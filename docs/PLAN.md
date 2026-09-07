@@ -1,5 +1,7 @@
 # Implementation and acceptance plan
 
+This implementation now lives at `/home/codexy/codex/astra-council_cabinet`. The [session handover](SESSION_HANDOVER.md) records continuity, the shared GNU Screen runtime and the feature-branch-only workflow; the design below remains the accepted foundation.
+
 The product is a single-host council, not a wrapper around one shared agent. Every bot is a distinct Discord application. Production runs one Uvicorn worker containing supervised discord.py clients, an asynchronous scheduler, provider HTTP clients, tool registry, control API and built React assets. SQLite WAL persists configuration, scoped memory, transcripts, requests, trajectories, metrics, credentials (encrypted), and an outbox. Multiple API workers are explicitly unsupported and prevented by a process lock.
 
 ## Grounding (researched 2026-09-07)

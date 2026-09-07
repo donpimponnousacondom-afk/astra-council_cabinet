@@ -1,12 +1,14 @@
 # Hortator Council
 
+The canonical project root is **`/home/codexy/codex/astra-council_cabinet`**, on **`dev/initial_phase`**. **Never push to main.** For a new agent session, begin with [the session handover](docs/SESSION_HANDOVER.md), [continuation prompt](docs/CONTINUE_PROMPT.md), and [AGENTS.md](AGENTS.md).
+
 An observable council of independent Discord applications. Each bot has its own Discord token, identity, personality, tool grants, cadence, credentials overrides, and channel-scoped memory. Reusable model profiles let you change the model without changing the bot.
 
 One Python process runs the Discord clients, scheduler, provider HTTP clients, FastAPI control service, and production React dashboard. Vite/Node is needed to build the UI or run its development server, not to run the production council.
 
 ## Start locally
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/); Node 22+ is used for the dashboard build. Run commands from `council/`:
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/); Node 22+ is used for the dashboard build. Run commands from the repository root, `/home/codexy/codex/astra-council_cabinet`:
 
 ```bash
 uv sync --frozen

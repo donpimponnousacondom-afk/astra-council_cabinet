@@ -1,5 +1,7 @@
 # Operations
 
+All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [SESSION_HANDOVER.md](SESSION_HANDOVER.md) for migration state and branch rules. Never push to main.
+
 ## Process and storage
 
 Use **one Uvicorn worker per data directory**. A file lock prevents two council runtimes from claiming the same database. Do not start a second bot runner, use `--reload` in production, or put multiple replicas in front of one SQLite file. Every Discord application has its own supervised client task within the one Python event loop. A failing client's connection does not take down the others.
@@ -31,7 +33,7 @@ Press **Ctrl-A, then D** to detach and leave the dashboard running. Press **Ctrl
 uv run hortator serve --host 127.0.0.1 --port 8000
 ```
 
-The server serves both the built dashboard and API at `http://127.0.0.1:8000`. To access it from a different computer, forward that port over SSH or use the configured reverse proxy. The session starts in `council/`.
+The server serves both the built dashboard and API at `http://127.0.0.1:8000`. To access it from a different computer, forward that port over SSH or use the configured reverse proxy. The shared shell and Screen's default directory are `/home/codexy/codex/astra-council_cabinet`.
 
 Terminal output is saved to `data/logs/hortator.screen.log`, with a one-second flush interval and 20,000 lines of Screen scrollback. Inspect it without taking control:
 
@@ -42,11 +44,13 @@ screen -ls
 
 `screen -ls` shows the current session identifier and socket directory. On this host the socket is `/run/screen/S-codexy/<pid>.hortator`; its PID changes when a new Screen session is created. The stable attach name is `hortator`.
 
-After a reboot, if the session no longer exists, recreate it from `council/`:
+After a reboot, if the session no longer exists, recreate it from the repository root:
 
 ```bash
+cd /home/codexy/codex/astra-council_cabinet
 mkdir -p data/logs
 chmod 700 data/logs
+umask 077
 screen -dmS hortator -t dashboard -L -Logfile "$PWD/data/logs/hortator.screen.log" bash --noprofile --norc -i
 screen -S hortator -p dashboard -X logfile flush 1
 screen -S hortator -p dashboard -X scrollback 20000
@@ -125,7 +129,7 @@ Environment variables:
 
 ## Backup and restore
 
-From `council/`, or with `--data-dir` before the command:
+From the repository root, or with `--data-dir` before the command:
 
 ```bash
 uv run hortator backup /absolute/path/to/new-backup-directory
