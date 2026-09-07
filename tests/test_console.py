@@ -154,6 +154,8 @@ def test_python_exception_traceback_is_folded_and_transport_urls_are_sanitized()
         text = console.stream.getvalue()
         assert "Traceback" in text and "RuntimeError" in text and "providers" in text
         assert "user:pass" not in text and "sample-credential" not in text
+        assert "\n  │ Traceback (most recent call last):\n" in text
+        assert "\\n  File" not in text
 
 
 def test_transport_child_debug_never_bypasses_payload_filter():

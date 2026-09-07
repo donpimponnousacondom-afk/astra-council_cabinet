@@ -532,6 +532,13 @@ class OperationalConsole(logging.Handler):
         self.write(line.rstrip())
         if self.details if details is None else details:
             body = {k: event[k] for k in ("turn_id", "request_id", "data") if event.get(k)}
+            multiline = {
+                key: value
+                for key, value in data.items()
+                if key in {"traceback", "error"} and isinstance(value, str) and "\n" in value
+            }
+            if multiline:
+                body["data"] = {key: value for key, value in data.items() if key not in multiline}
             encoded = json.dumps(body, ensure_ascii=False, indent=2, default=str)
             if len(encoded) > 12000:
                 encoded = encoded[:12000] + "\n… [details truncated; inspect the event ledger]"
@@ -544,3 +551,10 @@ class OperationalConsole(logging.Handler):
                         row,
                     )
                 self.write(self.paint("  │ ", "90") + row)
+            for key, value in multiline.items():
+                self.write(self.paint(f"  │ {key}:", COLORS.get(level, "90")))
+                rows = value.splitlines()
+                for row in rows[:80]:
+                    self.write(self.paint("  │ ", "90") + self.paint(plain(row), COLORS.get(level, "90")))
+                if len(rows) > 80:
+                    self.write("  │ … [additional lines omitted]")
