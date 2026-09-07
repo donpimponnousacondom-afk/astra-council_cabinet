@@ -11,6 +11,81 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible();
 });
 
+test("running version shows real server and dashboard identities with ISO dates", async ({
+  page,
+}) => {
+  const version = await (await page.request.get("/api/version")).json();
+  const build = await (await page.request.get("/build-info.json")).json();
+  const banner = page.getByRole("region", { name: "Running version" });
+  await expect(banner).toContainText(version.short_commit);
+  await expect(banner).toContainText(version.commit_title);
+  await expect(banner.locator("time")).toHaveText(version.committed_at);
+  expect(version.committed_at).toMatch(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
+  );
+  await banner.getByText("Build details", { exact: true }).click();
+  await expect(banner).toContainText(version.started_at);
+  const row = (name: string) =>
+    banner
+      .locator("dl > div")
+      .filter({ has: page.getByText(name, { exact: true }) })
+      .locator("dd");
+  await expect(row("Server commit")).toHaveText(version.commit);
+  await expect(row("Dashboard commit")).toHaveText(build.commit);
+  await expect(row("Dashboard commit title")).toHaveText(build.commit_title);
+  await expect(row("Dashboard built")).toHaveText(build.built_at);
+  await page.screenshot({
+    path: "test-results/running-version-desktop.png",
+    animations: "disabled",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(banner).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "test-results/running-version-mobile.png",
+    animations: "disabled",
+  });
+});
+
+test("version distinguishes different commits, uncommitted source and missing metadata", async ({
+  page,
+}) => {
+  const actual = await (await page.request.get("/api/version")).json();
+  let reported: typeof actual | undefined = {
+    ...actual,
+    commit: "f".repeat(40),
+    short_commit: "f".repeat(12),
+    commit_title: "Alternate running build",
+    dirty: true,
+  };
+  await page.route("**/api/status", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({ json: { ...body, version: reported } });
+  });
+  await page.getByRole("button", { name: "Refresh dashboard" }).click();
+  const banner = page.getByRole("region", { name: "Running version" });
+  await expect(banner).toContainText("Alternate running build");
+  await expect(banner).toContainText("Uncommitted changes at startup");
+  await expect(banner).toContainText(
+    "The dashboard and server are from different commits.",
+  );
+  reported = undefined;
+  await page.getByRole("button", { name: "Refresh dashboard" }).click();
+  await expect(banner).toContainText("Commit unavailable");
+  await expect(banner).toContainText(
+    "Commit metadata was not supplied by this server.",
+  );
+  await expect(banner.getByRole("status")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "The council", exact: true }),
+  ).toBeVisible();
+});
+
 test("overview, pause/resume, command reference, and mobile navigation", async ({
   page,
 }) => {

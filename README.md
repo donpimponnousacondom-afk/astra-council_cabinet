@@ -36,6 +36,10 @@ The configured five-bot runtime, verified backups and current acceptance status 
 
 Stop the foreground server before switching branches, rebuild the dashboard when its source changes, and restart through the installed launcher. Existing branches still have a `./data` CLI fallback; the external launcher and environment setting keep those branches on the same persistent data. See [branch changes and persistent storage](docs/OPERATIONS.md#branch-changes-and-persistent-storage).
 
+After a PR is squash-merged, use a clean working tree, `git switch main`, `git pull --ff-only origin main`, then `git switch -c feat/next_feature`. The full [repeatable workflow](docs/OPERATIONS.md#repeating-the-squash-merge-workflow) includes Screen control and rebuilding. No new work or pushes belong on main.
+
+Use **`!version` / `!ver`** or the panel's **Running server** banner to see the loaded commit, ISO UTC date/time and commit title. **Build details** also shows server start time and the dashboard's separately embedded build identity. Unknown metadata and uncommitted builds are explicit. Commit before the final build/restart so the release identifies the final task commit.
+
 ## Connect the first council
 
 The initial records are **disabled drafts**, with no invented traffic or credentials: Hortator (15-second cadence), Ada (60 seconds), Socrates (90 seconds), a shared prompt, one council room, OpenRouter, and an unconfigured model profile.
@@ -101,7 +105,7 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 | `image_generation` | Image generation to a Discord attachment | OpenAI-style image endpoint, raw request JSON, key |
 | `tts` | Speech generation to an audio attachment | OpenAI-style speech endpoint, model/voice/options JSON, key |
 | `memory` | Persistent bot + channel scoped notes | No key; 24,000-character total per scoped memory |
-| `council_inspect` | Status, statistics, configuration, context and trajectory queries | Hortator only, for authenticated owner questions; read-only |
+| `council_inspect` | Running version, status, statistics, configuration, context and trajectory queries | Hortator only, for authenticated owner questions; read-only |
 
 Global enablement and a bot grant are both required. Each bot can override plugin configuration and credentials. Plugin tools cannot run administration commands. `council_speak` and `council_silence` are built-in terminal decisions, not optional plugins. Tool rounds and per-round call limits are enforced outside the model.
 

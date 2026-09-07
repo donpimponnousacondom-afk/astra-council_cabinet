@@ -1270,12 +1270,60 @@ strong {
   width: 11px;
   height: 11px;
 }
-.version {
-  border: 1px solid #2e3e24;
-  border-radius: 4px;
-  padding: 2px 5px;
-  font-size: 10px;
-  margin-left: 4px;
+.build-banner {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 24px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.build-identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.build-identity strong,
+.build-identity code {
+  color: #dfe4de;
+}
+.build-identity time {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+.build-title {
+  margin: 8px 0;
+  color: #dfe4de;
+}
+.build-state,
+.build-mismatch {
+  color: #e4bb82;
+}
+.build-details summary {
+  cursor: pointer;
+}
+.build-details dl {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.build-details dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.build-details dt {
+  min-width: 155px;
+}
+.build-details dd {
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 220px;
+  color: #dfe4de;
+}
+.build-details p {
+  margin: 14px 0 0;
 }
 .pause-banner,
 .connection-error {

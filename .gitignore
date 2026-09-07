@@ -14,6 +14,7 @@ __pycache__/
 .coverage
 htmlcov/
 /web/dist/
+/hortator/_build_info.json
 /web/test-results/
 /web/playwright-report/
 *.tsbuildinfo
