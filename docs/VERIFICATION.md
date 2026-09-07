@@ -17,6 +17,8 @@ The first live console rollout (`b9c096e`) passed authenticated API/health/polli
 
 The same-day color refinement passed all 13 existing console tests, Ruff lint/format and diff checks. Manual rendering checks confirmed that scope/help/state/snapshot styling adds ANSI colors while preserving the original plain text and escaping untrusted terminal controls. This presentation change does not introduce new runtime behavior or require repeating unrelated browser/provider acceptance.
 
+The first palette rollout exposed inherited `NO_COLOR` in the actual server environment; live help/status lines contained no ANSI codes even though the source/build stamps matched. An explicit `serve --color` override was added for the user's shared Screen command, preserving the shell environment and automatic/plain behavior elsewhere. Console regression tests were rerun after this correction. Live color acceptance must check the actual semantic spans in new help/status output, rather than treating ANSI from an earlier Bash prompt as proof of application colors.
+
 ## Running version and Discord formatting
 
 On `feat/runtime_version`, based on fast-forwarded main `c42f0c3` on 2026-09-07:

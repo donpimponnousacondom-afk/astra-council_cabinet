@@ -21,7 +21,7 @@ The application retains history instead of silently discarding observability. Mo
 
 Keep the database, encryption key, bootstrap password, artifacts, and logs in the external data directory. Some historical branches tracked `data/`; moving between those commits can replace or remove files inside the checkout even though the current branch ignores them. Never restore those historical files over the external live directory.
 
-Before switching a running application's branch, stop the foreground server with Ctrl-C in Screen. Switch to the intended feature branch, rebuild `web/dist` if UI source changed (run `npm ci --prefix web` first if its dependencies changed), then run `hortator serve --host 127.0.0.1 --port 8000`. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
+Before switching a running application's branch, stop the foreground server with Ctrl-C in Screen. Switch to the intended feature branch, rebuild `web/dist` if UI source changed (run `npm ci --prefix web` first if its dependencies changed), then run `hortator serve --host 127.0.0.1 --port 8000 --color`. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
 
 For branches that change database schemas, make an external backup first; separating storage from Git does not make schema changes reversible. Use an explicit `--data-dir` pointing to separate temporary storage for tests or experiments that should not use live configuration.
 
@@ -46,7 +46,7 @@ After the branch is created, restore dependencies if needed, build the dashboard
 uv sync --frozen &&
 npm ci --prefix web &&
 npm run build --prefix web &&
-/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000
+/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000 --color
 ```
 
 When the feature is finished and verified, make its local commit **before** the final build/restart. Builds embed commit metadata, so a build produced before that commit correctly identifies the older commit plus uncommitted changes. Keep all pushes and the PR squash merge under the user's control.
@@ -78,7 +78,7 @@ screen -x hortator
 Press **Ctrl-A, then D** to detach and leave the dashboard running. Press **Ctrl-C** to stop the foreground server and return to the shared shell. From that shell, restart with:
 
 ```bash
-hortator serve --host 127.0.0.1 --port 8000
+hortator serve --host 127.0.0.1 --port 8000 --color
 ```
 
 The server serves both the built dashboard and API at `http://127.0.0.1:8000`. To access it from a different computer, forward that port over SSH or use the configured reverse proxy. The shared shell and Screen's default directory are `/home/codexy/codex/astra-council_cabinet`.
@@ -144,6 +144,8 @@ hortator serve --host 127.0.0.1 --port 8000 \
 ```
 
 Available scopes are `system,bots,providers,discord,tools,context,dashboard`, or `all`. Colors automatically turn off for redirected output, `TERM=dumb`, or `NO_COLOR`. Single-key input is only enabled on a foreground terminal with a terminal output stream; `--no-console-keys` leaves terminal input untouched. Terminal echo/canonical input are restored on orderly SIGINT/SIGTERM shutdown. Do not use SIGKILL for normal runtime control.
+
+**This shared workspace inherits `NO_COLOR`.** The user explicitly wants colors in Screen, so append **`--color`** to its foreground serve command to override automatic detection and `NO_COLOR`. Do not unset the shell environment globally. `--color` and `--no-color` are mutually exclusive; without either flag, the normal automatic behavior above applies. Older branches may not support this new flag.
 
 Known credentials, secret fields, authorization values and vendor reasoning content are scrubbed. HTTP query strings, headers, cookies and bodies are not logged. Untrusted terminal controls are escaped. Low-level Discord/HTTP transport wire-debug payloads remain disabled even at console DEBUG; safe runtime events provide the inspection data. The Screen logfile records what was displayed; it is not an unfiltered substitute for SQLite. Discord incident notifications retain their existing independent dashboard setting and throttling. A richer dashboard log panel is deferred.
 

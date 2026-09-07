@@ -24,7 +24,9 @@ def main():
     )
     serve.add_argument("--console-details", action="store_true", help="Expand JSON and tracebacks")
     serve.add_argument("--no-console-keys", action="store_true", help="Leave terminal input untouched")
-    serve.add_argument(
+    color = serve.add_mutually_exclusive_group()
+    color.add_argument("--color", action="store_true", help="Force ANSI colors, overriding NO_COLOR")
+    color.add_argument(
         "--no-color", action="store_true", help="Plain console output (also respects NO_COLOR)"
     )
     sub.add_parser("init", help="Initialize configuration and encrypted credential storage")
@@ -50,7 +52,7 @@ def main():
             scopes=scopes,
             details=args.console_details,
             keys=not args.no_console_keys,
-            color=False if args.no_color else None,
+            color=True if args.color else False if args.no_color else None,
         )
         return
     if args.command == "backup":

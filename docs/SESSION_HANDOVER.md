@@ -66,6 +66,8 @@ The preceding explanatory review made no code/configuration changes: tool limits
 
 On the user's 2026-09-07 console color follow-up, the same logging branch adds distinct scope colors, highlighted help keys and identities, green/red state values, muted idle/profile metadata and JSON scalar colors. This is presentation only; key bindings, filtering, redaction and terminal behavior are preserved.
 
+Live inspection found that the server inherits `NO_COLOR`, disabling automatic ANSI output. The current Screen command therefore appends `--color`, an explicit per-process override requested by the user. Preserve that flag on this branch's restarts; leave the shell environment unchanged. Automatic/no-color behavior remains available for other deployments.
+
 | Area | Files and purpose |
 | --- | --- |
 | Configuration and persistence | `hortator/models.py`, `store.py`: typed entities, SQLite WAL, references/revisions, identity tombstones, channel scope, contexts, memory, events, turns, requests, outbox and artifacts |
@@ -109,7 +111,7 @@ From the shared shell, start/restart with:
 
 ```bash
 cd /home/codexy/codex/astra-council_cabinet
-/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000
+/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000 --color
 ```
 
 The agent can send shell input with `screen -S hortator -p dashboard -X stuff` once the foreground server has been deliberately stopped. Keep runtime commands in this session and report them to the user. Ordinary repository edits and read-only diagnostics can use normal tools. Do not detach the user's display, kill Screen, or start a second API worker. Screen survives terminal/turn detachment, not host reboot, and does not automatically restart a crashed application. Creation/recovery commands are in [OPERATIONS.md](OPERATIONS.md#shared-gnu-screen-terminal).
