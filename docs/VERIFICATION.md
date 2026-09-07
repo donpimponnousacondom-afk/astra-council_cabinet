@@ -2,6 +2,17 @@
 
 Verified in this workspace on 2026-09-07. Automated provider/Discord tests use controlled transports and synthetic credentials. Later read-only live checks used the user's configured credentials in memory without exposing them or making paid completion probes; see the typing/configuration verification below.
 
+## Operational console logging
+
+On `feat/improving_logging`, already prepared by the user from main `d33cf80` (version PR #6), on 2026-09-07:
+
+- The initial tree was clean; main, origin/main and the new feature branch matched. Main's tree exactly matched the previous version feature tip `5870b74`. The agent continued this prepared branch without another checkout, branch deletion or push. The existing server was still in the attached `387556.hortator` Screen session.
+- **116 backend tests passed**, including **13 console tests**. Coverage includes real persisted-event forwarding, ISO offset timestamps and bot/provider/sequence attribution, healthy HTTP polling suppression, scope/verbosity/replay behavior, folded JSON/tracebacks, secret/query-string/reasoning redaction, terminal-control escaping, bounded history with separate retained errors, pre-startup ledger replay, read-only runtime inspection, repeat summaries without ledger loss, color/plain output, a broken output sink and rejection of wire-debug child loggers.
+- Two console tests run the actual CLI on a real pseudo-terminal with isolated disabled drafts and a random loopback port. They send single-key input, observe HTTP visibility/detail/scope changes, send an actual Ctrl-C byte or SIGTERM, and verify orderly exit plus exact restoration of terminal attributes. The existing two real CLI shutdown/SSE tests also pass. No live Discord/provider calls or production configuration mutations are part of these tests.
+- Ruff lint and formatting checks and `git diff --check` passed. Dashboard source/dependencies are unchanged, so browser tests were not repeated for this console feature. The deployment procedure still rebuilds Vite after the final commit to refresh its source stamp, then restarts the foreground server in the existing Screen session. Verify authenticated `/api/version` and `/build-info.json` match the committed source, exercise harmless console keys, and confirm INFO no longer prints successful HTTP polls. This procedure does not establish paid provider or full council acceptance.
+
+No bot/provider/profile settings, plugin grants, credentials, Discord notification policy or database schema are changed. The Screen session, shell configuration and external data location are preserved. Existing snapshots are older rollback points; they are not represented as fresh backups of later user configuration changes.
+
 ## Running version and Discord formatting
 
 On `feat/runtime_version`, based on fast-forwarded main `c42f0c3` on 2026-09-07:

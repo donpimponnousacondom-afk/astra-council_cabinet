@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import time
 import uuid
@@ -135,7 +136,11 @@ class Store:
           VALUES(:id,:at,:kind,:level,:bot_id,:turn_id,:request_id,:data)""",
             {**event, "data": dumps(event["data"])},
         )
-        return {**event, "seq": cur.lastrowid}
+        event["seq"] = cur.lastrowid
+        logging.getLogger("hortator.events").log(
+            getattr(logging, level.upper(), logging.INFO), kind, extra={"council_event": event}
+        )
+        return event
 
     def events(self, *, after=0, before=None, limit=100, bot_id=None, turn_id=None, level=None):
         where, args = ["seq> ?"], [after]

@@ -258,6 +258,7 @@ class ProviderPool:
             self.store.emit(
                 "request.started",
                 {
+                    "provider_id": provider["id"],
                     "purpose": purpose,
                     "profile_id": profile["id"],
                     "model": profile["model"],
@@ -472,6 +473,9 @@ class ProviderPool:
                 self.store.emit(
                     "request.completed",
                     {
+                        "provider_id": provider["id"],
+                        "profile_id": profile["id"],
+                        "model": profile["model"],
                         **metrics,
                         "duration_ms": duration,
                         "ttft_ms": ttft,

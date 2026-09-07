@@ -232,7 +232,12 @@ class Engine:
         )
         self.store.emit(
             "turn.started",
-            {"channel_id": channel_id, "profile_id": profile["id"]},
+            {
+                "channel_id": channel_id,
+                "profile_id": profile["id"],
+                "provider_id": provider["id"],
+                "model": profile["model"],
+            },
             bot_id=bot["id"],
             turn_id=turn_id,
         )
@@ -428,7 +433,7 @@ class Engine:
             )
             self.store.emit(
                 "turn.ended",
-                {"status": status, "decision": decision, "error": error},
+                {"status": status, "decision": decision, "error": error, "provider_id": provider["id"]},
                 bot_id=bot["id"],
                 turn_id=turn_id,
             )

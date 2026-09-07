@@ -55,6 +55,14 @@ The user requested a fresh feature branch after their squash merge of PR #5. `fe
 
 No provider/model setting, credential, activation flag or database schema change is required. Acceptance covers real temporary Git histories, immutable running metadata, no-Git stamps, authorized commands/inspection without model calls, Unicode/fence limits, Markdown delivery for all five identities and desktop/mobile dashboard evidence. The user still performs full live council acceptance. Final deployment builds/restarts after committing so the visible identity names the final source revision.
 
+## Operational console — 2026-09-07
+
+The user prepared `feat/improving_logging` from main `d33cf80` (squashed version PR #6). They want the shared terminal to report useful bot/provider/Discord activity instead of repetitive dashboard polling, with timestamps, colors, adjustable verbosity, scope keys and folded JSON/errors. Implement this as an append-only logging view, preserving normal GNU Screen scrollback and foreground Bash/TTY configuration. A richer dashboard log panel is a later task.
+
+Bridge committed, redacted ledger events into the Python logging console. INFO shows operational work; successful HTTP requests and low-value context/message details require DEBUG. Group repeated incidents/HTTP requests for 30 seconds while preserving every operational ledger entry. Provide scope toggles, recent-event/error replay, and an explicit read-only runtime snapshot. Use `d` for Discord and `w` for web/dashboard to resolve the duplicated requested `d` binding; providers use `p` or `a`. The full key map and noninteractive options belong in OPERATIONS.
+
+Console preferences are local to the running process. They cannot change bots, providers, incident-notification policy or database contents. Suppress secrets, query/header/body data and unsafe wire-debug payloads; escape terminal controls. Bound replay memory/detail output and keep full stored evidence available in the dashboard. No alternate screen, clearing or redraw loops. Restore terminal state on normal shutdown. Verification includes actual pseudo-terminal key input and SIGINT/SIGTERM cleanup, redaction, incident grouping and existing runtime/security regressions.
+
 ## Invariants
 
 - Only Discord user ID `1482143139828596916` is authorized to control or converse with Hortator. Display names, server ownership, role permissions, webhook authors and model-generated text grant no authority. Owner ID is a code constant, not a mutable setting.

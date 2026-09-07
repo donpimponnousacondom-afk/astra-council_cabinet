@@ -109,6 +109,42 @@ An interactive login Bash reads this user's `.profile`, which sources `.bashrc` 
 
 The agent can send commands through `screen -S hortator -p dashboard -X stuff` and inspect the same output log. Inspect the foreground process first, then use Ctrl-C to stop this server and wait for Bash to regain the terminal before entering a shell command. The CLI now closes dashboard SSE streams before draining HTTP connections, so an open dashboard does not hold shutdown indefinitely. Other HTTP requests have a ten-second drain backstop; runtime cleanup then cancels model/tool work using the existing delivery rules. Confirm process exit before startup or backup. Older branches lack this SSE fix and can require a second Ctrl-C after confirming no active work. Avoid `screen -Q` queries on this host: a session disappeared during a query and the cause is unconfirmed. Use `screen -ls`, `/proc` and the log. Screen may expand variables in `stuff`; source a local script for shell diagnostics involving `$PS1` or other shell variables. Do not start a second council runtime outside this session.
 
+## Console inspection and filtering
+
+The foreground `hortator serve` console receives the same redacted operational events persisted in SQLite, plus Python/Uvicorn warnings and errors. Lines include a local ISO 8601 timestamp with UTC offset, severity, scope, event kind/sequence and bot/provider identity when available. Request/turn details retain IDs for correlation with dashboard trajectories. The default is **INFO, all scopes enabled, details folded**. Healthy dashboard GETs are DEBUG; normal bot turns, provider requests, tools, compaction, deliveries and gateway changes remain visible. HTTP 4xx/5xx responses are warnings/errors. Console filters never change scheduling, grants, configuration, Discord notifications or event persistence.
+
+In the attached Screen window, press a key without Enter:
+
+| Key | Effect |
+| --- | --- |
+| `+` / `-` | Increase/decrease verbosity: ERROR → WARNING → INFO → DEBUG |
+| `f` | Fold/expand JSON and exception details; redisplay the last five matching entries |
+| `r` | Replay the last 20 matching entries with their original timestamps |
+| `e` | Replay recent warnings/errors, using a separate 50-entry history so polling cannot displace them |
+| `i` | Read-only snapshot: council enablement, bot enablement/gateway/profile/active turn, provider enablement/failure count/circuit delay |
+| `d` | Toggle Discord, received-message and delivery events |
+| `p` or `a` | Toggle providers and model requests |
+| `w` | Toggle web/dashboard HTTP traffic; successful requests also require DEBUG (`+`) |
+| `b` / `t` / `c` / `s` | Toggle bots/turns, tools, context/compaction, or system events |
+| `0` | Restore INFO, all scopes, folded details |
+| `?` or `h` | Show the current filters and key map |
+
+Every filter change prints its state. Disabled scopes hide their warnings/errors too; `0` restores visibility. `i` is an explicit snapshot independent of filters. Keys do not stop or reconfigure bots. Ctrl-C still stops the foreground server; Ctrl-A then D still detaches a Screen viewer. Normal terminal scrollback remains available: there is no alternate screen, cursor repaint or screen clearing. `f` affects subsequent output and appends a short replay; it does not rewrite old scrollback.
+
+The first occurrence of an incident is immediate. Identical errors/gateway transitions and repeated HTTP requests are grouped over 30 seconds, with a count and latest event reference. Different errors or bot/provider identities are separate groups. All operational occurrences remain in SQLite. The console keeps 200 recent entries plus 50 warnings/errors and loads bounded recent ledger history at startup for replay without automatic chatty backfill. Details are bounded and explicitly indicate truncation; use the event ledger/trajectory for the full stored record.
+
+Console preferences last for this server process. Startup options also work with redirected output or noninteractive service/container logs:
+
+```bash
+hortator serve --host 127.0.0.1 --port 8000 \
+  --console-level debug --console-scopes providers,bots,tools \
+  --console-details --no-console-keys --no-color
+```
+
+Available scopes are `system,bots,providers,discord,tools,context,dashboard`, or `all`. Colors automatically turn off for redirected output, `TERM=dumb`, or `NO_COLOR`. Single-key input is only enabled on a foreground terminal with a terminal output stream; `--no-console-keys` leaves terminal input untouched. Terminal echo/canonical input are restored on orderly SIGINT/SIGTERM shutdown. Do not use SIGKILL for normal runtime control.
+
+Known credentials, secret fields, authorization values and vendor reasoning content are scrubbed. HTTP query strings, headers, cookies and bodies are not logged. Untrusted terminal controls are escaped. Low-level Discord/HTTP transport wire-debug payloads remain disabled even at console DEBUG; safe runtime events provide the inspection data. The Screen logfile records what was displayed; it is not an unfiltered substitute for SQLite. Discord incident notifications retain their existing independent dashboard setting and throttling. A richer dashboard log panel is deferred.
+
 ## Scheduling and message semantics
 
 A bot gets at most one active turn across its rooms. Its interval starts again when the turn settles. Idle evaluation is optional and begins only after there is conversation history. Pending new input is selected before idle contexts; among eligible contexts, the oldest evaluated channel runs first. Hortator requires a new owner question and never generates autonomous chatter.

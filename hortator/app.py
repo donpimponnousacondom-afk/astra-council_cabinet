@@ -79,7 +79,7 @@ class ControlBody(BaseModel):
     data: dict = Field(default_factory=dict)
 
 
-def create_app(directory=None, start_runtime=True, *, stopping=None):
+def create_app(directory=None, start_runtime=True, *, stopping=None, console=None):
     directory = Path(directory or os.getenv("HORTATOR_DATA_DIR", "data")).resolve()
     stopping = stopping if stopping is not None else asyncio.Event()
 
@@ -98,10 +98,14 @@ def create_app(directory=None, start_runtime=True, *, stopping=None):
         try:
             kernel = Kernel(directory)
             app.state.kernel = kernel
+            if console:
+                console.bind(kernel)
             if start_runtime:
                 kernel.start()
             yield
         finally:
+            if console:
+                console.stop_keys()
             if kernel:
                 await kernel.close()
             fcntl.flock(lock, fcntl.LOCK_UN)

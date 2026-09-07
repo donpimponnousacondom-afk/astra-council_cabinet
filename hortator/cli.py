@@ -16,6 +16,17 @@ def main():
     serve = sub.add_parser("serve", help="Run the API, Discord clients and built dashboard in one process")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--console-level", choices=("error", "warning", "info", "debug"), default="info")
+    serve.add_argument(
+        "--console-scopes",
+        default="all",
+        help="Comma-separated system,bots,providers,discord,tools,context,dashboard; or all",
+    )
+    serve.add_argument("--console-details", action="store_true", help="Expand JSON and tracebacks")
+    serve.add_argument("--no-console-keys", action="store_true", help="Leave terminal input untouched")
+    serve.add_argument(
+        "--no-color", action="store_true", help="Plain console output (also respects NO_COLOR)"
+    )
     sub.add_parser("init", help="Initialize configuration and encrypted credential storage")
     sub.add_parser("doctor", help="Show configuration readiness without contacting Discord/providers")
     sub.add_parser("password", help="Set a new dashboard password interactively")
@@ -25,13 +36,22 @@ def main():
     directory = Path(args.data_dir).resolve()
     os.environ["HORTATOR_DATA_DIR"] = str(directory)
     if args.command == "serve":
+        from .console import SCOPES
         from .server import serve
 
-        print(f"Dashboard: http://{args.host}:{args.port}")
-        print(
-            f"First-run password file: {directory / 'initial-password'} (unless HORTATOR_ADMIN_PASSWORD is set)"
+        scopes = set(SCOPES.values()) if args.console_scopes == "all" else set(args.console_scopes.split(","))
+        if not scopes or scopes - set(SCOPES.values()):
+            parser.error("--console-scopes must use: " + ",".join(SCOPES.values()))
+        serve(
+            directory,
+            args.host,
+            args.port,
+            level=args.console_level,
+            scopes=scopes,
+            details=args.console_details,
+            keys=not args.no_console_keys,
+            color=False if args.no_color else None,
         )
-        serve(directory, args.host, args.port)
         return
     if args.command == "backup":
         destination = Path(args.destination).resolve()
