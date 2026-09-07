@@ -21,7 +21,7 @@ The application retains history instead of silently discarding observability. Mo
 
 Keep the database, encryption key, bootstrap password, artifacts, and logs in the external data directory. Some historical branches tracked `data/`; moving between those commits can replace or remove files inside the checkout even though the current branch ignores them. Never restore those historical files over the external live directory.
 
-Before switching a running application's branch, stop the foreground server with Ctrl-C in Screen. Switch to the intended feature branch, rebuild `web/dist` if UI source changed (run `npm ci --prefix web` first if its dependencies changed), then run `hortator serve --host 127.0.0.1 --port 8000`. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
+Before switching a running application's branch, stop the foreground server with Ctrl-C in Screen. Switch to the intended feature branch, rebuild `web/dist` if UI source changed (run `npm ci --prefix web` first if its dependencies changed), then run `hortator serve --host 127.0.0.1 --port 8000 --color`. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
 
 For branches that change database schemas, make an external backup first; separating storage from Git does not make schema changes reversible. Use an explicit `--data-dir` pointing to separate temporary storage for tests or experiments that should not use live configuration.
 
@@ -46,7 +46,7 @@ After the branch is created, restore dependencies if needed, build the dashboard
 uv sync --frozen &&
 npm ci --prefix web &&
 npm run build --prefix web &&
-/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000
+/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000 --color
 ```
 
 When the feature is finished and verified, make its local commit **before** the final build/restart. Builds embed commit metadata, so a build produced before that commit correctly identifies the older commit plus uncommitted changes. Keep all pushes and the PR squash merge under the user's control.
@@ -78,7 +78,7 @@ screen -x hortator
 Press **Ctrl-A, then D** to detach and leave the dashboard running. Press **Ctrl-C** to stop the foreground server and return to the shared shell. From that shell, restart with:
 
 ```bash
-hortator serve --host 127.0.0.1 --port 8000
+hortator serve --host 127.0.0.1 --port 8000 --color
 ```
 
 The server serves both the built dashboard and API at `http://127.0.0.1:8000`. To access it from a different computer, forward that port over SSH or use the configured reverse proxy. The shared shell and Screen's default directory are `/home/codexy/codex/astra-council_cabinet`.
@@ -102,12 +102,52 @@ chmod 700 "$HORTATOR_DATA_DIR/logs"
 umask 077
 screen -c /home/codexy/.screenrc -dmS hortator -t dashboard -L -Logfile "$HORTATOR_DATA_DIR/logs/hortator.screen.log" bash --login -i
 screen -S hortator -p dashboard -X logfile flush 1
-screen -S hortator -p dashboard -X stuff $'/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000\n'
+screen -S hortator -p dashboard -X stuff $'/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000 --color\n'
 ```
 
 An interactive login Bash reads this user's `.profile`, which sources `.bashrc` (the file is `.bashrc`, not `.bash_rc`). This loads their aliases and PS1. Do not use `--noprofile`, `--norc`, or an empty Screen configuration. The recovery on 2026-09-07 verified the login/interactive flags, nonempty prompt, and `ll` alias. Preserve an existing attachment when restarting the foreground server; recreating Screen is only necessary if the session is gone.
 
 The agent can send commands through `screen -S hortator -p dashboard -X stuff` and inspect the same output log. Inspect the foreground process first, then use Ctrl-C to stop this server and wait for Bash to regain the terminal before entering a shell command. The CLI now closes dashboard SSE streams before draining HTTP connections, so an open dashboard does not hold shutdown indefinitely. Other HTTP requests have a ten-second drain backstop; runtime cleanup then cancels model/tool work using the existing delivery rules. Confirm process exit before startup or backup. Older branches lack this SSE fix and can require a second Ctrl-C after confirming no active work. Avoid `screen -Q` queries on this host: a session disappeared during a query and the cause is unconfirmed. Use `screen -ls`, `/proc` and the log. Screen may expand variables in `stuff`; source a local script for shell diagnostics involving `$PS1` or other shell variables. Do not start a second council runtime outside this session.
+
+## Console inspection and filtering
+
+The foreground `hortator serve` console receives the same redacted operational events persisted in SQLite, plus Python/Uvicorn warnings and errors. Lines include a local ISO 8601 timestamp with UTC offset, severity, scope, event kind/sequence and bot/provider identity when available. Request/turn details retain IDs for correlation with dashboard trajectories. The default is **INFO, all scopes enabled, details folded**. Healthy dashboard GETs are DEBUG; normal bot turns, provider requests, tools, compaction, deliveries and gateway changes remain visible. HTTP 4xx/5xx responses are warnings/errors. Console filters never change scheduling, grants, configuration, Discord notifications or event persistence.
+
+In the attached Screen window, press a key without Enter:
+
+Scope colors are consistent across events and help: system white, bots magenta, providers cyan, Discord blue, tools yellow, context green, dashboard teal. Shortcut keys stand out in bold yellow. Enabled/online states are green, disabled/error states red, and offline/idle values and long profile IDs muted. Bot/provider identities are highlighted; warning/error messages use their severity color. Expanded JSON also colors numbers, booleans and nulls. All text labels remain present in plain output and with `NO_COLOR`.
+
+| Key | Effect |
+| --- | --- |
+| `+` / `-` | Increase/decrease verbosity: ERROR → WARNING → INFO → DEBUG |
+| `f` | Fold/expand JSON and exception details; redisplay the last five matching entries |
+| `r` | Replay the last 20 matching entries with their original timestamps |
+| `e` | Replay recent warnings/errors, using a separate 50-entry history so polling cannot displace them |
+| `i` | Read-only snapshot: council enablement, bot enablement/gateway/profile/active turn, provider enablement/failure count/circuit delay |
+| `d` | Toggle Discord, received-message and delivery events |
+| `p` or `a` | Toggle providers and model requests |
+| `w` | Toggle web/dashboard HTTP traffic; successful requests also require DEBUG (`+`) |
+| `b` / `t` / `c` / `s` | Toggle bots/turns, tools, context/compaction, or system events |
+| `0` | Restore INFO, all scopes, folded details |
+| `?` or `h` | Show the current filters and key map |
+
+Every filter change prints its state. Disabled scopes hide their warnings/errors too; `0` restores visibility. `i` is an explicit snapshot independent of filters. Keys do not stop or reconfigure bots. Ctrl-C still stops the foreground server; Ctrl-A then D still detaches a Screen viewer. Normal terminal scrollback remains available: there is no alternate screen, cursor repaint or screen clearing. `f` affects subsequent output and appends a short replay; it does not rewrite old scrollback.
+
+The first occurrence of an incident is immediate. Identical errors/gateway transitions and repeated HTTP requests are grouped over 30 seconds, with a count and latest event reference. Different errors or bot/provider identities are separate groups. All operational occurrences remain in SQLite. The console keeps 200 recent entries plus 50 warnings/errors and loads bounded recent ledger history at startup for replay without automatic chatty backfill. Details are bounded and explicitly indicate truncation; use the event ledger/trajectory for the full stored record.
+
+Console preferences last for this server process. Startup options also work with redirected output or noninteractive service/container logs:
+
+```bash
+hortator serve --host 127.0.0.1 --port 8000 \
+  --console-level debug --console-scopes providers,bots,tools \
+  --console-details --no-console-keys --no-color
+```
+
+Available scopes are `system,bots,providers,discord,tools,context,dashboard`, or `all`. Colors automatically turn off for redirected output, `TERM=dumb`, or `NO_COLOR`. Single-key input is only enabled on a foreground terminal with a terminal output stream; `--no-console-keys` leaves terminal input untouched. Terminal echo/canonical input are restored on orderly SIGINT/SIGTERM shutdown. Do not use SIGKILL for normal runtime control.
+
+**This shared workspace inherits `NO_COLOR`.** The user explicitly wants colors in Screen, so append **`--color`** to its foreground serve command to override automatic detection and `NO_COLOR`. Do not unset the shell environment globally. `--color` and `--no-color` are mutually exclusive; without either flag, the normal automatic behavior above applies. Older branches may not support this new flag.
+
+Known credentials, secret fields, authorization values and vendor reasoning content are scrubbed. HTTP query strings, headers, cookies and bodies are not logged. Untrusted terminal controls are escaped. Low-level Discord/HTTP transport wire-debug payloads remain disabled even at console DEBUG; safe runtime events provide the inspection data. The Screen logfile records what was displayed; it is not an unfiltered substitute for SQLite. Discord incident notifications retain their existing independent dashboard setting and throttling. A richer dashboard log panel is deferred.
 
 ## Scheduling and message semantics
 

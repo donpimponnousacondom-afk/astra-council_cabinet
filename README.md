@@ -1,6 +1,6 @@
 # Hortator Council
 
-The canonical project root is **`/home/codexy/codex/astra-council_cabinet`**, on **`dev/initial_phase`**. **Never push to main.** For a new agent session, begin with [the session handover](docs/SESSION_HANDOVER.md), [continuation prompt](docs/CONTINUE_PROMPT.md), and [AGENTS.md](AGENTS.md).
+The canonical project root is **`/home/codexy/codex/astra-council_cabinet`**. Resume the current task branch recorded in the handover and verify actual Git state. **Never push to main.** For a new agent session, begin with [the session handover](docs/SESSION_HANDOVER.md), [continuation prompt](docs/CONTINUE_PROMPT.md), and [AGENTS.md](AGENTS.md).
 
 An observable council of independent Discord applications. Each bot has its own Discord token, identity, personality, tool grants, cadence, credentials overrides, and channel-scoped memory. Reusable model profiles let you change the model without changing the bot.
 
@@ -18,7 +18,7 @@ npm run build --prefix web
 uv run hortator serve
 ```
 
-Persistent data stays outside the checkout, so changing branches or cleaning generated files does not remove the database, credentials, memory, or artifacts. On this workspace, the installed `~/.local/bin/hortator` launcher loads `~/.config/hortator/runtime.env` and sets the same data directory on every branch. Use `hortator serve --host 127.0.0.1 --port 8000` in the shared Screen shell. The launcher also supports commands such as `hortator backup /absolute/path/to/new-backup-directory`.
+Persistent data stays outside the checkout, so changing branches or cleaning generated files does not remove the database, credentials, memory, or artifacts. On this workspace, the installed `~/.local/bin/hortator` launcher loads `~/.config/hortator/runtime.env` and sets the same data directory on every branch. Use `hortator serve --host 127.0.0.1 --port 8000 --color` in the shared Screen shell; the explicit flag overrides its inherited `NO_COLOR`. The launcher also supports commands such as `hortator backup /absolute/path/to/new-backup-directory`.
 
 Open **http://127.0.0.1:8000**. On first startup, a random dashboard password is written to `$HORTATOR_DATA_DIR/initial-password` with owner-only permissions:
 
@@ -31,6 +31,8 @@ Alternatively, set `HORTATOR_ADMIN_PASSWORD` to a strong password of at least 12
 For development, run the same API command and, in a second terminal, `npm run dev --prefix web`. The Vite UI at **http://localhost:5173** proxies `/api` to port 8000. Its development server is reachable on the host network; use the production server for deployment.
 
 This workspace's persistent runtime uses **GNU Screen**: run `screen -x hortator` to join its shared terminal. Detach with **Ctrl-A, then D**. See [shared terminal controls and logs](docs/OPERATIONS.md#shared-gnu-screen-terminal) before starting another server.
+
+The console shows timestamped, colored bot/provider/Discord activity. Successful dashboard polling is hidden at normal verbosity. Press **`?`** for controls: **`+`/`-`** verbosity, **`f`** JSON/error details, **`r`** recent events, **`e`** recent errors and **`i`** current bot/provider state. Scope keys include **`d`** Discord, **`p`/`a`** providers and **`w`** web/dashboard. Controls preserve ordinary Screen scrollback and change only the console view. See [console inspection](docs/OPERATIONS.md#console-inspection-and-filtering) for all keys and startup options.
 
 The configured five-bot runtime, verified backups and current acceptance status are recorded in the [session handover](docs/SESSION_HANDOVER.md). The [configuration audit](docs/CONFIGURATION_STATUS.md) retains historical findings; the user subsequently resolved the provider/context/concurrency setup and confirmed live typing. The first-run instructions below describe a new installation; do not reinitialize this workspace's existing external data.
 
