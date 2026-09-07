@@ -1,20 +1,45 @@
 # Session handover: Astra Council Cabinet / Hortator
 
-Updated 2026-09-07 during the move to the standalone repository. This document carries the project and operating context into a new agent session. Read [AGENTS.md](../AGENTS.md) first; it contains the user's repository boundary and branch rules. The application is still named **Hortator Council** in its package, CLI and dashboard; the repository directory is **astra-council_cabinet**. This move does not rename or redesign the product.
+Updated 2026-09-07 after the configured five-bot audit, verified snapshots, terminal startup correction and typing feature. This document carries the project and operating context into a new agent session. Read [AGENTS.md](../AGENTS.md) first; it contains the user's repository boundary, branch and documentation rules. The application is still named **Hortator Council** in its package, CLI and dashboard; the repository directory is **astra-council_cabinet**. Continue this implementation and preserve the user's external configuration.
 
 ## Canonical workspace and Git
 
-- **Only working root:** `/home/codexy/codex/astra-council_cabinet`. Application files (`hortator/`, `web/`, `data/`, `pyproject.toml`) are directly under this root.
-- **Working branch:** `dev/initial_phase`. **NEVER PUSH TO MAIN.** No push of any branch is authorized by this handover. Do not merge or commit to main, bypass the guard, force-push, or rewrite the existing commits.
-- The user copied/restored this project and its Git history into this destination. The three incoming commits are `81c4686 Initial`, `c4b5738 Second phase`, and `9447ba6 first release`. The migration adds one fourth commit on the same feature branch; `git log -1` gives its identifier. No remotes were configured when inspected.
+- **Only working repository:** `/home/codexy/codex/astra-council_cabinet`. Application files (`hortator/`, `web/`, `pyproject.toml`) are directly under this root. Persistent data and host launch settings live outside the checkout, at the user's explicit request; see the recovery section below.
+- **Current task branch:** `feat/add_typing_indicator`, created from `dev/initial_phase` at `737c6bf` as explicitly requested. The development baseline remains `dev/initial_phase`. Create a new `feat/`, `hotfix/` or `dev/` branch for each new task from the current branch unless directed otherwise. Keep new commits linear; the user handles PRs and merging. **NEVER PUSH TO MAIN.** No push of any branch is authorized by this handover. Do not merge or commit to main, bypass the guard, force-push, or rewrite existing commits. Additional hook work is deferred.
+- The user copied/restored this project and its Git history into this destination. The three original incoming commits were `81c4686 Initial`, `c4b5738 Second phase`, and `9447ba6 first release`. The initial migration added a handover commit. No remotes existed at that original inspection; an `origin` remote and additional branches were present at the later Screen recovery. Inspect current Git state instead of assuming the original history is still the branch tip. No push is authorized by this handover.
 - The former `/home/codexy/codex/t3-code` workspace is explicitly out of scope. The user will clean it separately. Do not run Git there, edit it, use it as a worktree, restore from it, or synchronize this repository back into it.
 - `.githooks/pre-push` blocks every update or deletion targeting `refs/heads/main`. This repository has `core.hooksPath=.githooks`; on a fresh clone install that setting again. The guard was tested locally without contacting a remote.
 
 ### Copied local files and history
 
-The incoming commits tracked the runtime database/WAL, bootstrap password, master encryption key, logs, installed Node dependencies, generated web build, test screenshots and Python caches. This handover commit removes 6,275 such files **from Git tracking only**. Their local copies are preserved. A root `.gitignore` prevents staging them again; lockfiles, source, tests and deployment files remain tracked. Local data directories/files have owner-only permissions.
+The incoming commits tracked the runtime database/WAL, bootstrap password, master encryption key, logs, installed Node dependencies, generated web build, test screenshots and Python caches. The original migration removed 6,275 such files **from Git tracking only**, preserving their local copies at that time. A root `.gitignore` prevents staging them again on the current branch; older branches still tracked them. Later, the database/key/build were found missing during Screen recovery. Do not treat the original preservation check as evidence that the old runtime files still exist. Lockfiles, source, tests and deployment files remain tracked.
 
 **The earlier three commits still contain the bootstrap password and encryption key.** Removing files from the current tree does not remove historical copies. No history rewrite, credential rotation or remote publication was performed. Address that history in a separately scoped task before sharing the repository elsewhere. At migration inspection, no provider keys or Discord bot tokens were configured; the only stored secret was the dashboard password hash. Never print secret contents in reports or commit them again.
+
+## Runtime recovery and external storage
+
+The user reported that Screen crashed, then explained that they had been moving between Git branches and requested that runtime data be independent of the checkout. At recovery inspection, the old Screen session and API were gone, and the checkout had no `council.sqlite3`, `master.key`, or production dashboard build. The exact cause of the Screen crash was not established. No current database/key backup was located in the inspected workspace and known external Hortator locations; the retired workspace was left untouched.
+
+Persistent storage is now `/home/codexy/.local/share/hortator`, including its database, encryption key, bootstrap password, artifacts, and logs. The remaining local artifact directory and recovery log were moved there. A fresh disabled-draft setup was initialized at that recovery; previous runtime configuration was **not recovered**, and no historical credentials were restored from Git. **The user subsequently configured five real bots and Featherless through the dashboard. That current setup exists and is backed up; do not initialize, clear, or replace it with drafts.**
+
+The executable `/home/codexy/.local/bin/hortator` loads `/home/codexy/.config/hortator/runtime.env`, changes to this repository, and runs `uv run hortator` with its arguments. Both host files live outside Git. The environment file exports the absolute `HORTATOR_DATA_DIR`, so older branches with a `./data` fallback use the same external storage. The Screen shell also sources that file, and Screen exports the same directory to future windows. Data/config directories are mode 0700, the environment file is 0600, and the launcher is 0700.
+
+Use the external launcher for serve, backup, doctor, and password commands. Stop the server before switching branches, rebuild the dashboard when UI source changes, and restart through the launcher. Back up before trying schema-changing branches; external storage protects against checkout/cleanup operations, not application migrations. See [OPERATIONS.md](OPERATIONS.md#branch-changes-and-persistent-storage).
+
+### Configured state and snapshots
+
+The [2026-09-07 configuration audit](CONFIGURATION_STATUS.md) records all five distinct applications, live Discord identity/permissions checks, exact reasoning settings, reconnect evidence, optional plugin gaps and provider-plan limits. Hortator's Discord connection is online; its bot flag is enabled but the newly assigned Ollama provider is disabled, so model-assisted answers are paused. Ada, Socrates, Dirac and Curie remain disabled for the user to activate. Do not enable them as part of typing verification. The user raised Featherless's timeout from 120 to 360 seconds, moved Hortator to a new `hortator_ollama` profile, saved its credential field, then disabled that provider. Preserve these edits, but report the two Ollama setup issues: the credential field currently contains the endpoint URL and needs a real cloud API key; the catalog lists `kimi-k3`, but the saved model ID is `kimi-k3:cloud`. The new provider is `https://ollama.com/v1`. Its public catalog response is not authentication validation, and it has no completed request yet. Ollama has its own 120-second timeout. Correct the fields before enabling that provider.
+
+The four council bots still use Featherless Qwen. Before activating them together, set local Featherless concurrency to two requests for the plan's four-unit budget (each Qwen uses two; current local concurrency is four). The original unused Featherless `hortator` profile still declares 262,144 tokens; correct it to the plan's 32,768 cap before reusing it. If Kimi returns to that provider, its four-unit cost makes one request the safe initial concurrency for the mixed pool. These findings were reported without changing configuration; the active Ollama profile is not subject to Featherless's context cap.
+
+Verified snapshots live outside Git under `/home/codexy/.local/share/hortator-backups`:
+
+- `20260907T113338Z-configured-before-typing`: complete stopped-runtime archive before implementation; at that moment all five model activation flags were false.
+- `20260907T115803Z-configured-before-deploy`: complete stopped-runtime archive before deploying typing; Hortator's model is enabled, the four council models are disabled. The timeout was still 120 seconds at this snapshot.
+- `20260907T120654Z-configured-final`: consistent live SQLite snapshot at 14:06 Europe/Madrid, including the user's 360-second Featherless timeout, new Ollama provider/credential/profile and Hortator assignment. All configuration bodies and credential scopes matched the live database immediately after capture.
+- **Latest: `20260907T121700Z-configured-final`**: consistent live SQLite snapshot at **14:17 Europe/Madrid**, additionally preserving the user's disabled Ollama provider. Both live snapshots passed standalone database integrity, all nine file hashes and decryption of **13** encrypted entries. Logs/artifacts were copied separately during live capture, not as an atomic filesystem snapshot. Validation used immutable reads and excluded temporary WAL/SHM sidecars.
+
+Each contains SQLite, the matching master key, artifacts, a redacted configuration export, bootstrap password if present, logs and the external launcher/environment/Screen configuration. The first two archives passed SQLite integrity, SHA-256 checks and decryption of their 12 encrypted entries; the final snapshot includes the additional Ollama secret. Directories are 0700, files 0600; `RESTORE.md` in each snapshot gives restoration steps. The `.latest-requested` path file in the backup root identifies the most recent snapshot. Use timestamped SQLite snapshots rather than Git around a live database/key. No backup remote or automatic schedule was configured. A separate disk copy is still needed for disk-loss recovery.
 
 ## What the user is building
 
@@ -54,15 +79,18 @@ Keep the existing session; the user may already be attached.
 | --- | --- |
 | OS account | `codexy` |
 | Stable session name / window | `hortator` / `dashboard` |
-| Session identifier at handover | `267858.hortator` |
-| Current socket | `/run/screen/S-codexy/267858.hortator` |
+| Session identifier at handover | `387556.hortator` |
+| Current socket | `/run/screen/S-codexy/387556.hortator` |
 | Shell and default working directory | `/home/codexy/codex/astra-council_cabinet` |
-| Terminal log | `/home/codexy/codex/astra-council_cabinet/data/logs/hortator.screen.log` |
+| Terminal log | `/home/codexy/.local/share/hortator/logs/hortator.screen.log` |
 | Dashboard and API | `http://127.0.0.1:8000` |
-| Persistent data | `/home/codexy/codex/astra-council_cabinet/data` |
-| Password location | `data/initial-password` (read locally; do not print in the handover) |
+| Persistent data | `/home/codexy/.local/share/hortator` |
+| Password location | `/home/codexy/.local/share/hortator/initial-password` (read locally; do not print in the handover) |
+| Launcher / environment | `/home/codexy/.local/bin/hortator` / `/home/codexy/.config/hortator/runtime.env` |
 
-The original ad-hoc API process did not survive the previous turn. The user explicitly requested GNU Screen so both parties can observe output and control the same process. The session was preserved during this move, including its concurrent attachment, and repointed to this repository and log. The server was already stopped when migration began; dependencies/build/tests were run visibly in that shared shell before restarting it here.
+The user explicitly requested GNU Screen so both parties can observe output and control the same process. During this task the prior `343348.hortator` session disappeared while a `screen -Q windows` query was being issued; the precise crash cause is unconfirmed. Avoid `-Q` on this host. The new `387556.hortator` was created from this repository using **the user's `.screenrc` and `bash --login -i`**. Their 50,000-line scrollback and `termcapinfo xterm* ti@:te@` setting are preserved, and `.profile` sources `.bashrc` for aliases and PS1. Interactive/login status, the prompt and the `ll` alias were verified. Earlier recovery commands bypassed these files; do not repeat that workaround. Other Screen sessions were left alone.
+
+The tested typing code was loaded by restarting only the foreground server in this attached Screen session. At verification, API PID `396099` listened on loopback port 8000 with cwd in this repository; database, WAL/SHM and lock descriptors pointed to external storage, as did Screen's log. Rediscover PIDs before control. The open dashboard SSE connection held the first Ctrl-C at Uvicorn's graceful connection drain; after confirming no active turns or deliveries, a second Ctrl-C completed shutdown. This is separate from the Screen crash and gateway reconnect events.
 
 Attach with `screen -x hortator`. **Ctrl-A then D** detaches your viewer without stopping the server. **Ctrl-C** stops the foreground server and returns to the shell. Inspect `screen -ls`, foreground processes and the log before sending input; do not interrupt an unrelated user command. The stable session name is preferable to assuming the PID will never change.
 
@@ -70,7 +98,7 @@ From the shared shell, start/restart with:
 
 ```bash
 cd /home/codexy/codex/astra-council_cabinet
-uv run hortator serve --host 127.0.0.1 --port 8000
+/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000
 ```
 
 The agent can send shell input with `screen -S hortator -p dashboard -X stuff` once the foreground server has been deliberately stopped. Keep runtime commands in this session and report them to the user. Ordinary repository edits and read-only diagnostics can use normal tools. Do not detach the user's display, kill Screen, or start a second API worker. Screen survives terminal/turn detachment, not host reboot, and does not automatically restart a crashed application. Creation/recovery commands are in [OPERATIONS.md](OPERATIONS.md#shared-gnu-screen-terminal).
@@ -79,17 +107,18 @@ A separate legacy Vite process on port 5173 was observed outside Screen. It belo
 
 ## Verification and readiness
 
-- In the new root: created a fresh Python 3.12 environment with the frozen lockfile, installed Node dependencies from the lockfile, and rebuilt the production dashboard. The build passed strict TypeScript checking.
-- Re-ran **57 backend tests** and **5 Chromium browser tests** successfully in the shared Screen session. The browser suite starts an isolated temporary API on port 18000 and uses synthetic provider/Discord transports; it does not operate live bots.
+- At the initial migration: created a fresh Python 3.12 environment with the frozen lockfile, installed Node dependencies from the lockfile, and rebuilt the production dashboard. During later recovery, `uv sync --frozen`, `npm ci --prefix web`, and the production build passed again in the replacement Screen session. Strict TypeScript checking passed with the build.
+- The initial migration re-ran **57 backend tests** and **5 Chromium browser tests** successfully in the shared Screen session. These suites were not rerun for the host environment/documentation-only recovery. The browser suite starts an isolated temporary API on port 18000 and uses synthetic provider/Discord transports; it does not operate live bots.
 - The previous implementation also passed its backend suite on Python 3.14, Ruff checks/formatting and Prettier. The migration did not change application behavior. [VERIFICATION.md](VERIFICATION.md) separates historical and current evidence.
-- Main data is preserved. Hortator, Ada and Socrates remain disabled drafts; the default OpenRouter profile still needs a real model identifier, provider credentials, Discord application tokens and guild/channel IDs. No live messages or model requests were present at migration inspection. Do not invent connected bots or measured usage.
-- Live Discord, OpenRouter/custom endpoints and optional media/search integration still require the user's configuration and external acceptance. Docker packaging is present; actual image build/container startup was not verified because the available environment denied Docker daemon socket access.
+- The typing feature passed **71 backend tests on Python 3.12**, including 14 new presence tests, plus Ruff lint/format checks. No UI source changed, so the existing built dashboard was retained. Health, dashboard HTML, authenticated bot readiness, login/logout revocation and external runtime file paths passed after deployment. The user remains attached to Screen.
+- The user-configured five applications passed live read-only token/application/intent/guild/channel-permission checks. The original Qwen/Kimi Featherless catalog and plan checks exposed context/concurrency limits; the later Ollama catalog check exposed an exact model-ID mismatch, as detailed in the audit. Hortator has real completed Kimi requests/deliveries through its former Featherless profile. New Ollama and normal-bot completion/tool acceptance and visual Discord typing acceptance remain unverified; no paid probes or manual Discord posts were sent by the agent and no council bots were enabled.
+- Optional search/image/TTS integration still needs configuration and external acceptance. Docker packaging is present; actual image build/container startup was not verified because the available environment denied Docker daemon socket access.
 - Process locking, backup/restore, authorization, cancellation, scoped context, compaction, raw JSON, provider failures, write-only secrets and populated trajectory inspection have controlled test coverage. Such coverage is not a claim of compatibility with every vendor or a proven large-scale deployment limit.
 
 ## Resume without losing continuity
 
 1. Confirm this repository root and feature branch, read AGENTS and this handover, and inspect local status without overwriting the user's changes.
-2. Check the existing Screen session and port 8000. Confirm the running executable, working directory and log resolve to this root. Preserve the user's attachment and current configuration.
+2. Check the existing Screen session and port 8000. Confirm the running executable and working directory resolve to this root, while the database and log resolve to `/home/codexy/.local/share/hortator`. Preserve the user's attachment and current configuration. Do not use any `data/` directory recreated by an old branch as live storage.
 3. Give a short status confirmation, then continue the user's next requested work on this implementation. There is no new feature mandate hidden in the handover; the next session should not launch a redesign or enable unconfigured bots.
 4. Update this handover when branch/runtime conventions or material project state change. Keep the continuation prompt useful, keep work off main, and do not push unless explicitly asked.
 
