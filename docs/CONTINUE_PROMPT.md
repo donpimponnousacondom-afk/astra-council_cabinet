@@ -1,0 +1,17 @@
+# Continue this project in a new session
+
+Open the project at `/home/codexy/codex/astra-council_cabinet`, then paste:
+
+```text
+Continue our existing Astra Council Cabinet / Hortator project from this repository. This is a session handover, not a new implementation or architecture exercise.
+
+First read AGENTS.md, docs/SESSION_HANDOVER.md, README.md and docs/OPERATIONS.md. Consult docs/PLAN.md and docs/VERIFICATION.md for the accepted design and actual validation. Treat them as continuity from our previous session.
+
+Work only in /home/codexy/codex/astra-council_cabinet on dev/initial_phase. The application is directly at this root. Completely leave /home/codexy/codex/t3-code alone: no Git, edits, cleanup, restore or synchronization there. NEVER PUSH TO MAIN. Do not push any branch unless I explicitly request it, and do not bypass the installed pre-push guard or rewrite the existing history.
+
+We share GNU Screen session hortator, window dashboard, as codexy. Its current socket is /run/screen/S-codexy/267858.hortator; rediscover it with screen -ls if needed. Use this existing session for runtime control so I see the same output. Preserve my attachment. The shell/data/logs must point into this new repository; the log is data/logs/hortator.screen.log and the production dashboard/API use http://127.0.0.1:8000. Do not start a second runtime or use the legacy Vite process on port 5173.
+
+Preserve the implemented provider/profile/bot separation, arbitrary provider JSON, isolated context and memory, trajectories, plugins and exact owner security for Discord snowflake 1482143139828596916. Never print or commit credentials. Read the handover's note about copied secret files in earlier Git history before any future publication.
+
+Start by checking this repository's branch/status and the existing Screen runtime, then give me a brief continuity/status confirmation. Continue subsequent work from the current implementation and configuration as if we were still in the same session.
+```

@@ -2,6 +2,8 @@
 
 Verified in this workspace on 2026-09-07. Provider and Discord tests use controlled transports; no Discord tokens, provider keys, or paid requests were supplied.
 
+During the standalone-repository migration on the same date, dependencies were restored and the production build, 57 backend tests on Python 3.12 and all 5 browser tests were rerun successfully from `/home/codexy/codex/astra-council_cabinet` inside the shared Screen session. Ruff, Prettier, documentation links and the migrated production API/assets/login/logout checks also passed. Python 3.14 results below refer to the earlier implementation check. The local pre-push guard was checked against feature-branch updates, pushes to main and deletion of main without contacting a remote. See [SESSION_HANDOVER.md](SESSION_HANDOVER.md) for repository/runtime continuity.
+
 | Check | Result |
 | --- | --- |
 | Backend suite, Python 3.12 | 57 passed |
@@ -29,7 +31,7 @@ Dependency deprecation warnings remain in the test client (and Python 3.12's Dis
 
 ## Repeat the checks
 
-From `council/`:
+From `/home/codexy/codex/astra-council_cabinet`:
 
 ```bash
 uv sync --frozen

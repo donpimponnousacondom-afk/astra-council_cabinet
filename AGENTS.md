@@ -1,0 +1,29 @@
+# Council project continuity
+
+## Repository boundary and branch policy
+
+- The sole working repository is `/home/codexy/codex/astra-council_cabinet`. Its top level is the application root; there is no nested `council/` directory here.
+- The user explicitly retired the previous workspace for this project. Do not run Git, edit files, restore files, synchronize changes, or clean up in `/home/codexy/codex/t3-code`. Do not use that repository as a worktree or source of truth.
+- Work on `dev/initial_phase` unless the user names another feature branch. Verify `git rev-parse --show-toplevel` and the branch before Git mutations.
+- **NEVER PUSH TO MAIN.** Do not commit or merge into `main`. Do not push any branch unless the user explicitly asks. The local `core.hooksPath=.githooks` setting installs an additional pre-push guard for `refs/heads/main`; do not bypass it. On a new clone, install it with `git config core.hooksPath .githooks`.
+- Never stage runtime data, credentials, logs, caches, dependencies, build output or test screenshots. The migration commit removes previously tracked copies from the current tree while preserving local files. Earlier commits still contain those copies; do not rewrite history or rotate credentials without a separately scoped task.
+
+## Read before continuing
+
+Read `docs/SESSION_HANDOVER.md`, then `README.md` and `docs/OPERATIONS.md`. Consult `docs/PLAN.md` for the researched design, `docs/VERIFICATION.md` for actual test evidence, and `docs/API.md` / `docs/PLUGINS.md` for the control and extension contracts. Continue the existing implementation; do not replace it with a new scaffold or assume this is still a planning exercise.
+
+## Shared runtime
+
+- The user and agent share GNU Screen session `hortator`, window `dashboard`, under OS account `codexy`. Use it for foreground runtime commands so the user can observe and control the same terminal.
+- Join with `screen -x hortator`; this permits concurrent attachment. Do not detach the user's display or terminate the Screen session. Ctrl-A then D detaches a viewer; Ctrl-C stops the foreground server but preserves the shell.
+- The shell working directory, Screen default directory, data directory and log must point into this repository. Current log: `data/logs/hortator.screen.log`. Inspect Screen and foreground process state before sending input; do not interrupt an unrelated user command.
+- Start with `uv run hortator serve --host 127.0.0.1 --port 8000` from this root. One worker / one runtime only. Keep it running in Screen after the turn when it was running or the task requested startup. Do not create a second unsupervised API process.
+- The production dashboard and API share port 8000. Do not use the legacy Vite process on port 5173 as evidence of the current build. Rebuild `web/dist` when UI source changes; new routes/static mounts may require a server restart.
+- Read-only diagnostics and repository edits may use ordinary tools. Runtime start/stop/restart commands belong in the shared Screen session. Keep the user informed of those changes.
+
+## Product constraints
+
+- Every bot is a distinct Discord application. Provider transport, reusable model profiles, bot personality/capabilities, and scoped memory remain separate.
+- Discord owner is the immutable snowflake `1482143139828596916` (`.normal.man.`, The Boss). Only that genuine human identity may command or converse with Hortator. Keep deterministic commands outside model execution; model inspection stays read-only. Credentials are dashboard-only.
+- Preserve arbitrary vendor parameter JSON, independent cadence/cooldowns, intentional silence, bounded tools/compaction, durable trajectories and explicit delivery uncertainty. Do not publish provider reasoning fields to Discord.
+- Follow the existing test and build commands. Run checks appropriate to changes; never claim live Discord/provider validation from mocked tests. Do not expose secret values in tool output, documentation or commits.
