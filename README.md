@@ -18,7 +18,7 @@ npm run build --prefix web
 uv run hortator serve
 ```
 
-Persistent data stays outside the checkout, so changing branches or cleaning generated files does not remove the database, credentials, memory, or artifacts. On this workspace, the installed `~/.local/bin/hortator` launcher loads `~/.config/hortator/runtime.env` and sets the same data directory on every branch. Use `hortator serve --host 127.0.0.1 --port 8000` in the shared Screen shell. The launcher also supports commands such as `hortator backup /absolute/path/to/new-backup-directory`.
+Persistent data stays outside the checkout, so changing branches or cleaning generated files does not remove the database, credentials, memory, or artifacts. On this workspace, the installed `~/.local/bin/hortator` launcher loads `~/.config/hortator/runtime.env` and sets the same data directory on every branch. Use `hortator serve --host 127.0.0.1 --port 8000 --color` in the shared Screen shell; the explicit flag overrides its inherited `NO_COLOR`. The launcher also supports commands such as `hortator backup /absolute/path/to/new-backup-directory`.
 
 Open **http://127.0.0.1:8000**. On first startup, a random dashboard password is written to `$HORTATOR_DATA_DIR/initial-password` with owner-only permissions:
 

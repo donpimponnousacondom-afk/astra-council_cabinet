@@ -102,7 +102,7 @@ chmod 700 "$HORTATOR_DATA_DIR/logs"
 umask 077
 screen -c /home/codexy/.screenrc -dmS hortator -t dashboard -L -Logfile "$HORTATOR_DATA_DIR/logs/hortator.screen.log" bash --login -i
 screen -S hortator -p dashboard -X logfile flush 1
-screen -S hortator -p dashboard -X stuff $'/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000\n'
+screen -S hortator -p dashboard -X stuff $'/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000 --color\n'
 ```
 
 An interactive login Bash reads this user's `.profile`, which sources `.bashrc` (the file is `.bashrc`, not `.bash_rc`). This loads their aliases and PS1. Do not use `--noprofile`, `--norc`, or an empty Screen configuration. The recovery on 2026-09-07 verified the login/interactive flags, nonempty prompt, and `ll` alias. Preserve an existing attachment when restarting the foreground server; recreating Screen is only necessary if the session is gone.
