@@ -1,6 +1,6 @@
 # Operations
 
-All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [SESSION_HANDOVER.md](SESSION_HANDOVER.md) for continuity and [AGENTS.md](../AGENTS.md) for branch and documentation rules. Create each new task branch from the current branch; the user handles PRs and merging. Never push to main or push any branch without an explicit request.
+All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [SESSION_HANDOVER.md](SESSION_HANDOVER.md) for continuity and [AGENTS.md](../AGENTS.md) for branch and documentation rules. The user handles PRs with GitHub **Squash and merge**; after a merge, update main with a fast-forward pull and create a fresh task branch. Never push to main or push any branch without an explicit request.
 
 ## Process and storage
 
@@ -24,6 +24,46 @@ Keep the database, encryption key, bootstrap password, artifacts, and logs in th
 Before switching a running application's branch, stop the foreground server with Ctrl-C in Screen. Switch to the intended feature branch, rebuild `web/dist` if UI source changed (run `npm ci --prefix web` first if its dependencies changed), then run `hortator serve --host 127.0.0.1 --port 8000`. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
 
 For branches that change database schemas, make an external backup first; separating storage from Git does not make schema changes reversible. Use an explicit `--data-dir` pointing to separate temporary storage for tests or experiments that should not use live configuration.
+
+### Repeating the squash-merge workflow
+
+After the previous PR is merged, attach with `screen -x hortator`, let active work finish, then press Ctrl-C and wait for the shared Bash prompt. In that shell, replace `feat/next_feature` with the new task name:
+
+```bash
+cd /home/codexy/codex/astra-council_cabinet
+git status --short
+test -z "$(git status --porcelain)" &&
+git switch main &&
+git pull --ff-only origin main &&
+git switch -c feat/next_feature
+```
+
+The clean-tree guard stops if edits remain; commit them on their task branch or resolve them deliberately. `--ff-only` refuses divergent history instead of creating a merge commit. Do not work on main if the pull or new branch creation fails. A squash merge has a new commit ID, so do not merge the old feature branch back into main or rebase it automatically. Keep old local branches until their work is verified as merged; delete them only when requested. [Git pull documentation](https://git-scm.com/docs/git-pull).
+
+After the branch is created, restore dependencies if needed, build the dashboard and start the foreground server:
+
+```bash
+uv sync --frozen &&
+npm ci --prefix web &&
+npm run build --prefix web &&
+/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000
+```
+
+When the feature is finished and verified, make its local commit **before** the final build/restart. Builds embed commit metadata, so a build produced before that commit correctly identifies the older commit plus uncommitted changes. Keep all pushes and the PR squash merge under the user's control.
+
+## Running code identity
+
+Send **`!version`** or **`!ver`** to Hortator, or inspect the dashboard's **Running server** banner. Both show the commit, commit title and ISO 8601 commit date/time in UTC. The command also shows startup time, branch, source cleanliness and package version. These are deterministic commands and remain available while model execution is paused. The authenticated **`GET /api/version`** returns the same server metadata; `/api/status` includes it as `version`. Hortator can query `council_inspect` with `resource: "version"` when answering an owner question.
+
+Server metadata is captured once at startup and is not recomputed on each request. A later Git checkout does not change the identity of loaded code. The dashboard embeds a separate source stamp and build timestamp during Vite's build; **Build details** shows both identities and highlights differing commits. Uncommitted builds remain explicitly labelled, even when commit IDs match; the commit alone cannot identify their local edits. The package's `0.1.0` remains compatibility metadata, not the displayed release identity. `/api/health` keeps its small existing package-version response; detailed metadata requires dashboard authentication.
+
+Git-free archives report unavailable commit metadata unless supplied with an explicit build stamp. Docker carries the dashboard stamp into the Python package. To build a stamped image from a committed checkout:
+
+```bash
+docker compose build --build-arg HORTATOR_BUILD_INFO="$(uv run python -m hortator.version)"
+```
+
+This argument is non-secret source metadata (commit, commit title, timestamp, branch and dirty flag), not credentials. A packaged Python deployment can use the same `HORTATOR_BUILD_INFO` JSON or `hortator/_build_info.json`; Git metadata takes precedence in a real checkout. No version stamp contains a database path or runtime secrets. Build output/stamps remain ignored by Git.
 
 ## Shared GNU Screen terminal
 
@@ -82,6 +122,10 @@ Incoming messages are deduplicated by Discord message ID, because several client
 Changing a room's guild, channel or thread policy immediately removes its old channels from eligible work. The runtime checks current scope before sending as well. Deleted configuration identifiers are permanently retired so a new bot cannot accidentally inherit the old identity's memory, resources or statistics; use a new identifier when recreating one.
 
 Known council bots are admitted as speakers. External bots require room opt-in; webhooks are excluded. Regular bots ignore command-prefixed input. Hortator routes commands before model execution, including commands supplied as owner-uploaded UTF-8 text/JSON attachments.
+
+**`!help`** sends the command list inside a code block, without the repeated owner/credential preface. Longer lists are split at line boundaries into independently fenced messages within Discord's 2,000 UTF-16-unit budget. `!version` and `!ver` use the same formatting. Authorization still runs before either command.
+
+All bots receive guidance to use Discord Markdown when helpful, and message delivery preserves it: emphasis, underline/strike, spoilers, headings/subtext, lists, quotes, links, inline code and fenced code. Ordinary prose stays outside code blocks. Long replies still use the existing full-response attachment; a truncated preview closes an open code fence before the attachment note. Mention suppression and hidden-reasoning filtering remain in force. [Discord formatting guide](https://support.discord.com/hc/en-us/articles/210298617-Markdown-Text-101-Chat-Formatting-Bold-Italic-Underline).
 
 Long council output is sent as one message with a readable preview and `full-response.txt`. This prevents multi-chunk output from defeating cooldowns. Full generated content remains in the outbox/trajectory and is used as canonical council context. Generated media is attached to the same message; each attachment is limited to 8 MB. Forum channels must contain a thread/post; `!thread` or the Rooms panel creates it. Commands and incident reports use Hortator's control connection and are not delayed by the model's conversational cadence.
 
@@ -151,6 +195,7 @@ Environment variables:
 | `HORTATOR_SECURE_COOKIES` | `0` | Set `1` for HTTPS deployments |
 | `HORTATOR_ALLOWED_ORIGINS` | Same Host only | Comma-separated extra trusted origins |
 | `HORTATOR_WEB_DIR` | `web/dist` | Built UI assets |
+| `HORTATOR_BUILD_INFO` | Git metadata, otherwise unknown | Non-secret JSON source stamp for Git-free release/container builds |
 | `TIKTOKEN_CACHE_DIR` | Library default | Optional tokenizer asset cache; baked into Docker image |
 
 ## Backup and restore

@@ -6,6 +6,7 @@ All endpoints except `/api/health` and login require the dashboard session. Log 
 | --- | --- |
 | `GET /api/auth/session`, `POST /api/auth/logout` | Session state/revocation |
 | `GET /api/status` | Configuration, readiness, gateway state, provider health, active requests, outbox counts |
+| `GET /api/version` | Startup-captured commit, ISO commit date/time, title, branch, dirty flag, provenance, package and server startup time |
 | `GET /api/stats?hours=24` | Usage/cost/timing/failure groups, hourly history, tool and turn outcomes |
 | `GET /api/config/{kind}` / `/{id}` | Read configuration, with credential-present flags only |
 | `GET /api/config-schemas` | JSON schemas for every configuration resource |
@@ -23,6 +24,8 @@ All endpoints except `/api/health` and login require the dashboard session. Log 
 | `GET /api/openapi.json` | Authenticated OpenAPI specification |
 
 The configuration kinds are `providers`, `profiles`, `bots`, `prompts`, `rooms`, `plugins`, and `settings` (`global`). `id` is immutable. Optional `revision` guards concurrent edits. A patch merges top-level fields; nested JSON objects and lists are deliberately replaced, not magically combined.
+
+`/api/status.version` and `/api/version` share the same snapshot: `commit` (full hash), `short_commit` (12 characters), `commit_title`, `committed_at` (ISO UTC), `branch`, `dirty`, `provenance` (`git`, `build` or `unknown`), `package_version` and `started_at` (ISO UTC). Missing source fields are null, not invented version numbers. Metadata stays fixed if the checkout changes after startup. The dashboard's build stamp is separately embedded in its JS bundle and emitted as `web/dist/build-info.json`; it also includes `built_at`. The public health endpoint retains its existing package-version field.
 
 Control request shape:
 
@@ -53,6 +56,8 @@ Bot token validation calls Discord to check both the application and bot identit
 
 ```text
 !help
+!version
+!ver
 !status
 !stats 168
 !stop all
@@ -82,4 +87,6 @@ Bot token validation calls Discord to check both the application and bot identit
 !dm What failed in the last day, and which model profiles were involved?
 ```
 
-`!get`, `!set`, `!create`, `!delete`, and `!clone` provide configuration parity instead of inventing a different command for every vendor parameter. Credentials are the deliberate exception: enter them in the dashboard. A command error never falls through to the model. A normal owner message is queued for Hortator's model, whose `council_inspect` tool can query status/statistics/configuration/events/contexts/trajectories but cannot mutate them.
+`!get`, `!set`, `!create`, `!delete`, and `!clone` provide configuration parity instead of inventing a different command for every vendor parameter. Credentials are the deliberate exception: enter them in the dashboard. A command error never falls through to the model. A normal owner message is queued for Hortator's model, whose `council_inspect` tool can query version/status/statistics/configuration/events/contexts/trajectories but cannot mutate them.
+
+`!help` returns the complete command list in fenced code blocks with no repeated owner/credential preface. `!version` and `!ver` are aliases for the same deterministic, read-only version report, also fenced. Formatting does not change exact-owner authorization, introduce model calls or enable mutations through the inspector. Native Discord Markdown in generated messages is preserved under the existing reasoning/mention rules.

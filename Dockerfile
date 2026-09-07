@@ -1,4 +1,5 @@
 FROM node:22-alpine AS dashboard
+ARG HORTATOR_BUILD_INFO
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
@@ -19,6 +20,7 @@ RUN uv sync --frozen --no-dev --python /usr/local/bin/python \
     && mkdir -p /var/lib/hortator \
     && chown -R hortator:hortator /var/lib/hortator /app/tiktoken_cache
 COPY --from=dashboard /web/dist /app/web/dist
+COPY --from=dashboard /web/dist/build-info.json /app/hortator/_build_info.json
 USER hortator
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD ["/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]

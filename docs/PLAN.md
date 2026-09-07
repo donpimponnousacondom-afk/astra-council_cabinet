@@ -2,7 +2,7 @@
 
 This implementation now lives at `/home/codexy/codex/astra-council_cabinet`. The [session handover](SESSION_HANDOVER.md) records continuity, the shared GNU Screen runtime and the feature-branch-only workflow; the design below remains the accepted foundation.
 
-Standing workflow preferences are maintained in [AGENTS.md](../AGENTS.md): each new feature/fix/development task starts on a new branch from the current branch unless directed otherwise, new history stays linear, and the user handles PRs/merging. No main changes or unrequested pushes. Update the relevant design, operations, verification and handover documents whenever a user decision changes ongoing work; future agents must be able to recover these decisions from the repository.
+Standing workflow preferences are maintained in [AGENTS.md](../AGENTS.md): the user squash-merges PRs on GitHub. After a merge, require a clean working tree, fast-forward local main from origin, and create a fresh task branch before implementation. New task history stays linear; the user handles PRs/merging. No local implementation commits on main or unrequested pushes. Update the relevant design, operations, verification and handover documents whenever a user decision changes ongoing work; future agents must be able to recover these decisions from the repository.
 
 The product is a single-host council, not a wrapper around one shared agent. Every bot is a distinct Discord application. Production runs one Uvicorn worker containing supervised discord.py clients, an asynchronous scheduler, provider HTTP clients, tool registry, control API and built React assets. SQLite WAL persists configuration, scoped memory, transcripts, requests, trajectories, metrics, credentials (encrypted), and an outbox. Multiple API workers are explicitly unsupported and prevented by a process lock.
 
@@ -44,6 +44,16 @@ The user requested a general feature branch for the remaining implementation ref
 - **Orderly terminal shutdown:** the CLI server signals dashboard SSE streams to finish before Uvicorn drains HTTP connections, with a ten-second HTTP drain backstop. SIGINT/SIGTERM still run the existing runtime cleanup and preserve the Screen shell. This does not change delivery uncertainty or cancellation semantics.
 
 No schema migration or saved configuration rewrite is needed. Validate JSON round trips through the real dashboard/API, reconnect reporting through isolated transports, and shutdown with real child processes holding an SSE connection. Record measured results in [VERIFICATION.md](VERIFICATION.md).
+
+## Running version and Discord formatting — 2026-09-07
+
+The user requested a fresh feature branch after their squash merge of PR #5. `feat/runtime_version` starts from `c42f0c3` after an explicit fast-forward pull of main. The previous PR and local feature tree matched; no local main commit, remote push, merge commit or history rewrite was performed.
+
+- **Server identity:** capture commit hash/title, committer timestamp in ISO UTC, branch and dirty state once during server startup. Keep the package version separate. `!version` and `!ver`, authenticated `/api/version`, `/api/status.version`, startup ledger evidence and Hortator's read-only `council_inspect` share that snapshot. A later checkout must never change the claimed identity of loaded code.
+- **Dashboard identity:** replace the hardcoded footer version with a visible running-server banner and expandable build details. Embed a separate source stamp plus build time into Vite output; show when the dashboard/server commits differ. Unknown source metadata and uncommitted builds remain explicit. Git-free release/container builds can supply a validated source stamp; do not guess from file dates.
+- **Concise help and native Markdown:** `!help` is a complete fenced command list without the repeated owner/credential preface, and `!version` uses the same format. Paginate long code reports within Discord's message budget and close each fence. All five bots receive native Markdown guidance; transport preserves formatting, mention suppression and reasoning filtering. Long output retains the existing full attachment with a balanced code preview.
+
+No provider/model setting, credential, activation flag or database schema change is required. Acceptance covers real temporary Git histories, immutable running metadata, no-Git stamps, authorized commands/inspection without model calls, Unicode/fence limits, Markdown delivery for all five identities and desktop/mobile dashboard evidence. The user still performs full live council acceptance. Final deployment builds/restarts after committing so the visible identity names the final source revision.
 
 ## Invariants
 

@@ -41,7 +41,7 @@ def function(name, description, parameters):
 
 SPEAK = function(
     "council_speak",
-    "Publish one considered council contribution, optionally replying to a message ID in this context. This ends your turn. Never include reasoning or analysis traces.",
+    "Publish one considered council contribution using Discord Markdown where helpful, optionally replying to a message ID in this context. This ends your turn. Never include reasoning or analysis traces.",
     schema(
         {
             "content": {"type": "string", "minLength": 1, "maxLength": 12000},
@@ -242,12 +242,13 @@ class Registry:
             PluginSpec(
                 "council_inspect",
                 "Council inspector",
-                "Read council status, statistics, configuration, events, trajectory or context for The Boss. No mutations or credentials.",
+                "Read the running code version, council status, statistics, configuration, events, trajectory or context for The Boss. No mutations or credentials.",
                 schema(
                     {
                         "resource": {
                             "type": "string",
                             "enum": [
+                                "version",
                                 "status",
                                 "stats",
                                 "bots",

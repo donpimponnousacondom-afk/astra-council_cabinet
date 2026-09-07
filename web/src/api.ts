@@ -1,3 +1,5 @@
+import type { RuntimeVersion } from "./Version";
+
 export type RecordData = Record<string, any>;
 export type Kind =
   | "bots"
@@ -9,6 +11,7 @@ export type Kind =
   | "settings";
 export type Page = "council" | "trajectory" | "analytics" | "commands" | Kind;
 export type Dashboard = {
+  version?: RuntimeVersion;
   bots: RecordData[];
   providers: RecordData[];
   profiles: RecordData[];

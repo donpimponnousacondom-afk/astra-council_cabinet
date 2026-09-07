@@ -13,6 +13,8 @@ import httpx
 from .models import ControlError, OWNER_ID
 from .runtime import DeliveryError
 from .security import Actor
+from .discord_text import CodeBlock, code_pages, markdown_preview, preview
+from .version import version_text
 
 
 TYPING_INTERVAL_SECONDS = 5
@@ -21,6 +23,7 @@ RECONNECT_NOTICE_DELAY_SECONDS = 30
 
 
 COMMANDS = [
+    ("!version | !ver", "Running code: commit, ISO date/time, title and startup time"),
     ("!status", "Council, Discord gateway and provider status"),
     ("!stats [hours]", "Usage, timings, costs and failures; default 24 hours"),
     ("!stop [bot-id | all | providers:id]", "Pause and cancel active work immediately"),
@@ -40,16 +43,11 @@ COMMANDS = [
     ("!memory <bot-id> <JSON>", "Edit notes: channel_id, key, value (empty deletes)"),
     ("!trajectory [turn-id]", "Export the full turn or list recent turns"),
     ("!events [bot-id]", "Recent operational events"),
-    ("!check <provider-id>", "Probe authentication/transport via model discovery"),
+    ("!check <provider-id>", "Discover model catalog; does not verify credentials or generation"),
     ("!reset-circuit <provider-id>", "Allow another completion probe immediately"),
     ("!thread <room-id> <name>", "Create a public thread or forum post"),
     ("!dm <command or question>", "Continue privately with Hortator"),
 ]
-
-
-def preview(text, budget=1800):
-    data = text.encode("utf-16-le")
-    return data[: budget * 2].decode("utf-16-le", errors="ignore")
 
 
 def owner_message(message):
@@ -526,6 +524,10 @@ class DiscordManager:
                 )
 
     async def reply(self, channel, result):
+        if isinstance(result, CodeBlock):
+            for page in code_pages(self.vault.redact(result.text), result.language):
+                await channel.send(content=page, allowed_mentions=discord.AllowedMentions.none())
+            return
         content = result if isinstance(result, str) else json.dumps(result, indent=2, ensure_ascii=False)
         content = self.vault.redact(content)
         if len(content.encode("utf-16-le")) <= 3800:
@@ -577,15 +579,12 @@ class DiscordManager:
                 text += " " + (await message.attachments[0].read()).decode("utf-8")
             parts = text.split(maxsplit=1)
             name, rest = parts[0].lower() if parts else "help", parts[1] if len(parts) > 1 else ""
-            aliases = {"models": "profiles", "pause": "stop", "resume": "start"}
+            aliases = {"models": "profiles", "pause": "stop", "resume": "start", "ver": "version"}
             name = aliases.get(name, name)
             if name == "help":
-                result = (
-                    "Only The Boss ("
-                    + OWNER_ID
-                    + ") can use these commands. JSON/text may be attached as a file. Credentials are dashboard-only.\n\n"
-                    + "\n".join(f"{cmd} — {desc}" for cmd, desc in COMMANDS)
-                )
+                result = CodeBlock("\n".join(f"{cmd} — {desc}" for cmd, desc in COMMANDS))
+            elif name == "version":
+                result = CodeBlock(version_text(self.service.version()))
             elif name == "status":
                 status = self.service.status()
                 result = {
@@ -761,7 +760,7 @@ class DiscordManager:
             files = [discord.File(path) for path in paths]
             if len(content.encode("utf-16-le")) > 3900:
                 files.append(discord.File(io.BytesIO(content.encode()), filename="full-response.txt"))
-                content = preview(content, 1700) + "\n\n↳ Full response attached."
+                content = markdown_preview(content) + "\n\n↳ Full response attached."
             reference = (
                 discord.MessageReference(
                     message_id=int(reply_to), channel_id=int(channel_id), fail_if_not_exists=False

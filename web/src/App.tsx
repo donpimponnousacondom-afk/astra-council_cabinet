@@ -50,6 +50,7 @@ import {
 } from "./api";
 import type { Dashboard, Kind, Page, RecordData } from "./api";
 import { reasoningSummary } from "./Reasoning";
+import { Version } from "./Version";
 import {
   Avatar,
   Badge,
@@ -429,6 +430,7 @@ export default function App() {
           </div>
         </header>
         <main>
+          <Version version={dashboard.version} />
           <div className="page-heading">
             <div>
               <div className="eyebrow">
@@ -869,9 +871,6 @@ export default function App() {
           <footer className="page-footer">
             <span>
               <Logo small />A council of independent minds.
-            </span>
-            <span>
-              Hortator <span className="version">v0.1.0</span>
             </span>
           </footer>
         </main>

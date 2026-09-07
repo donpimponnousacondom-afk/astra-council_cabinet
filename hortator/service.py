@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from .models import ControlError, KINDS, OWNER_ID, SCHEMAS
 from .store import uid
+from .version import runtime_version
 
 
 class Service:
@@ -16,6 +17,10 @@ class Service:
         self.store, self.vault, self.pool = store, vault, pool
         self.engine = self.registry = self.connector = None
         self.lock = asyncio.Lock()
+        self._version = runtime_version()
+
+    def version(self):
+        return self.vault.redact(self._version)
 
     def seed(self):
         if self.store.get("settings", "global"):
@@ -430,6 +435,7 @@ class Service:
 
     def status(self):
         return {
+            "version": self.version(),
             "owner_id": OWNER_ID,
             "now": time.time(),
             "settings": self.store.get("settings", "global"),
@@ -502,6 +508,8 @@ class Service:
         return value
 
     def inspect(self, resource, entity_id=None, channel_id=None):
+        if resource == "version":
+            return self.version()
         if resource == "status":
             return self.status()
         if resource == "stats":

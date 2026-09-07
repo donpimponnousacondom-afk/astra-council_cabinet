@@ -2,6 +2,8 @@
 
 Plugins are ordinary installed Python packages with an `hortator.plugins` entry point. The runtime loads these trusted local packages at startup; it never installs or executes code named by a model or Discord message.
 
+The built-in owner-only `council_inspect` accepts `resource: "version"` to read the same startup-captured source metadata as `!version` and `/api/version`. It requires Hortator's enabled grant and a runtime-verified owner context. The tool performs no Git mutation, configuration write or provider call. Source identity remains fixed for the running server.
+
 Example package metadata:
 
 ```toml

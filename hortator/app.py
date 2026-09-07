@@ -51,7 +51,9 @@ class Kernel:
         self.store.recover()
         self.connector.start()
         self.engine.start()
-        self.store.emit("runtime.started", {"version": __version__, "pid": os.getpid()})
+        self.store.emit(
+            "runtime.started", {"version": __version__, "build": self.service.version(), "pid": os.getpid()}
+        )
 
     async def close(self):
         await self.engine.close()
@@ -176,6 +178,10 @@ def create_app(directory=None, start_runtime=True, *, stopping=None):
     @app.get("/api/health")
     async def health():
         return {"status": "ok", "version": __version__}
+
+    @app.get("/api/version")
+    async def version(actor=Depends(authenticated), k=Depends(kernel)):
+        return k.service.version()
 
     @app.post("/api/auth/login")
     async def login(body: LoginBody, request: Request, k=Depends(kernel)):

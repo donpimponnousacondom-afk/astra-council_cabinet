@@ -2,6 +2,18 @@
 
 Verified in this workspace on 2026-09-07. Automated provider/Discord tests use controlled transports and synthetic credentials. Later read-only live checks used the user's configured credentials in memory without exposing them or making paid completion probes; see the typing/configuration verification below.
 
+## Running version and Discord formatting
+
+On `feat/runtime_version`, based on fast-forwarded main `c42f0c3` on 2026-09-07:
+
+- Verified [PR #5](https://github.com/donpimponnousacondom-afk/astra-council_cabinet/pull/5) was squash-merged into main at 19:52:07 UTC and that its tree matched local `90671eb`. Let the active Hortator turn finish, stopped the existing server with one Ctrl-C in attached Screen, switched to main, ran `git pull --ff-only origin main`, and created the new feature branch. No merge commit, local main implementation commit, history rewrite, push or additional branch deletion occurred.
+- **103 backend tests passed** on Python 3.12. The 23 new cases cover real temporary Git commits/dirty and detached states, ignored runtime files, rejection of unrelated enclosing repositories, an authenticated API whose reported version stays unchanged after a later checkout, read-only owner inspection, explicit/missing/malformed Git-free build stamps, both deterministic command aliases, secret redaction, complete fenced help, owner/bot/webhook rejection, Unicode/fence message limits, native Markdown delivery for all five identities and complete long-output attachments with a closed preview fence. Tests use isolated state and synthetic transports; no live command was posted.
+- **11 Playwright tests passed:** nine Chromium dashboard flows plus two Node build-metadata checks. New browser cases compare the banner with the real temporary API and generated dashboard manifest, verify ISO timestamps/full commit/title details, display differing/uncommitted builds, and keep the panel usable without metadata. Desktop/mobile screenshots were visually inspected. Node checks cover Git-free stamps and malformed metadata without echoing inputs. Images/traces remain ignored under `web/test-results/`.
+- Ruff lint/format, Prettier, strict TypeScript and Vite build passed. Source stamping is generated during the build and excluded from Git. Container source-stamp wiring was added and Git-free metadata behavior was tested without Docker; an actual Docker image build/run remains unverified under the existing host limitation.
+- Deployment must use the final committed source, followed by a fresh dashboard build and a foreground restart in the same Screen. `!version`/`/api/version` and the dashboard identify the actual server/build snapshots directly, so no static PID or inferred live HEAD is a substitute. Local health/assets/auth checks do not establish visual Discord rendering or paid provider acceptance. Full council activation and the new commands' live rendering remain for the user.
+
+The work changes no saved provider/profile configuration, activation flags, credentials or schema. The existing external data directory and verified rollback snapshot remain as listed in [SESSION_HANDOVER.md](SESSION_HANDOVER.md).
+
 ## Council refinements and merged PR verification
 
 On `feat/council_refinements`, created from the checked-out main `2a20ca0` on 2026-09-07:
