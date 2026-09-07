@@ -248,11 +248,33 @@ class Engine:
         )
         return turn_id
 
+    async def show_typing(self, bot, channel_id, turn_id):
+        try:
+            await self.transport.typing(bot, channel_id, turn_id=turn_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            # Presence is best effort: a failed indicator must not fail model work or delivery.
+            self.store.emit(
+                "discord.typing_failed",
+                {"channel_id": channel_id, "error": self.vault.redact(str(exc))},
+                bot_id=bot["id"],
+                turn_id=turn_id,
+                level="warning",
+            )
+
     async def run(self, bot, profile, provider, channel_id, turn_id, compact_only):
         status, decision, error = "failed", None, None
         retry_delay = 0
+        typing_task = None
         context = ToolContext(bot, channel_id, turn_id, owner_verified=bot["role"] == "hortator")
         try:
+            if getattr(self.transport, "typing", None):
+                typing_task = asyncio.create_task(
+                    self.show_typing(bot, channel_id, turn_id), name=f"typing:{bot['id']}:{turn_id}"
+                )
+                # Start presence before context preparation, including compaction and provider queues.
+                await asyncio.sleep(0)
             tools = [SPEAK, SILENCE] + self.registry.schemas(context)
             rows, summary, through, original_meta = await self.contexts.prepare(
                 bot, profile, channel_id, turn_id, tools, force=compact_only
@@ -390,6 +412,9 @@ class Engine:
                 level="error",
             )
         finally:
+            if typing_task:
+                typing_task.cancel()
+                await asyncio.gather(typing_task, return_exceptions=True)
             self.store.execute(
                 "UPDATE turns SET status=?,decision=?,error=?,ended_at=? WHERE id=?",
                 (status, decision, error, time.time(), turn_id),

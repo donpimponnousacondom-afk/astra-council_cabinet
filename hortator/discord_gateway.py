@@ -15,6 +15,10 @@ from .runtime import DeliveryError
 from .security import Actor
 
 
+TYPING_INTERVAL_SECONDS = 5
+TYPING_TIMEOUT_SECONDS = 5
+
+
 COMMANDS = [
     ("!status", "Council, Discord gateway and provider status"),
     ("!stats [hours]", "Usage, timings, costs and failures; default 24 hours"),
@@ -682,6 +686,38 @@ class DiscordManager:
         if not isinstance(result, dict):
             raise ControlError("Configuration must be a JSON object")
         return result
+
+    async def typing(self, bot, channel_id, *, turn_id):
+        reported_failure = False
+        while not self.closed:
+            current = self.store.get("bots", bot["id"])
+            if not current or not self.service.engine.channel_allowed(current, channel_id):
+                return
+            client = self.clients.get(bot["id"])
+            if client and client.is_ready():
+                try:
+                    # Renew before Discord's ten-second expiry. A separate task prevents a slow
+                    # presence request from delaying context, tools, generation, or delivery.
+                    async with asyncio.timeout(TYPING_TIMEOUT_SECONDS):
+                        channel = client.get_channel(int(channel_id)) or await client.fetch_channel(
+                            int(channel_id)
+                        )
+                        if isinstance(channel, discord.ForumChannel):
+                            return  # Forum discussions take place inside their posts/threads.
+                        await channel.typing()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    if not reported_failure:
+                        self.store.emit(
+                            "discord.typing_failed",
+                            {"channel_id": channel_id, "error": self.vault.redact(str(exc))},
+                            bot_id=bot["id"],
+                            turn_id=turn_id,
+                            level="warning",
+                        )
+                        reported_failure = True
+            await asyncio.sleep(TYPING_INTERVAL_SECONDS)
 
     async def send(self, bot, channel_id, content, reply_to, paths, *, nonce=None):
         client = self.clients.get(bot["id"])
