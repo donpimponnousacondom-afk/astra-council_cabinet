@@ -17,6 +17,7 @@ from .security import Actor
 
 TYPING_INTERVAL_SECONDS = 5
 TYPING_TIMEOUT_SECONDS = 5
+RECONNECT_NOTICE_DELAY_SECONDS = 30
 
 
 COMMANDS = [
@@ -62,19 +63,28 @@ class CouncilClient(discord.Client):
         super().__init__(intents=intents, allowed_mentions=discord.AllowedMentions.none(), max_messages=500)
         self.manager, self.bot_id = manager, bot_id
         self.backfill_task = None
+        self.stopping = False
 
     async def on_ready(self):
-        self.manager.gateway(self.bot_id, "online")
+        self.manager.gateway(self.bot_id, "online", source="ready")
         if not self.backfill_task or self.backfill_task.done():
             self.backfill_task = asyncio.create_task(
                 self.manager.backfill(self), name=f"backfill:{self.bot_id}"
             )
 
     async def on_disconnect(self):
-        self.manager.gateway(self.bot_id, "reconnecting")
+        if self.stopping or self.manager.closed:
+            return
+        socket = getattr(getattr(self, "ws", None), "socket", None)
+        self.manager.gateway(
+            self.bot_id,
+            "reconnecting",
+            source="disconnect_callback",
+            close_code=getattr(socket, "close_code", None),
+        )
 
     async def on_resumed(self):
-        self.manager.gateway(self.bot_id, "online")
+        self.manager.gateway(self.bot_id, "online", source="resumed")
 
     async def on_message(self, message):
         try:
@@ -125,6 +135,7 @@ class CouncilClient(discord.Client):
         )
 
     async def close(self):
+        self.stopping = True
         if self.backfill_task and self.backfill_task is not asyncio.current_task():
             self.backfill_task.cancel()
             await asyncio.gather(self.backfill_task, return_exceptions=True)
@@ -142,6 +153,8 @@ class DiscordManager:
         self.notification_cursor = self.store.one("SELECT coalesce(max(seq),0) AS seq FROM events")["seq"]
         self.last_health_check = 0
         self.unhealthy = {}
+        self.reconnect_started = {}
+        self.pending_reconnects = {}
 
     async def validate_token(self, token):
         try:
@@ -163,8 +176,22 @@ class DiscordManager:
         except httpx.HTTPError as exc:
             raise ControlError("Could not reach Discord to verify the token") from exc
 
-    def gateway(self, bot_id, status, error=None):
+    def gateway(self, bot_id, status, error=None, *, source="supervisor", close_code=None):
         previous = self.store.runtime(bot_id)
+        now = time.time()
+        data = {"source": source, "previous_status": previous["gateway_status"]}
+        if error:
+            data["error"] = self.vault.redact(error)
+        if close_code is not None:
+            data["close_code"] = close_code
+        if status == "reconnecting":
+            data["reconnect_started_at"] = self.reconnect_started.setdefault(bot_id, now)
+            if not error:
+                data["reason"] = "Discord did not supply a disconnect reason"
+        elif status == "online" and bot_id in self.reconnect_started:
+            data["reconnect_duration_ms"] = max(0, now - self.reconnect_started.pop(bot_id)) * 1000
+        elif status == "offline":
+            self.reconnect_started.pop(bot_id, None)
         self.store.execute(
             "UPDATE bot_runtime SET gateway_status=?,error=coalesce(?,error) WHERE bot_id=?",
             (status, self.vault.redact(error) if error else None, bot_id),
@@ -172,7 +199,7 @@ class DiscordManager:
         if previous["gateway_status"] != status or error and previous["error"] != error:
             self.store.emit(
                 "discord." + status,
-                {"error": error},
+                data,
                 bot_id=bot_id,
                 level="error" if status == "failed" else "warning" if status == "reconnecting" else "info",
             )
@@ -259,7 +286,10 @@ class DiscordManager:
                         self.unhealthy[bot_id] = 0 if healthy else self.unhealthy.get(bot_id, 0) + 1
                         if self.unhealthy[bot_id] >= 3:
                             self.gateway(
-                                bot_id, "reconnecting", "Gateway heartbeat is unhealthy; reconnecting"
+                                bot_id,
+                                "reconnecting",
+                                "Gateway heartbeat is unhealthy; reconnecting",
+                                source="heartbeat_watchdog",
                             )
                             # Close one client; its single supervisor recreates it. Never start competing reconnect loops.
                             await client.close()
@@ -796,9 +826,13 @@ class DiscordManager:
 
     async def notifications(self):
         settings = self.store.get("settings", "global")
+        if not settings["incident_notifications"]:
+            self.pending_reconnects.clear()
         events = self.store.events(after=self.notification_cursor, limit=100)
         for event in events:
             self.notification_cursor = max(self.notification_cursor, event["seq"])
+            if event["kind"] in ("discord.online", "discord.offline", "discord.failed"):
+                self.pending_reconnects.pop(event["bot_id"], None)
             reportable = event["kind"] in (
                 "provider.failure",
                 "provider.circuit_open",
@@ -816,26 +850,65 @@ class DiscordManager:
             )
             if not reportable or not settings["incident_notifications"]:
                 continue
-            key = (event["kind"], event["bot_id"] or event["data"].get("provider_id"))
-            if time.time() - self.last_notification.get(key, 0) < 300:
+            if event["kind"] == "discord.reconnecting":
+                self.pending_reconnects[event["bot_id"]] = event
                 continue
-            hortator = next((b for b in self.store.list("bots") if b["role"] == "hortator"), None)
-            client = self.clients.get(hortator["id"]) if hortator else None
-            if not client or not client.is_ready() or not settings["control_channel_id"]:
+            duration = event["data"].get("reconnect_duration_ms")
+            if (
+                event["kind"] == "discord.online"
+                and duration is not None
+                and duration < RECONNECT_NOTICE_DELAY_SECONDS * 1000
+            ):
+                continue  # Brief resumes remain in the ledger without a pair of chat messages.
+            await self.notify_event(event, settings)
+        for bot_id, event in list(self.pending_reconnects.items()):
+            if self.store.runtime(bot_id)["gateway_status"] != "reconnecting":
+                self.pending_reconnects.pop(bot_id, None)
                 continue
-            try:
-                channel = client.get_channel(
-                    int(settings["control_channel_id"])
-                ) or await client.fetch_channel(int(settings["control_channel_id"]))
-                if (
-                    not getattr(channel, "guild", None)
-                    or str(channel.guild.id) != settings["control_guild_id"]
-                ):
-                    raise ControlError("Reporting channel does not match the configured guild")
+            started = event["data"].get("reconnect_started_at", event["at"])
+            if time.time() - started >= RECONNECT_NOTICE_DELAY_SECONDS:
+                await self.notify_event(event, settings)
+
+    async def notify_event(self, event, settings):
+        data = event["data"]
+        duration = data.get("reconnect_duration_ms")
+        # A startup connection notice must not suppress a later outage recovery.
+        kind = (
+            "discord.recovered"
+            if event["kind"] == "discord.online" and duration is not None
+            else event["kind"]
+        )
+        key = (kind, event["bot_id"] or data.get("provider_id"))
+        if time.time() - self.last_notification.get(key, 0) < 300:
+            return
+        hortator = next((b for b in self.store.list("bots") if b["role"] == "hortator"), None)
+        client = self.clients.get(hortator["id"]) if hortator else None
+        if not client or not client.is_ready() or not settings["control_channel_id"]:
+            return
+        try:
+            channel = client.get_channel(int(settings["control_channel_id"])) or await client.fetch_channel(
+                int(settings["control_channel_id"])
+            )
+            if not getattr(channel, "guild", None) or str(channel.guild.id) != settings["control_guild_id"]:
+                raise ControlError("Reporting channel does not match the configured guild")
+            if event["kind"] == "discord.reconnecting":
+                elapsed = max(0, time.time() - data.get("reconnect_started_at", event["at"]))
+                detail = f"Discord connection has been interrupted for {elapsed:.1f}s; reconnecting. "
+                detail += data.get("error") or data.get("reason") or "Disconnect reason unavailable."
+                if data.get("close_code") is not None:
+                    detail += f" (close code {data['close_code']})"
+            elif event["kind"] == "discord.online":
+                detail = (
+                    f"Discord connection restored after {duration / 1000:.1f}s."
+                    if duration is not None
+                    else "Discord connected."
+                )
+            else:
                 info = {
                     k: v
-                    for k, v in event["data"].items()
-                    if k
+                    for k, v in data.items()
+                    if v is not None
+                    and k
                     in (
                         "error",
                         "provider_id",
@@ -845,16 +918,17 @@ class DiscordManager:
                         "before_tokens",
                     )
                 }
-                await self.reply(
-                    channel,
-                    f"[{event['kind']}] {event['bot_id'] or 'provider'} · event #{event['seq']}\n"
-                    + preview(json.dumps(info, ensure_ascii=False), 1300),
-                )
-                self.last_notification[key] = time.time()
-            except Exception as exc:
-                self.store.emit(
-                    "notification.failed", {"source_event": event["seq"], "error": str(exc)}, level="warning"
-                )
+                detail = json.dumps(info, ensure_ascii=False)
+            await self.reply(
+                channel,
+                f"[{event['kind']}] {event['bot_id'] or 'provider'} · event #{event['seq']}\n"
+                + preview(detail, 1300),
+            )
+            self.last_notification[key] = time.time()
+        except Exception as exc:
+            self.store.emit(
+                "notification.failed", {"source_event": event["seq"], "error": str(exc)}, level="warning"
+            )
 
     async def close(self):
         self.closed = True

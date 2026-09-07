@@ -32,7 +32,7 @@ For development, run the same API command and, in a second terminal, `npm run de
 
 This workspace's persistent runtime uses **GNU Screen**: run `screen -x hortator` to join its shared terminal. Detach with **Ctrl-A, then D**. See [shared terminal controls and logs](docs/OPERATIONS.md#shared-gnu-screen-terminal) before starting another server.
 
-The configured five-bot runtime, verified backups, provider-plan limits and remaining activation steps are recorded in the dated [configuration audit](docs/CONFIGURATION_STATUS.md). The first-run instructions below describe a new installation; do not reinitialize this workspace's existing external data.
+The configured five-bot runtime, verified backups and current acceptance status are recorded in the [session handover](docs/SESSION_HANDOVER.md). The [configuration audit](docs/CONFIGURATION_STATUS.md) retains historical findings; the user subsequently resolved the provider/context/concurrency setup and confirmed live typing. The first-run instructions below describe a new installation; do not reinitialize this workspace's existing external data.
 
 Stop the foreground server before switching branches, rebuild the dashboard when its source changes, and restart through the installed launcher. Existing branches still have a `./data` CLI fallback; the external launcher and environment setting keep those branches on the same persistent data. See [branch changes and persistent storage](docs/OPERATIONS.md#branch-changes-and-persistent-storage).
 
@@ -55,7 +55,7 @@ Only Discord snowflake **`1482143139828596916`** (`.normal.man.`, “The Boss”
 
 A provider stores transport settings and a shared encrypted credential. A model profile stores model identity, context settings, prices (optional), streaming switches, and exact non-secret request JSON. A bot references a profile and can override the provider key in its own credential box.
 
-Edit reasoning options at **Model profiles → Edit → Advanced · exact request JSON → Model parameters**. There is no provider-level reasoning setting. The card's “Provider default” text is a limited JSON summary and can miss vendor-specific options; see the [reasoning diagnosis](docs/CONFIGURATION_STATUS.md#reasoning-configuration).
+Edit reasoning at **Model profiles → Edit profile → Reasoning**. Choose the native request field, then an effort level, thinking toggle or token budget. These controls update **Advanced · exact request JSON → Model parameters** directly, preserving other vendor fields. **Unset** omits only that field; **Off** sends `false`. With no override, the model service chooses its behavior; there is no provider-level reasoning setting. The card displays explicit reasoning fields, including nested values and `false`. Options depend on the endpoint/model; the UI does not establish remote support. See [reasoning operations](docs/OPERATIONS.md#reasoning-controls).
 
 For example, a profile's **Model parameters** can be:
 
@@ -70,7 +70,7 @@ For example, a profile's **Model parameters** can be:
 }
 ```
 
-This JSON is passed through without translating sampling or reasoning settings. Replace it with exactly what the chosen provider/model accepts; the example is not a promise that every model accepts those fields. Use `reasoning_effort`, `thinking`, or nested provider-specific structures as appropriate. `compaction_request_json`, available in full configuration JSON, overrides parameters for summary requests. Non-secret provider headers and the credential `auth_header`/`auth_scheme` are also configurable there.
+This JSON is passed through without translating sampling or reasoning settings. Replace it with exactly what the chosen provider/model accepts; the example is not a promise that every model accepts those fields. Use `reasoning_effort`, `thinking`, or nested provider-specific structures as appropriate. **Advanced · compaction parameter overrides** edits `compaction_request_json` and previews effective reasoning fields for summaries. Non-secret provider headers and the credential `auth_header`/`auth_scheme` are configurable in full configuration JSON.
 
 The runtime owns `model`, `messages`, `tools`, `tool_choice`, `stream`, and single-choice generation. The stream switches live beside the JSON editor. `max_tokens`/`max_completion_tokens` must fit the configured output reserve. Compaction uses its own output limit. This protects context and delivery invariants while leaving arbitrary vendor parameters intact.
 

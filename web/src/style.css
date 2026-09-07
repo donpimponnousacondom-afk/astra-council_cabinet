@@ -1499,6 +1499,23 @@ strong {
   max-width: 260px;
   font-size: 12px !important;
 }
+.reasoning-editor {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.reasoning-editor h3,
+.reasoning-editor p {
+  margin: 0;
+}
+
+.detail-list .mono {
+  overflow-wrap: anywhere;
+}
+
 .probe-result {
   border: 1px solid #4c663a;
   border-radius: 9px;

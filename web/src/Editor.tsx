@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { api, control, credential, dateLabel, kindLabel, num } from "./api";
 import type { Dashboard, Kind, RecordData } from "./api";
+import { ReasoningEditor, reasoningFields } from "./Reasoning";
 import {
   Badge,
   Code,
@@ -86,6 +87,7 @@ export function Editor({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [modelJsonValid, setModelJsonValid] = useState(true);
   const [tab, setTab] = useState(
     kind === "bots" && entity && !entity.token_configured
       ? "discord"
@@ -622,7 +624,7 @@ export function Editor({
               {text(
                 "model",
                 "Exact model identifier",
-                "Paste the provider’s model ID. Use Test connection on the provider to discover its catalog.",
+                "Paste the provider’s model ID. Use Discover models on the provider to browse its catalog.",
               )}
               <div className="form-grid">
                 {numeric("context_window", "Context window (tokens)")}
@@ -635,7 +637,7 @@ export function Editor({
                 {numeric(
                   "response_tokens",
                   "Response token reserve",
-                  "Upper bound reserved for generation.",
+                  "Space reserved in context planning. Set max_tokens or max_completion_tokens in Model parameters to send an output limit to the provider.",
                 )}
                 {numeric("summary_tokens", "Compaction output limit")}
                 {numeric(
@@ -656,12 +658,23 @@ export function Editor({
                   onChange={(v) => set("include_usage", v)}
                 />
               </div>
+              <ReasoningEditor
+                key={draft.provider_id}
+                value={draft.request_json || {}}
+                onChange={(v) => set("request_json", v)}
+                providerUrl={
+                  dashboard.providers.find((p) => p.id === draft.provider_id)
+                    ?.base_url || ""
+                }
+                disabled={!modelJsonValid}
+              />
               <details className="advanced prominent" open>
                 <summary>Advanced · exact request JSON</summary>
                 <JsonInput
                   label="Model parameters"
                   value={draft.request_json || {}}
                   onChange={(v) => set("request_json", v)}
+                  onValidityChange={setModelJsonValid}
                   hint="Sent unchanged alongside the runtime's model, messages, tools, and stream settings. Nested vendor options stay nested. No reasoning-effort or sampling translation layer."
                 />
                 <Notice>
@@ -679,6 +692,17 @@ export function Editor({
                   value={draft.compaction_request_json || {}}
                   onChange={(v) => set("compaction_request_json", v)}
                   hint="Optional overrides for summarization calls, such as a lower reasoning effort. The summary token limit still applies."
+                />
+                <p className="muted small-text">
+                  Compaction starts with Model parameters and replaces any
+                  top-level fields set here, including whole nested objects.
+                </p>
+                <Code
+                  value={reasoningFields({
+                    ...draft.request_json,
+                    ...draft.compaction_request_json,
+                  })}
+                  label="Effective compaction reasoning fields"
                 />
               </details>
               <details className="advanced">

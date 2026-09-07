@@ -37,6 +37,10 @@ Control request shape:
 
 Actions: `create`, `save`, `delete`, `start`, `stop`, `clone`, `probe`, `reset_circuit`, `restart`, `compact`, `memory`, `thread`. `start`/`stop` with `id: "all"` updates the global switch. `clone` defaults to profiles and accepts a new `id`/`name` in `data`. `compact` takes a bot ID and optional `data.channel_id`; `memory` takes `channel_id`, `key`, and `value`; `thread` takes a room ID and `data.name`. `probe` and `reset_circuit` take a provider ID. `restart` takes a bot ID.
 
+`probe` is **model discovery** (`GET` to the provider's `/models`). Its successful result contains `provider_id`, `latency_ms`, `models`, `authentication_verified: false` and an explanatory `note`. A public catalog cannot establish credential validity, generation, account limits or tool support; discovery does not reset completion health.
+
+The dashboard's Reasoning controls use the existing profile `request_json` field; there is no new API setting or provider default. Omitted values stay omitted, and compaction applies `compaction_request_json` as top-level replacements before runtime-owned fields/output limits. SSE streams finish cooperatively on CLI server shutdown; clients can reconnect with their cursor after restart.
+
 Credential kinds/fields:
 
 - `providers/{id}/api_key`
