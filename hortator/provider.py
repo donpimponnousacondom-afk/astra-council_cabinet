@@ -563,12 +563,13 @@ class ProviderPool:
                 for item in raw.get("data", [])[:3000]
                 if isinstance(item, dict)
             ]
-            # Discovery validates transport/auth only. It must not clear completion failure counters.
+            # Some catalogs are public. Discovery cannot establish credential validity or reset health.
             result = {
                 "provider_id": provider["id"],
                 "latency_ms": (time.perf_counter() - start) * 1000,
                 "models": models,
-                "note": "Discovery succeeded. This does not verify chat completions or tool support.",
+                "authentication_verified": False,
+                "note": "Model discovery succeeded. Catalogs may be public: this does not verify credentials, chat completions, account limits, or tool support.",
             }
             self.store.emit("provider.discovery", {k: v for k, v in result.items() if k != "models"})
             return result

@@ -77,8 +77,9 @@ class ControlBody(BaseModel):
     data: dict = Field(default_factory=dict)
 
 
-def create_app(directory=None, start_runtime=True):
+def create_app(directory=None, start_runtime=True, *, stopping=None):
     directory = Path(directory or os.getenv("HORTATOR_DATA_DIR", "data")).resolve()
+    stopping = stopping if stopping is not None else asyncio.Event()
 
     @asynccontextmanager
     async def lifespan(app):
@@ -273,7 +274,7 @@ def create_app(directory=None, start_runtime=True):
             if not cursor:
                 cursor = k.store.one("SELECT coalesce(max(seq),0) AS seq FROM events")["seq"]
             yield f"event: connected\ndata: {json.dumps({'cursor': cursor})}\n\n"
-            while not await request.is_disconnected():
+            while not stopping.is_set() and not await request.is_disconnected():
                 try:
                     k.auth.session(request.cookies.get("hortator_session"))
                 except ControlError:
@@ -284,7 +285,10 @@ def create_app(directory=None, start_runtime=True):
                     yield f"id: {cursor}\ndata: {json.dumps(event)}\n\n"
                 if not rows:
                     yield ": keepalive\n\n"
-                await asyncio.sleep(1)
+                try:
+                    await asyncio.wait_for(stopping.wait(), timeout=1)
+                except TimeoutError:
+                    pass
 
         return StreamingResponse(
             generate(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"}

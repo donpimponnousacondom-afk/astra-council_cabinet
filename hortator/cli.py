@@ -25,13 +25,13 @@ def main():
     directory = Path(args.data_dir).resolve()
     os.environ["HORTATOR_DATA_DIR"] = str(directory)
     if args.command == "serve":
-        import uvicorn
+        from .server import serve
 
         print(f"Dashboard: http://{args.host}:{args.port}")
         print(
             f"First-run password file: {directory / 'initial-password'} (unless HORTATOR_ADMIN_PASSWORD is set)"
         )
-        uvicorn.run("hortator.app:app", host=args.host, port=args.port, workers=1, proxy_headers=False)
+        serve(directory, args.host, args.port)
         return
     if args.command == "backup":
         destination = Path(args.destination).resolve()

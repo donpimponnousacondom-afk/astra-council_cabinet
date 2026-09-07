@@ -49,6 +49,7 @@ import {
   timeLabel,
 } from "./api";
 import type { Dashboard, Kind, Page, RecordData } from "./api";
+import { reasoningSummary } from "./Reasoning";
 import {
   Avatar,
   Badge,
@@ -1354,7 +1355,7 @@ function Catalog({
                     }}
                   >
                     <Activity size={14} />
-                    Test connection
+                    Discover models
                   </button>
                   <button
                     className="icon-button"
@@ -1409,15 +1410,21 @@ function Catalog({
                     <dd>{num(item.response_tokens)}</dd>
                   </div>
                   <div>
+                    <dt>Output limit sent</dt>
+                    <dd className="mono">
+                      {["max_tokens", "max_completion_tokens"]
+                        .filter((key) => Object.hasOwn(item.request_json, key))
+                        .map(
+                          (key) =>
+                            `${key}: ${JSON.stringify(item.request_json[key])}`,
+                        )
+                        .join(" · ") || "Not specified"}
+                    </dd>
+                  </div>
+                  <div>
                     <dt>Reasoning configuration</dt>
                     <dd className="mono">
-                      {String(
-                        item.request_json.reasoning_effort ||
-                          item.request_json.reasoning?.effort ||
-                          (item.request_json.thinking
-                            ? "Custom JSON"
-                            : "Provider default"),
-                      )}
+                      {reasoningSummary(item.request_json)}
                     </dd>
                   </div>
                 </dl>
@@ -1595,10 +1602,10 @@ function Catalog({
       {probe && (
         <div className="probe-result">
           <div className="section-title">
-            <h2>Connection check · {duration(probe.latency_ms)}</h2>
+            <h2>Model discovery · {duration(probe.latency_ms)}</h2>
             <button
               className="icon-button"
-              aria-label="Dismiss connection check"
+              aria-label="Dismiss model discovery"
               onClick={() => setProbe(null)}
             >
               <X size={17} />

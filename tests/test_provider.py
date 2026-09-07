@@ -23,6 +23,26 @@ async def install_client(k, handler):
     k.pool.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
+async def test_public_model_discovery_does_not_validate_auth_or_reset_completion_health(kernel):
+    configured(kernel)
+    provider = kernel.store.get("providers", "openrouter")
+    kernel.pool.failure(provider, ProviderError("Prior completion failure", http_status=503))
+    before = kernel.store.health(provider["id"])
+    requests = []
+
+    def catalog(request):
+        requests.append(request)
+        return httpx.Response(200, json={"data": [{"id": "public-catalog-model"}]})
+
+    await install_client(kernel, catalog)
+    result = await kernel.pool.probe(provider)
+    assert result["models"][0]["id"] == "public-catalog-model"
+    assert result["authentication_verified"] is False
+    assert "does not verify credentials" in result["note"]
+    assert kernel.store.health(provider["id"]) == before
+    assert [(r.method, r.url.path) for r in requests] == [("GET", "/v1/models")]
+
+
 def call_args(k, bot):
     return dict(
         bot=bot,

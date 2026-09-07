@@ -167,12 +167,15 @@ export function JsonInput({
   value,
   onChange,
   hint,
+  onValidityChange,
 }: {
   label: string;
   value: any;
   onChange: (value: RecordData) => void;
   hint?: string;
+  onValidityChange?: (valid: boolean) => void;
 }) {
+  const input = useRef<HTMLTextAreaElement>(null);
   const [raw, setRaw] = useState(JSON.stringify(value || {}, null, 2));
   const [error, setError] = useState("");
   const accepted = useRef(JSON.stringify(value || {}));
@@ -182,11 +185,14 @@ export function JsonInput({
       accepted.current = serialized;
       setRaw(JSON.stringify(value || {}, null, 2));
       setError("");
+      input.current?.setCustomValidity("");
+      onValidityChange?.(true);
     }
-  }, [value]);
+  }, [value, onValidityChange]);
   return (
     <Field label={label} hint={hint}>
       <textarea
+        ref={input}
         className={`json-input ${error ? "invalid" : ""}`}
         rows={10}
         spellCheck={false}
@@ -198,12 +204,14 @@ export function JsonInput({
             if (!parsed || Array.isArray(parsed) || typeof parsed !== "object")
               throw new Error("Use a JSON object");
             setError("");
+            onValidityChange?.(true);
             accepted.current = JSON.stringify(parsed);
             onChange(parsed);
             e.target.setCustomValidity("");
           } catch (err) {
             const message = err instanceof Error ? err.message : "Invalid JSON";
             setError(message);
+            onValidityChange?.(false);
             e.target.setCustomValidity(message);
           }
         }}

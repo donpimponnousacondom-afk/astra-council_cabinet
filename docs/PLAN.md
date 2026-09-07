@@ -32,7 +32,18 @@ The user requested `feat/add_typing_indicator` from the current `dev/initial_pha
 
 Acceptance covers all five identities, early start and delivery lifetime, silence/failure/cancellation cleanup, repeated pulses, current scope, independent clients, and redacted nonfatal presence failures. See [VERIFICATION.md](VERIFICATION.md) for measured results and [OPERATIONS.md](OPERATIONS.md#scheduling-and-message-semantics) for expiry and provider-wait semantics.
 
-The same session requested configuration/backup reports and reasoning/reconnect explanations. Those findings are in [CONFIGURATION_STATUS.md](CONFIGURATION_STATUS.md). A clearer reasoning label/editor entry point, improved reconnect reporting, weighted provider concurrency and graceful shutdown with open SSE connections remain separately scoped follow-ups; they are not bundled into the typing implementation.
+The same session requested configuration/backup reports and reasoning/reconnect explanations, recorded in [CONFIGURATION_STATUS.md](CONFIGURATION_STATUS.md). Those changes were kept separate from typing. The user subsequently confirmed live typing and merged PR #4 into main (`2a20ca0`). The obsolete local typing branch was removed only after confirming its tree exactly matched main.
+
+## Council refinements — 2026-09-07
+
+The user requested a general feature branch for the remaining implementation refinements. `feat/council_refinements` starts at the checked-out main `2a20ca0`, with ordinary linear commits and no push. The user considers provider/context/concurrency configuration complete: Hortator uses another provider with working Kimi K3, and Qwen's two concurrent requests fit the four-unit plan. Preserve that configuration and leave full council activation to the user; weighted concurrency is not needed for this setup.
+
+- **Visible reasoning controls:** a dedicated model-profile section edits exact native fields for effort, thinking and token budgets. Unset removes only the selected leaf; false stays explicit. Sibling vendor JSON survives edits, and custom structures or invalid JSON require correction in the raw editor. Cards show nested reasoning options and accurately report the absence of an override. There is no provider reasoning inheritance or translation layer, and no inference of universal model support. The compaction preview follows the runtime's existing top-level override semantics.
+- **Clear limits and discovery:** profile cards distinguish context response reserve from the actual output cap in request JSON. Provider model discovery is labelled as a catalog lookup and explicitly does not validate credentials, generation, account limits or tools. It never resets completion health.
+- **Useful reconnect reporting:** persist callback/watchdog source, prior status, close code when available and measured reconnect duration. Suppress chat notices for reconnect/resume pairs shorter than 30 seconds, while retaining their ledger events. Sustained interruptions retain five-minute repeats and a separate recovery throttle; intentional client shutdown does not emit a false network incident.
+- **Orderly terminal shutdown:** the CLI server signals dashboard SSE streams to finish before Uvicorn drains HTTP connections, with a ten-second HTTP drain backstop. SIGINT/SIGTERM still run the existing runtime cleanup and preserve the Screen shell. This does not change delivery uncertainty or cancellation semantics.
+
+No schema migration or saved configuration rewrite is needed. Validate JSON round trips through the real dashboard/API, reconnect reporting through isolated transports, and shutdown with real child processes holding an SSE connection. Record measured results in [VERIFICATION.md](VERIFICATION.md).
 
 ## Invariants
 

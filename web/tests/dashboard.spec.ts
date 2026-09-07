@@ -189,6 +189,218 @@ test("provider creation, encrypted write-only key, readiness error, and trajecto
   });
 });
 
+test("visible reasoning controls preserve vendor JSON, false values, and compaction overrides", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: "Model profiles", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Add profile", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByLabel("Display name", { exact: true })
+    .fill("Visible reasoning controls");
+  await dialog
+    .getByLabel("Stable identifier", { exact: true })
+    .fill("visible-reasoning-controls");
+  await dialog
+    .getByLabel("Exact model identifier", { exact: true })
+    .fill("vendor/test-model");
+  const initial = {
+    temperature: 0.37,
+    reasoning: { effort: "low", exclude: true },
+    chat_template_kwargs: { enable_thinking: true, custom_option: [1, 2] },
+    custom_vendor: { thinking_mode: "experimental", unrelated: "preserve me" },
+  };
+  const raw = dialog.getByLabel("Model parameters", { exact: true });
+  await raw.fill(JSON.stringify(initial));
+  await dialog
+    .getByLabel("Reasoning request field", { exact: true })
+    .selectOption("reasoning.effort");
+  await expect(
+    dialog.getByLabel("Reasoning effort", { exact: true }),
+  ).toHaveValue('"low"');
+  await dialog
+    .getByLabel("Reasoning effort", { exact: true })
+    .selectOption('"high"');
+  await expect
+    .poll(async () => JSON.parse(await raw.inputValue()))
+    .toEqual({
+      ...initial,
+      reasoning: { effort: "high", exclude: true },
+    });
+  await dialog.getByLabel("Reasoning effort", { exact: true }).selectOption("");
+  await expect
+    .poll(async () => JSON.parse(await raw.inputValue()).reasoning)
+    .toEqual({
+      exclude: true,
+    });
+  await dialog
+    .getByLabel("Reasoning effort", { exact: true })
+    .selectOption('"medium"');
+  await dialog
+    .getByLabel("Reasoning request field", { exact: true })
+    .selectOption("chat_template_kwargs.enable_thinking");
+  await dialog
+    .getByLabel("Thinking mode", { exact: true })
+    .selectOption("false");
+  const expected = {
+    ...initial,
+    reasoning: { effort: "medium", exclude: true },
+    chat_template_kwargs: { enable_thinking: false, custom_option: [1, 2] },
+  };
+  await expect
+    .poll(async () => JSON.parse(await raw.inputValue()))
+    .toEqual(expected);
+  await dialog
+    .getByText("Advanced · compaction parameter overrides", { exact: true })
+    .click();
+  await dialog
+    .getByLabel("Compaction parameters", { exact: true })
+    .fill(JSON.stringify({ reasoning: { effort: "minimal" } }));
+  const preview = dialog.locator("details.code-block").filter({
+    has: page.locator("summary", {
+      hasText: "Effective compaction reasoning fields",
+    }),
+  });
+  await preview.locator("summary").click();
+  expect(JSON.parse(await preview.locator("pre").innerText())).toEqual({
+    reasoning: { effort: "minimal" },
+    chat_template_kwargs: { enable_thinking: false },
+    custom_vendor: { thinking_mode: "experimental" },
+  });
+  await dialog
+    .getByRole("button", { name: "Create draft", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const profile = await (
+    await page.request.get("/api/config/profiles/visible-reasoning-controls")
+  ).json();
+  expect(profile.request_json).toEqual(expected);
+  expect(profile.compaction_request_json).toEqual({
+    reasoning: { effort: "minimal" },
+  });
+  const card = page.locator(".catalog-card").filter({
+    has: page.getByRole("heading", {
+      name: "Visible reasoning controls",
+      exact: true,
+    }),
+  });
+  await expect(card).toContainText('"enable_thinking":false');
+  await expect(card).toContainText("experimental");
+  await expect(card).toContainText("Not specified");
+  await card.getByRole("button", { name: "Edit profile" }).click();
+  await expect
+    .poll(async () => JSON.parse(await raw.inputValue()))
+    .toEqual(expected);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await dialog
+    .getByRole("region", { name: "Reasoning configuration" })
+    .scrollIntoViewIfNeeded();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "test-results/reasoning-controls-mobile.png",
+    fullPage: true,
+  });
+  await dialog.getByRole("button", { name: "Close dialog" }).click();
+});
+
+test("reasoning controls protect invalid JSON and custom structures and distinguish unset from off", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: "Model profiles", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Add profile", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  const raw = dialog.getByLabel("Model parameters", { exact: true });
+  const field = dialog.getByLabel("Reasoning request field", { exact: true });
+  await raw.fill('{"vendor_option": 42}');
+  await field.selectOption("reasoning.effort");
+  await expect(
+    dialog.getByLabel("Reasoning effort", { exact: true }),
+  ).toHaveValue("");
+  await dialog
+    .getByLabel("Reasoning effort", { exact: true })
+    .selectOption('"low"');
+  await dialog.getByLabel("Reasoning effort", { exact: true }).selectOption("");
+  await expect
+    .poll(async () => JSON.parse(await raw.inputValue()))
+    .toEqual({ vendor_option: 42 });
+  await raw.fill(
+    '{"vendor_option":42,"chat_template_kwargs":{"thinking_budget":-1}}',
+  );
+  await field.selectOption("chat_template_kwargs.thinking_budget");
+  const budget = dialog.getByLabel("Reasoning token budget", { exact: true });
+  await expect(budget).toHaveValue("-1");
+  expect(
+    await budget.evaluate((input: HTMLInputElement) => input.validity.valid),
+  ).toBe(true);
+  await field.selectOption("reasoning.effort");
+  await raw.fill('{"vendor_option":');
+  await expect(field).toBeDisabled();
+  await expect(
+    dialog.getByLabel("Reasoning effort", { exact: true }),
+  ).toBeDisabled();
+  await expect(raw).toHaveValue('{"vendor_option":');
+  await raw.fill(
+    '{"vendor_option":42,"reasoning":"custom-mode","thinking":{"type":"adaptive","vendor_budget":123}}',
+  );
+  await expect(field).toBeEnabled();
+  await expect(
+    dialog.getByLabel("Reasoning effort", { exact: true }),
+  ).toBeDisabled();
+  await field.selectOption("thinking");
+  await expect(
+    dialog.getByLabel("Thinking mode", { exact: true }),
+  ).toBeDisabled();
+  await field.selectOption("thinking.type");
+  await expect(dialog.getByLabel("Thinking mode", { exact: true })).toHaveValue(
+    '"adaptive"',
+  );
+  await dialog
+    .getByLabel("Thinking mode", { exact: true })
+    .selectOption('"disabled"');
+  await expect
+    .poll(async () => JSON.parse(await raw.inputValue()).thinking)
+    .toEqual({
+      type: "disabled",
+      vendor_budget: 123,
+    });
+  await field.selectOption("thinking.budget_tokens");
+  await dialog
+    .getByLabel("Reasoning token budget", { exact: true })
+    .fill("1024");
+  await expect
+    .poll(async () => JSON.parse(await raw.inputValue()).thinking)
+    .toEqual({
+      type: "disabled",
+      vendor_budget: 123,
+      budget_tokens: 1024,
+    });
+  await dialog.getByLabel("Reasoning token budget", { exact: true }).fill("");
+  await expect
+    .poll(async () => JSON.parse(await raw.inputValue()).thinking)
+    .toEqual({
+      type: "disabled",
+      vendor_budget: 123,
+    });
+  await raw.fill('{"thinking":false,"vendor_option":42}');
+  await field.selectOption("thinking");
+  await expect(dialog.getByLabel("Thinking mode", { exact: true })).toHaveValue(
+    "false",
+  );
+  await dialog.getByLabel("Thinking mode", { exact: true }).selectOption("");
+  await expect
+    .poll(async () => JSON.parse(await raw.inputValue()))
+    .toEqual({ vendor_option: 42 });
+  await dialog.getByRole("button", { name: "Close dialog" }).click();
+});
+
 test("all operational pages render without errors", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
