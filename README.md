@@ -11,16 +11,19 @@ One Python process runs the Discord clients, scheduler, provider HTTP clients, F
 Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/); Node 22+ is used for the dashboard build. Run commands from the repository root, `/home/codexy/codex/astra-council_cabinet`:
 
 ```bash
+export HORTATOR_DATA_DIR="$HOME/.local/share/hortator"
 uv sync --frozen
 npm ci --prefix web
 npm run build --prefix web
 uv run hortator serve
 ```
 
-Open **http://127.0.0.1:8000**. On first startup, a random dashboard password is written to `data/initial-password` with owner-only permissions:
+Persistent data stays outside the checkout, so changing branches or cleaning generated files does not remove the database, credentials, memory, or artifacts. On this workspace, the installed `~/.local/bin/hortator` launcher loads `~/.config/hortator/runtime.env` and sets the same data directory on every branch. Use `hortator serve --host 127.0.0.1 --port 8000` in the shared Screen shell. The launcher also supports commands such as `hortator backup /absolute/path/to/new-backup-directory`.
+
+Open **http://127.0.0.1:8000**. On first startup, a random dashboard password is written to `$HORTATOR_DATA_DIR/initial-password` with owner-only permissions:
 
 ```bash
-cat data/initial-password
+cat "$HORTATOR_DATA_DIR/initial-password"
 ```
 
 Alternatively, set `HORTATOR_ADMIN_PASSWORD` to a strong password of at least 12 characters before starting. The dashboard uses an HttpOnly session cookie, CSRF protection, and a 12-hour session. The command-line runtime listens on loopback by default.
@@ -28,6 +31,8 @@ Alternatively, set `HORTATOR_ADMIN_PASSWORD` to a strong password of at least 12
 For development, run the same API command and, in a second terminal, `npm run dev --prefix web`. The Vite UI at **http://localhost:5173** proxies `/api` to port 8000. Its development server is reachable on the host network; use the production server for deployment.
 
 This workspace's persistent runtime uses **GNU Screen**: run `screen -x hortator` to join its shared terminal. Detach with **Ctrl-A, then D**. See [shared terminal controls and logs](docs/OPERATIONS.md#shared-gnu-screen-terminal) before starting another server.
+
+Stop the foreground server before switching branches, rebuild the dashboard when its source changes, and restart through the installed launcher. Existing branches still have a `./data` CLI fallback; the external launcher and environment setting keep those branches on the same persistent data. See [branch changes and persistent storage](docs/OPERATIONS.md#branch-changes-and-persistent-storage).
 
 ## Connect the first council
 

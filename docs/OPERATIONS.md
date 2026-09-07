@@ -6,7 +6,7 @@ All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, 
 
 Use **one Uvicorn worker per data directory**. A file lock prevents two council runtimes from claiming the same database. Do not start a second bot runner, use `--reload` in production, or put multiple replicas in front of one SQLite file. Every Discord application has its own supervised client task within the one Python event loop. A failing client's connection does not take down the others.
 
-`HORTATOR_DATA_DIR` defaults to `./data`. Storage includes:
+This workspace sets `HORTATOR_DATA_DIR=/home/codexy/.local/share/hortator`, outside the Git checkout. The installed `/home/codexy/.local/bin/hortator` launcher loads `/home/codexy/.config/hortator/runtime.env`, changes to the application root, and runs `uv run hortator` with your arguments. Both files live outside Git and remain available when switching branches. The underlying CLI still falls back to `./data` if no directory is supplied, so use the launcher or source the external environment file before running the CLI directly. Storage includes:
 
 - `council.sqlite3` plus WAL files: configuration, observed messages, context checkpoints, scoped memory, requests, turns, events, encrypted secrets, auth sessions and outbox.
 - `master.key`: Fernet encryption key, unless supplied through `HORTATOR_MASTER_KEY`.
@@ -16,6 +16,14 @@ Use **one Uvicorn worker per data directory**. A file lock prevents two council 
 The data directory is mode 0700; database/key/artifacts are owner-readable. **The master key is required to recover credentials.** Protect the key separately from the database and restrict host access. Conversations, prompt snapshots and provider response content are intentionally stored as readable observability data; secret encryption is not full-disk encryption. Never commit the data directory.
 
 The application retains history instead of silently discarding observability. Monitor available disk space and back it up. Large contexts and many bots increase CPU, memory, database and provider usage; tune concurrency and cadence for the host. SQLite is appropriate for this single-host design; this implementation does not claim a horizontally distributed scheduler.
+
+## Branch changes and persistent storage
+
+Keep the database, encryption key, bootstrap password, artifacts, and logs in the external data directory. Some historical branches tracked `data/`; moving between those commits can replace or remove files inside the checkout even though the current branch ignores them. Never restore those historical files over the external live directory.
+
+Before switching a running application's branch, stop the foreground server with Ctrl-C in Screen. Switch to the intended feature branch, rebuild `web/dist` if UI source changed (run `npm ci --prefix web` first if its dependencies changed), then run `hortator serve --host 127.0.0.1 --port 8000`. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
+
+For branches that change database schemas, make an external backup first; separating storage from Git does not make schema changes reversible. Use an explicit `--data-dir` pointing to separate temporary storage for tests or experiments that should not use live configuration.
 
 ## Shared GNU Screen terminal
 
@@ -30,15 +38,15 @@ screen -x hortator
 Press **Ctrl-A, then D** to detach and leave the dashboard running. Press **Ctrl-C** to stop the foreground server and return to the shared shell. From that shell, restart with:
 
 ```bash
-uv run hortator serve --host 127.0.0.1 --port 8000
+hortator serve --host 127.0.0.1 --port 8000
 ```
 
 The server serves both the built dashboard and API at `http://127.0.0.1:8000`. To access it from a different computer, forward that port over SSH or use the configured reverse proxy. The shared shell and Screen's default directory are `/home/codexy/codex/astra-council_cabinet`.
 
-Terminal output is saved to `data/logs/hortator.screen.log`, with a one-second flush interval and 20,000 lines of Screen scrollback. Inspect it without taking control:
+Terminal output is saved to `/home/codexy/.local/share/hortator/logs/hortator.screen.log`, with a one-second flush interval and 20,000 lines of Screen scrollback. Inspect it without taking control:
 
 ```bash
-tail -F data/logs/hortator.screen.log
+tail -F /home/codexy/.local/share/hortator/logs/hortator.screen.log
 screen -ls
 ```
 
@@ -48,13 +56,14 @@ After a reboot, if the session no longer exists, recreate it from the repository
 
 ```bash
 cd /home/codexy/codex/astra-council_cabinet
-mkdir -p data/logs
-chmod 700 data/logs
+source /home/codexy/.config/hortator/runtime.env
+mkdir -p "$HORTATOR_DATA_DIR/logs"
+chmod 700 "$HORTATOR_DATA_DIR/logs"
 umask 077
-screen -dmS hortator -t dashboard -L -Logfile "$PWD/data/logs/hortator.screen.log" bash --noprofile --norc -i
+screen -c /dev/null -dmS hortator -t dashboard -L -Logfile "$HORTATOR_DATA_DIR/logs/hortator.screen.log" bash --noprofile --norc -i
 screen -S hortator -p dashboard -X logfile flush 1
 screen -S hortator -p dashboard -X scrollback 20000
-screen -S hortator -p dashboard -X stuff $'uv run hortator serve --host 127.0.0.1 --port 8000\n'
+screen -S hortator -p dashboard -X stuff $'hortator serve --host 127.0.0.1 --port 8000\n'
 ```
 
 The agent can send commands through `screen -S hortator -p dashboard -X stuff` and inspect the same output log. Use Ctrl-C before entering a shell command while the server owns the foreground terminal. Do not start a second council runtime outside this session.
@@ -119,9 +128,9 @@ Environment variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HORTATOR_DATA_DIR` | `./data` | Persistent storage |
+| `HORTATOR_DATA_DIR` | Workspace: `/home/codexy/.local/share/hortator`; bare CLI fallback: `./data` | Persistent storage; use the external workspace environment on every branch |
 | `HORTATOR_ADMIN_PASSWORD` | Generated file | Password override, 12+ characters; changes revoke sessions on startup |
-| `HORTATOR_MASTER_KEY` | `data/master.key` | Fernet key; wrong keys fail closed |
+| `HORTATOR_MASTER_KEY` | `$HORTATOR_DATA_DIR/master.key` | Fernet key; wrong keys fail closed |
 | `HORTATOR_SECURE_COOKIES` | `0` | Set `1` for HTTPS deployments |
 | `HORTATOR_ALLOWED_ORIGINS` | Same Host only | Comma-separated extra trusted origins |
 | `HORTATOR_WEB_DIR` | `web/dist` | Built UI assets |
@@ -132,7 +141,7 @@ Environment variables:
 From the repository root, or with `--data-dir` before the command:
 
 ```bash
-uv run hortator backup /absolute/path/to/new-backup-directory
+hortator backup /absolute/path/to/new-backup-directory
 ```
 
 This uses SQLite's backup API, copies artifacts, and saves the encryption key separately inside the new backup directory. It can read a running database. Move that key to separate secure storage after verifying the backup. Keep the artifacts and database from the same operational period; new artifacts created during a live backup may not be in the snapshot. For a complete point-in-time archive, pause the council first.
@@ -142,7 +151,7 @@ To restore, stop Hortator, copy `council.sqlite3`, `master.key`, and `artifacts/
 To reset the dashboard password, stop the runtime and run:
 
 ```bash
-uv run hortator password
+hortator password
 ```
 
-This prompts privately, revokes sessions, and removes the bootstrap password file. If `HORTATOR_ADMIN_PASSWORD` is set at startup, that environment value remains authoritative. `uv run hortator doctor` shows readiness without external calls.
+This prompts privately, revokes sessions, and removes the bootstrap password file. If `HORTATOR_ADMIN_PASSWORD` is set at startup, that environment value remains authoritative. `hortator doctor` shows readiness without external calls; stop the runtime before using it.
