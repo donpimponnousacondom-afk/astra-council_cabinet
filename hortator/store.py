@@ -17,6 +17,7 @@ def dumps(value):
 
 class Store:
     """One event-loop writer. Short WAL transactions never span network awaits."""
+
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
@@ -32,6 +33,10 @@ class Store:
         CREATE TABLE IF NOT EXISTS entities (
           kind TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
           updated_at REAL NOT NULL, PRIMARY KEY(kind,id));
+        CREATE TABLE IF NOT EXISTS entity_tombstones (
+          kind TEXT NOT NULL,id TEXT NOT NULL,deleted_at REAL NOT NULL,PRIMARY KEY(kind,id));
+        CREATE TABLE IF NOT EXISTS channels (id TEXT PRIMARY KEY,guild_id TEXT,parent_id TEXT);
+        INSERT OR IGNORE INTO schema_version VALUES(2);
         CREATE TABLE IF NOT EXISTS secrets (scope TEXT PRIMARY KEY, value BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS auth_sessions (
           token_hash TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires_at REAL NOT NULL);
@@ -96,24 +101,40 @@ class Store:
         return self.db.execute(sql, args)
 
     def list(self, kind):
-        return [{**json.loads(row["body"]), "revision": row["revision"]} for row in self.rows(
-            "SELECT body,revision FROM entities WHERE kind=? ORDER BY id", (kind,))]
+        return [
+            {**json.loads(row["body"]), "revision": row["revision"]}
+            for row in self.rows("SELECT body,revision FROM entities WHERE kind=? ORDER BY id", (kind,))
+        ]
 
     def get(self, kind, entity_id):
         row = self.one("SELECT body,revision FROM entities WHERE kind=? AND id=?", (kind, entity_id))
         return {**json.loads(row["body"]), "revision": row["revision"]} if row else None
 
     def put(self, kind, body):
-        self.execute("""INSERT INTO entities(kind,id,body,updated_at) VALUES(?,?,?,?)
+        self.execute(
+            """INSERT INTO entities(kind,id,body,updated_at) VALUES(?,?,?,?)
           ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body, revision=entities.revision+1,
-          updated_at=excluded.updated_at""", (kind, body["id"], dumps(body), time.time()))
+          updated_at=excluded.updated_at""",
+            (kind, body["id"], dumps(body), time.time()),
+        )
         return self.get(kind, body["id"])
 
     def emit(self, kind, data=None, *, bot_id=None, turn_id=None, request_id=None, level="info"):
-        event = dict(id=uid("ev_"), at=time.time(), kind=kind, level=level, bot_id=bot_id,
-                     turn_id=turn_id, request_id=request_id, data=self.redact(data or {}))
-        cur = self.execute("""INSERT INTO events(id,at,kind,level,bot_id,turn_id,request_id,data)
-          VALUES(:id,:at,:kind,:level,:bot_id,:turn_id,:request_id,:data)""", {**event, "data": dumps(event["data"])})
+        event = dict(
+            id=uid("ev_"),
+            at=time.time(),
+            kind=kind,
+            level=level,
+            bot_id=bot_id,
+            turn_id=turn_id,
+            request_id=request_id,
+            data=self.redact(data or {}),
+        )
+        cur = self.execute(
+            """INSERT INTO events(id,at,kind,level,bot_id,turn_id,request_id,data)
+          VALUES(:id,:at,:kind,:level,:bot_id,:turn_id,:request_id,:data)""",
+            {**event, "data": dumps(event["data"])},
+        )
         return {**event, "seq": cur.lastrowid}
 
     def events(self, *, after=0, before=None, limit=100, bot_id=None, turn_id=None, level=None):
@@ -126,34 +147,83 @@ class Store:
             where.append("seq<?")
             args.append(before)
         order = "ASC" if after else "DESC"
-        rows = self.rows(f"SELECT * FROM events WHERE {' AND '.join(where)} ORDER BY seq {order} LIMIT ?",
-                         (*args, min(limit, 500)))
+        rows = self.rows(
+            f"SELECT * FROM events WHERE {' AND '.join(where)} ORDER BY seq {order} LIMIT ?",
+            (*args, min(limit, 500)),
+        )
         for row in rows:
             row["data"] = json.loads(row["data"])
         return rows
 
     def context(self, bot_id, channel_id):
-        self.execute("INSERT OR IGNORE INTO contexts(bot_id,channel_id,updated_at) VALUES(?,?,?)",
-                     (bot_id, channel_id, time.time()))
+        self.execute(
+            "INSERT OR IGNORE INTO contexts(bot_id,channel_id,updated_at) VALUES(?,?,?)",
+            (bot_id, channel_id, time.time()),
+        )
         return self.one("SELECT * FROM contexts WHERE bot_id=? AND channel_id=?", (bot_id, channel_id))
 
     def transcript(self, channel_id, after=0, through=None, limit=10000):
-        rows = self.rows("""SELECT * FROM messages WHERE channel_id=? AND seq>? AND seq<=?
-          ORDER BY seq LIMIT ?""", (channel_id, after, through or 9223372036854775807, limit))
+        rows = self.rows(
+            """SELECT * FROM messages WHERE channel_id=? AND seq>? AND seq<=?
+          ORDER BY seq LIMIT ?""",
+            (channel_id, after, through or 9223372036854775807, limit),
+        )
         for row in rows:
             row["attachments"] = json.loads(row["attachments"])
         return rows
 
-    def ingest(self, *, discord_id, channel_id, author_id, author_name, content, at=None,
-               room_id=None, bot_id=None, reply_to=None, attachments=None):
+    def ingest(
+        self,
+        *,
+        discord_id,
+        channel_id,
+        author_id,
+        author_name,
+        content,
+        at=None,
+        room_id=None,
+        bot_id=None,
+        reply_to=None,
+        attachments=None,
+        guild_id=None,
+        parent_id=None,
+    ):
+        room = self.get("rooms", room_id) if room_id else None
+        if guild_id is None and room and room["channel_id"] == channel_id:
+            guild_id = room["guild_id"]
+        self.execute(
+            "INSERT INTO channels(id,guild_id,parent_id) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET guild_id=coalesce(excluded.guild_id,channels.guild_id),parent_id=coalesce(excluded.parent_id,channels.parent_id)",
+            (channel_id, guild_id, parent_id),
+        )
         content = self.redact(content)
-        cur = self.execute("""INSERT OR IGNORE INTO messages(discord_id,channel_id,room_id,author_id,
+        cur = self.execute(
+            """INSERT OR IGNORE INTO messages(discord_id,channel_id,room_id,author_id,
           author_name,bot_id,content,at,reply_to,attachments) VALUES(?,?,?,?,?,?,?,?,?,?)""",
-          (discord_id, channel_id, room_id, author_id, author_name, bot_id, content, at or time.time(),
-           reply_to, dumps(self.redact(attachments or []))))
+            (
+                discord_id,
+                channel_id,
+                room_id,
+                author_id,
+                author_name,
+                bot_id,
+                content,
+                at or time.time(),
+                reply_to,
+                dumps(self.redact(attachments or [])),
+            ),
+        )
         if cur.rowcount:
-            self.emit("message.received", {"message_id": discord_id, "channel_id": channel_id,
-                      "author_name": author_name, "content": content, "seq": cur.lastrowid}, bot_id=bot_id)
+            self.emit(
+                "message.received",
+                {
+                    "message_id": discord_id,
+                    "channel_id": channel_id,
+                    "author_name": author_name,
+                    "content": content,
+                    "seq": cur.lastrowid,
+                },
+                bot_id=bot_id,
+            )
         return bool(cur.rowcount)
 
     def runtime(self, bot_id):
@@ -168,11 +238,25 @@ class Store:
         self.execute("UPDATE bot_runtime SET gateway_status='offline',heartbeat_ms=NULL")
         for row in self.rows("SELECT * FROM outbox WHERE status IN ('pending','sending')"):
             status = "unknown" if row["status"] == "sending" else "suppressed"
-            self.execute("UPDATE outbox SET status=?,error='Process restarted before delivery was confirmed' WHERE id=?", (status, row["id"]))
-            self.emit("delivery." + status, {"outbox_id": row["id"], "reason": "process_restart"},
-                      bot_id=row["bot_id"], turn_id=row["turn_id"], level="warning")
-        self.execute("UPDATE turns SET status='interrupted',ended_at=?,error='Process restarted' WHERE ended_at IS NULL", (time.time(),))
-        self.execute("UPDATE requests SET status='interrupted',ended_at=?,error='Process restarted; usage may be incomplete' WHERE ended_at IS NULL", (time.time(),))
+            self.execute(
+                "UPDATE outbox SET status=?,error='Process restarted before delivery was confirmed' WHERE id=?",
+                (status, row["id"]),
+            )
+            self.emit(
+                "delivery." + status,
+                {"outbox_id": row["id"], "reason": "process_restart"},
+                bot_id=row["bot_id"],
+                turn_id=row["turn_id"],
+                level="warning",
+            )
+        self.execute(
+            "UPDATE turns SET status='interrupted',ended_at=?,error='Process restarted' WHERE ended_at IS NULL",
+            (time.time(),),
+        )
+        self.execute(
+            "UPDATE requests SET status='interrupted',ended_at=?,error='Process restarted; usage may be incomplete' WHERE ended_at IS NULL",
+            (time.time(),),
+        )
 
     def close(self):
         self.db.close()

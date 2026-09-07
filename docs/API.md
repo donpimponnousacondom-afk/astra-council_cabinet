@@ -1,0 +1,81 @@
+# Control API and Discord command parity
+
+All endpoints except `/api/health` and login require the dashboard session. Log in at `POST /api/auth/login` with `{"password":"..."}`; retain the HttpOnly cookie and returned `csrf`. Send `X-CSRF-Token` for POST/PUT operations. There is no API key in a URL and no unauthenticated public control endpoint.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/auth/session`, `POST /api/auth/logout` | Session state/revocation |
+| `GET /api/status` | Configuration, readiness, gateway state, provider health, active requests, outbox counts |
+| `GET /api/stats?hours=24` | Usage/cost/timing/failure groups, hourly history, tool and turn outcomes |
+| `GET /api/config/{kind}` / `/{id}` | Read configuration, with credential-present flags only |
+| `GET /api/config-schemas` | JSON schemas for every configuration resource |
+| `POST /api/control` | Shared owner control service |
+| `PUT /api/credentials/{kind}/{id}/{field}` | Write-only `{"value":"..."}`; empty value removes a credential |
+| `GET /api/trajectory?bot_id=&status=&before=&limit=60` | Tail-first turn history; `before` is a Unix timestamp |
+| `GET /api/trajectory/{turn-id}` / `/export` | Full requests, assembly metadata, tool events and deliveries |
+| `GET /api/events?after=&before=&bot_id=&turn_id=&level=&limit=100` | Stable sequence cursor event ledger |
+| `GET /api/events/stream?after=` | Authenticated SSE; reconnect via `Last-Event-ID` |
+| `GET /api/context/{bot}/{channel}` | Summary, checkpoint, estimates, notes, first 500 uncompacted messages, compaction history |
+| `GET /api/messages/{channel}?after=&through=&limit=100` | Original observed messages; page by sequence |
+| `GET /api/artifacts/{id}` | Authenticated generated attachment download |
+| `GET /api/export/config` | Configuration without credentials |
+| `GET /api/commands` | Command help used by the dashboard |
+| `GET /api/openapi.json` | Authenticated OpenAPI specification |
+
+The configuration kinds are `providers`, `profiles`, `bots`, `prompts`, `rooms`, `plugins`, and `settings` (`global`). `id` is immutable. Optional `revision` guards concurrent edits. A patch merges top-level fields; nested JSON objects and lists are deliberately replaced, not magically combined.
+
+Control request shape:
+
+```json
+{
+  "action": "save",
+  "kind": "profiles",
+  "id": "balanced",
+  "data": { "request_json": { "temperature": 0.4, "reasoning_effort": "low" } }
+}
+```
+
+Actions: `create`, `save`, `delete`, `start`, `stop`, `clone`, `probe`, `reset_circuit`, `restart`, `compact`, `memory`, `thread`. `start`/`stop` with `id: "all"` updates the global switch. `clone` defaults to profiles and accepts a new `id`/`name` in `data`. `compact` takes a bot ID and optional `data.channel_id`; `memory` takes `channel_id`, `key`, and `value`; `thread` takes a room ID and `data.name`. `probe` and `reset_circuit` take a provider ID. `restart` takes a bot ID.
+
+Credential kinds/fields:
+
+- `providers/{id}/api_key`
+- `bots/{id}/token`, `bots/{id}/provider_key`, `bots/{id}/plugin:{plugin-id}`
+- `plugins/{id}/api_key`
+
+Bot token validation calls Discord to check both the application and bot identity before storage. The Bot token is not an OAuth client secret or a user account token. All other keys are stored without sending a paid probe; use provider discovery or a real configured activation to verify the endpoint.
+
+## Discord examples
+
+```text
+!help
+!status
+!stats 168
+!stop all
+!start all
+!stop ada
+!stop providers:openrouter
+!start providers:openrouter
+!restart ada
+!models
+!clone balanced DeepSeek low
+!set profiles balanced {"model":"provider/model-id","context_window":272000,"compact_threshold":0.7,"request_json":{"temperature":0.6,"reasoning":{"effort":"low"}}}
+!use ada balanced
+!prompt ada You are Ada. Be analytical and inquisitive.
+!interval socrates 180
+!set bots ada {"enabled_plugins":["web_fetch","memory"],"max_tool_rounds":3}
+!set settings global {"global_prompt":"Share interesting ideas. Recognize The Boss and let discussions develop."}
+!context ada
+!compact ada 123456789012345678
+!memory ada {"channel_id":"123456789012345678","key":"topic","value":"Discuss the article The Boss shared."}
+!trajectory
+!trajectory turn_...
+!events ada
+!check openrouter
+!reset-circuit openrouter
+!thread council Today's discussion
+!dm !status
+!dm What failed in the last day, and which model profiles were involved?
+```
+
+`!get`, `!set`, `!create`, `!delete`, and `!clone` provide configuration parity instead of inventing a different command for every vendor parameter. Credentials are the deliberate exception: enter them in the dashboard. A command error never falls through to the model. A normal owner message is queued for Hortator's model, whose `council_inspect` tool can query status/statistics/configuration/events/contexts/trajectories but cannot mutate them.

@@ -22,28 +22,92 @@ class Service:
             return
         initial = {
             "settings": [{"id": "global"}],
-            "providers": [{"id": "openrouter", "name": "OpenRouter", "kind": "openrouter", "base_url": "https://openrouter.ai/api/v1"}],
-            "profiles": [{"id": "balanced", "name": "Balanced · configure model", "provider_id": "openrouter", "model": "your-model-id"}],
+            "providers": [
+                {
+                    "id": "openrouter",
+                    "name": "OpenRouter",
+                    "kind": "openrouter",
+                    "base_url": "https://openrouter.ai/api/v1",
+                }
+            ],
+            "profiles": [
+                {
+                    "id": "balanced",
+                    "name": "Balanced · configure model",
+                    "provider_id": "openrouter",
+                    "model": "your-model-id",
+                }
+            ],
             "rooms": [{"id": "council", "name": "The council"}],
-            "prompts": [{"id": "council-etiquette", "name": "Council etiquette", "content": "Build on specific points from other participants. Ask real questions. Cite fetched sources when relevant. Disagree with ideas, never insult participants. Avoid restating an entire discussion. Take a pause when you have nothing to add."}],
+            "prompts": [
+                {
+                    "id": "council-etiquette",
+                    "name": "Council etiquette",
+                    "content": "Build on specific points from other participants. Ask real questions. Cite fetched sources when relevant. Disagree with ideas, never insult participants. Avoid restating an entire discussion. Take a pause when you have nothing to add.",
+                }
+            ],
             "bots": [
-                {"id": "hortator", "name": "Hortator", "role": "hortator", "model_profile_id": "balanced", "interval_seconds": 15, "cooldown_seconds": 15,
-                 "persona": "You are the measured, technically precise council director. Help The Boss understand the council and diagnose operational failures. Support claims with inspected data.", "enabled_plugins": ["council_inspect"], "color": "#d7c2ef"},
-                {"id": "ada", "name": "Ada", "model_profile_id": "balanced", "room_ids": ["council"], "prompt_ids": ["council-etiquette"],
-                 "persona": "You are Ada: analytical, inventive, and curious about how ideas become practical systems. Look for testable claims and useful connections. Ask concise, probing questions.", "color": "#b9de89"},
-                {"id": "socrates", "name": "Socrates", "model_profile_id": "balanced", "room_ids": ["council"], "prompt_ids": ["council-etiquette"],
-                 "interval_seconds": 90, "cooldown_seconds": 90, "persona": "You are Socrates: warm, skeptical, and interested in assumptions. Ask questions that reveal what others mean. Offer your own position too; do not make every response a question.", "color": "#e4bb82"}],
+                {
+                    "id": "hortator",
+                    "name": "Hortator",
+                    "role": "hortator",
+                    "model_profile_id": "balanced",
+                    "interval_seconds": 15,
+                    "cooldown_seconds": 15,
+                    "persona": "You are the measured, technically precise council director. Help The Boss understand the council and diagnose operational failures. Support claims with inspected data.",
+                    "enabled_plugins": ["council_inspect"],
+                    "color": "#d7c2ef",
+                },
+                {
+                    "id": "ada",
+                    "name": "Ada",
+                    "model_profile_id": "balanced",
+                    "room_ids": ["council"],
+                    "prompt_ids": ["council-etiquette"],
+                    "persona": "You are Ada: analytical, inventive, and curious about how ideas become practical systems. Look for testable claims and useful connections. Ask concise, probing questions.",
+                    "color": "#b9de89",
+                },
+                {
+                    "id": "socrates",
+                    "name": "Socrates",
+                    "model_profile_id": "balanced",
+                    "room_ids": ["council"],
+                    "prompt_ids": ["council-etiquette"],
+                    "interval_seconds": 90,
+                    "cooldown_seconds": 90,
+                    "persona": "You are Socrates: warm, skeptical, and interested in assumptions. Ask questions that reveal what others mean. Offer your own position too; do not make every response a question.",
+                    "color": "#e4bb82",
+                },
+            ],
         }
         for kind, items in initial.items():
             for item in items:
                 self.store.put(kind, SCHEMAS[kind].model_validate(item).model_dump())
-        self.store.emit("system.initialized", {"owner_id": OWNER_ID, "note": "Draft bots are disabled. Enter credentials and Discord IDs before activation."})
+        self.store.emit(
+            "system.initialized",
+            {
+                "owner_id": OWNER_ID,
+                "note": "Draft bots are disabled. Enter credentials and Discord IDs before activation.",
+            },
+        )
 
     def seed_plugins(self):
         for name, spec in self.registry.specs.items():
             if not self.store.get("plugins", name):
-                self.store.put("plugins", SCHEMAS["plugins"].model_validate({"id": name, "name": spec.name,
-                    "description": spec.description, "config": spec.defaults, "enabled": name in ("council_inspect", "memory", "web_fetch")}).model_dump())
+                self.store.put(
+                    "plugins",
+                    SCHEMAS["plugins"]
+                    .model_validate(
+                        {
+                            "id": name,
+                            "name": spec.name,
+                            "description": spec.description,
+                            "config": spec.defaults,
+                            "enabled": name in ("council_inspect", "memory", "web_fetch"),
+                        }
+                    )
+                    .model_dump(),
+                )
 
     def entity(self, kind, entity_id):
         if kind not in KINDS:
@@ -58,18 +122,30 @@ class Service:
         if kind == "providers":
             value["key_configured"] = bool(self.vault.get(f"provider/{value['id']}/api_key"))
             value["health"] = self.store.health(value["id"])
+            value["recent"] = self.store.one(
+                "SELECT count(*) AS requests,coalesce(sum(CASE WHEN status='failed' THEN 1 ELSE 0 END),0) AS failures FROM requests WHERE provider_id=? AND started_at>?",
+                (value["id"], time.time() - 900),
+            )
         elif kind == "bots":
             value["token_configured"] = bool(self.vault.get(f"bot/{value['id']}/token"))
             value["key_override_configured"] = bool(self.vault.get(f"bot/{value['id']}/provider_key"))
-            value["plugin_keys_configured"] = [name for name in self.registry.specs if self.vault.get(f"bot/{value['id']}/plugin:{name}")]
+            value["plugin_keys_configured"] = [
+                name for name in self.registry.specs if self.vault.get(f"bot/{value['id']}/plugin:{name}")
+            ]
             value["runtime"] = self.store.runtime(value["id"])
             value["active_turn"] = bool(self.engine and value["id"] in self.engine.tasks)
-            value["contexts"] = self.store.rows("SELECT * FROM contexts WHERE bot_id=? ORDER BY updated_at DESC", (value["id"],))
+            value["contexts"] = self.store.rows(
+                "SELECT * FROM contexts WHERE bot_id=? ORDER BY updated_at DESC", (value["id"],)
+            )
             value["readiness"] = self.readiness(value)
             if value["application_id"]:
                 # View, Send, Embed, Attach, Read History, Create Public Threads, Send in Threads.
-                permissions = (1 << 10) | (1 << 11) | (1 << 14) | (1 << 15) | (1 << 16) | (1 << 35) | (1 << 38)
-                value["invite_url"] = "https://discord.com/oauth2/authorize?" + urlencode({"client_id": value["application_id"], "scope": "bot", "permissions": str(permissions)})
+                permissions = (
+                    (1 << 10) | (1 << 11) | (1 << 14) | (1 << 15) | (1 << 16) | (1 << 35) | (1 << 38)
+                )
+                value["invite_url"] = "https://discord.com/oauth2/authorize?" + urlencode(
+                    {"client_id": value["application_id"], "scope": "bot", "permissions": str(permissions)}
+                )
         elif kind == "plugins":
             value["key_configured"] = bool(self.vault.get(f"plugin/{value['id']}/api_key"))
             spec = self.registry.specs.get(value["id"])
@@ -108,11 +184,16 @@ class Service:
         def exists(k, value):
             if not self.store.get(k, value):
                 raise ControlError(f"Referenced {k}/{value} does not exist")
+
         if kind == "profiles":
             exists("providers", entity["provider_id"])
         if kind == "bots":
             exists("profiles", entity["model_profile_id"])
-            for k, field in (("rooms", "room_ids"), ("prompts", "prompt_ids"), ("plugins", "enabled_plugins")):
+            for k, field in (
+                ("rooms", "room_ids"),
+                ("prompts", "prompt_ids"),
+                ("plugins", "enabled_plugins"),
+            ):
                 for value in entity[field]:
                     exists(k, value)
             for other in self.store.list("bots"):
@@ -125,8 +206,19 @@ class Service:
                 issues = self.readiness(entity)
                 if issues:
                     raise ControlError("Bot is not ready: " + "; ".join(issues))
+        if (
+            kind == "settings"
+            and entity["control_channel_id"]
+            and any(r["channel_id"] == entity["control_channel_id"] for r in self.store.list("rooms"))
+        ):
+            raise ControlError("Use a separate reporting channel for Hortator")
         if kind == "rooms" and entity["channel_id"]:
-            if any(r["id"] != entity["id"] and r["channel_id"] == entity["channel_id"] for r in self.store.list("rooms")):
+            if self.store.get("settings", "global")["control_channel_id"] == entity["channel_id"]:
+                raise ControlError("Council rooms and Hortator reporting must use separate channels")
+            if any(
+                r["id"] != entity["id"] and r["channel_id"] == entity["channel_id"]
+                for r in self.store.list("rooms")
+            ):
                 raise ControlError("This channel already belongs to a room", 409)
         if kind == "plugins" and entity["id"] not in self.registry.specs:
             raise ControlError("Install a Python plugin entry point before configuring it")
@@ -154,6 +246,12 @@ class Service:
             raise ControlError("Unknown resource", 404)
         async with self.lock:
             old = self.store.get(kind, entity_id)
+            if create and self.store.one(
+                "SELECT 1 FROM entity_tombstones WHERE kind=? AND id=?", (kind, entity_id)
+            ):
+                raise ControlError(
+                    "That identifier is retired; use a new ID to keep historical identities separate", 409
+                )
             if create and old:
                 raise ControlError("That identifier already exists", 409)
             if not create and not old:
@@ -168,13 +266,25 @@ class Service:
             try:
                 entity = SCHEMAS[kind].model_validate(raw).model_dump()
             except ValidationError as exc:
-                raise ControlError("; ".join(".".join(map(str, e["loc"])) + ": " + e["msg"] for e in exc.errors(include_input=False))) from exc
+                raise ControlError(
+                    "; ".join(
+                        ".".join(map(str, e["loc"])) + ": " + e["msg"]
+                        for e in exc.errors(include_input=False)
+                    )
+                ) from exc
             self.validate_references(kind, entity)
-            if kind == "bots" and old and old["application_id"] != entity["application_id"] and self.vault.get(f"bot/{entity_id}/token"):
+            if (
+                kind == "bots"
+                and old
+                and old["application_id"] != entity["application_id"]
+                and self.vault.get(f"bot/{entity_id}/token")
+            ):
                 raise ControlError("Remove the existing bot token before changing its application ID")
             result = self.store.put(kind, entity)
-            self.store.emit("config.created" if create else "config.updated", {"actor": actor.label, "resource": kind, "id": entity_id,
-                            "before": old, "after": result})
+            self.store.emit(
+                "config.created" if create else "config.updated",
+                {"actor": actor.label, "resource": kind, "id": entity_id, "before": old, "after": result},
+            )
             if self.engine:
                 await self.engine.cancel(self.affected(kind, entity_id), f"{kind}/{entity_id} changed")
             return self.public(kind, result)
@@ -182,7 +292,7 @@ class Service:
     async def delete(self, actor, kind, entity_id):
         actor.require_owner()
         async with self.lock:
-            self.entity(kind, entity_id)
+            deleted_entity = self.entity(kind, entity_id)
             if kind in ("settings", "plugins"):
                 raise ControlError("This registry entry cannot be deleted; disable it instead")
             references = []
@@ -190,7 +300,12 @@ class Service:
                 for row in self.store.list(k):
                     if k == kind and row["id"] == entity_id:
                         continue
-                    fields = {"providers": ("provider_id",), "profiles": ("model_profile_id",), "rooms": ("room_ids",), "prompts": ("prompt_ids",)}.get(kind, ())
+                    fields = {
+                        "providers": ("provider_id",),
+                        "profiles": ("model_profile_id",),
+                        "rooms": ("room_ids",),
+                        "prompts": ("prompt_ids",),
+                    }.get(kind, ())
                     for field in fields:
                         value = row.get(field)
                         if value == entity_id or isinstance(value, list) and entity_id in value:
@@ -198,8 +313,14 @@ class Service:
             if references:
                 raise ControlError("Still referenced by: " + ", ".join(references), 409)
             affected = self.affected(kind, entity_id)
+            self.store.execute(
+                "INSERT OR REPLACE INTO entity_tombstones VALUES(?,?,?)", (kind, entity_id, time.time())
+            )
             self.store.execute("DELETE FROM entities WHERE kind=? AND id=?", (kind, entity_id))
-            self.store.emit("config.deleted", {"actor": actor.label, "resource": kind, "id": entity_id})
+            self.store.emit(
+                "config.deleted",
+                {"actor": actor.label, "resource": kind, "id": entity_id, "before": deleted_entity},
+            )
             if self.engine:
                 await self.engine.cancel(affected, "Configuration deleted")
             prefix = {"bots": "bot", "providers": "provider"}.get(kind)
@@ -217,7 +338,13 @@ class Service:
             raise ControlError("Invalid credential")
         entity = self.entity(kind, entity_id)
         prefix = {"providers": "provider", "bots": "bot", "plugins": "plugin"}.get(kind)
-        allowed = field == "api_key" if kind in ("providers", "plugins") else field in ("token", "provider_key") or field.startswith("plugin:") and field[7:] in self.registry.specs
+        allowed = (
+            field == "api_key"
+            if kind in ("providers", "plugins")
+            else field in ("token", "provider_key")
+            or field.startswith("plugin:")
+            and field[7:] in self.registry.specs
+        )
         if not prefix or not allowed:
             raise ControlError("Unknown credential field")
         if kind == "bots" and field == "token" and value:
@@ -238,7 +365,16 @@ class Service:
         self.vault.put(f"{prefix}/{entity_id}/{field}", value.strip())
         if kind == "bots" and field == "token" and not value:
             self.vault.put(f"bot/{entity_id}/user_id", "")
-        self.store.emit("credential.updated", {"actor": actor.label, "resource": kind, "id": entity_id, "field": field, "configured": bool(value)})
+        self.store.emit(
+            "credential.updated",
+            {
+                "actor": actor.label,
+                "resource": kind,
+                "id": entity_id,
+                "field": field,
+                "configured": bool(value),
+            },
+        )
         if self.engine:
             await self.engine.cancel(self.affected(kind, entity_id), "Credential changed")
         return {"configured": bool(value)}
@@ -257,37 +393,71 @@ class Service:
         total = self.store.one(f"SELECT {fields} FROM requests WHERE started_at>=?", (since,))
         grouped = {}
         for group in ("bot_id", "provider_id", "profile_id", "model", "purpose"):
-            grouped[group] = self.store.rows(f"SELECT {group} AS id,{fields} FROM requests WHERE started_at>=? GROUP BY {group}", (since,))
-        latency = self.store.rows("SELECT ttft_ms,duration_ms FROM requests WHERE started_at>=? AND status='completed' ORDER BY started_at DESC LIMIT 10000", (since,))
+            grouped[group] = self.store.rows(
+                f"SELECT {group} AS id,{fields} FROM requests WHERE started_at>=? GROUP BY {group}", (since,)
+            )
+        grouped["configuration"] = self.store.rows(
+            f"SELECT profile_id || '@r' || coalesce(json_extract(context,'$.profile_revision'),0) AS id,{fields} FROM requests WHERE started_at>=? GROUP BY profile_id,coalesce(json_extract(context,'$.profile_revision'),0)",
+            (since,),
+        )
+        latency = self.store.rows(
+            "SELECT ttft_ms,duration_ms FROM requests WHERE started_at>=? AND status='completed' ORDER BY started_at DESC LIMIT 10000",
+            (since,),
+        )
         for key in ("ttft_ms", "duration_ms"):
             vals = sorted(r[key] for r in latency if r[key] is not None)
-            total["p95_" + key] = vals[min(len(vals)-1, int(len(vals)*.95))] if vals else None
+            total["p95_" + key] = vals[min(len(vals) - 1, int(len(vals) * 0.95))] if vals else None
         total["latency_sample_size"] = len(latency)
-        history = self.store.rows(f"SELECT CAST(started_at/3600 AS INTEGER)*3600 AS at,{fields} FROM requests WHERE started_at>=? GROUP BY CAST(started_at/3600 AS INTEGER) ORDER BY at", (since,))
-        turns = self.store.rows("SELECT status,count(*) AS count FROM turns WHERE started_at>=? GROUP BY status", (since,))
-        tools = self.store.rows("SELECT json_extract(data,'$.name') AS name,kind,count(*) AS count,avg(json_extract(data,'$.duration_ms')) AS avg_duration_ms FROM events WHERE at>=? AND kind IN ('tool.completed','tool.failed') GROUP BY name,kind", (since,))
-        return {"hours": hours, "total": total, "by": grouped, "history": history, "turns": turns, "tools": tools}
+        history = self.store.rows(
+            f"SELECT CAST(started_at/3600 AS INTEGER)*3600 AS at,{fields} FROM requests WHERE started_at>=? GROUP BY CAST(started_at/3600 AS INTEGER) ORDER BY at",
+            (since,),
+        )
+        turns = self.store.rows(
+            "SELECT status,count(*) AS count FROM turns WHERE started_at>=? GROUP BY status", (since,)
+        )
+        tools = self.store.rows(
+            "SELECT json_extract(data,'$.name') AS name,kind,count(*) AS count,avg(json_extract(data,'$.duration_ms')) AS avg_duration_ms FROM events WHERE at>=? AND kind IN ('tool.completed','tool.failed') GROUP BY name,kind",
+            (since,),
+        )
+        return {
+            "hours": hours,
+            "total": total,
+            "by": grouped,
+            "history": history,
+            "turns": turns,
+            "tools": tools,
+        }
 
     def status(self):
-        return {"owner_id": OWNER_ID, "now": time.time(), "settings": self.store.get("settings", "global"),
-                "bots": [self.public("bots", b) for b in self.store.list("bots")],
-                "providers": [self.public("providers", p) for p in self.store.list("providers")],
-                "profiles": self.store.list("profiles"), "rooms": self.store.list("rooms"),
-                "plugins": [self.public("plugins", p) for p in self.store.list("plugins")],
-                "prompts": self.store.list("prompts"),
-                "active_requests": self.store.rows("SELECT id,bot_id,model,purpose,started_at FROM requests WHERE status='running'"),
-                "delivery_counts": self.store.rows("SELECT status,count(*) AS count FROM outbox GROUP BY status"),
-                "last_event_seq": self.store.one("SELECT coalesce(max(seq),0) AS seq FROM events")["seq"]}
+        return {
+            "owner_id": OWNER_ID,
+            "now": time.time(),
+            "settings": self.store.get("settings", "global"),
+            "bots": [self.public("bots", b) for b in self.store.list("bots")],
+            "providers": [self.public("providers", p) for p in self.store.list("providers")],
+            "profiles": self.store.list("profiles"),
+            "rooms": self.store.list("rooms"),
+            "plugins": [self.public("plugins", p) for p in self.store.list("plugins")],
+            "prompts": self.store.list("prompts"),
+            "active_requests": self.store.rows(
+                "SELECT id,bot_id,model,purpose,started_at FROM requests WHERE status='running'"
+            ),
+            "delivery_counts": self.store.rows("SELECT status,count(*) AS count FROM outbox GROUP BY status"),
+            "last_event_seq": self.store.one("SELECT coalesce(max(seq),0) AS seq FROM events")["seq"],
+        }
 
     def turns(self, bot_id=None, before=None, status=None, limit=60):
-        conditions, args = ["started_at<?"], [before or time.time()+1]
+        conditions, args = ["started_at<?"], [before or time.time() + 1]
         if bot_id:
             conditions.append("bot_id=?")
             args.append(bot_id)
         if status:
             conditions.append("status=?")
             args.append(status)
-        return self.store.rows("SELECT * FROM turns WHERE " + " AND ".join(conditions) + " ORDER BY started_at DESC LIMIT ?", (*args, min(limit, 200)))
+        return self.store.rows(
+            "SELECT * FROM turns WHERE " + " AND ".join(conditions) + " ORDER BY started_at DESC LIMIT ?",
+            (*args, min(limit, 200)),
+        )
 
     def turn(self, turn_id):
         turn = self.store.one("SELECT * FROM turns WHERE id=?", (turn_id,))
@@ -309,10 +479,26 @@ class Service:
         value = self.store.one("SELECT * FROM contexts WHERE bot_id=? AND channel_id=?", (bot_id, channel_id))
         if not value:
             raise ControlError("Context has not been created for this bot/channel", 404)
-        value["memories"] = self.store.rows("SELECT key,value,updated_at FROM memories WHERE bot_id=? AND channel_id=?", (bot_id, channel_id))
+        value["memories"] = self.store.rows(
+            "SELECT key,value,updated_at FROM memories WHERE bot_id=? AND channel_id=?", (bot_id, channel_id)
+        )
         value["messages"] = self.store.transcript(channel_id, after=value["checkpoint"], limit=500)
-        value["message_count"] = self.store.one("SELECT count(*) AS n FROM messages WHERE channel_id=? AND seq>?", (channel_id, value["checkpoint"]))["n"]
-        value["compaction_events"] = [e for e in self.store.events(bot_id=bot_id, limit=500) if e["kind"] == "compaction.completed" and e["turn_id"] in {t["id"] for t in self.store.rows("SELECT id FROM turns WHERE bot_id=? AND channel_id=?", (bot_id, channel_id))}][:30]
+        value["message_count"] = self.store.one(
+            "SELECT count(*) AS n FROM messages WHERE channel_id=? AND seq>?",
+            (channel_id, value["checkpoint"]),
+        )["n"]
+        value["compaction_events"] = [
+            e
+            for e in self.store.events(bot_id=bot_id, limit=500)
+            if e["kind"] == "compaction.completed"
+            and e["turn_id"]
+            in {
+                t["id"]
+                for t in self.store.rows(
+                    "SELECT id FROM turns WHERE bot_id=? AND channel_id=?", (bot_id, channel_id)
+                )
+            }
+        ][:30]
         return value
 
     def inspect(self, resource, entity_id=None, channel_id=None):
@@ -325,9 +511,17 @@ class Service:
         if resource == "turn":
             return self.turn(entity_id)
         if resource == "context":
-            return self.context(entity_id, channel_id) if channel_id else self.store.rows("SELECT * FROM contexts WHERE bot_id=?", (entity_id,))
+            return (
+                self.context(entity_id, channel_id)
+                if channel_id
+                else self.store.rows("SELECT * FROM contexts WHERE bot_id=?", (entity_id,))
+            )
         if resource in KINDS:
-            return self.public(resource, self.entity(resource, entity_id)) if entity_id else [self.public(resource, item) for item in self.store.list(resource)]
+            return (
+                self.public(resource, self.entity(resource, entity_id))
+                if entity_id
+                else [self.public(resource, item) for item in self.store.list(resource)]
+            )
         raise ControlError("Unknown inspection resource")
 
     async def control(self, actor, command):
@@ -335,7 +529,9 @@ class Service:
         action = command.get("action")
         kind, target, data = command.get("kind"), command.get("id"), command.get("data", {})
         if action in ("save", "create"):
-            return await self.save(actor, kind, target or data.get("id", uid("new_")), data, create=action == "create")
+            return await self.save(
+                actor, kind, target or data.get("id", uid("new_")), data, create=action == "create"
+            )
         if action == "delete":
             return await self.delete(actor, kind, target)
         if action in ("start", "stop"):
@@ -352,16 +548,26 @@ class Service:
             if kind not in ("profiles", "bots", "prompts", "providers"):
                 raise ControlError("That resource cannot be cloned")
             source.pop("revision")
-            source.update(id=data.get("id", uid(target[:30] + "_")), name=data.get("name", source["name"] + " · copy"))
+            source.update(
+                id=data.get("id", uid(target[:30] + "_")), name=data.get("name", source["name"] + " · copy")
+            )
             if kind == "bots":
                 source.update(application_id="", enabled=False, role="council")
             return await self.save(actor, kind, source["id"], source, create=True)
         if action == "probe":
             result = await self.pool.probe(self.entity("providers", target))
+        elif action == "restart":
+            self.entity("bots", target)
+            await self.engine.cancel([target], "Discord reconnect requested")
+            await self.connector.restart(target)
+            result = {"reconnecting": target}
         elif action == "reset_circuit":
             self.entity("providers", target)
             self.store.health(target)
-            self.store.execute("UPDATE provider_health SET consecutive_failures=0,circuit_until=0 WHERE provider_id=?", (target,))
+            self.store.execute(
+                "UPDATE provider_health SET consecutive_failures=0,circuit_until=0 WHERE provider_id=?",
+                (target,),
+            )
             result = {"reset": target}
         elif action == "compact":
             bot = self.entity("bots", target)
@@ -371,17 +577,34 @@ class Service:
             result = {"turn_id": self.engine.launch(bot, channel_id, compact_only=True)}
         elif action == "memory":
             self.entity("bots", target)
-            channel_id, key, value = data.get("channel_id"), data.get("key", "operator"), data.get("value", "")
+            channel_id, key, value = (
+                data.get("channel_id"),
+                data.get("key", "operator"),
+                data.get("value", ""),
+            )
             self.context(target, channel_id)
-            if not isinstance(key, str) or not 1 <= len(key) <= 100 or not isinstance(value, str) or len(value) > 8000:
+            if (
+                not isinstance(key, str)
+                or not 1 <= len(key) <= 100
+                or not isinstance(value, str)
+                or len(value) > 8000
+            ):
                 raise ControlError("Memory key/value exceeds limits")
             from .plugins import ToolContext
-            result = await self.registry.memory({"operation": "write" if value else "delete", "key": key, "value": value}, ToolContext(self.entity("bots", target), channel_id, "operator"), {}, "")
+
+            result = await self.registry.memory(
+                {"operation": "write" if value else "delete", "key": key, "value": value},
+                ToolContext(self.entity("bots", target), channel_id, "operator"),
+                {},
+                "",
+            )
             await self.engine.cancel([target], "Memory changed")
         elif action == "thread":
             room = self.entity("rooms", target)
             result = await self.connector.create_thread(room, data.get("name", "Council discussion"))
         else:
             raise ControlError("Unknown control action")
-        self.store.emit("control.executed", {"actor": actor.label, "action": action, "id": target, "data": data})
+        self.store.emit(
+            "control.executed", {"actor": actor.label, "action": action, "id": target, "data": data}
+        )
         return result

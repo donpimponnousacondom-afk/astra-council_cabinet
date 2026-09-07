@@ -28,6 +28,7 @@ from .store import Store
 
 class Kernel:
     def __init__(self, directory):
+        self.started = False
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.store = Store(self.directory / "council.sqlite3")
@@ -46,6 +47,7 @@ class Kernel:
         self.engine.transport = self.connector
 
     def start(self):
+        self.started = True
         self.store.recover()
         self.connector.start()
         self.engine.start()
@@ -55,7 +57,8 @@ class Kernel:
         await self.engine.close()
         await self.connector.close()
         await self.pool.close()
-        self.store.emit("runtime.stopped")
+        if self.started:
+            self.store.emit("runtime.stopped")
         self.store.close()
 
 
@@ -85,7 +88,9 @@ def create_app(directory=None, start_runtime=True):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             lock.close()
-            raise RuntimeError("Another Hortator process owns this database. Run exactly one worker.") from exc
+            raise RuntimeError(
+                "Another Hortator process owns this database. Run exactly one worker."
+            ) from exc
         kernel = None
         try:
             kernel = Kernel(directory)
@@ -99,8 +104,14 @@ def create_app(directory=None, start_runtime=True):
             fcntl.flock(lock, fcntl.LOCK_UN)
             lock.close()
 
-    app = FastAPI(title="Hortator Council", version=__version__, lifespan=lifespan,
-                  docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(
+        title="Hortator Council",
+        version=__version__,
+        lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
 
     async def kernel(request: Request):
         return request.app.state.kernel
@@ -110,7 +121,11 @@ def create_app(directory=None, start_runtime=True):
         if origin:
             parsed = urlparse(origin)
             allowed = {v.rstrip("/") for v in os.getenv("HORTATOR_ALLOWED_ORIGINS", "").split(",") if v}
-            if parsed.scheme not in ("http", "https") or parsed.netloc != request.headers.get("host") and origin.rstrip("/") not in allowed:
+            if (
+                parsed.scheme not in ("http", "https")
+                or parsed.netloc != request.headers.get("host")
+                and origin.rstrip("/") not in allowed
+            ):
                 raise ControlError("Cross-origin control requests are forbidden", 403)
         if request.headers.get("sec-fetch-site") == "cross-site":
             raise ControlError("Cross-site control requests are forbidden", 403)
@@ -125,13 +140,18 @@ def create_app(directory=None, start_runtime=True):
 
     @app.middleware("http")
     async def boundaries(request, call_next):
-        if request.headers.get("content-length", "0").isdigit() and int(request.headers.get("content-length", "0")) > 1_000_000:
+        if (
+            request.headers.get("content-length", "0").isdigit()
+            and int(request.headers.get("content-length", "0")) > 1_000_000
+        ):
             return JSONResponse({"error": "Request body exceeds 1 MB"}, status_code=413)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+        )
         if request.url.path.startswith("/api"):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -143,7 +163,14 @@ def create_app(directory=None, start_runtime=True):
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
-        return JSONResponse({"error": "; ".join(".".join(map(str, item["loc"])) + ": " + item["msg"] for item in exc.errors())}, status_code=422)
+        return JSONResponse(
+            {
+                "error": "; ".join(
+                    ".".join(map(str, item["loc"])) + ": " + item["msg"] for item in exc.errors()
+                )
+            },
+            status_code=422,
+        )
 
     @app.get("/api/health")
     async def health():
@@ -155,7 +182,15 @@ def create_app(directory=None, start_runtime=True):
         # Rate-limited scrypt verification is bounded; auth state stays on the event-loop writer.
         token, csrf = k.auth.login(body.password, request.client.host if request.client else "unknown")
         response = JSONResponse({"csrf": csrf, "owner_id": OWNER_ID})
-        response.set_cookie("hortator_session", token, httponly=True, samesite="strict", secure=os.getenv("HORTATOR_SECURE_COOKIES") == "1", max_age=43200, path="/")
+        response.set_cookie(
+            "hortator_session",
+            token,
+            httponly=True,
+            samesite="strict",
+            secure=os.getenv("HORTATOR_SECURE_COOKIES") == "1",
+            max_age=43200,
+            path="/",
+        )
         return response
 
     @app.get("/api/auth/session")
@@ -195,12 +230,25 @@ def create_app(directory=None, start_runtime=True):
         return await k.service.control(actor, body.model_dump())
 
     @app.put("/api/credentials/{kind}/{entity_id}/{field}")
-    async def credential(kind: str, entity_id: str, field: str, body: CredentialBody, actor=Depends(authenticated), k=Depends(kernel)):
+    async def credential(
+        kind: str,
+        entity_id: str,
+        field: str,
+        body: CredentialBody,
+        actor=Depends(authenticated),
+        k=Depends(kernel),
+    ):
         return await k.service.credential(actor, kind, entity_id, field, body.value)
 
     @app.get("/api/trajectory")
-    async def trajectories(bot_id: str | None = None, before: float | None = None, status: str | None = None,
-                           limit: int = Query(60, ge=1, le=200), actor=Depends(authenticated), k=Depends(kernel)):
+    async def trajectories(
+        bot_id: str | None = None,
+        before: float | None = None,
+        status: str | None = None,
+        limit: int = Query(60, ge=1, le=200),
+        actor=Depends(authenticated),
+        k=Depends(kernel),
+    ):
         return k.service.turns(bot_id, before, status, limit)
 
     @app.get("/api/trajectory/{turn_id}")
@@ -209,7 +257,9 @@ def create_app(directory=None, start_runtime=True):
 
     @app.get("/api/trajectory/{turn_id}/export")
     async def trajectory_export(turn_id: str, actor=Depends(authenticated), k=Depends(kernel)):
-        return JSONResponse(k.service.turn(turn_id), headers={"Content-Disposition": f'attachment; filename="{turn_id}.json"'})
+        return JSONResponse(
+            k.service.turn(turn_id), headers={"Content-Disposition": f'attachment; filename="{turn_id}.json"'}
+        )
 
     @app.get("/api/events/stream")
     async def event_stream(request: Request, after: int = 0, actor=Depends(authenticated), k=Depends(kernel)):
@@ -235,21 +285,39 @@ def create_app(directory=None, start_runtime=True):
                 if not rows:
                     yield ": keepalive\n\n"
                 await asyncio.sleep(1)
-        return StreamingResponse(generate(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"})
+
+        return StreamingResponse(
+            generate(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"}
+        )
 
     @app.get("/api/events")
-    async def events(after: int = Query(0, ge=0), before: int | None = None, bot_id: str | None = None,
-                     turn_id: str | None = None, level: str | None = None, limit: int = Query(100, ge=1, le=500),
-                     actor=Depends(authenticated), k=Depends(kernel)):
-        return k.store.events(after=after, before=before, bot_id=bot_id, turn_id=turn_id, level=level, limit=limit)
+    async def events(
+        after: int = Query(0, ge=0),
+        before: int | None = None,
+        bot_id: str | None = None,
+        turn_id: str | None = None,
+        level: str | None = None,
+        limit: int = Query(100, ge=1, le=500),
+        actor=Depends(authenticated),
+        k=Depends(kernel),
+    ):
+        return k.store.events(
+            after=after, before=before, bot_id=bot_id, turn_id=turn_id, level=level, limit=limit
+        )
 
     @app.get("/api/context/{bot_id}/{channel_id}")
     async def context(bot_id: str, channel_id: str, actor=Depends(authenticated), k=Depends(kernel)):
         return k.service.context(bot_id, channel_id)
 
     @app.get("/api/messages/{channel_id}")
-    async def messages(channel_id: str, after: int = 0, through: int | None = None,
-                       limit: int = Query(100, ge=1, le=1000), actor=Depends(authenticated), k=Depends(kernel)):
+    async def messages(
+        channel_id: str,
+        after: int = 0,
+        through: int | None = None,
+        limit: int = Query(100, ge=1, le=1000),
+        actor=Depends(authenticated),
+        k=Depends(kernel),
+    ):
         return k.store.transcript(channel_id, after=after, through=through, limit=limit)
 
     @app.get("/api/artifacts/{artifact_id}")
@@ -264,7 +332,10 @@ def create_app(directory=None, start_runtime=True):
 
     @app.get("/api/export/config")
     async def export_config(actor=Depends(authenticated), k=Depends(kernel)):
-        return JSONResponse({kind: k.store.list(kind) for kind in SCHEMAS}, headers={"Content-Disposition": 'attachment; filename="council-config.json"'})
+        return JSONResponse(
+            {kind: k.store.list(kind) for kind in SCHEMAS},
+            headers={"Content-Disposition": 'attachment; filename="council-config.json"'},
+        )
 
     @app.get("/api/commands")
     async def commands(actor=Depends(authenticated)):
@@ -278,9 +349,13 @@ def create_app(directory=None, start_runtime=True):
     if assets.is_dir():
         app.mount("/", StaticFiles(directory=assets, html=True), name="dashboard")
     else:
+
         @app.get("/")
         async def development():
-            return {"message": "Dashboard assets are not built. Run npm ci && npm run build in web/, or use the Vite development server on port 5173."}
+            return {
+                "message": "Dashboard assets are not built. Run npm ci && npm run build in web/, or use the Vite development server on port 5173."
+            }
+
     return app
 
 

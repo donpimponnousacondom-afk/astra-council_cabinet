@@ -13,6 +13,8 @@ Sources: [Hermes adapter](https://github.com/NousResearch/hermes-agent/blob/6936
 
 ## Work packages and acceptance
 
+All six work packages below are implemented. Local acceptance results and the remaining external connection checks are recorded in [VERIFICATION.md](VERIFICATION.md).
+
 1. **Storage and control:** typed configuration with references; reusable model profiles and cloning; encrypted secrets; audited owner controls; password/session/CSRF dashboard authentication. Validate duplicate application IDs, references, secret redaction and exact owner identity.
 2. **Provider and plugins:** streamed/non-streamed OpenAI-compatible HTTP, arbitrary model JSON, timeouts, concurrency limits, usage/cost/TTFT, failure attribution/circuit recovery. Global + bot grants for fetch, search, image, TTS, scoped memory and Hortator inspection. Validate fragmented SSE, tool-call assembly, unsupported/missing usage and denied tools.
 3. **Council runtime:** per-bot activation and delivery cooldowns, one turn per bot, room send serialization, deliberate silence/replies, durable outbox, immediate cancellation, persistent scoped sessions, bounded model-driven compaction and context reconstruction. Validate overlapping ticks, queued messages, provider stops, restart recovery and context boundaries.

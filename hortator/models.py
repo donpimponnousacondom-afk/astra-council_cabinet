@@ -9,7 +9,18 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 OWNER_ID = "1482143139828596916"
 KINDS = ("providers", "profiles", "bots", "prompts", "rooms", "plugins", "settings")
 ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$")
-SECRET_FIELDS = {"api_key", "apikey", "authorization", "token", "password", "secret", "access_token", "bot_token", "x-api-key", "x-subscription-token"}
+SECRET_FIELDS = {
+    "api_key",
+    "apikey",
+    "authorization",
+    "token",
+    "password",
+    "secret",
+    "access_token",
+    "bot_token",
+    "x-api-key",
+    "x-subscription-token",
+}
 
 
 class ControlError(Exception):
@@ -22,7 +33,9 @@ def no_secrets(value: Any) -> None:
     if isinstance(value, dict):
         for key, val in value.items():
             if key.lower() in SECRET_FIELDS:
-                raise ValueError(f"{key} belongs in the dashboard's credential fields, not configuration JSON")
+                raise ValueError(
+                    f"{key} belongs in the dashboard's credential fields, not configuration JSON"
+                )
             no_secrets(val)
     elif isinstance(value, list):
         for val in value:
@@ -51,12 +64,26 @@ class Provider(Entity):
     failure_threshold: int = Field(default=3, ge=1, le=30)
     circuit_seconds: float = Field(default=60, ge=1, le=3600)
     requires_key: bool = True
+    auth_header: str = Field(default="Authorization", pattern=r"^[A-Za-z0-9-]{1,80}$")
+    auth_scheme: str = Field(default="Bearer", max_length=60)
+
+    @field_validator("auth_header")
+    @classmethod
+    def auth_header_safe(cls, value):
+        if value.lower() in {"host", "content-length", "connection", "cookie"}:
+            raise ValueError("Cannot use a transport or cookie header for API authentication")
+        return value
 
     @field_validator("base_url")
     @classmethod
     def url(cls, value):
         parsed = urlparse(value)
-        if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+        if (
+            parsed.scheme not in ("http", "https")
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+        ):
             raise ValueError("Use an http(s) base URL without embedded credentials")
         if parsed.query or parsed.fragment:
             raise ValueError("Base URLs cannot contain queries or fragments")
@@ -74,27 +101,30 @@ class Profile(Entity):
     provider_id: str
     model: str = Field(min_length=1, max_length=300)
     context_window: int = Field(default=131072, ge=1024, le=10000000)
-    compact_threshold: float = Field(default=.7, ge=.1, le=.95)
+    compact_threshold: float = Field(default=0.7, ge=0.1, le=0.95)
     response_tokens: int = Field(default=4096, ge=128, le=1000000)
     summary_tokens: int = Field(default=1024, ge=128, le=32000)
     keep_recent_messages: int = Field(default=12, ge=1, le=1000)
-    request_json: dict[str, Any] = Field(default_factory=lambda: {"temperature": .8, "max_tokens": 2048})
+    request_json: dict[str, Any] = Field(default_factory=lambda: {"temperature": 0.8, "max_tokens": 2048})
+    compaction_request_json: dict[str, Any] = Field(default_factory=dict)
     stream: bool = True
     include_usage: bool = True
     input_price_per_million: float | None = Field(default=None, ge=0)
     output_price_per_million: float | None = Field(default=None, ge=0)
 
-    @field_validator("request_json")
+    @field_validator("request_json", "compaction_request_json")
     @classmethod
     def options(cls, value):
         forbidden = {"messages", "model", "tools", "tool_choice", "stream", "n"}.intersection(value)
         if forbidden:
-            raise ValueError(f"Runtime-owned fields: {', '.join(sorted(forbidden))}; use the stream switch for streaming")
+            raise ValueError(
+                f"Runtime-owned fields: {', '.join(sorted(forbidden))}; use the stream switch for streaming"
+            )
         return value
 
     @model_validator(mode="after")
     def fits(self):
-        if max(self.response_tokens, self.summary_tokens) >= self.context_window * .6:
+        if max(self.response_tokens, self.summary_tokens) >= self.context_window * 0.6:
             raise ValueError("Output reserves must be less than 60% of the context window")
         for key in ("max_tokens", "max_completion_tokens"):
             if key in self.request_json:
@@ -114,7 +144,9 @@ class Bot(Entity):
     cooldown_seconds: float = Field(default=60, ge=1, le=86400)
     evaluate_when_idle: bool = True
     prompt_ids: list[str] = Field(default_factory=list, max_length=30)
-    persona: str = Field(default="Be curious, thoughtful, concise, and willing to disagree constructively.", max_length=60000)
+    persona: str = Field(
+        default="Be curious, thoughtful, concise, and willing to disagree constructively.", max_length=60000
+    )
     dynamic_prompt: str = Field(default="", max_length=20000)
     enabled_plugins: list[str] = Field(default_factory=list, max_length=50)
     plugin_config: dict[str, dict[str, Any]] = Field(default_factory=dict)
@@ -176,6 +208,7 @@ class Settings(Entity):
     @classmethod
     def timezone_valid(cls, value):
         from zoneinfo import ZoneInfo
+
         try:
             ZoneInfo(value)
         except (KeyError, ValueError) as exc:
@@ -183,4 +216,12 @@ class Settings(Entity):
         return value
 
 
-SCHEMAS = {"providers": Provider, "profiles": Profile, "bots": Bot, "prompts": Prompt, "rooms": Room, "plugins": Plugin, "settings": Settings}
+SCHEMAS = {
+    "providers": Provider,
+    "profiles": Profile,
+    "bots": Bot,
+    "prompts": Prompt,
+    "rooms": Room,
+    "plugins": Plugin,
+    "settings": Settings,
+}

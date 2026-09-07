@@ -1,0 +1,21 @@
+services:
+  hortator:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - council-data:/var/lib/hortator
+    environment:
+      HORTATOR_SECURE_COOKIES: "${HORTATOR_SECURE_COOKIES:-0}"
+      HORTATOR_ALLOWED_ORIGINS: "${HORTATOR_ALLOWED_ORIGINS:-}"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  council-data:

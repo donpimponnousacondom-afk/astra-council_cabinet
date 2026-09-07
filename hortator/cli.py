@@ -26,15 +26,21 @@ def main():
     os.environ["HORTATOR_DATA_DIR"] = str(directory)
     if args.command == "serve":
         import uvicorn
+
         print(f"Dashboard: http://{args.host}:{args.port}")
-        print(f"First-run password file: {directory / 'initial-password'} (unless HORTATOR_ADMIN_PASSWORD is set)")
+        print(
+            f"First-run password file: {directory / 'initial-password'} (unless HORTATOR_ADMIN_PASSWORD is set)"
+        )
         uvicorn.run("hortator.app:app", host=args.host, port=args.port, workers=1, proxy_headers=False)
         return
     if args.command == "backup":
         destination = Path(args.destination).resolve()
         destination.mkdir(parents=True, exist_ok=False)
         destination.chmod(0o700)
-        with sqlite3.connect(directory / "council.sqlite3") as source, sqlite3.connect(destination / "council.sqlite3") as target:
+        with (
+            sqlite3.connect(directory / "council.sqlite3") as source,
+            sqlite3.connect(destination / "council.sqlite3") as target,
+        ):
             source.backup(target)
         (destination / "council.sqlite3").chmod(0o600)
         key = os.getenv("HORTATOR_MASTER_KEY") or (directory / "master.key").read_text()
@@ -44,8 +50,20 @@ def main():
             shutil.copytree(directory / "artifacts", destination / "artifacts")
         print(f"Backup saved to {destination}. Store its encryption key separately from the database.")
         return
+    import fcntl
+
+    directory.mkdir(parents=True, exist_ok=True)
+    runtime_lock = (directory / "runtime.lock").open("a")
+    try:
+        fcntl.flock(runtime_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        runtime_lock.close()
+        raise SystemExit(
+            "Stop the runtime before running init, doctor, or password. Use the dashboard for live status."
+        ) from None
     from .app import Kernel
     from .security import password_hash
+
     k = Kernel(directory)
     try:
         if args.command == "password":
@@ -58,13 +76,21 @@ def main():
             print("Dashboard password updated; existing sessions revoked.")
         elif args.command == "doctor":
             for bot in k.store.list("bots"):
-                print(bot["name"] + ": " + ("; ".join(k.service.readiness(bot)) or "Configuration ready (external connectivity unverified)"))
+                print(
+                    bot["name"]
+                    + ": "
+                    + (
+                        "; ".join(k.service.readiness(bot))
+                        or "Configuration ready (external connectivity unverified)"
+                    )
+                )
         else:
             print(f"Council initialized at {directory}")
             print(f"Dashboard owner: 1482143139828596916. Initial password: {directory / 'initial-password'}")
             print("All sample bots are disabled. Build the dashboard and run: uv run hortator serve")
     finally:
         asyncio.run(k.close())
+        runtime_lock.close()
 
 
 if __name__ == "__main__":

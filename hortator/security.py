@@ -23,7 +23,12 @@ class Actor:
     webhook_id: str | None = None
 
     def require_owner(self):
-        if self.source not in ("dashboard", "discord", "local") or self.user_id != OWNER_ID or self.is_bot or self.webhook_id:
+        if (
+            self.source not in ("dashboard", "discord", "local")
+            or self.user_id != OWNER_ID
+            or self.is_bot
+            or self.webhook_id
+        ):
             raise ControlError("Only The Boss can control the council", 403)
 
     @property
@@ -46,7 +51,9 @@ class Vault:
             key = path.read_text().strip()
         self.fernet = Fernet(key.encode())
         # Fail closed if an existing encrypted database uses a different key.
-        self.values = {r["scope"]: self.fernet.decrypt(r["value"]).decode() for r in store.rows("SELECT * FROM secrets")}
+        self.values = {
+            r["scope"]: self.fernet.decrypt(r["value"]).decode() for r in store.rows("SELECT * FROM secrets")
+        }
         store.redact = self.redact
 
     def get(self, scope):
@@ -54,8 +61,10 @@ class Vault:
 
     def put(self, scope, value):
         if value:
-            self.store.execute("INSERT INTO secrets(scope,value) VALUES(?,?) ON CONFLICT(scope) DO UPDATE SET value=excluded.value",
-                               (scope, self.fernet.encrypt(value.encode())))
+            self.store.execute(
+                "INSERT INTO secrets(scope,value) VALUES(?,?) ON CONFLICT(scope) DO UPDATE SET value=excluded.value",
+                (scope, self.fernet.encrypt(value.encode())),
+            )
             self.values[scope] = value
         else:
             self.store.execute("DELETE FROM secrets WHERE scope=?", (scope,))
@@ -63,11 +72,17 @@ class Vault:
 
     def redact(self, value: Any):
         if isinstance(value, dict):
-            return {k: ("[REDACTED]" if k.lower() in SECRET_FIELDS else self.redact(v)) for k, v in value.items()}
+            return {
+                k: ("[REDACTED]" if k.lower() in SECRET_FIELDS else self.redact(v)) for k, v in value.items()
+            }
         if isinstance(value, list):
             return [self.redact(x) for x in value]
         if isinstance(value, str):
-            for secret in sorted(self.values.values(), key=len, reverse=True):
+            # Verified Discord user IDs are public identity metadata, even though
+            # stored beside the token. Redacting them would corrupt application
+            # IDs, OAuth invitations, and speaker attribution in the dashboard.
+            secrets_to_hide = (v for scope, v in self.values.items() if not scope.endswith("/user_id"))
+            for secret in sorted(secrets_to_hide, key=len, reverse=True):
                 if len(secret) >= 6:
                     value = value.replace(secret, "[REDACTED]")
             value = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]+=*", r"\1[REDACTED]", value)
@@ -89,7 +104,9 @@ class Auth:
             if len(supplied) < 12:
                 raise RuntimeError("HORTATOR_ADMIN_PASSWORD must have at least 12 characters")
             encoded = vault.get("auth/password")
-            if not encoded or not hmac.compare_digest(encoded, password_hash(supplied, encoded.split(":")[0])):
+            if not encoded or not hmac.compare_digest(
+                encoded, password_hash(supplied, encoded.split(":")[0])
+            ):
                 vault.put("auth/password", password_hash(supplied))
                 store.execute("DELETE FROM auth_sessions")
         elif not vault.get("auth/password"):
@@ -102,7 +119,11 @@ class Auth:
 
     def login(self, password, peer):
         now = time.time()
-        self.failures = {key: [t for t in times if t > now - 300] for key, times in self.failures.items() if any(t > now - 300 for t in times)}
+        self.failures = {
+            key: [t for t in times if t > now - 300]
+            for key, times in self.failures.items()
+            if any(t > now - 300 for t in times)
+        }
         attempts = self.failures.setdefault(peer, [])
         if len(attempts) >= 8 or sum(map(len, self.failures.values())) > 200:
             raise ControlError("Too many login attempts. Try again in five minutes.", 429)
@@ -114,17 +135,24 @@ class Auth:
         self.failures.pop(peer, None)
         token, csrf = secrets.token_urlsafe(40), secrets.token_urlsafe(32)
         self.store.execute("DELETE FROM auth_sessions WHERE expires_at<?", (now,))
-        self.store.execute("INSERT INTO auth_sessions VALUES(?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), csrf, now + 43200))
+        self.store.execute(
+            "INSERT INTO auth_sessions VALUES(?,?,?)",
+            (hashlib.sha256(token.encode()).hexdigest(), csrf, now + 43200),
+        )
         return token, csrf
 
     def session(self, token):
         if not token:
             raise ControlError("Sign in to continue", 401)
-        session = self.store.one("SELECT * FROM auth_sessions WHERE token_hash=? AND expires_at>?",
-                                (hashlib.sha256(token.encode()).hexdigest(), time.time()))
+        session = self.store.one(
+            "SELECT * FROM auth_sessions WHERE token_hash=? AND expires_at>?",
+            (hashlib.sha256(token.encode()).hexdigest(), time.time()),
+        )
         if not session:
             raise ControlError("Session expired. Sign in again.", 401)
         return session
 
     def logout(self, token):
-        self.store.execute("DELETE FROM auth_sessions WHERE token_hash=?", (hashlib.sha256(token.encode()).hexdigest(),))
+        self.store.execute(
+            "DELETE FROM auth_sessions WHERE token_hash=?", (hashlib.sha256(token.encode()).hexdigest(),)
+        )

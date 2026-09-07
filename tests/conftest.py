@@ -27,12 +27,16 @@ def configured(k, bot_id="ada", **changes):
     profile.pop("revision")
     k.store.put("profiles", profile)
     room = k.store.get("rooms", "council")
-    room.update(guild_id="111111111111111111", channel_id="222222222222222222", send_gap_seconds=.02)
+    room.update(guild_id="111111111111111111", channel_id="222222222222222222", send_gap_seconds=0.02)
     room.pop("revision")
     k.store.put("rooms", room)
     bot = k.store.get("bots", bot_id)
     bot.pop("revision")
-    bot.update(enabled=True, application_id="333333333333333333" if bot_id == "ada" else "444444444444444444", **changes)
+    bot.update(
+        enabled=True,
+        application_id="333333333333333333" if bot_id == "ada" else "444444444444444444",
+        **changes,
+    )
     k.vault.put(f"bot/{bot_id}/token", "fake-token-for-tests-only")
     k.store.put("bots", bot)
     k.store.runtime(bot_id)
@@ -40,6 +44,15 @@ def configured(k, bot_id="ada", **changes):
     return k.store.get("bots", bot_id)
 
 
-def ingest(k, bot_id="ada", content="Hello council", discord_id="555555555555555555", channel_id="222222222222222222"):
-    k.store.ingest(discord_id=discord_id, channel_id=channel_id, room_id="council", author_id="1482143139828596916", author_name="The Boss", content=content)
+def ingest(
+    k, bot_id="ada", content="Hello council", discord_id="555555555555555555", channel_id="222222222222222222"
+):
+    k.store.ingest(
+        discord_id=discord_id,
+        channel_id=channel_id,
+        room_id="council",
+        author_id="1482143139828596916",
+        author_name="The Boss",
+        content=content,
+    )
     k.store.context(bot_id, channel_id)
