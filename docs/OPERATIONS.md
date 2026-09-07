@@ -1,6 +1,6 @@
 # Operations
 
-All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [SESSION_HANDOVER.md](SESSION_HANDOVER.md) for migration state and branch rules. Never push to main.
+All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [SESSION_HANDOVER.md](SESSION_HANDOVER.md) for continuity and [AGENTS.md](../AGENTS.md) for branch and documentation rules. Create each new task branch from the current branch; the user handles PRs and merging. Never push to main or push any branch without an explicit request.
 
 ## Process and storage
 
@@ -43,7 +43,7 @@ hortator serve --host 127.0.0.1 --port 8000
 
 The server serves both the built dashboard and API at `http://127.0.0.1:8000`. To access it from a different computer, forward that port over SSH or use the configured reverse proxy. The shared shell and Screen's default directory are `/home/codexy/codex/astra-council_cabinet`.
 
-Terminal output is saved to `/home/codexy/.local/share/hortator/logs/hortator.screen.log`, with a one-second flush interval and 20,000 lines of Screen scrollback. Inspect it without taking control:
+Terminal output is saved to `/home/codexy/.local/share/hortator/logs/hortator.screen.log`, with a one-second flush interval. The user's `/home/codexy/.screenrc` sets 50,000 lines of Screen scrollback and `termcapinfo xterm* ti@:te@` for terminal scrollback. Keep that configuration. Screen's own history is available with **Ctrl-A, then [**, followed by arrows/Page Up/Page Down; **Esc** exits copy mode. Mouse-wheel/terminal history behavior also depends on the attaching terminal. Inspect runtime output without taking control (logs are private and must not be pasted without redaction):
 
 ```bash
 tail -F /home/codexy/.local/share/hortator/logs/hortator.screen.log
@@ -60,19 +60,22 @@ source /home/codexy/.config/hortator/runtime.env
 mkdir -p "$HORTATOR_DATA_DIR/logs"
 chmod 700 "$HORTATOR_DATA_DIR/logs"
 umask 077
-screen -c /dev/null -dmS hortator -t dashboard -L -Logfile "$HORTATOR_DATA_DIR/logs/hortator.screen.log" bash --noprofile --norc -i
+screen -c /home/codexy/.screenrc -dmS hortator -t dashboard -L -Logfile "$HORTATOR_DATA_DIR/logs/hortator.screen.log" bash --login -i
 screen -S hortator -p dashboard -X logfile flush 1
-screen -S hortator -p dashboard -X scrollback 20000
-screen -S hortator -p dashboard -X stuff $'hortator serve --host 127.0.0.1 --port 8000\n'
+screen -S hortator -p dashboard -X stuff $'/home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000\n'
 ```
 
-The agent can send commands through `screen -S hortator -p dashboard -X stuff` and inspect the same output log. Use Ctrl-C before entering a shell command while the server owns the foreground terminal. Do not start a second council runtime outside this session.
+An interactive login Bash reads this user's `.profile`, which sources `.bashrc` (the file is `.bashrc`, not `.bash_rc`). This loads their aliases and PS1. Do not use `--noprofile`, `--norc`, or an empty Screen configuration. The recovery on 2026-09-07 verified the login/interactive flags, nonempty prompt, and `ll` alias. Preserve an existing attachment when restarting the foreground server; recreating Screen is only necessary if the session is gone.
+
+The agent can send commands through `screen -S hortator -p dashboard -X stuff` and inspect the same output log. Inspect the foreground process first, then use Ctrl-C to stop this server and wait for Bash to regain the terminal before entering a shell command. A connected dashboard SSE stream can keep Uvicorn at “Waiting for connections to close.” If no turns or deliveries are active, a second Ctrl-C completes shutdown; confirm process exit before startup or backup. Avoid `screen -Q` queries on this host: a session disappeared during a query and the cause is unconfirmed. Use `screen -ls`, `/proc` and the log. Screen may expand variables in `stuff`; source a local script for shell diagnostics involving `$PS1` or other shell variables. Do not start a second council runtime outside this session.
 
 ## Scheduling and message semantics
 
 A bot gets at most one active turn across its rooms. Its interval starts again when the turn settles. Idle evaluation is optional and begins only after there is conversation history. Pending new input is selected before idle contexts; among eligible contexts, the oldest evaluated channel runs first. Hortator requires a new owner question and never generates autonomous chatter.
 
 Model requests for different bots may overlap, subject to global and provider concurrency limits. Discord deliveries in the same channel are serialized with the room's send gap. The bot's minimum send interval applies across all rooms and is measured from confirmed delivery. There is no round-robin speaker sequence and no backlog of missed timer activations.
+
+Every active model turn starts Discord typing in that bot's actual channel/thread/owner DM, before context preparation. Typing renews every five seconds through compaction, provider queueing, generation, tool calls and delivery waits. It stops renewing when the turn sends, chooses silence, fails, is cancelled, or leaves its allowed channel scope. Each bot uses its own Discord identity. Presence requests have a five-second timeout and run separately from model work; failures produce at most one redacted `discord.typing_failed` warning per turn and do not fail the turn. No partial response content is posted. Typing means a turn is active, including waiting for a provider, and does not promise a reply. Discord's last pulse may remain visible for up to ten seconds after cancellation or silence; the API provides expiry rather than an explicit stop request. See [Discord's typing endpoint](https://docs.discord.com/developers/resources/channel#trigger-typing-indicator).
 
 Incoming messages are deduplicated by Discord message ID, because several clients can observe the same message. Context checkpoints and last-seen cursors are scoped by bot and actual channel/thread ID. Messages arriving during generation remain pending for a later activation; claiming a context never consumes future input. An edit or deletion is recorded, and future context uses the current message state; recorded old requests are not rewritten.
 
@@ -95,6 +98,8 @@ At the threshold, the bot summarizes the older input in bounded requests, retain
 Full request snapshots preserve which summary and source messages were actually sent, including per-round tool additions. Compaction events retain before/after summaries and source boundaries. Scoped memory notes are separate, editable via the Context panel or `!memory`.
 
 Provider reasoning fields are carried in memory only when needed to continue a tool-call exchange, and scrubbed from stored request snapshots and Discord messages. Known inline `<think>`, `<thinking>`, `<analysis>` and `<reasoning>` blocks are removed from visible content. This cannot prove that a model never expresses reasoning inside ordinary untagged prose; the universal prompt instructs it to publish only its considered answer. The runtime never publishes vendor reasoning fields.
+
+Reasoning request options live at **Model profiles → Edit → Advanced · exact request JSON → Model parameters** (`request_json`). Providers have no separate reasoning default field. The profile-card text “Provider default” is a derived summary when its limited detector finds no recognized override, not a selectable inheritance setting; nested vendor fields such as `chat_template_kwargs` can be missed. Inspect the JSON and a request's effective body. Compaction has its own optional JSON overrides. The [configuration audit](CONFIGURATION_STATUS.md) records the current settings, provider documentation and the requested UI clarification as a separate follow-up.
 
 ## Pause, failures and recovery
 
@@ -145,6 +150,8 @@ hortator backup /absolute/path/to/new-backup-directory
 ```
 
 This uses SQLite's backup API, copies artifacts, and saves the encryption key separately inside the new backup directory. It can read a running database. Move that key to separate secure storage after verifying the backup. Keep the artifacts and database from the same operational period; new artifacts created during a live backup may not be in the snapshot. For a complete point-in-time archive, pause the council first.
+
+This workspace uses timestamped snapshots under `/home/codexy/.local/share/hortator-backups`, outside both the code checkout and live data directory. A Git repository around a live SQLite database does not provide a consistent snapshot and risks tracking the master key and bootstrap password. Use the CLI's SQLite backup, then capture host settings and logs while the server is stopped for a complete archive. The snapshots listed in [SESSION_HANDOVER.md](SESSION_HANDOVER.md) include a matching key, artifacts, redacted configuration export, bootstrap password if present, logs, external launcher/environment and `.screenrc`, with `manifest.json` hashes and `RESTORE.md`. They passed SQLite integrity and decryption checks. Keep directories 0700 and files 0600. These local snapshots provide rollback; an independent secure disk copy is still needed for disk-loss recovery. Never overwrite an earlier snapshot, commit these files, or confuse a redacted JSON export with a credentials backup.
 
 To restore, stop Hortator, copy `council.sqlite3`, `master.key`, and `artifacts/` into an **empty** data directory, restore owner-only permissions, then start with that directory. Do not copy old `-wal`/`-shm` files over a restored database. If using an environment master key, supply the same key. The recovery logic marks unfinished work; it never blindly replays uncertain sends.
 

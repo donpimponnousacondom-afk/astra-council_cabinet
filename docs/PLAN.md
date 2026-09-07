@@ -2,6 +2,8 @@
 
 This implementation now lives at `/home/codexy/codex/astra-council_cabinet`. The [session handover](SESSION_HANDOVER.md) records continuity, the shared GNU Screen runtime and the feature-branch-only workflow; the design below remains the accepted foundation.
 
+Standing workflow preferences are maintained in [AGENTS.md](../AGENTS.md): each new feature/fix/development task starts on a new branch from the current branch unless directed otherwise, new history stays linear, and the user handles PRs/merging. No main changes or unrequested pushes. Update the relevant design, operations, verification and handover documents whenever a user decision changes ongoing work; future agents must be able to recover these decisions from the repository.
+
 The product is a single-host council, not a wrapper around one shared agent. Every bot is a distinct Discord application. Production runs one Uvicorn worker containing supervised discord.py clients, an asynchronous scheduler, provider HTTP clients, tool registry, control API and built React assets. SQLite WAL persists configuration, scoped memory, transcripts, requests, trajectories, metrics, credentials (encrypted), and an outbox. Multiple API workers are explicitly unsupported and prevented by a process lock.
 
 ## Grounding (researched 2026-09-07)
@@ -23,6 +25,14 @@ All six work packages below are implemented. Local acceptance results and the re
 4. **Discord and Hortator:** client per application, token/application identity check, configured guild/channel/thread routing, owner DMs, deterministic command parity with API, operational incident/recovery reporting, invitation wizard. Test owner spoofing and command routing without contacting Discord.
 5. **Dashboard:** responsive operational overview, bot/profile/provider/prompt/plugin/room editors, raw advanced JSON, trajectory inspector and export, context/compaction inspector, statistics, alert/audit history, command reference, onboarding and secrets controls. Verify real API-backed browser workflows.
 6. **Packaging and handoff:** reproducible lockfiles, Docker image/compose, local run commands, backup/restore and security/operations documentation. Run meaningful tests, lint, typecheck, production build and browser checks. Live Discord/provider acceptance needs user-entered credentials and guild/channel IDs; do not fabricate external verification.
+
+## Typing presence addition — 2026-09-07
+
+The user requested `feat/add_typing_indicator` from the current `dev/initial_phase` tip (`737c6bf`). Every bot, including Hortator, shows its own Discord typing indicator while a model turn works: context/compaction, provider queue, generation, tool rounds and delivery waits. Presence begins at turn start, renews before Discord expiry and is cancelled on all turn exits. It uses the actual scoped text channel/thread/owner DM, respects scope changes and handles reconnecting clients. Typing is best effort and must neither delay nor fail a model response; no partial response text or provider reasoning is sent to Discord. Bots waiting for activation do not advertise work; explicitly requested manual compaction is active work. Intentional silence remains valid.
+
+Acceptance covers all five identities, early start and delivery lifetime, silence/failure/cancellation cleanup, repeated pulses, current scope, independent clients, and redacted nonfatal presence failures. See [VERIFICATION.md](VERIFICATION.md) for measured results and [OPERATIONS.md](OPERATIONS.md#scheduling-and-message-semantics) for expiry and provider-wait semantics.
+
+The same session requested configuration/backup reports and reasoning/reconnect explanations. Those findings are in [CONFIGURATION_STATUS.md](CONFIGURATION_STATUS.md). A clearer reasoning label/editor entry point, improved reconnect reporting, weighted provider concurrency and graceful shutdown with open SSE connections remain separately scoped follow-ups; they are not bundled into the typing implementation.
 
 ## Invariants
 
