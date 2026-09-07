@@ -9,7 +9,6 @@ import socket
 import time
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from pathlib import Path
 from typing import Any, Awaitable, Callable
 from urllib.parse import urljoin, urlparse
 
