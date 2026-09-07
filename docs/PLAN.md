@@ -63,6 +63,8 @@ Bridge committed, redacted ledger events into the Python logging console. INFO s
 
 Console preferences are local to the running process. They cannot change bots, providers, incident-notification policy or database contents. Suppress secrets, query/header/body data and unsafe wire-debug payloads; escape terminal controls. Bound replay memory/detail output and keep full stored evidence available in the dashboard. No alternate screen, clearing or redraw loops. Restore terminal state on normal shutdown. Verification includes actual pseudo-terminal key input and SIGINT/SIGTERM cleanup, redaction, incident grouping and existing runtime/security regressions.
 
+The user's same-day follow-up asks for stronger color distinction in help/filter state and runtime snapshots. Use a consistent scope palette, highlighted shortcut keys and bot/provider identities, semantic state/error colors and muted secondary values. Apply styling after redaction/escaping, retain plain-text labels, and honor existing no-color behavior.
+
 ## Invariants
 
 - Only Discord user ID `1482143139828596916` is authorized to control or converse with Hortator. Display names, server ownership, role permissions, webhook authors and model-generated text grant no authority. Owner ID is a code constant, not a mutable setting.

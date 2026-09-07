@@ -29,6 +29,24 @@ SCOPES = {
     "w": "dashboard",
 }
 COLORS = {"error": "91", "warning": "93", "info": "92", "debug": "90"}
+SCOPE_COLORS = {
+    "system": "97",
+    "bots": "95",
+    "providers": "96",
+    "discord": "94",
+    "tools": "93",
+    "context": "92",
+    "dashboard": "36",
+}
+CONSOLE_TOKENS = re.compile(
+    r"(?P<field>\b(?:bot|provider|enabled|gateway|status|profile|active_turn|failures|circuit_remaining|details|"
+    r"s:system|b:bots|p:providers|d:discord|t:tools|c:context|w:dashboard)=)(?P<value>[^\s|]+)"
+    r"|(?P<scope>\b(?i:system|bots|providers|discord|tools|context|dashboard)\b)"
+    r"|(?P<level>\b(?:ERROR|WARNING|INFO|DEBUG)\b)"
+    r"|(?P<key>(?:^|(?<=\| ))(?:\+/-|f|r|e|i|0|\?)(?=\s))"
+    r"|(?P<scope_key>(?:(?<=Scopes: )|(?<=, ))(?:[sbdtcw]|p/a)(?= ))"
+    r"|(?P<control>\bCtrl-C\b)"
+)
 QUIET_EVENTS = {
     "context.assembled",
     "request.first_token",
@@ -317,6 +335,39 @@ class OperationalConsole(logging.Handler):
     def paint(self, text, code):
         return f"\033[{code}m{text}\033[0m" if self.color else text
 
+    def highlight(self, text):
+        """Apply semantic colors only after redaction and terminal-control escaping."""
+        if not self.color:
+            return text
+
+        def token(match):
+            if match["field"]:
+                field, value = match["field"][:-1], match["value"]
+                label_color = SCOPE_COLORS.get(field.split(":")[-1], "90")
+                if value in {"on", "True", "online", "ready", "sent", "completed", "recovered"}:
+                    color = "1;92"
+                elif value in {"off", "False", "failed", "error"}:
+                    color = "1;91"
+                elif (
+                    value in {"offline", "unknown", "none", "folded", "silent", "cancelled", "suppressed"}
+                    or field == "profile"
+                ):
+                    color = "90"
+                elif field == "failures":
+                    color = "92" if value == "0" else "1;91"
+                elif field == "circuit_remaining":
+                    color = "92" if value == "0s" else "1;93"
+                else:
+                    color = {"bot": "1;95", "provider": "1;96"}.get(field, "1;93")
+                return self.paint(field, label_color) + self.paint("=", "90") + self.paint(value, color)
+            if match["scope"]:
+                return self.paint(match[0], SCOPE_COLORS[match[0].lower()])
+            if match["level"]:
+                return self.paint(match[0], "1;" + COLORS[match[0].lower()])
+            return self.paint(match[0], "1;93")
+
+        return CONSOLE_TOKENS.sub(token, text)
+
     def write(self, text):
         if self.output_failed:
             return
@@ -329,7 +380,7 @@ class OperationalConsole(logging.Handler):
     def notice(self, text):
         stamp = datetime.now().astimezone().isoformat(timespec="seconds")
         self.write(
-            f"{self.paint(stamp, '90')} {self.paint('CONSOLE', '96')} {plain(safe_text(self.redact(text)))}"
+            f"{self.paint(stamp, '90')} {self.paint('CONSOLE', '1;96')} {self.highlight(plain(safe_text(self.redact(text))))}"
         )
 
     def state(self):
@@ -528,7 +579,11 @@ class OperationalConsole(logging.Handler):
         if len(summary) > 320:
             summary = summary[:317] + "…"
         reference = f" #{event['seq']}" if event.get("seq") else ""
-        line = f"{self.paint(stamp, '90')} {self.paint(level.upper().ljust(7), COLORS.get(level, '90'))} {self.paint(event['scope'].ljust(9), '96')} {self.paint(plain(event['kind']) + reference, '1')} {identity} {summary} {suffix}"
+        scope_color = SCOPE_COLORS.get(event["scope"], "97")
+        summary = (
+            self.paint(summary, COLORS[level]) if level in {"warning", "error"} else self.highlight(summary)
+        )
+        line = f"{self.paint(stamp, '90')} {self.paint(level.upper().ljust(7), COLORS.get(level, '90'))} {self.paint(event['scope'].ljust(9), scope_color)} {self.paint(plain(event['kind']), '1;' + scope_color)}{self.paint(reference, '90')} {self.highlight(identity)} {summary} {self.paint(suffix, '90')}"
         self.write(line.rstrip())
         if self.details if details is None else details:
             body = {k: event[k] for k in ("turn_id", "request_id", "data") if event.get(k)}
@@ -546,8 +601,14 @@ class OperationalConsole(logging.Handler):
                 row = plain(row)
                 if self.color:
                     row = re.sub(
-                        r'("(?:\\.|[^"\\])*")(\s*:)?',
-                        lambda m: self.paint(m[1], "96" if m[2] else "92") + (m[2] or ""),
+                        r'("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)',
+                        lambda m: (
+                            self.paint(m[1], "96" if m[2] else "92") + (m[2] or "")
+                            if m[1]
+                            else self.paint(
+                                m[0], {"true": "1;92", "false": "1;91", "null": "90"}.get(m[0], "94")
+                            )
+                        ),
                         row,
                     )
                 self.write(self.paint("  │ ", "90") + row)

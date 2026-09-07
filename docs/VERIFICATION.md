@@ -15,6 +15,8 @@ No bot/provider/profile settings, plugin grants, credentials, Discord notificati
 
 The first live console rollout (`b9c096e`) passed authenticated API/health/polling checks and matching clean server/dashboard build stamps. With no active turns, requests or pending deliveries, the old server stopped through Screen and the new one started in the same attached session. Configuration bodies/revisions had identical hashes before and after. The log confirmed colors, active keyboard controls and no formatting errors. Harmless live `i`, `+`, `f`, `e`, `d` and `0` keys passed; successful HTTP polls stayed hidden at INFO, appeared at DEBUG, and omitted query strings. Defaults were restored. A subsequent formatting refinement renders expanded tracebacks/multiline errors as separate escaped terminal lines; its regression assertion uses a synthetic exception, not a fabricated live provider failure.
 
+The same-day color refinement passed all 13 existing console tests, Ruff lint/format and diff checks. Manual rendering checks confirmed that scope/help/state/snapshot styling adds ANSI colors while preserving the original plain text and escaping untrusted terminal controls. This presentation change does not introduce new runtime behavior or require repeating unrelated browser/provider acceptance.
+
 ## Running version and Discord formatting
 
 On `feat/runtime_version`, based on fast-forwarded main `c42f0c3` on 2026-09-07:

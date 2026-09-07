@@ -115,6 +115,8 @@ The foreground `hortator serve` console receives the same redacted operational e
 
 In the attached Screen window, press a key without Enter:
 
+Scope colors are consistent across events and help: system white, bots magenta, providers cyan, Discord blue, tools yellow, context green, dashboard teal. Shortcut keys stand out in bold yellow. Enabled/online states are green, disabled/error states red, and offline/idle values and long profile IDs muted. Bot/provider identities are highlighted; warning/error messages use their severity color. Expanded JSON also colors numbers, booleans and nulls. All text labels remain present in plain output and with `NO_COLOR`.
+
 | Key | Effect |
 | --- | --- |
 | `+` / `-` | Increase/decrease verbosity: ERROR → WARNING → INFO → DEBUG |

@@ -64,6 +64,8 @@ The current console feature adds `hortator/console.py` and bridges redacted pers
 
 The preceding explanatory review made no code/configuration changes: tool limits count sequential batches, Council inspector/memory/web fetch need no keys, and private memory is visible in each bot card's Context capacity panel. The proposed clearer tool-limit labels and credential form treatment remain UI follow-ups, not part of this logging feature. At that read-only check, no persistent notes existed; this is a dated observation, not a claim about newer user activity.
 
+On the user's 2026-09-07 console color follow-up, the same logging branch adds distinct scope colors, highlighted help keys and identities, green/red state values, muted idle/profile metadata and JSON scalar colors. This is presentation only; key bindings, filtering, redaction and terminal behavior are preserved.
+
 | Area | Files and purpose |
 | --- | --- |
 | Configuration and persistence | `hortator/models.py`, `store.py`: typed entities, SQLite WAL, references/revisions, identity tombstones, channel scope, contexts, memory, events, turns, requests, outbox and artifacts |
