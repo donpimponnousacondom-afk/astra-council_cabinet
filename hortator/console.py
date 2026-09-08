@@ -742,6 +742,13 @@ class OperationalConsole(logging.Handler):
                         except ValueError:
                             value = encoded
                     sections.append((f"Request {name}", value))
+            elif source["kind"] == "provider.discovery_failed":
+                sections.append(
+                    (
+                        "Model discovery",
+                        "The stored event above contains this GET /models failure. Discovery does not create a model completion or a turn.",
+                    )
+                )
             else:
                 sections.append(
                     (

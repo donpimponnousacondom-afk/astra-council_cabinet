@@ -19,9 +19,12 @@ from .vision import ImageCache
 
 
 class ProviderError(ControlError):
-    def __init__(self, message, status=502, *, http_status=None, retry_after=0, provider_fault=True):
+    def __init__(
+        self, message, status=502, *, http_status=None, retry_after=0, provider_fault=True, details=None
+    ):
         super().__init__(message, status)
         self.http_status, self.retry_after, self.provider_fault = http_status, retry_after, provider_fault
+        self.details = details or {}
 
 
 def strip_reasoning(content: str) -> str:
@@ -252,7 +255,10 @@ class ProviderPool:
         )
 
     def headers(self, provider, bot_id):
-        headers = {"Content-Type": "application/json", **provider["headers"]}
+        # Header names are case-insensitive; custom spelling must not create a
+        # second User-Agent or defeat the vault-owned authentication header.
+        headers = httpx.Headers({"Content-Type": "application/json"})
+        headers.update(provider["headers"])
         key = self.key(provider, bot_id)
         if provider["requires_key"] and not key:
             raise ProviderError("Provider API key is missing; add it in the dashboard", provider_fault=False)
@@ -710,15 +716,22 @@ class ProviderPool:
 
     async def probe(self, provider):
         start = time.perf_counter()
+        response = None
+        request_headers = None
         try:
+            request_headers = self.headers(provider, "")
             response = await self.client.get(
-                provider["base_url"] + "/models", headers=self.headers(provider, ""), timeout=20
+                provider["base_url"] + "/models", headers=request_headers, timeout=20
             )
             if response.status_code >= 300:
                 raise ProviderError(
-                    f"Model discovery returned HTTP {response.status_code}", http_status=response.status_code
+                    f"Provider returned HTTP {response.status_code}", http_status=response.status_code
                 )
             raw = response.json()
+            if not isinstance(raw, dict) or raw.get("error") or not isinstance(raw.get("data"), list):
+                raise ProviderError(
+                    "Provider did not return a valid model catalog", http_status=response.status_code
+                )
             models = [
                 {
                     "id": item.get("id"),
@@ -738,8 +751,83 @@ class ProviderPool:
             }
             self.store.emit("provider.discovery", {k: v for k, v in result.items() if k != "models"})
             return result
-        except (httpx.HTTPError, ValueError) as exc:
-            raise ProviderError(self.vault.redact(str(exc))) from exc
+        except (ProviderError, httpx.HTTPError, ValueError) as exc:
+            upstream_status = response.status_code if response is not None else None
+            evidence = {}
+            provider_message = ""
+            if response is not None:
+                # Only diagnostic response headers: never cookies, authorization,
+                # full outgoing headers, or transport wire logs.
+                evidence["response_headers"] = {
+                    key: self.vault.redact(response.headers[key])[:300]
+                    for key in (
+                        "content-type",
+                        "server",
+                        "cf-mitigated",
+                        "cf-ray",
+                        "x-request-id",
+                        "request-id",
+                        "retry-after",
+                    )
+                    if key in response.headers
+                }
+                try:
+                    raw = safe_payload(self.vault.redact(response.json()))
+                    if isinstance(raw, dict):
+                        error = raw.get("error")
+                        provider_message = error.get("message") if isinstance(error, dict) else error
+                        provider_message = (
+                            provider_message or raw.get("message") or raw.get("msg") or raw.get("detail")
+                        )
+                        raw = {
+                            key: raw[key]
+                            for key in (
+                                "error",
+                                "message",
+                                "msg",
+                                "detail",
+                                "code",
+                                "type",
+                                "success",
+                                "request_id",
+                            )
+                            if key in raw
+                        }
+                    preview = dumps(raw)
+                except ValueError:
+                    preview = self.vault.redact(response.text)
+                # Redact before truncation, so a credential cannot be split and leak.
+                evidence["response_excerpt"] = preview[:2000]
+                evidence["response_truncated"] = len(preview) > 2000
+            summary = (
+                f"Provider returned HTTP {upstream_status}"
+                if upstream_status is not None and upstream_status >= 300
+                else str(exc) or type(exc).__name__
+            )
+            if isinstance(provider_message, str) and provider_message:
+                summary += ": " + provider_message[:600]
+            message = self.vault.redact(
+                f"Model discovery for {provider['id']} failed (Hortator API HTTP 502): {summary}"
+            )
+            details = self.vault.redact(
+                {
+                    "provider_id": provider["id"],
+                    "operation": "model_discovery",
+                    "api_status": 502,
+                    "upstream_status": upstream_status,
+                    "endpoint": provider["base_url"] + "/models",
+                    "duration_ms": (time.perf_counter() - start) * 1000,
+                    "user_agent": request_headers.get("User-Agent", self.client.headers.get("User-Agent"))
+                    if request_headers is not None
+                    else None,
+                    **evidence,
+                }
+            )
+            self.store.emit("provider.discovery_failed", {**details, "error": message}, level="error")
+            # Discovery is separate from completion health, on failure as on success.
+            raise ProviderError(
+                message, http_status=upstream_status, provider_fault=False, details=details
+            ) from exc
 
     async def close(self):
         await self.client.aclose()

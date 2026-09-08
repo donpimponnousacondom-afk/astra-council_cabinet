@@ -2,6 +2,12 @@
 
 This implementation lives at `/home/codexy/codex/astra-council_cabinet`. [AGENTS.md](../AGENTS.md) records standing agent rules; [OPERATIONS.md](OPERATIONS.md) covers the shared GNU Screen runtime, storage and branch workflow. The design below remains the accepted foundation.
 
+## Provider identity and discovery diagnostics (2026-09-08)
+
+The owner requested a per-provider User-Agent and an explanation for a local control HTTP 502 while the dashboard displayed the provider's HTTP 401. Expose the existing `headers["User-Agent"]` as a first-class provider-editor field, with a single source of truth alongside Advanced headers. Apply it to catalog discovery, generation and compaction; blank retains the client default. Preserve unrelated headers and credential ownership, normalize case and reject duplicate/unsafe values before network execution. Do not silently change existing provider configuration or assume that a browser-style identifier resolves an upstream client-policy rejection.
+
+Preserve the local/upstream boundary in error responses instead of propagating a provider 401 as a dashboard login failure. Record bounded, credential-redacted discovery errors with the actual upstream response, both status codes, selected response headers, effective client identifier and a readable provider message. The event ledger and existing provider console controls expose this evidence; ordinary access logs remain local HTTP observations. Discovery does not produce paid completions or alter their health counters. A missing response remains unknown, and a malformed catalog or HTTP-200 error envelope must not be reported as successful discovery. See [transport operations](OPERATIONS.md#provider-headers-and-discovery-errors).
+
 ## Ordinary model answers and private diagnostics (2026-09-08)
 
 The owner replaced the tool-for-final-answer contract after small models emitted malformed `council_speak` JSON/XML into Discord. Final contributions now use ordinary OpenAI assistant content, including ordered text parts. `council_silence` remains the explicit terminal action, and real plugins still use native tool calls. Attachment preparation is optional, contains no answer text and is advertised only when the turn has an owned artifact. No plain-text answer needs an extra tool round. Preserve typing, footers, Markdown, budgets, media ownership, cancellation and delivery uncertainty. Obsolete reply calls execute nothing; obvious textual wrappers get one bounded repair inside the existing budget. See [TOOLS.md](TOOLS.md).

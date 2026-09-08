@@ -204,6 +204,103 @@ test("model profile advanced JSON and personality-preserving switch", async ({
   await dialog.getByRole("button", { name: "Close dialog" }).click();
 });
 
+test("provider User-Agent round-trips with advanced headers and upstream errors preserve the dashboard session", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Providers", exact: true }).click();
+  await page.getByRole("button", { name: "Add provider", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByLabel("Display name", { exact: true })
+    .fill("UI User Agent");
+  await dialog
+    .getByLabel("Stable identifier", { exact: true })
+    .fill("ui-user-agent");
+  await dialog
+    .getByLabel("API base URL", { exact: true })
+    .fill("https://provider.test/v1");
+  await dialog
+    .getByText("Advanced · non-secret HTTP headers", { exact: true })
+    .click();
+  await dialog
+    .getByLabel("Request headers", { exact: true })
+    .fill(
+      JSON.stringify({ "uSeR-aGeNt": "Initial/1.0", "X-Title": "Preserved" }),
+    );
+  await expect(dialog.getByLabel("User-Agent", { exact: true })).toHaveValue(
+    "Initial/1.0",
+  );
+  await dialog
+    .getByLabel("User-Agent", { exact: true })
+    .fill("Council Client/2.0");
+  await dialog
+    .getByRole("button", { name: "Create draft", exact: true })
+    .click();
+  await expect(
+    dialog.getByRole("heading", { name: "UI User Agent", exact: true }),
+  ).toBeVisible();
+  const saved = await (
+    await page.request.get("/api/config/providers/ui-user-agent")
+  ).json();
+  expect(saved.headers).toEqual({
+    "User-Agent": "Council Client/2.0",
+    "X-Title": "Preserved",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await dialog
+    .getByLabel("User-Agent", { exact: true })
+    .scrollIntoViewIfNeeded();
+  await expect(dialog.getByLabel("User-Agent", { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "test-results/provider-user-agent-mobile.png",
+    animations: "disabled",
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await dialog.getByLabel("User-Agent", { exact: true }).fill("");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const cleared = await (
+    await page.request.get("/api/config/providers/ui-user-agent")
+  ).json();
+  expect(cleared.headers).toEqual({ "X-Title": "Preserved" });
+  await page.route("**/api/control", async (route) => {
+    if (route.request().postDataJSON().action !== "probe")
+      return route.continue();
+    await route.fulfill({
+      status: 502,
+      json: {
+        error:
+          "Model discovery for ui-user-agent failed (Hortator API HTTP 502): Provider returned HTTP 401: Unauthorized client",
+        source: "provider",
+        api_status: 502,
+        upstream_status: 401,
+      },
+    });
+  });
+  const card = page.locator("article").filter({
+    has: page.getByRole("heading", { name: "UI User Agent", exact: true }),
+  });
+  await card
+    .getByRole("button", { name: "Discover models", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("Hortator API HTTP 502");
+  await expect(page.getByRole("alert")).toContainText(
+    "Provider returned HTTP 401",
+  );
+  await expect(page.getByRole("alert")).toContainText("Unauthorized client");
+  await expect(page.getByLabel("Dashboard password")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Providers", exact: true }),
+  ).toBeVisible();
+});
+
 test("provider creation, encrypted write-only key, readiness error, and trajectory inspection", async ({
   page,
 }) => {

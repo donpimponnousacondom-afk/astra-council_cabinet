@@ -63,6 +63,8 @@ Only Discord snowflake **`1482143139828596916`** (`.normal.man.`, “The Boss”
 
 ## Fine control of providers and models
 
+Set **Providers → Edit provider → User-Agent** to customize the outgoing client identifier. The field and Advanced HTTP headers edit the same value; it applies to discovery, generation and compaction. Blank uses the HTTP client's default. [Provider transport and discovery diagnostics](docs/OPERATIONS.md#provider-headers-and-discovery-errors) distinguish the provider's HTTP response from the dashboard API response.
+
 A provider stores transport settings and a shared encrypted credential. A model profile stores model identity, context settings, prices (optional), streaming switches, and exact non-secret request JSON. A bot references a profile and can override the provider key in its own credential box.
 
 Edit reasoning at **Model profiles → Edit profile → Reasoning**. Choose the native request field, then an effort level, thinking toggle or token budget. These controls update **Advanced · exact request JSON → Model parameters** directly, preserving other vendor fields. **Unset** omits only that field; **Off** sends `false`. With no override, the model service chooses its behavior; there is no provider-level reasoning setting. The card displays explicit reasoning fields, including nested values and `false`. Options depend on the endpoint/model; the UI does not establish remote support. See [reasoning operations](docs/OPERATIONS.md#reasoning-controls).
