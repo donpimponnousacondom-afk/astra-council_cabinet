@@ -29,13 +29,45 @@ The application retains history instead of silently discarding observability. Mo
 
 Keep the database, encryption key, bootstrap password, artifacts, and logs in the external data directory. Some historical branches tracked `data/`; moving between those commits can replace or remove files inside the checkout even though the current branch ignores them. Never restore those historical files over the external live directory.
 
-Before switching a running application's branch, stop the foreground server with Ctrl-C in Screen. Switch to the intended feature branch, rebuild `web/dist` if UI source changed (run `npm ci --prefix web` first if its dependencies changed), then run `hortator serve --host 127.0.0.1 --port 8000 --color`. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
+Before switching a running application's branch, stop the foreground server with Ctrl-C in Screen. Switch to the intended feature branch, rebuild `web/dist` for the selected commit (including after a squash merge even when UI code is identical), then run `hortator serve --host 127.0.0.1 --port 8000 --color`. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
 
 For branches that change database schemas, make an external backup first; separating storage from Git does not make schema changes reversible. Use an explicit `--data-dir` pointing to separate temporary storage for tests or experiments that should not use live configuration.
 
 ### Repeating the squash-merge workflow
 
-After the previous PR is merged, attach with `screen -x hortator`, let active work finish, then press Ctrl-C and wait for the shared Bash prompt. In that shell, replace `feat/next_feature` with the new task name:
+From any normal shell prompt on this workspace, after the previous PR is merged:
+
+```bash
+hortator-next-feature
+```
+
+The user intentionally uses `feat/next_feature` as a local placeholder and renames it before pushing. This command checks the canonical repository and clean tree, fetches main, verifies that the current task and any existing placeholder are merged, and verifies the shared Screen foreground process before sending Ctrl-C. Squash merges are accepted only when GitHub CLI reports a merged PR whose exact head matches the local tip and whose merge commit is included in fetched main. Extra local commits, divergent main, another worktree owning main/the placeholder, failed merge verification, unrelated foreground commands and concurrent maintenance stop the operation. No automatic stash, reset, rebase, merge commit, branch deletion or push occurs.
+
+The worker runs inside the existing Screen Bash and preserves attachments, startup/profile settings, scrollback and colors. It performs `git switch main`, `git pull --ff-only origin main`, prepares `feat/next_feature`, runs `uv sync --frozen`, `npm ci --prefix web`, `npm run build --prefix web`, then starts the existing external runtime launcher with `--color`. An existing placeholder at the selected main commit is reused. An older verified-merged placeholder is retained under a unique `archive/next_feature-<UTC>-<old-commit>` name before a fresh placeholder is created; named task branches remain untouched. The worker runs a temporary private copy outside the checkout so a branch switch cannot remove the running workflow.
+
+The invoking terminal reports progress and verifies the public dashboard build stamp against the startup-captured `runtime.started` record and HTTP health without reading a dashboard password. A successful external invocation records non-secret deployment evidence in `$HORTATOR_DATA_DIR/logs/next-feature.json`. Build output and failures are visible in Screen. Refresh the browser with **Ctrl-Shift-R** after completion. The command does not attach/detach viewers automatically; `screen -x hortator` joins the existing display.
+
+Two additional modes are available:
+
+```bash
+hortator-next-feature --check    # Fetch/check prerequisites; no stop, checkout or build
+hortator-next-feature --refresh  # Build/restart the clean current task; no fetch or branch switch
+```
+
+`--refresh` is useful after committing a feature before its PR is merged. It also repairs a stale dashboard on the current task branch. Invoke from a shell prompt: text typed into the active runtime console is not a shell command. If invoked at the shared Screen's own idle Bash prompt, the workflow runs there directly and hands the terminal to the server. Missing Screen sessions are reported, not recreated automatically; follow the shared-terminal recovery procedure below if needed.
+
+Preflight failures leave the runtime running. After shutdown, a failed dependency/build/startup step leaves an explicit failure in Screen and does not start a partially built release. Inspect the error, fix its cause and retry (use `--refresh` if the branch transition already completed). Runtime shutdown uses the existing cancellation rules. This command does not create a configuration backup or change bot/provider settings; take a complete backup before deployments that require one, especially schema changes.
+
+The tracked shell entry point is `scripts/hortator-next-feature`, with its standard-library controller in `scripts/next_feature.py`. The workspace installation is a symlink in the user's existing PATH:
+
+```bash
+ln -s /home/codexy/codex/astra-council_cabinet/scripts/hortator-next-feature \
+  /home/codexy/.local/bin/hortator-next-feature
+```
+
+Installation does not alter `.bashrc`, `.profile`, `.screenrc`, the runtime launcher or credentials. It requires the existing runtime environment/launcher plus Git, GNU Screen, Python3, uv, npm and `ss`; GitHub CLI authentication is needed for squash-merge verification when ordinary ancestry cannot prove inclusion. This launcher is local operator automation, not a bot tool.
+
+For the manual equivalent, attach with `screen -x hortator`, let active work finish, then press Ctrl-C and wait for the shared Bash prompt. Use a new task name when the placeholder already exists:
 
 ```bash
 cd /home/codexy/codex/astra-council_cabinet
