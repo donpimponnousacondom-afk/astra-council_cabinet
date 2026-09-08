@@ -1,5 +1,55 @@
 import { test, expect } from "@playwright/test";
 
+test("intentional silence is a persistent per-bot capability with a usable checkbox", async ({
+  page,
+}) => {
+  const getBot = async (id: string) =>
+    (await page.request.get(`/api/config/bots/${id}`)).json();
+  const before = await getBot("ada");
+  const other = await getBot("hortator");
+  await page.getByRole("button", { name: "Bots", exact: true }).click();
+  await page.getByRole("button", { name: "Edit Ada", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByRole("button", { name: "Capabilities", exact: true })
+    .click();
+  const toggle = dialog.getByRole("checkbox", {
+    name: "Allow intentional silence",
+    exact: true,
+  });
+  await expect(toggle).toBeChecked();
+  const box = await toggle.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(12);
+  expect(box?.height).toBeGreaterThanOrEqual(12);
+  await toggle.uncheck();
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const after = await getBot("ada");
+  expect(after.allow_silence).toBe(false);
+  expect(after.enabled_plugins).toEqual(before.enabled_plugins);
+  expect(after.model_profile_id).toBe(before.model_profile_id);
+  expect(after.interval_seconds).toBe(before.interval_seconds);
+  expect(await getBot("hortator")).toEqual(other);
+  await page.reload();
+  await page.getByRole("button", { name: "Bots", exact: true }).click();
+  await page.getByRole("button", { name: "Edit Ada", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Capabilities", exact: true })
+    .click();
+  await expect(toggle).not.toBeChecked();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(toggle).toBeVisible();
+  expect((await toggle.boundingBox())?.width).toBeGreaterThanOrEqual(12);
+  await toggle.check();
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  expect((await getBot("ada")).allow_silence).toBe(true);
+});
+
 test("Hortator control scope and external application intake are explained without changing configuration", async ({
   page,
 }) => {

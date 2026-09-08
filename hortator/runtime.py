@@ -22,7 +22,7 @@ REPLY_REPAIR = (
     "Your previous answer was withheld because it used a tool wrapper instead of an answer. "
     "council_speak does not exist. Write only the final Discord message as ordinary assistant "
     "content, without JSON/XML/function wrappers or a description of your tool decision. "
-    "Use actual tool_calls for actions, or council_silence alone to say nothing."
+    "Use actual tool_calls only for available actions or terminal decisions."
 )
 
 
@@ -373,7 +373,8 @@ class Engine:
                 )
                 # Start presence before context preparation, including compaction and provider queues.
                 await asyncio.sleep(0)
-            tools = [SILENCE] + self.registry.schemas(context)
+            silence_tools = [SILENCE] if bot.get("allow_silence", True) else []
+            tools = silence_tools + self.registry.schemas(context)
             rows, summary, through, original_meta = await self.contexts.prepare(
                 bot, profile, channel_id, turn_id, tools, force=compact_only
             )
@@ -420,7 +421,7 @@ class Engine:
                     raise ControlError(
                         "Extended task time budget exhausted; saved local files remain available"
                     )
-                available_tools = [SILENCE] + (
+                available_tools = silence_tools + (
                     self.registry.schemas(context) if round_index < round_limit else []
                 )
                 # Most chat turns need no attachment schema. Expose preparation only
@@ -565,8 +566,13 @@ class Engine:
                         status, decision = "sent", "reply" if reply_to else "speak"
                     else:
                         raise ControlError(
-                            "Provider returned no visible answer or tool call; use council_silence for intentional silence. "
-                            "Inspect provider diagnostics for reasoning-only output."
+                            "Provider returned no visible answer or tool call. "
+                            + (
+                                "Use council_silence for intentional silence. "
+                                if silence_tools
+                                else "Intentional silence is disabled for this bot. "
+                            )
+                            + "Inspect provider diagnostics for reasoning-only output."
                         )
                     break
                 if len({c["id"] for c in result.tool_calls}) != len(result.tool_calls):
@@ -574,12 +580,19 @@ class Engine:
                 names = [call["function"]["name"] for call in result.tool_calls]
                 terminal = any(name in ("council_speak", "council_silence") for name in names)
                 batch_error = None
-                if terminal and len(names) != 1:
+                current_bot = self.store.get("bots", bot["id"])
+                if "council_silence" in names and (
+                    not silence_tools or not current_bot or not current_bot.get("allow_silence", True)
+                ):
+                    batch_error = "Intentional silence is disabled for this bot; council_silence was not executed. Finish with ordinary assistant text. No actions in this batch were executed."
+                elif terminal and len(names) != 1:
                     batch_error = "A silence decision (or obsolete reply call) must be the only tool call; no partial actions were executed"
                 elif len(names) > calls_limit:
                     batch_error = f"Too many tool calls: maximum {calls_limit} per round; none executed"
                 elif not terminal and round_index >= round_limit:
-                    batch_error = "Tool round budget exhausted; write an ordinary text answer or call council_silence alone"
+                    batch_error = "Tool round budget exhausted; write an ordinary text answer" + (
+                        " or call council_silence alone" if silence_tools else ""
+                    )
                 extras.append(result.message())
                 finished = False
                 for call in result.tool_calls:

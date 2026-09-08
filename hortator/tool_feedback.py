@@ -13,7 +13,7 @@ are a JSON object with named fields: key order does not matter. A rejected call 
 detectable argument errors together with complete usage; fix every reported issue before retrying.
 Do not guess missing parameters, coerce unrelated values, or repeat an unchanged failed call.
 Usage and failed calls still consume bounded tool rounds. Read the remaining budget and finish
-with an ordinary assistant text answer, or council_silence alone. Never call a tool to write
+with an ordinary assistant text answer (or the silence tool only when available). Never call a tool to write
 the answer itself. If you need to send generated/exported files, leave a tool round for
 discord_attach to prepare them before the final text answer; file preparation does not post.
 If document_site is available, create a NEW site explicitly before writing; start/edit only resume

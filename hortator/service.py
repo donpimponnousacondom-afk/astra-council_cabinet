@@ -135,6 +135,7 @@ class Service:
             )
         elif kind == "bots":
             value.update(footer_settings(value))
+            value.setdefault("allow_silence", True)
             for field in ("document_task_rounds", "document_task_calls_per_round", "document_task_seconds"):
                 value.setdefault(field, SCHEMAS["bots"].model_fields[field].default)
             for field in (
