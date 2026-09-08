@@ -36,6 +36,8 @@ The console shows timestamped, colored bot/provider/Discord activity. Successful
 
 The five-bot runtime uses real configuration in external storage; do not reinitialize it. Consult [backup procedures](docs/OPERATIONS.md#backup-and-restore) and [dated acceptance evidence](docs/VERIFICATION.md), and inspect the dashboard for current state. The [configuration audit](docs/CONFIGURATION_STATUS.md) retains historical findings; the user subsequently resolved the provider/context/concurrency setup and confirmed live typing. The first-run instructions below describe a new installation.
 
+Prepare the publishing server's public SSH key with the offline operator command **`hortator ssh-key create publishing`**. Its private key stays in the existing encrypted vault and travels with normal backups; server/transport setup is separate. See [SSH identity and portability](docs/OPERATIONS.md#publishing-ssh-identity).
+
 Stop the foreground server before switching branches, rebuild the dashboard when its source changes, and restart through the installed launcher. Existing branches still have a `./data` CLI fallback; the external launcher and environment setting keep those branches on the same persistent data. See [branch changes and persistent storage](docs/OPERATIONS.md#branch-changes-and-persistent-storage).
 
 After a PR is squash-merged, use a clean working tree, `git switch main`, `git pull --ff-only origin main`, then `git switch -c feat/next_feature`. The full [repeatable workflow](docs/OPERATIONS.md#repeating-the-squash-merge-workflow) includes Screen control and rebuilding. No new work or pushes belong on main.

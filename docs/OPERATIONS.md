@@ -12,6 +12,7 @@ This workspace sets `HORTATOR_DATA_DIR=/home/codexy/.local/share/hortator`, outs
 - `master.key`: Fernet encryption key, unless supplied through `HORTATOR_MASTER_KEY`.
 - `initial-password`: one-time bootstrap password, created only if no password is configured.
 - `artifacts/`: bot/turn-owned generated media.
+- `ssh/`: public SSH key exports and, after server configuration, verified host pins. Private SSH keys stay encrypted inside the database, never as plaintext files here.
 
 The data directory is mode 0700; database/key/artifacts are owner-readable. **The master key is required to recover credentials.** Protect the key separately from the database and restrict host access. Conversations, prompt snapshots and provider response content are intentionally stored as readable observability data; secret encryption is not full-disk encryption. Never commit the data directory.
 
@@ -282,6 +283,32 @@ Environment variables:
 | `HORTATOR_BUILD_INFO` | Git metadata, otherwise unknown | Non-secret JSON source stamp for Git-free release/container builds |
 | `TIKTOKEN_CACHE_DIR` | Library default | Optional tokenizer asset cache; baked into Docker image |
 
+## Publishing SSH identity
+
+The local operator can prepare a portable identity before configuring a server. Stop the foreground runtime in shared Screen first: the CLI takes its lock so the server's cached vault cannot miss a new credential. Use the installed launcher (or explicitly set the external data directory on another installation):
+
+```bash
+hortator ssh-key create publishing
+```
+
+This generates Ed25519 once and stores its OpenSSH private key **encrypted** at vault scope `ssh/publishing/private_key` in `council.sqlite3`. The matching `master.key` unlocks it without a separate SSH passphrase. It never creates a plaintext private key file or modifies personal `~/.ssh`. Existing identities are reused; invalid stored keys fail without rotation. The command requires an existing database/key and does not seed bots or call providers/Discord. Standard output is the single public `ssh-ed25519 ... hortator-publishing` line; standard error contains its public SHA256 fingerprint. Only that public line belongs in the remote account's `~/.ssh/authorized_keys`. See the [OpenSSH key documentation](https://man.openbsd.org/ssh-keygen#FILES).
+
+To export the public line while the runtime is stopped:
+
+```bash
+umask 077
+mkdir -p "$HORTATOR_DATA_DIR/ssh"
+chmod 700 "$HORTATOR_DATA_DIR/ssh"
+hortator ssh-key public publishing > "$HORTATOR_DATA_DIR/ssh/publishing.pub"
+ssh-keygen -lf "$HORTATOR_DATA_DIR/ssh/publishing.pub"
+```
+
+Then restart the server normally. The public file can be read/copied while it runs. Both identity commands are local offline administration, with no Discord/model/API private-key export or bot grant. Identity names are bounded lowercase names, defaulting to `publishing`. There is deliberately no implicit overwrite/rotation command.
+
+Normal backups include the encrypted identity in SQLite and public exports in `ssh/`. Move the complete backup and matching master key to the new installation, preserve owner-only permissions, and use its own `HORTATOR_DATA_DIR`; no source-host path is encoded in the identity. `ssh-key public publishing` can reconstruct a lost public export. The database and master key together can unlock all backed-up credentials, so transport them through a secure channel.
+
+Key creation does **not** start remote delivery. Once the account, address, port and destination are supplied, verify the server's host-key fingerprint through a trusted source and store pins with Hortator. The future worker will use an explicit identity, `BatchMode=yes`, `IdentitiesOnly=yes` and `StrictHostKeyChecking=yes`, without personal SSH-agent/config dependence. This keeps unattended connections from prompting or silently trusting a changed server. [OpenSSH client settings](https://man.openbsd.org/ssh_config#BatchMode). Remote command execution needs a separate capability design.
+
 ## Backup and restore
 
 From the repository root, or with `--data-dir` before the command:
@@ -290,11 +317,11 @@ From the repository root, or with `--data-dir` before the command:
 hortator backup /absolute/path/to/new-backup-directory
 ```
 
-This uses SQLite's backup API, copies artifacts, cached images and site blobs, and saves the encryption key separately inside the new backup directory. It can read a running database. Move that key to separate secure storage after verifying the backup. Keep the artifacts and database from the same operational period; new artifacts created during a live backup may not be in the snapshot. For a complete point-in-time archive, pause the council first.
+This uses SQLite's backup API, copies artifacts, cached images, site blobs and `ssh/` public exports/host pins, and saves the encryption key separately inside the new backup directory. It can read a running database. Move that key to separate secure storage after verifying the backup. Keep the artifacts and database from the same operational period; new artifacts created during a live backup may not be in the snapshot. For a complete point-in-time archive, pause the council first.
 
-This workspace uses timestamped snapshots under `/home/codexy/.local/share/hortator-backups`, outside both the code checkout and live data directory. Its **`.latest-requested`** file identifies the latest requested snapshot; inspect that path and the snapshot's `manifest.json` for current evidence rather than relying on a copied session note. [VERIFICATION.md](VERIFICATION.md) records dated checks. A Git repository around a live SQLite database does not provide a consistent snapshot and risks tracking the master key and bootstrap password. Use the CLI's SQLite backup, then capture host settings and logs while the server is stopped for a complete archive. Complete snapshots include a matching key, artifacts, images, sites, redacted configuration export, bootstrap password if present, logs, external launcher/environment and `.screenrc`, with `manifest.json` hashes and `RESTORE.md`. Verify SQLite integrity, hashes and matching-key decryption before declaring a snapshot usable. Keep directories 0700 and files 0600. These local snapshots provide rollback; an independent secure disk copy is still needed for disk-loss recovery. Never overwrite an earlier snapshot, commit these files, or confuse a redacted JSON export with a credentials backup.
+This workspace uses timestamped snapshots under `/home/codexy/.local/share/hortator-backups`, outside both the code checkout and live data directory. Its **`.latest-requested`** file identifies the latest requested snapshot; inspect that path and the snapshot's `manifest.json` for current evidence rather than relying on a copied session note. [VERIFICATION.md](VERIFICATION.md) records dated checks. A Git repository around a live SQLite database does not provide a consistent snapshot and risks tracking the master key and bootstrap password. Use the CLI's SQLite backup, then capture host settings and logs while the server is stopped for a complete archive. Complete snapshots include a matching key, artifacts, images, sites, SSH public exports/host pins, redacted configuration export, bootstrap password if present, logs, external launcher/environment and `.screenrc`, with `manifest.json` hashes and `RESTORE.md`. Verify SQLite integrity, hashes and matching-key decryption before declaring a snapshot usable. Keep directories 0700 and files 0600. These local snapshots provide rollback; an independent secure disk copy is still needed for disk-loss recovery. Never overwrite an earlier snapshot, commit these files, or confuse a redacted JSON export with a credentials backup.
 
-To restore, stop Hortator, copy `council.sqlite3`, `master.key`, `artifacts/`, `images/`, and `sites/` into an **empty** data directory, restore owner-only permissions, then start with that directory. Do not copy old `-wal`/`-shm` files over a restored database. If using an environment master key, supply the same key. The recovery logic marks unfinished work; it never blindly replays uncertain sends.
+To restore, stop Hortator, copy `council.sqlite3`, `master.key`, `artifacts/`, `images/`, `sites/`, and `ssh/` into an **empty** data directory, restore owner-only permissions, then start with that directory. Do not copy old `-wal`/`-shm` files over a restored database. If using an environment master key, supply the same key. The recovery logic marks unfinished work; it never blindly replays uncertain sends.
 
 To reset the dashboard password, stop the runtime and run:
 

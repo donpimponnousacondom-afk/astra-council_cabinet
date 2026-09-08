@@ -18,6 +18,7 @@ SECRET_FIELDS = {
     "token",
     "password",
     "secret",
+    "private_key",
     "access_token",
     "bot_token",
     "x-api-key",
