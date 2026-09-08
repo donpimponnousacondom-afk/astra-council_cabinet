@@ -44,5 +44,6 @@ Do not create rolling session handover documents or continuation prompts: the us
 
 - Preserve the shared empty-argument usage and complete argument-error contract in [docs/TOOLS.md](docs/TOOLS.md) for every tool/plugin, including terminal tools. Do not replace it with first-error validation or unbounded repair retries.
 - Images use the shared multimodal pipeline for every bot; unsupported models fail upstream visibly. Keep image bytes and site blobs outside Git, and include `images/` and `sites/` in consistent backups.
+- The owner requested image intake up to 20 MiB per file, with a 40 MiB combined request budget. Preserve original pixels; do not silently resize or lower this ceiling. General bot shell/filesystem tools are a separately deferred feature; see PLAN.
 - Cache pricing is explicit per model profile. Preserve operator input/output rates; never replace them with a published tariff or schedule without authorization. Unknown usage remains unknown.
 - Any enabled, granted bot may start its bounded extended document task, autonomously or on request from any permitted participant. One extension per turn, no self-renewal. Local publication and durable remote sync queue are implemented; remote transport remains disabled until separately configured. Never claim a queued site was delivered remotely.

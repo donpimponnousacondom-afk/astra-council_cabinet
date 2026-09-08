@@ -19,12 +19,37 @@ from PIL import Image, UnidentifiedImageError
 from .models import ControlError
 from .store import dumps
 
-MAX_IMAGE_BYTES = 8 * 1024 * 1024
-MAX_REQUEST_BYTES = 16 * 1024 * 1024
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
+MAX_REQUEST_BYTES = 2 * MAX_IMAGE_BYTES
 MAX_IMAGES = 8
 MAX_PIXELS = 20_000_000
 IMAGE_TOKEN_RESERVE = 4096  # Deliberately approximate: providers tokenize pixels differently.
 FORMATS = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp", "GIF": "image/gif"}
+
+
+class ImageSizeLimit(ValueError):
+    def __init__(self):
+        super().__init__(f"Image exceeds the {MAX_IMAGE_BYTES // (1024 * 1024)} MiB image limit")
+
+
+def retry_previous_size_limit(attachment):
+    vision = attachment.get("vision") or {}
+    if vision.get("status") != "unavailable":
+        return False
+    old_limit = vision.get("size_limit_bytes")
+    # Metadata from the original 8 MiB implementation predates structured failure limits.
+    if old_limit is None and vision.get("error") in (
+        "Image exceeds the 8 MiB image limit",
+        "Image is empty or exceeds the 8 MiB image limit",
+    ):
+        old_limit = 8 * 1024 * 1024
+    size = attachment.get("size")
+    return (
+        isinstance(old_limit, int)
+        and old_limit < MAX_IMAGE_BYTES
+        and isinstance(size, (int, float))
+        and 0 < size <= MAX_IMAGE_BYTES
+    )
 
 
 def trusted_discord_url(url):
@@ -50,8 +75,10 @@ def image_candidate(attachment):
 
 
 def validate_image(data):
-    if not data or len(data) > MAX_IMAGE_BYTES:
-        raise ValueError("Image is empty or exceeds the 8 MiB image limit")
+    if not data:
+        raise ValueError("Image is empty")
+    if len(data) > MAX_IMAGE_BYTES:
+        raise ImageSizeLimit()
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
@@ -112,7 +139,7 @@ class ImageCache:
                 raise ValueError("Image URL is not a trusted Discord attachment CDN URL")
             declared_size = result.get("size")
             if isinstance(declared_size, (int, float)) and declared_size > MAX_IMAGE_BYTES:
-                raise ValueError("Image exceeds the 8 MiB image limit")
+                raise ImageSizeLimit()
 
             async def fetch(client):
                 async with asyncio.timeout(15):
@@ -126,11 +153,11 @@ class ImageCache:
                             raise ValueError("Discord attachment response is not a supported raster image")
                         length = response.headers.get("content-length")
                         if length and int(length) > MAX_IMAGE_BYTES:
-                            raise ValueError("Image exceeds the 8 MiB image limit")
+                            raise ImageSizeLimit()
                         data = bytearray()
                         async for chunk in response.aiter_bytes():
                             if len(data) + len(chunk) > MAX_IMAGE_BYTES:
-                                raise ValueError("Image exceeds the 8 MiB image limit")
+                                raise ImageSizeLimit()
                             data.extend(chunk)
                         return bytes(data)
 
@@ -170,6 +197,8 @@ class ImageCache:
                 else f"Image capture failed ({type(exc).__name__}); reattach to retry"
             )
             result["vision"] = {"status": "unavailable", "error": error}
+            if isinstance(exc, ImageSizeLimit):
+                result["vision"]["size_limit_bytes"] = MAX_IMAGE_BYTES
         return result
 
     async def prepare_rows(self, rows):
@@ -177,8 +206,11 @@ class ImageCache:
             if row.get("deleted"):
                 continue
             for index, attachment in enumerate(row["attachments"]):
-                # Attempt old, pre-vision metadata once. Live history refresh can retry failed URLs.
-                if image_candidate(attachment) and not attachment.get("vision"):
+                # Retry a previously rejected size once when a larger limit now admits it.
+                # Other failures wait for a refreshed history URL or a new attachment.
+                if image_candidate(attachment) and (
+                    not attachment.get("vision") or retry_previous_size_limit(attachment)
+                ):
                     row["attachments"][index] = await self.capture(attachment)
                     # Persist each completed attachment so a deadline/cancellation does not discard progress.
                     self.store.execute(
@@ -240,7 +272,7 @@ class ImageCache:
                 total += len(data)
                 if total > MAX_REQUEST_BYTES:
                     raise ControlError(
-                        "Request images exceed 16 MiB; compact the conversation or use smaller attachments"
+                        f"Request images exceed {MAX_REQUEST_BYTES // (1024 * 1024)} MiB; compact the conversation or use smaller attachments"
                     )
                 mime = part["image"]["content_type"]
                 if mime not in FORMATS.values():

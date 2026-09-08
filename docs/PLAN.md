@@ -89,3 +89,11 @@ The user approved actual Discord image inputs for every bot without model-name g
 An enabled bot with the document plugin grant may open its extended document-task budget regardless of who requested the document or whether the bot initiated it. Defaults: 20 additional rounds, 8 calls per round, 900 seconds, once per turn; ordinary limits remain independently configurable. The plugin creates local files without shell access and publishes immutable manifests, preserving queued remote intent across restarts. The model must report local versus remote state honestly.
 
 The permanent [tool contract](TOOLS.md) requires `{}` discovery and all detectable argument errors plus complete usage in one response for every current/future plugin and terminal tool. This is intentional support for model repair, not overdesign to remove. Follow [DOCUMENTS.md](DOCUMENTS.md), [VISION.md](VISION.md) and [PRICING.md](PRICING.md) for implementation boundaries; dated test evidence belongs in VERIFICATION.
+
+## 2026-09-08: image ceiling patch and next filesystem feature
+
+The owner requested a focused patch on the existing image/publishing task branch before landing its PR: raise image intake from 8 MiB to 20 MiB, matching the standard Discord API per-file allowance. A 40 MiB combined request allowance admits two maximum-size images while preserving a bound on base64 request memory. Keep the existing eight-image/20-megapixel checks and preserve original pixels. Retry uncompacted historical size rejections once under the larger policy. This changes no provider/model/credential/grant settings.
+
+The next requested feature, after the user merges this PR and prepares the next task branch, is bot filesystem/Bash tooling for workflows such as downloading an attachment, compressing an image and reattaching the result. That work is deferred here; the current plugins have no general shell. The user is finishing remote-domain configuration separately; no remote publishing transport is enabled by this image patch.
+
+The owner also reported the document capability checkbox shrinking beside its long description. The same patch reserves a consistent non-shrinking native checkbox size, preserves keyboard focus visibility and protects the global-off badge from shrinking. Keep this behavior in checkbox lists as descriptions grow.

@@ -2,6 +2,17 @@
 
 Verified in this workspace on 2026-09-07. Automated provider/Discord tests use controlled transports and synthetic credentials. Later read-only live checks used the user's configured credentials in memory without exposing them or making paid completion probes; see the typing/configuration verification below.
 
+## 20 MiB image intake and checkbox correction (2026-09-08)
+
+Follow-up on `feat/image_cache_webgeneration`, based on `8de7024`, before the user lands the same PR:
+
+- **51 focused backend tests passed** (vision and runtime). New cases exercise the reported 10,583,216-byte size, exactly 20 MiB, rejection above 20 MiB at metadata/header/stream/decoder gates, 40 MiB combined wire budgeting, and one-time retry/persistence of legacy 8 MiB rejections including expired URLs. Synthetic valid PNG files test byte boundaries independently of pixel dimensions; this is not a live provider vision probe.
+- The existing document-settings Playwright flow passed. A read-only browser inspection of the live dashboard confirmed every capability checkbox remains 18×18 pixels at 1440px, 622px and 390px widths with no modal horizontal overflow. Screenshots were visually inspected; no bot settings were saved and the diagnostic session was logged out. An initial inspection attempt used the collapsed mobile navigation; opening the bot editor at desktop width before resizing corrected the inspection procedure.
+- Ruff lint/format, TypeScript/Vite build, Prettier and whitespace checks passed. Native checkboxes now have a non-shrinking size and keyboard focus outline; long descriptions and disabled-plugin badges retain their space. No permanent UI test was added for this small CSS correction.
+- Stopped the idle foreground runtime in attached `387556.hortator`. Backup `/home/codexy/.local/share/hortator-backups/20260908T015448Z-before-image-20mib-checkbox` passed SQLite integrity, matching-key decryption of **14 encrypted records**, **15 file hashes**, owner-only permissions and exact entity/encrypted-entry equality with stopped live data. Images and site blobs are included when present.
+
+Deploy after the final task commit/build in the same Screen window. Record sanitized local rollout evidence in external `logs/image20-checkbox-verification.json`, confirming matching clean server/dashboard stamps and unchanged configuration/credential values. No paid provider probe, manual Discord post, shell tool, remote sync or text-fetch limit change is part of this patch.
+
 ## Images, cache pricing and document sites (2026-09-08)
 
 Implemented on the user-prepared `feat/image_cache_webgeneration`, based on the squash-merged footer baseline `9a66b54`. Work was split among vision, pricing and publishing agents, then integrated with shared tool feedback and runtime budget tests.

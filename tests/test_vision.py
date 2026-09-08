@@ -1,6 +1,8 @@
 import base64
 import io
 import json
+import struct
+import zlib
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -12,7 +14,16 @@ from conftest import configured
 from test_provider import install_client
 from test_typing import prepare_bot
 from hortator.models import OWNER_ID, ControlError
-from hortator.vision import ImageCache, MAX_IMAGES, trusted_discord_url, image_count
+from hortator.vision import (
+    ImageCache,
+    MAX_IMAGE_BYTES,
+    MAX_REQUEST_BYTES,
+    MAX_IMAGES,
+    trusted_discord_url,
+    image_count,
+    image_limits_exceeded,
+    validate_image,
+)
 
 URL = "https://cdn.discordapp.com/attachments/123/456/image.png?ex=expired-soon"
 
@@ -89,7 +100,9 @@ async def test_capture_persists_validated_pixels_surviving_signed_url_expiry(ker
         httpx.Response(200, content=b"<script>bad</script>", headers={"content-type": "image/png"}),
         httpx.Response(200, content=png(), headers={"content-type": "text/html"}),
         httpx.Response(
-            200, content=png(), headers={"content-type": "image/png", "content-length": str(9 * 1024 * 1024)}
+            200,
+            content=png(),
+            headers={"content-type": "image/png", "content-length": str(MAX_IMAGE_BYTES + 1)},
         ),
     ],
 )
@@ -334,3 +347,145 @@ async def test_image_capture_failure_before_atomic_replace_leaves_no_ready_refer
         result = await cache.capture(attachment())
     assert result["vision"]["status"] == "unavailable"
     assert list(cache.root.iterdir()) == []
+
+
+def png_with_file_size(size):
+    # A valid ancillary padding chunk exercises encoded-byte limits independently
+    # of decoded dimensions and compression ratios, with exact byte boundaries.
+    original = png()
+    payload = b"p" * (size - len(original) - 12)
+    kind = b"npAD"
+    chunk = struct.pack(">I", len(payload)) + kind + payload
+    chunk += struct.pack(">I", zlib.crc32(kind + payload))
+    return original[:-12] + chunk + original[-12:]
+
+
+@pytest.mark.parametrize("size", [10_583_216, 20 * 1024 * 1024])
+async def test_large_image_reaches_provider_wire_without_resizing(kernel, size):
+    data = png_with_file_size(size)
+    assert len(data) == size
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, content=data, headers={"content-type": "image/png"})
+        )
+    ) as client:
+        cache = ImageCache(kernel.store, client)
+        item = await cache.capture(attachment(size=size))
+    assert item["vision"]["status"] == "ready"
+    assert item["vision"]["size"] == size
+    messages = [
+        {"role": "user", "content": cache.content("look", [{"discord_id": "1", "attachments": [item]}])}
+    ]
+    assert not image_limits_exceeded(messages)
+    wire = cache.wire_messages(messages)
+    assert base64.b64decode(wire[0]["content"][-1]["image_url"]["url"].split(",", 1)[1]) == data
+
+
+@pytest.mark.parametrize("gate", ["metadata", "header", "stream", "validation"])
+async def test_twenty_mib_ceiling_is_enforced_at_every_ingestion_gate(kernel, gate):
+    if gate == "validation":
+        with pytest.raises(ValueError, match="20 MiB"):
+            validate_image(b"x" * (MAX_IMAGE_BYTES + 1))
+        return
+    called = []
+
+    class Oversize(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"x" * MAX_IMAGE_BYTES
+            yield b"x"
+
+    def handler(request):
+        called.append(request)
+        headers = {"content-type": "image/png"}
+        if gate == "header":
+            headers["content-length"] = str(MAX_IMAGE_BYTES + 1)
+        return httpx.Response(200, headers=headers, stream=Oversize())
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        item = await ImageCache(kernel.store, client).capture(
+            attachment(size=MAX_IMAGE_BYTES + 1 if gate == "metadata" else 1)
+        )
+    assert len(called) == (0 if gate == "metadata" else 1)
+    assert item["vision"] == {
+        "status": "unavailable",
+        "error": "Image exceeds the 20 MiB image limit",
+        "size_limit_bytes": MAX_IMAGE_BYTES,
+    }
+
+
+async def test_combined_byte_budget_counts_original_bytes_and_stays_bounded(kernel):
+    cache, item = await cached(kernel)
+    data = png_with_file_size(MAX_IMAGE_BYTES)
+    # Use valid cached bytes and matching durable metadata for exact wire-boundary testing.
+    import hashlib
+
+    item["vision"].update(sha256=hashlib.sha256(data).hexdigest(), size=len(data))
+    cache.path(item["vision"]["sha256"]).write_bytes(data)
+    rows = [{"discord_id": "1", "attachments": [item, item]}]
+    messages = [{"role": "user", "content": cache.content("two large images", rows)}]
+    assert MAX_REQUEST_BYTES == 40 * 1024 * 1024
+    assert not image_limits_exceeded(messages)
+    assert image_count(messages) == 2
+    assert (
+        len([part for part in cache.wire_messages(messages)[0]["content"] if part["type"] == "image_url"])
+        == 2
+    )
+    rows[0]["attachments"].append(item)
+    messages = [{"role": "user", "content": cache.content("too large together", rows)}]
+    assert image_limits_exceeded(messages)
+    with pytest.raises(ControlError, match="40 MiB"):
+        cache.wire_messages(messages)
+
+
+@pytest.mark.parametrize("status", [200, 403])
+async def test_previous_eight_mib_rejections_retry_once_under_new_limit(kernel, status):
+    _, channel = prepare_bot(kernel)
+    legacy = attachment(
+        size=10_583_216, vision={"status": "unavailable", "error": "Image exceeds the 8 MiB image limit"}
+    )
+    kernel.store.execute(
+        "UPDATE messages SET attachments=? WHERE channel_id=?", (json.dumps([legacy]), channel)
+    )
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(status, content=png(), headers={"content-type": "image/png"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        cache = ImageCache(kernel.store, client)
+        await cache.prepare_rows(kernel.store.transcript(channel))
+        await cache.prepare_rows(kernel.store.transcript(channel))
+    assert len(calls) == 1
+    stored = kernel.store.transcript(channel)[0]["attachments"][0]["vision"]
+    assert stored["status"] == ("ready" if status == 200 else "unavailable")
+    assert "8 MiB" not in stored.get("error", "")
+
+
+async def test_current_rejections_and_deleted_images_are_not_retried(kernel):
+    cache = ImageCache(kernel.store)
+    cache.capture = AsyncMock()
+    rows = [
+        {
+            "discord_id": "1",
+            "deleted": True,
+            "attachments": [
+                attachment(vision={"status": "unavailable", "error": "Image exceeds the 8 MiB image limit"})
+            ],
+        },
+        {
+            "discord_id": "2",
+            "attachments": [
+                attachment(
+                    size=MAX_IMAGE_BYTES + 1,
+                    vision={
+                        "status": "unavailable",
+                        "error": "Image exceeds the 20 MiB image limit",
+                        "size_limit_bytes": MAX_IMAGE_BYTES,
+                    },
+                )
+            ],
+        },
+    ]
+    await cache.prepare_rows(rows)
+    cache.capture.assert_not_awaited()
