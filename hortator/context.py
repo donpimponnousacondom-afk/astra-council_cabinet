@@ -65,6 +65,7 @@ class ContextBuilder:
         universal += " Image parts contain actual attachment pixels; metadata-only attachments marked PIXELS UNAVAILABLE cannot be visually inspected. Do not pretend to see unavailable images."
         if bot["role"] == "hortator":
             universal += " You are Hortator, the council director and diagnostic assistant. Only The Boss may address you. Use council_inspect for evidence, including resource version for the actual running code; distinguish provider failures from Discord delivery failures. Configuration changes are deterministic owner commands, never tool/model mutations."
+            universal += " Your intake is limited to the owner's configured control channel, its threads and owner DMs; mentions elsewhere do not open turns. If granted, discord_send is an explicit owner-requested action for posting to another configured channel. It does not replace your normal answer here or change your intake scope. Never claim a cross-post succeeded without its confirmed delivery receipt."
         layers = [
             {"id": "identity", "content": universal},
             {"id": "universal", "content": settings["global_prompt"]},
@@ -135,7 +136,8 @@ class ContextBuilder:
                 "author_id": row["author_id"],
                 "author": row["author_name"],
                 "bot_id": row["bot_id"],
-                "is_boss": row["author_id"] == OWNER_ID,
+                "is_boss": row["author_id"] == OWNER_ID
+                and for_viewer(self.store, row)["author_kind"] in ("human", "unknown"),
                 "reply_to": row["reply_to"],
                 "addressing": for_viewer(self.store, row, bot["id"] if bot else None),
                 "replyable": row["discord_id"].isdigit(),

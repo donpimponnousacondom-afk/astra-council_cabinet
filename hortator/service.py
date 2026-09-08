@@ -174,6 +174,7 @@ class Service:
             value["keyless"] = value["id"] in (
                 "memory",
                 "council_inspect",
+                "discord_send",
                 "document_site",
                 "workspace",
                 "shell",

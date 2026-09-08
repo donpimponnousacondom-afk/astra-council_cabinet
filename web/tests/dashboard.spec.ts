@@ -1,5 +1,45 @@
 import { test, expect } from "@playwright/test";
 
+test("Hortator control scope and external application intake are explained without changing configuration", async ({
+  page,
+}) => {
+  const before = await (
+    await page.request.get("/api/config/settings/global")
+  ).json();
+  await page
+    .getByRole("button", { name: "Council settings", exact: true })
+    .click();
+  await expect(
+    page.getByText("Hortator control channel", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Edit council settings", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByLabel("Hortator control channel ID", { exact: true }),
+  ).toHaveValue(before.control_channel_id);
+  await expect(dialog).toContainText(
+    "Mentions in other server channels do not bypass that scope.",
+  );
+  await dialog.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Rooms", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Edit The council", exact: true })
+    .click();
+  await expect(dialog).toContainText("including slash-command results");
+  await expect(dialog).toContainText(
+    "Ordinary incoming webhooks remain excluded",
+  );
+  expect(
+    await (await page.request.get("/api/config/settings/global")).json(),
+  ).toEqual(before);
+  const plugin = await (
+    await page.request.get("/api/config/plugins/discord_send")
+  ).json();
+  expect(plugin.keyless).toBe(true);
+});
+
 test("SSE is an immediate per-model card option with matching editor and preserved parameters", async ({
   page,
 }) => {

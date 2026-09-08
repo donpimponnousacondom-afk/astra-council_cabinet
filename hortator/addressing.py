@@ -73,7 +73,7 @@ async def capture(store, vault, message, *, historical=False):
                 user_id = str(resolved.author.id)
                 reply = {
                     "message_id": reply_id,
-                    **known.get(
+                    **({} if getattr(resolved, "webhook_id", None) else known).get(
                         user_id, {"user_id": user_id, "name": resolved.author.display_name, "bot_id": None}
                     ),
                 }
@@ -85,6 +85,12 @@ async def capture(store, vault, message, *, historical=False):
             target.setdefault("via", []).append("reply")
     return {
         "author_kind": kind,
+        **(
+            {"application_id": str(message.application_id)}
+            if getattr(message, "application_id", None)
+            else {}
+        ),
+        **({"webhook_id": str(message.webhook_id)} if message.webhook_id else {}),
         "live": not historical,
         "directed": bool(reply_id or targets),
         "targets": list(targets.values()),

@@ -801,7 +801,7 @@ export default function App() {
                 </div>
                 <dl className="detail-list">
                   <div>
-                    <dt>Reporting channel</dt>
+                    <dt>Hortator control channel</dt>
                     <dd>
                       {dashboard.settings.control_channel_id ||
                         "Not configured"}

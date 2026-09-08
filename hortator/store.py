@@ -94,6 +94,10 @@ class Store:
         """)
         if "addressing" not in {row["name"] for row in self.rows("PRAGMA table_info(messages)")}:
             self.execute("ALTER TABLE messages ADD COLUMN addressing TEXT NOT NULL DEFAULT '{}'")
+        if "discord_parts" not in {row["name"] for row in self.rows("PRAGMA table_info(messages)")}:
+            self.execute("ALTER TABLE messages ADD COLUMN discord_parts TEXT NOT NULL DEFAULT '{}'")
+        if "routing" not in {row["name"] for row in self.rows("PRAGMA table_info(outbox)")}:
+            self.execute("ALTER TABLE outbox ADD COLUMN routing TEXT NOT NULL DEFAULT '{}'")
         if "retry_until" not in {row["name"] for row in self.rows("PRAGMA table_info(bot_runtime)")}:
             self.execute("ALTER TABLE bot_runtime ADD COLUMN retry_until REAL NOT NULL DEFAULT 0")
         self.execute(
@@ -187,6 +191,7 @@ class Store:
         for row in rows:
             row["attachments"] = json.loads(row["attachments"])
             row["addressing"] = json.loads(row["addressing"])
+            row["discord_parts"] = json.loads(row["discord_parts"])
         return rows
 
     def ingest(
@@ -205,6 +210,7 @@ class Store:
         guild_id=None,
         parent_id=None,
         addressing=None,
+        discord_parts=None,
     ):
         room = self.get("rooms", room_id) if room_id else None
         if guild_id is None and room and room["channel_id"] == channel_id:
@@ -216,7 +222,7 @@ class Store:
         content = self.redact(content)
         cur = self.execute(
             """INSERT OR IGNORE INTO messages(discord_id,channel_id,room_id,author_id,
-          author_name,bot_id,content,at,reply_to,attachments,addressing) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+          author_name,bot_id,content,at,reply_to,attachments,addressing,discord_parts) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 discord_id,
                 channel_id,
@@ -229,6 +235,7 @@ class Store:
                 reply_to,
                 dumps(self.redact(attachments or [])),
                 dumps(self.redact(addressing or {"author_kind": "bot" if bot_id else "unknown"})),
+                dumps(self.redact(discord_parts or {})),
             ),
         )
         if cur.rowcount:

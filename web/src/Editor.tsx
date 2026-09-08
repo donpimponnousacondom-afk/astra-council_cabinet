@@ -922,9 +922,11 @@ export function Editor({
               </div>
               <Notice>
                 Known council bots are always eligible conversation
-                participants. Threads have separate contexts; forum
-                conversations take place inside posts. Webhooks do not carry
-                administrative authority.
+                participants. Include external bots also admits application
+                responses, including slash-command results. Ordinary incoming
+                webhooks remain excluded. App messages never carry human or
+                administrative authority. Threads have separate contexts; forum
+                conversations take place inside posts.
               </Notice>
             </>
           )}
@@ -936,9 +938,14 @@ export function Editor({
                 <code>{dashboard.owner_id}</code>
               </div>
               <div className="form-grid">
-                {text("control_guild_id", "Hortator reporting server ID")}
-                {text("control_channel_id", "Hortator reporting channel ID")}
+                {text("control_guild_id", "Hortator control server ID")}
+                {text("control_channel_id", "Hortator control channel ID")}
               </div>
+              <Notice>
+                Hortator accepts only your messages in this control channel, its
+                threads, or your DMs. Mentions in other server channels do not
+                bypass that scope. Reports also use this channel.
+              </Notice>
               <Field label="Global system prompt">
                 <textarea
                   rows={8}

@@ -47,6 +47,9 @@ class Kernel:
         self.connector = DiscordManager(self.service)
         self.service.connector = self.connector
         self.engine.transport = self.connector
+        from .discord_dispatch import DiscordDispatch
+
+        self.registry.discord_dispatch = DiscordDispatch(self.service)
         self.publishing = PublishingWorker(self.store, self.vault, self.directory, self.registry.documents)
 
     def start(self):
