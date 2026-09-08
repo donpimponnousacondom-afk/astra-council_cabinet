@@ -44,9 +44,10 @@ def restrict(config):
     }
     for kind, value in limits.items():
         resource.setrlimit(kind, (value, value))
-    # Namespaces are the filesystem/process/network boundary. Seccomp also
+    # Namespaces are the filesystem/process boundary. Seccomp also
     # removes kernel interfaces that could allocate unaccounted shared memory,
-    # bypass the transport, create sockets, or modify namespace topology.
+    # bypass the transport or modify namespace topology. Network sockets use
+    # the host network namespace; filesystem and process restrictions remain.
     seccomp = ctypes.CDLL("libseccomp.so.2", use_errno=True)
     seccomp.seccomp_init.argtypes = [ctypes.c_uint32]
     seccomp.seccomp_init.restype = ctypes.c_void_p
@@ -59,7 +60,7 @@ def restrict(config):
     if not policy:
         raise RuntimeError("Cannot initialize seccomp")
     deny = (
-        "socket socketpair unshare setns mount umount2 pivot_root chroot ptrace "
+        "unshare setns mount umount2 pivot_root chroot ptrace "
         "process_vm_readv process_vm_writev memfd_create shmget shmat shmctl "
         "bpf perf_event_open io_uring_setup io_uring_enter io_uring_register userfaultfd "
         "keyctl add_key request_key reboot kexec_load kexec_file_load open_by_handle_at "
