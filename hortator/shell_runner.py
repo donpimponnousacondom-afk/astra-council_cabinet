@@ -13,6 +13,7 @@ import re
 import secrets
 import shutil
 import signal
+import ssl
 import stat
 import subprocess
 import sys
@@ -60,8 +61,9 @@ FINAL_STATES = {
     "interrupted",
 }
 SETUP = (
-    "Provide Linux with unprivileged user/PID/mount/network namespaces, bubblewrap supporting "
-    "--disable-userns and --size, libseccomp.so.2, Bash, and this app's installed Python/Pillow. "
+    "Provide Linux with unprivileged user/PID/mount namespaces, bubblewrap supporting "
+    "--disable-userns and --size, libseccomp.so.2, Bash, this app's installed Python/Pillow, "
+    "system DNS configuration and a CA certificate bundle. "
     "Install operator-managed OS packages and enable the required namespace policy, then retry readiness. "
     "No unrestricted-host fallback exists."
 )
@@ -401,6 +403,32 @@ class ShellRunner:
         magic = Path("/usr/share/file/magic.mgc")
         if magic.exists():
             mounts["/usr/share/misc/magic.mgc"] = magic.resolve()
+        # Resolve host symlinks before binding only these public configuration
+        # files; do not expose /run, all of /etc, or private certificate keys.
+        resolver = Path("/etc/resolv.conf")
+        if not resolver.is_file():
+            raise ControlError("System DNS configuration /etc/resolv.conf is unavailable. " + SETUP)
+        mounts["/etc/resolv.conf"] = resolver.resolve()
+        for filename in ("/etc/hosts", "/etc/nsswitch.conf"):
+            path = Path(filename)
+            if path.is_file():
+                mounts[filename] = path.resolve()
+        certificates = next(
+            (
+                Path(filename)
+                for filename in (
+                    ssl.get_default_verify_paths().openssl_cafile,
+                    "/etc/ssl/certs/ca-certificates.crt",
+                    "/etc/pki/tls/certs/ca-bundle.crt",
+                    "/etc/ssl/ca-bundle.pem",
+                )
+                if filename and Path(filename).is_file()
+            ),
+            None,
+        )
+        if certificates is None:
+            raise ControlError("System CA certificate bundle is unavailable. " + SETUP)
+        mounts["/etc/ssl/certs/ca-certificates.crt"] = certificates.resolve()
         return {"bwrap": bwrap, "mounts": mounts, "tools": available + ["python", "python3", "Pillow"]}
 
     async def readiness(self, refresh=False):
@@ -438,7 +466,8 @@ class ShellRunner:
                 self._readiness = {
                     "ready": True,
                     "boundary": "bubblewrap + seccomp",
-                    "network": "denied",
+                    "network": "host",
+                    "message": "Host networking enabled; DNS and HTTPS trust use read-only system configuration.",
                     "tools": self._toolchain["tools"],
                     "limits": limits(),
                     "memory_scope": "per process; process count bounds multiplied address space",
@@ -449,7 +478,7 @@ class ShellRunner:
                     "boundary": "unavailable",
                     "error": str(error)[:1200],
                     "setup": SETUP,
-                    "network": "denied",
+                    "network": "unavailable",
                 }
             return dict(self._readiness)
 
@@ -457,6 +486,7 @@ class ShellRunner:
         command = [
             self._toolchain["bwrap"],
             "--unshare-all",
+            "--share-net",
             "--unshare-user",
             "--disable-userns",
             "--assert-userns-disabled",
@@ -488,6 +518,9 @@ class ShellRunner:
             "--setenv",
             "PYTHONDONTWRITEBYTECODE",
             "1",
+            "--setenv",
+            "SSL_CERT_FILE",
+            "/etc/ssl/certs/ca-certificates.crt",
             "--proc",
             "/proc",
             "--remount-ro",
