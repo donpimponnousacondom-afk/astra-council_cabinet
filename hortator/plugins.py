@@ -17,8 +17,14 @@ import httpx
 from jsonschema import Draft202012Validator
 
 from .models import ControlError
+from .fetched_documents import (
+    DEFAULTS as FETCH_DEFAULTS,
+    DESCRIPTION as FETCH_DESCRIPTION,
+    PARAMETERS as FETCH_PARAMETERS,
+)
 from .store import dumps, uid
 from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage, with_usage
+from .working_set import ToolEvidence
 
 
 def schema(properties, required=()):
@@ -179,6 +185,7 @@ class Registry:
         self.directory = directory / "artifacts"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.inspect = inspect
+        self.evidence = ToolEvidence(store, vault)
         from .documents import DocumentSites, DEFAULTS, DESCRIPTION, PARAMETERS
 
         self.documents = DocumentSites(store, directory, vault)
@@ -197,10 +204,10 @@ class Registry:
             PluginSpec(
                 "web_fetch",
                 "Web fetch",
-                "Retrieve readable text from a public web page.",
-                schema({"url": STR}, ("url",)),
+                FETCH_DESCRIPTION,
+                FETCH_PARAMETERS,
                 self.web_fetch,
-                {},
+                FETCH_DEFAULTS,
             )
         )
         self.register(
@@ -313,6 +320,9 @@ class Registry:
                 True,
             )
         )
+        from .agentic import AgentTools
+
+        self.agentic = AgentTools(self, directory)
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
             entry.load()(self)
 
@@ -325,11 +335,16 @@ class Registry:
     def allowed(self, name, context):
         spec = self.specs.get(name)
         config = self.store.get("plugins", name)
+        current_bot = self.store.get("bots", context.bot["id"])
         return bool(
             spec
             and config
             and config["enabled"]
             and name in context.bot["enabled_plugins"]
+            and current_bot
+            and name in current_bot["enabled_plugins"]
+            and (context.bot["role"] != "hortator" or context.owner_verified)
+            and (name != "shell" or self.allowed("workspace", context))
             and (not spec.owner_only or (context.bot["role"] == "hortator" and context.owner_verified))
         )
 
@@ -356,6 +371,7 @@ class Registry:
             report = feedback(name, args, spec.parameters, spec.description)
             if report is not None:
                 report = self.vault.redact(report)
+                report = self.evidence.record(context, name, call_id, report)
                 self.store.emit(
                     "tool.help" if report.get("usage_only") else "tool.failed",
                     {"name": name, "call_id": call_id, **report},
@@ -373,9 +389,21 @@ class Registry:
                 f"plugin/{name}/api_key"
             )
             async with asyncio.timeout(120):
-                result = self.vault.redact(await spec.handler(args, context, config, key))
+                if name in ("web_fetch", "workspace", "shell") and args.get("operation") == "read_result":
+                    result = self.evidence.read(args, context, self.allowed)
+                else:
+                    result = self.vault.redact(await spec.handler(args, context, config, key))
             if len(dumps(result)) > 60000:
                 result = {"truncated": True, "text": dumps(result)[:50000]}
+            result = self.evidence.record(
+                context,
+                name,
+                call_id,
+                result,
+                source_result_id=args["result_id"]
+                if name in ("workspace", "shell", "web_fetch") and args.get("operation") == "read_result"
+                else None,
+            )
             self.store.emit(
                 "tool.completed",
                 {
@@ -402,6 +430,7 @@ class Registry:
             result = {"ok": False, "error": error}
             if spec:
                 result["usage"] = self.vault.redact(usage(name, spec.parameters, spec.description, args))
+            result = self.evidence.record(context, name, call_id, result)
             self.store.emit(
                 "tool.failed",
                 {
@@ -424,6 +453,7 @@ class Registry:
         except (ValueError, TypeError) as exc:
             spec = self.specs[name]
             result = self.vault.redact(syntax_feedback(name, exc, spec.parameters, spec.description))
+            result = self.evidence.record(context, name, call_id, result)
             self.store.emit(
                 "tool.failed",
                 {"name": name, "call_id": call_id, **result},
@@ -435,22 +465,7 @@ class Registry:
         return await self.call(name, args, context, call_id)
 
     async def web_fetch(self, args, context, config, key):
-        data, content_type, url = await fetch_public(args["url"])
-        if not any(t in content_type for t in ("text/", "application/json", "application/xml")):
-            raise ControlError(
-                "web_fetch supports text documents; binary files are not injected into context"
-            )
-        text = data.decode("utf-8", errors="replace")
-        if "html" in content_type:
-            parser = ExtractText()
-            parser.feed(text)
-            text = "".join(parser.parts)
-        return {
-            "url": url,
-            "text": text[:18000],
-            "truncated": len(text) > 18000,
-            "trust": "untrusted external content",
-        }
+        return await self.fetched_documents.call(args, context, config, key)
 
     async def web_search(self, args, context, config, key):
         if not key:

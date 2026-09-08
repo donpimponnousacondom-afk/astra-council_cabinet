@@ -58,6 +58,7 @@ class Kernel:
 
     async def close(self):
         await self.engine.close()
+        await self.registry.agentic.close()
         await self.connector.close()
         await self.pool.close()
         if self.started:
@@ -372,6 +373,43 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
     @app.get("/api/documents")
     async def documents(actor=Depends(authenticated), k=Depends(kernel)):
         return {"sites": k.registry.documents.list_sites(), "remote_status": "disabled"}
+
+    @app.get("/api/agentic-tools")
+    async def agentic_tools(
+        bot_id: str | None = Query(None, max_length=80),
+        limit: int = Query(30, ge=1, le=100),
+        actor=Depends(authenticated),
+        k=Depends(kernel),
+    ):
+        return await k.registry.agentic.catalog(bot_id=bot_id, limit=limit)
+
+    @app.get("/api/agentic-tools/inspect")
+    async def agentic_inspect(
+        resource: str = Query(pattern="^(files|file|document|job|output)$"),
+        bot_id: str = Query(max_length=80),
+        channel_id: str = Query(max_length=100),
+        task: str | None = Query(None, max_length=64),
+        path: str = Query(".", max_length=240),
+        id: str | None = Query(None, max_length=100),
+        offset: int = Query(0, ge=0),
+        length: int = Query(8000, ge=1, le=18000),
+        stream: str = Query("stdout", pattern="^(stdout|stderr)$"),
+        actor=Depends(authenticated),
+        k=Depends(kernel),
+    ):
+        return k.vault.redact(
+            k.registry.agentic.inspect(
+                resource,
+                bot_id,
+                channel_id,
+                task=task,
+                path=path,
+                identifier=id,
+                offset=offset,
+                length=length,
+                stream=stream,
+            )
+        )
 
     @app.get("/api/documents/{bot_id}/{slug}/files/{filename:path}")
     async def document_draft(

@@ -92,7 +92,7 @@ def scope_for(kind):
         return "discord"
     if prefix in {"turn", "decision", "activation"}:
         return "bots"
-    if prefix == "tool":
+    if prefix in {"tool", "workspace", "job", "shell", "web_fetch"}:
         return "tools"
     if prefix in {"context", "compaction", "memory"}:
         return "context"

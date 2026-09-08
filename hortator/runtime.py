@@ -12,6 +12,7 @@ from .plugins import SILENCE, SPEAK, ToolContext
 from .provider import strip_reasoning
 from .store import dumps, uid
 from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage
+from .working_set import bound_exchanges, prompt_exchanges
 
 
 @dataclass
@@ -291,6 +292,9 @@ class Engine:
             calls_limit = bot["max_calls_per_round"]
             document_started = False
             document_deadline = None
+            task_extension_used = False
+            task_plugin = None
+            task_seconds = None
 
             async def budgeted(awaitable):
                 try:
@@ -302,7 +306,7 @@ class Engine:
                         and asyncio.get_running_loop().time() >= document_deadline
                     ):
                         raise ControlError(
-                            "Document task time budget exhausted; saved local files remain available"
+                            "Extended task time budget exhausted; saved local files remain available"
                         ) from exc
                     raise
 
@@ -313,21 +317,59 @@ class Engine:
                     raise asyncio.CancelledError()
                 if document_deadline is not None and asyncio.get_running_loop().time() >= document_deadline:
                     raise ControlError(
-                        "Document task time budget exhausted; saved local files remain available"
+                        "Extended task time budget exhausted; saved local files remain available"
                     )
                 available_tools = [SPEAK, SILENCE] + (
                     self.registry.schemas(context) if round_index < round_limit else []
                 )
                 budget_bot = {**bot, "max_tool_rounds": round_limit, "max_calls_per_round": calls_limit}
+                if task_extension_used:
+                    budget_bot["active_task_budget"] = {
+                        "plugin": task_plugin,
+                        "active": document_started,
+                        "calls_per_round": calls_limit,
+                        "seconds_remaining": max(0, document_deadline - asyncio.get_running_loop().time())
+                        if document_deadline is not None
+                        else None,
+                        "renewable_this_turn": False,
+                    }
+                # Only future prompt copies are minimized. Historical requests and
+                # the immutable result store continue to hold the actual evidence.
+                _, base_meta = self.contexts.assemble(
+                    budget_bot, profile, channel_id, rows, summary, round_index, [], available_tools
+                )
+                headroom = (
+                    int(
+                        (profile["context_window"] - profile["response_tokens"] - 1)
+                        / original_meta["calibration_factor"]
+                    )
+                    - base_meta["estimated_tokens"]
+                    - 128
+                )
+                working_limit = min(
+                    bot.get("tool_working_set_tokens", 6000),
+                    max(64, headroom),
+                )
+                extras, working_meta = bound_exchanges(extras, self.contexts.estimate, working_limit)
                 messages, meta = self.contexts.assemble(
-                    budget_bot, profile, channel_id, rows, summary, round_index, extras, available_tools
+                    budget_bot,
+                    profile,
+                    channel_id,
+                    rows,
+                    summary,
+                    round_index,
+                    prompt_exchanges(extras),
+                    available_tools,
                 )
                 meta.update(
                     checkpoint=original_meta["checkpoint"],
                     through_sequence=through,
                     calibration_factor=original_meta["calibration_factor"],
-                    document_task=document_started,
+                    document_task=document_started and task_plugin == "document_site",
+                    extended_task=document_started,
                     calls_per_round=calls_limit,
+                    task_plugin=task_plugin,
+                    tool_working_set={**working_meta, "token_limit": working_limit},
                 )
                 if document_deadline is not None:
                     meta["document_seconds_remaining"] = max(
@@ -520,17 +562,25 @@ class Engine:
                         result_value = await budgeted(
                             self.registry.call_raw(name, call["function"]["arguments"], context, call["id"])
                         )
-                        if (
-                            name == "document_site"
-                            and isinstance(result_value, dict)
-                            and result_value.get("document_task_started")
-                        ):
-                            extra_rounds = bot.get("document_task_rounds", 20)
-                            if extra_rounds and not document_started:
+                        starts_task = isinstance(result_value, dict) and (
+                            (name == "document_site" and result_value.get("document_task_started"))
+                            or (name == "workspace" and result_value.get("workspace_task_started"))
+                            or (name == "web_fetch" and result_value.get("web_task_started"))
+                        )
+                        if starts_task:
+                            field_prefix = "document_task" if name == "document_site" else "work_task"
+                            extra_rounds = bot.get(f"{field_prefix}_rounds", 20)
+                            if not task_extension_used:
+                                task_extension_used = True
+                                task_plugin = name
+                            else:
+                                extra_rounds = 0
+                            if extra_rounds:
                                 document_started = True
                                 round_limit = max(round_limit, round_index + 1 + extra_rounds)
-                                calls_limit = bot.get("document_task_calls_per_round", 8)
-                                seconds = bot.get("document_task_seconds", 900)
+                                calls_limit = bot.get(f"{field_prefix}_calls_per_round", 8)
+                                seconds = bot.get(f"{field_prefix}_seconds", 900)
+                                task_seconds = seconds
                                 document_deadline = asyncio.get_running_loop().time() + seconds
                                 self.store.emit(
                                     "tool.task_started",
@@ -549,9 +599,7 @@ class Engine:
                                     "active": document_started,
                                     "rounds_remaining": round_limit - round_index - 1,
                                     "calls_per_round": calls_limit,
-                                    "seconds": bot.get("document_task_seconds", 900)
-                                    if document_started
-                                    else None,
+                                    "seconds": task_seconds,
                                     "seconds_remaining": max(
                                         0, document_deadline - asyncio.get_running_loop().time()
                                     )
@@ -560,7 +608,13 @@ class Engine:
                                     "renewable_this_turn": False,
                                 },
                             }
+                            # Budget metadata is added after the plugin finishes.
+                            # Give that exact final model-visible body a fresh
+                            # immutable evidence ID; leave the earlier event intact.
+                            result_value.pop("result_id", None)
                     result_value = self.vault.redact(result_value)
+                    if "result_id" not in result_value:
+                        result_value = self.registry.evidence.record(context, name, call["id"], result_value)
                     if definition or batch_error:
                         self.store.emit(
                             "tool.help" if result_value.get("usage_only") else "tool.failed",
