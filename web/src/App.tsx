@@ -60,6 +60,7 @@ import {
   Logo,
   Metric,
   Notice,
+  Switch,
 } from "./components";
 import { Editor, ContextPanel } from "./Editor";
 import { Trajectory } from "./Trajectory";
@@ -1427,6 +1428,22 @@ function Catalog({
                     </dd>
                   </div>
                 </dl>
+                <Switch
+                  label="SSE streaming"
+                  checked={item.stream !== false}
+                  disabled={busy}
+                  onChange={(stream) =>
+                    act("save", "profiles", item.id, {
+                      stream,
+                      revision: item.revision,
+                    })
+                  }
+                />
+                <p className="muted small-text">
+                  {item.stream !== false
+                    ? "Streamed response · TTFT available; TPS requires reported usage."
+                    : "Complete JSON response · TTFT and streaming TPS unavailable."}
+                </p>
                 <Code value={item.request_json} label="Request parameters" />
                 <div className="catalog-actions">
                   <button className="button" onClick={() => edit(kind, item)}>

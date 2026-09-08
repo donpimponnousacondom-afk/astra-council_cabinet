@@ -489,11 +489,17 @@ export function Trajectory({
                           {request.error && (
                             <Notice warning>{request.error}</Notice>
                           )}
+                          <p className="muted small-text">
+                            {request.diagnostics?.note ||
+                              "No private diagnostic capture was supplied for this request."}
+                          </p>
                           <Code
                             value={
                               request.diagnostics ?? {
                                 capture: "unavailable",
-                                note: "Reasoning was not recorded for this request. Older discarded reasoning cannot be recovered.",
+                                request_id: request.id,
+                                reasoning_status: "not_recorded",
+                                note: "No private diagnostic capture was supplied for this request. Whether its provider returned reasoning is unknown.",
                               }
                             }
                             label="Provider reasoning & diagnostics (private; credentials redacted)"

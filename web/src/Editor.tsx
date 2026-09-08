@@ -759,16 +759,25 @@ export function Editor({
               </div>
               <div className="switch-stack">
                 <Switch
-                  label="Stream responses"
-                  checked={!!draft.stream}
+                  label="SSE streaming"
+                  checked={draft.stream !== false}
                   onChange={(v) => set("stream", v)}
                 />
                 <Switch
                   label="Request stream usage data"
                   checked={!!draft.include_usage}
+                  disabled={draft.stream === false}
                   onChange={(v) => set("include_usage", v)}
                 />
               </div>
+              <Notice>
+                Streaming is configured for this model profile and its selected
+                provider. Turn it off to request one complete JSON response.
+                Discord still waits for the complete answer either way. Buffered
+                responses retain reported usage and reasoning, but have no
+                measured TTFT or streaming TPS. Usage estimates are not
+                substituted for missing provider token counts.
+              </Notice>
               <ReasoningEditor
                 key={draft.provider_id}
                 value={draft.request_json || {}}

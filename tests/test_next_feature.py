@@ -258,7 +258,11 @@ def test_subprocess_timeout_kills_spawned_group(tmp_path):
     deadline = time.monotonic() + 3
     while time.monotonic() < deadline:
         path = Path(f"/proc/{pid}/stat")
-        if not path.exists() or path.read_text().rsplit(")", 1)[1].split()[0] == "Z":
+        try:
+            state = path.read_text().rsplit(")", 1)[1].split()[0]
+        except FileNotFoundError:
+            break  # The child can exit between checking /proc and opening stat.
+        if state == "Z":
             break
         time.sleep(0.05)
     else:

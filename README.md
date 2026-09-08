@@ -67,6 +67,8 @@ Set **Providers → Edit provider → User-Agent** to customize the outgoing cli
 
 A provider stores transport settings and a shared encrypted credential. A model profile stores model identity, context settings, prices (optional), streaming switches, and exact non-secret request JSON. A bot references a profile and can override the provider key in its own credential box.
 
+Use **Model profiles → SSE streaming** directly on the model card, or the same switch in **Edit profile**, to choose streaming or one complete JSON response for that model/provider profile. Existing modes are preserved; new profiles default to streaming. Buffered responses still retain returned reasoning, token usage and costs, but cannot measure TTFT or streaming TPS. Missing token counts are never replaced by tokenizer estimates. See [streaming and response diagnostics](docs/OPERATIONS.md#streaming-and-response-diagnostics).
+
 Edit reasoning at **Model profiles → Edit profile → Reasoning**. Choose the native request field, then an effort level, thinking toggle or token budget. These controls update **Advanced · exact request JSON → Model parameters** directly, preserving other vendor fields. **Unset** omits only that field; **Off** sends `false`. With no override, the model service chooses its behavior; there is no provider-level reasoning setting. The card displays explicit reasoning fields, including nested values and `false`. Options depend on the endpoint/model; the UI does not establish remote support. See [reasoning operations](docs/OPERATIONS.md#reasoning-controls).
 
 For example, a profile's **Model parameters** can be:

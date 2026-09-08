@@ -1,5 +1,134 @@
 import { test, expect } from "@playwright/test";
 
+test("SSE is an immediate per-model card option with matching editor and preserved parameters", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: "Model profiles", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Add profile", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByLabel("Display name", { exact: true })
+    .fill("SSE fixture profile");
+  await dialog
+    .getByLabel("Stable identifier", { exact: true })
+    .fill("sse-fixture-profile");
+  await dialog
+    .getByLabel("Exact model identifier", { exact: true })
+    .fill("fixture-model");
+  const parameters = {
+    temperature: 0.4,
+    vendor: { custom: true },
+    stream_options: { include_usage: true },
+  };
+  await dialog
+    .getByLabel("Model parameters", { exact: true })
+    .fill(JSON.stringify(parameters));
+  await expect(
+    dialog.getByRole("checkbox", { name: "SSE streaming", exact: true }),
+  ).toBeChecked();
+  await dialog
+    .getByRole("button", { name: "Create draft", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const card = page.locator(".catalog-card").filter({
+    has: page.getByRole("heading", {
+      name: "SSE fixture profile",
+      exact: true,
+    }),
+  });
+  const getProfile = async () =>
+    (await page.request.get("/api/config/profiles/sse-fixture-profile")).json();
+  const providersBefore = await (
+    await page.request.get("/api/config/providers")
+  ).json();
+  const before = await getProfile();
+  const toggle = card.getByRole("checkbox", {
+    name: "SSE streaming",
+    exact: true,
+  });
+  await expect(toggle).toBeChecked();
+  await toggle.click();
+  await expect(toggle).not.toBeChecked();
+  await expect.poll(async () => (await getProfile()).stream).toBe(false);
+  const after = await getProfile();
+  expect(after.revision).toBe(before.revision + 1);
+  expect(after.request_json).toEqual(parameters);
+  expect(after.include_usage).toBe(before.include_usage);
+  expect(after.provider_id).toBe(before.provider_id);
+  expect(
+    await (await page.request.get("/api/config/providers")).json(),
+  ).toEqual(providersBefore);
+  await expect(card).toContainText("Complete JSON response");
+  await card.getByRole("button", { name: "Edit profile", exact: true }).click();
+  await expect(
+    dialog.getByRole("checkbox", { name: "SSE streaming", exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    dialog.getByRole("checkbox", {
+      name: "Request stream usage data",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await dialog
+    .getByRole("checkbox", { name: "SSE streaming", exact: true })
+    .click();
+  await expect(
+    dialog.getByRole("checkbox", {
+      name: "Request stream usage data",
+      exact: true,
+    }),
+  ).toBeEnabled();
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect(toggle).toBeChecked();
+  expect((await getProfile()).request_json).toEqual(parameters);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(toggle).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("trajectory explains missing private capture for the selected request", async ({
+  page,
+}) => {
+  await page.route("**/api/trajectory/*", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    if (body.requests) {
+      body.requests[0].diagnostics = {
+        capture: "unavailable",
+        reasoning_status: "not_recorded",
+        request_id: body.requests[0].id,
+        note: "No private diagnostic capture is stored for this request. Whether its provider returned reasoning is unknown.",
+      };
+    }
+    await route.fulfill({ json: body });
+  });
+  await page.getByRole("button", { name: "Trajectory", exact: true }).click();
+  await page.locator(".turn-row").filter({ hasText: "sent" }).click();
+  const inspector = page.locator(".turn-inspector");
+  await inspector
+    .getByRole("button", { name: "requests", exact: true })
+    .click();
+  const diagnostic = inspector
+    .locator("details")
+    .filter({ hasText: "Provider reasoning & diagnostics" })
+    .first();
+  await diagnostic.locator("summary").click();
+  await expect(diagnostic).toContainText(
+    "Whether its provider returned reasoning is unknown.",
+  );
+  await expect(diagnostic).not.toContainText("Older discarded reasoning");
+  await expect(diagnostic.locator("pre")).toContainText("not_recorded");
+});
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page
@@ -740,6 +869,9 @@ test("populated trajectory shows exact requests, tool results, delivery, and com
   await diagnostics.locator("summary").click();
   await expect(diagnostics.locator("pre")).toContainText(
     "hidden fixture reasoning",
+  );
+  await expect(diagnostics).toContainText(
+    "Provider reasoning is captured below.",
   );
   await inspector.getByRole("button", { name: "tools", exact: true }).click();
   await expect(inspector).toContainText(

@@ -67,6 +67,10 @@ QUIET_EVENTS = {
     "discord.history_imported",
 }
 SUMMARY_FIELDS = (
+    "error_origin",
+    "response_format",
+    "frame_index",
+    "field",
     "error",
     "reason",
     "message",
