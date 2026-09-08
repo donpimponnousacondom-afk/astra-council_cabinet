@@ -2,6 +2,16 @@
 
 Verified in this workspace on 2026-09-07. Automated provider/Discord tests use controlled transports and synthetic credentials. Later read-only live checks used the user's configured credentials in memory without exposing them or making paid completion probes; see the typing/configuration verification below.
 
+## Portable publishing SSH identity (2026-09-08)
+
+Implemented on `feat/document_generation_and_sync`, based on squash-merged `0474890`. The separate agentic-tools worktree was left untouched.
+
+- **42 focused backend tests passed** across SSH identity, operations/backup and security. Coverage includes Ed25519 signing/public verification, OpenSSH fingerprint agreement, ciphertext persistence, public-only command output, repeat-safe creation, invalid/missing identities, wrong master keys, runtime locking, refusal to initialize a missing installation, private-key redaction/config rejection, and public identity recovery from a backup. An initial test invocation referenced nonexistent `tests/test_models.py` and collected nothing; the corrected invocation passed. Ruff and whitespace checks passed.
+- Stopped the verified idle foreground server in attached `387556.hortator`, preserving the shared shell and user attachment. Saved before/after archives under `/home/codexy/.local/share/hortator-backups/20260908T025828Z-before-publishing-ssh` and `20260908T025828Z-publishing-ssh-ready`. Both passed SQLite integrity, matching-key decryption, file hashes and owner-only permissions; the final archive contains **15 encrypted entries** and **18 hashed files**.
+- The sole credential addition is `ssh/publishing/private_key`, encrypted in the existing vault. Every existing encrypted credential and every configuration body/revision matched the stopped pre-change snapshot exactly. Hortator remains the only enabled bot. The public export is `$HORTATOR_DATA_DIR/ssh/publishing.pub`; the restored private key successfully signed a challenge verified with the exported public key. No plaintext SSH private file was produced.
+- The CLI backup now includes `ssh/` public exports and future host pins. The private identity itself travels in the database with its matching master key. No remote endpoint, host trust, transport worker, automatic upload or remote model command capability has been enabled or tested.
+
+Final rollout follows the local commit and dashboard rebuild in the same Screen window. Sanitized evidence belongs in external `logs/publishing-ssh-verification.json`, including matching clean startup/build identities and preserved configuration/credential values. No paid completion probes or manual Discord messages are part of this check.
 ## Private workspaces, isolated Bash and complete reading (2026-09-08)
 
 Implemented in the owner-authorized linked worktree `/home/codexy/codex/astra-council_cabinet-agentic-tools`, branch `feat/hortator_agentic_tools`, from fetched main `04748904e64a7a6202c99ccbf1ff24199782063e` (squashed PR #9). The canonical checkout, its HTML/site work, production data/configuration, port 8000 and shared Screen runtime were not changed by this task. Tests used private temporary data, this worktree's dependencies/build output and browser port **18110**. No push, merge, production deployment, provider-credit probe or live Discord post was performed.

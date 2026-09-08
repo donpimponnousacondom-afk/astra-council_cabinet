@@ -6,6 +6,7 @@ import getpass
 import os
 import shutil
 import sqlite3
+import sys
 from pathlib import Path
 
 
@@ -32,6 +33,11 @@ def main():
     sub.add_parser("init", help="Initialize configuration and encrypted credential storage")
     sub.add_parser("doctor", help="Show configuration readiness without contacting Discord/providers")
     sub.add_parser("password", help="Set a new dashboard password interactively")
+    ssh_key = sub.add_parser(
+        "ssh-key", help="Manage an encrypted SSH identity offline; output is public only"
+    )
+    ssh_key.add_argument("action", choices=("create", "public"))
+    ssh_key.add_argument("name", nargs="?", default="publishing")
     backup = sub.add_parser("backup", help="Create a consistent SQLite backup and a separate encryption key")
     backup.add_argument("destination")
     args = parser.parse_args()
@@ -68,7 +74,9 @@ def main():
         key = os.getenv("HORTATOR_MASTER_KEY") or (directory / "master.key").read_text()
         (destination / "master.key").write_text(key)
         (destination / "master.key").chmod(0o600)
-        for folder in ("artifacts", "images", "sites", "workspaces", "jobs", "fetched_documents"):
+
+        for folder in ("artifacts", "images", "sites", "ssh", "workspaces", "jobs", "fetched_documents"):
+
             if (directory / folder).exists():
                 shutil.copytree(directory / folder, destination / folder)
                 (destination / folder).chmod(0o700)
@@ -78,6 +86,11 @@ def main():
         return
     import fcntl
 
+    if args.command == "ssh-key" and (
+        not (directory / "council.sqlite3").is_file()
+        or not (os.getenv("HORTATOR_MASTER_KEY") or (directory / "master.key").is_file())
+    ):
+        parser.error("SSH bootstrap needs an existing Hortator database and its matching master key")
     directory.mkdir(parents=True, exist_ok=True)
     runtime_lock = (directory / "runtime.lock").open("a")
     try:
@@ -85,8 +98,35 @@ def main():
     except BlockingIOError:
         runtime_lock.close()
         raise SystemExit(
-            "Stop the runtime before running init, doctor, or password. Use the dashboard for live status."
+            "Stop the runtime before running init, doctor, password, or ssh-key. Use the dashboard for live status."
         ) from None
+    if args.command == "ssh-key":
+        from cryptography.fernet import InvalidToken
+
+        from .models import ControlError
+        from .security import Vault
+        from .ssh_identity import ssh_identity
+        from .store import Store
+
+        store = None
+        try:
+            store = Store(directory / "council.sqlite3")
+            vault = Vault(store, directory)
+            identity = ssh_identity(vault, args.name, create=args.action == "create")
+            print(identity.public_key)
+            print(
+                f"{'Created' if identity.created else 'Existing'} identity: {identity.fingerprint}",
+                file=sys.stderr,
+            )
+        except ControlError as exc:
+            raise SystemExit(str(exc)) from None
+        except (InvalidToken, ValueError):
+            raise SystemExit("Cannot unlock Hortator credentials; check the matching master key") from None
+        finally:
+            if store is not None:
+                store.close()
+            runtime_lock.close()
+        return
     from .app import Kernel
     from .security import password_hash
 
