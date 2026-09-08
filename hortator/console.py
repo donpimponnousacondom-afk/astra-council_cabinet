@@ -67,6 +67,10 @@ QUIET_EVENTS = {
     "discord.history_imported",
 }
 SUMMARY_FIELDS = (
+    "error_origin",
+    "response_format",
+    "frame_index",
+    "field",
     "error",
     "reason",
     "message",
@@ -742,6 +746,13 @@ class OperationalConsole(logging.Handler):
                         except ValueError:
                             value = encoded
                     sections.append((f"Request {name}", value))
+            elif source["kind"] == "provider.discovery_failed":
+                sections.append(
+                    (
+                        "Model discovery",
+                        "The stored event above contains this GET /models failure. Discovery does not create a model completion or a turn.",
+                    )
+                )
             else:
                 sections.append(
                     (

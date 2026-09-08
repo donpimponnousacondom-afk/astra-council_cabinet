@@ -20,7 +20,7 @@ from . import __version__
 from .discord_gateway import COMMANDS, DiscordManager
 from .models import ControlError, OWNER_ID, SCHEMAS
 from .plugins import Registry
-from .provider import ProviderPool
+from .provider import ProviderError, ProviderPool
 from .publishing import PublishingWorker
 from .runtime import Engine
 from .security import Actor, Auth, Vault
@@ -196,7 +196,12 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
     @app.exception_handler(ControlError)
     async def control_error(request, exc):
         k = getattr(request.app.state, "kernel", None)
-        return JSONResponse({"error": k.vault.redact(str(exc)) if k else str(exc)}, status_code=exc.status)
+        body = {"error": str(exc)}
+        if isinstance(exc, ProviderError):
+            body.update(
+                source="provider", api_status=exc.status, upstream_status=exc.http_status, details=exc.details
+            )
+        return JSONResponse(k.vault.redact(body) if k else body, status_code=exc.status)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):

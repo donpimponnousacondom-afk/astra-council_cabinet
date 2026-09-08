@@ -13,15 +13,26 @@ from typing import Any
 import httpx
 
 from .models import ControlError
-from .diagnostics import record_diagnostics, text_content
+from .diagnostics import record_diagnostics
+from .chat_response import (
+    ChatResponse,
+    Frame,
+    ResponseFormatError,
+    SSEReader,
+    UpstreamResponseError,
+    RESPONSE_LIMIT,
+)
 from .store import dumps, uid
 from .vision import ImageCache
 
 
 class ProviderError(ControlError):
-    def __init__(self, message, status=502, *, http_status=None, retry_after=0, provider_fault=True):
+    def __init__(
+        self, message, status=502, *, http_status=None, retry_after=0, provider_fault=True, details=None
+    ):
         super().__init__(message, status)
         self.http_status, self.retry_after, self.provider_fault = http_status, retry_after, provider_fault
+        self.details = details or {}
 
 
 def strip_reasoning(content: str) -> str:
@@ -198,6 +209,7 @@ class Completion:
     reasoning_details: list[dict] = field(default_factory=list)
     request_id: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+    response_diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def message(self):
         result = {"role": "assistant", "content": self.content or None}
@@ -252,7 +264,10 @@ class ProviderPool:
         )
 
     def headers(self, provider, bot_id):
-        headers = {"Content-Type": "application/json", **provider["headers"]}
+        # Header names are case-insensitive; custom spelling must not create a
+        # second User-Agent or defeat the vault-owned authentication header.
+        headers = httpx.Headers({"Content-Type": "application/json"})
+        headers.update(provider["headers"])
         key = self.key(provider, bot_id)
         if provider["requires_key"] and not key:
             raise ProviderError("Provider API key is missing; add it in the dashboard", provider_fault=False)
@@ -334,6 +349,8 @@ class ProviderPool:
             if purpose == "compaction":
                 body.update(copy.deepcopy(profile.get("compaction_request_json", {})))
             body.update(model=profile["model"], messages=messages, stream=profile["stream"])
+            if not profile["stream"]:
+                body.pop("stream_options", None)
             if output_limit:
                 cap_key = "max_completion_tokens" if "max_completion_tokens" in body else "max_tokens"
                 body[cap_key] = output_limit
@@ -345,6 +362,7 @@ class ProviderPool:
             request_id, started, clock = uid("req_"), time.time(), time.perf_counter()
             meta = {
                 **context,
+                "diagnostic_capture_version": 2,
                 "queue_ms": (clock - queued) * 1000,
                 "profile_revision": profile["revision"],
                 "provider_revision": provider["revision"],
@@ -382,13 +400,14 @@ class ProviderPool:
             )
             result = Completion(request_id=request_id)
             ttft = visible = None
-            calls: dict[int, dict] = {}
+            response_state = ChatResponse(result)
+            result.response_diagnostics["requested_stream"] = profile["stream"]
             total_bytes = 0
             status_code = None
             error_data = None
             diagnostic_at = clock
-            record_diagnostics(self.store, self.vault, request_id, result, body, status="running")
             try:
+                record_diagnostics(self.store, self.vault, request_id, result, body, status="running")
                 try:
                     body["messages"] = ImageCache(self.store).wire_messages(messages)
                 except ControlError as exc:
@@ -428,73 +447,20 @@ class ProviderPool:
                                 )
                                 or response.status_code >= 500,
                             )
-                        if "text/event-stream" in response.headers.get("content-type", ""):
-
-                            async def packets():
-                                lines = []
-                                size = 0
-                                async for line in response.aiter_lines():
-                                    size += len(line)
-                                    if size > 8_000_000:
-                                        raise ProviderError(
-                                            "Provider stream exceeded the 8 MB response limit",
-                                            provider_fault=False,
-                                        )
-                                    if line == "":
-                                        if lines:
-                                            yield "\n".join(lines)
-                                            lines = []
-                                    elif line.startswith("data:"):
-                                        lines.append(line[5:].lstrip())
-                                if lines:
-                                    yield "\n".join(lines)
-
+                        content_type = (
+                            response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                        )
+                        is_sse = content_type == "text/event-stream"
+                        result.response_diagnostics.update(
+                            response_format="sse" if is_sse else "json", content_type=content_type
+                        )
+                        if is_sse:
+                            reader = SSEReader(result.response_diagnostics)
                             finished = False
-                            async for payload in packets():
-                                if payload == "[DONE]":
-                                    finished = True
-                                    break
-                                packet = json.loads(payload)
-                                result.metadata.update(
-                                    {
-                                        key: packet[key]
-                                        for key in (
-                                            "id",
-                                            "model",
-                                            "created",
-                                            "system_fingerprint",
-                                            "provider",
-                                            "service_tier",
-                                        )
-                                        if key in packet
-                                    }
-                                )
-                                if packet.get("usage"):
-                                    result.usage.update(packet["usage"])
-                                if packet.get("error"):
-                                    error_data = packet["error"]
-                                    raise envelope_error(
-                                        error_data,
-                                        private_key=bool(self.vault.get(f"bot/{bot['id']}/provider_key")),
-                                    )
-                                for choice in packet.get("choices", []):
-                                    if choice.get("index", 0) != 0:
-                                        continue
-                                    delta = choice.get("delta") or {}
-                                    token = text_content(delta.get("content"))
-                                    reasoning = text_content(
-                                        delta.get("reasoning_content") or delta.get("reasoning")
-                                    )
-                                    details = delta.get("reasoning_details") or []
-                                    if (
-                                        token
-                                        or reasoning
-                                        or details
-                                        or any(
-                                            c.get("function", {}).get("arguments")
-                                            for c in delta.get("tool_calls", [])
-                                        )
-                                    ):
+                            try:
+                                async for frame in reader.frames(response):
+                                    finished = response_state.frame(frame)
+                                    if profile["stream"] and response_state.activity():
                                         if ttft is None:
                                             ttft = (time.perf_counter() - clock) * 1000
                                             self.store.emit(
@@ -504,83 +470,45 @@ class ProviderPool:
                                                 turn_id=turn_id,
                                                 request_id=request_id,
                                             )
-                                    if token and visible is None:
-                                        visible = (time.perf_counter() - clock) * 1000
-                                    result.content += token
-                                    result.reasoning_content += reasoning
-                                    result.reasoning_details.extend(details)
-                                    for call in delta.get("tool_calls", []):
-                                        entry = calls.setdefault(
-                                            call["index"],
-                                            {
-                                                "id": "",
-                                                "type": "function",
-                                                "function": {"name": "", "arguments": ""},
-                                            },
+                                        if result.content and visible is None:
+                                            visible = (time.perf_counter() - clock) * 1000
+                                    if time.perf_counter() - diagnostic_at >= 2:
+                                        record_diagnostics(
+                                            self.store, self.vault, request_id, result, body, status="running"
                                         )
-                                        if call.get("id"):
-                                            entry["id"] = call["id"]
-                                        fn = call.get("function") or {}
-                                        entry["function"]["name"] += fn.get("name") or ""
-                                        entry["function"]["arguments"] += fn.get("arguments") or ""
-                                    if choice.get("finish_reason"):
-                                        result.finish_reason = choice["finish_reason"]
-                                if time.perf_counter() - diagnostic_at >= 2:
-                                    record_diagnostics(
-                                        self.store, self.vault, request_id, result, body, status="running"
-                                    )
-                                    diagnostic_at = time.perf_counter()
+                                        diagnostic_at = time.perf_counter()
+                                    if finished:
+                                        break
+                            except httpx.TransportError:
+                                if not result.finish_reason:
+                                    raise
+                                # The final choice is complete; a lost usage/trailer
+                                # connection cannot make that full answer incomplete.
+                                response_state.note("transport_closed_after_finish")
                             if not finished and not result.finish_reason:
-                                raise ProviderError("Stream disconnected before a completion boundary")
-                            result.tool_calls = [calls[k] for k in sorted(calls)]
+                                raise ProviderError(
+                                    "Stream disconnected before a completion boundary",
+                                    details={"origin": "transport", "reason": "incomplete_stream"},
+                                )
+                            result.response_diagnostics.setdefault("completion_boundary", "finish_reason")
                         else:
                             chunks = []
                             async for chunk in response.aiter_bytes():
                                 total_bytes += len(chunk)
-                                if total_bytes > 8_000_000:
-                                    raise ProviderError(
-                                        "Provider response exceeded the 8 MB limit", provider_fault=False
+                                if total_bytes > RESPONSE_LIMIT:
+                                    raise ResponseFormatError(
+                                        "body",
+                                        "at most 8 MB",
+                                        "oversize",
+                                        message="Provider response exceeded the 8 MB limit",
                                     )
                                 chunks.append(chunk)
-                            packet = json.loads(b"".join(chunks))
-                            result.metadata.update(
-                                {
-                                    key: packet[key]
-                                    for key in (
-                                        "id",
-                                        "model",
-                                        "created",
-                                        "system_fingerprint",
-                                        "provider",
-                                        "service_tier",
-                                    )
-                                    if key in packet
-                                }
-                            )
-                            result.usage = packet.get("usage") or {}
-                            if packet.get("error"):
-                                error_data = packet["error"]
-                                raise envelope_error(
-                                    error_data,
-                                    private_key=bool(self.vault.get(f"bot/{bot['id']}/provider_key")),
-                                )
-                            choices = packet.get("choices") or []
-                            if not choices:
-                                raise ProviderError("Response has no choices", provider_fault=False)
-                            msg = choices[0]["message"]
-                            result.content = text_content(msg.get("content"))
-                            result.tool_calls = msg.get("tool_calls") or []
-                            result.reasoning_content = text_content(
-                                msg.get("reasoning_content") or msg.get("reasoning")
-                            )
-                            result.reasoning_details = msg.get("reasoning_details") or []
-                            result.usage = packet.get("usage") or {}
-                            result.finish_reason = choices[0].get("finish_reason")
-                            # A buffered response has no measurable time-to-first-token.
-                if len(result.tool_calls) > 100 or any(
-                    not c.get("id") or c.get("type") != "function" for c in result.tool_calls
-                ):
-                    raise ProviderError("Invalid or excessive tool calls", provider_fault=False)
+                            raw = b"".join(chunks).decode("utf-8-sig", errors="strict")
+                            result.response_diagnostics["response_bytes"] = total_bytes
+                            response_state.current = Frame(raw)
+                            response_state.packet(response_state.decode(raw), streamed=False)
+                            # Buffered responses have no measurable TTFT/TPS.
+                response_state.finish()
                 record_diagnostics(self.store, self.vault, request_id, result, body, status="completed")
                 result.content = strip_reasoning(result.content)
                 self.success(provider)
@@ -633,14 +561,56 @@ class ProviderPool:
                 cancelled = isinstance(error, asyncio.CancelledError)
                 if not isinstance(error, (Exception, asyncio.CancelledError)):
                     raise
-                exc = (
-                    error
-                    if isinstance(error, ProviderError)
-                    else ProviderError(
-                        "Request cancelled; provider usage may be incomplete"
-                        if cancelled
-                        else f"{type(error).__name__}: {str(error) or 'Request timed out'}"
+                if isinstance(error, UpstreamResponseError):
+                    error_data = error.envelope
+                    exc = envelope_error(
+                        error_data, private_key=bool(self.vault.get(f"bot/{bot['id']}/provider_key"))
                     )
+                    exc.details["origin"] = "upstream_error"
+                elif isinstance(error, (ResponseFormatError, UnicodeError, httpx.DecodingError)):
+                    exc = ProviderError(
+                        f"Response format error: {error}",
+                        provider_fault=False,
+                        details={"origin": "response_format", **getattr(error, "details", {})},
+                    )
+                    evidence_key = (
+                        "last_frame"
+                        if exc.details.get("field") in ("SSE body", "body")
+                        or not isinstance(error, ResponseFormatError)
+                        else "offending_frame"
+                    )
+                    result.response_diagnostics[evidence_key] = response_state.failure_evidence(
+                        self.vault.redact
+                    )
+                elif isinstance(error, ProviderError):
+                    exc = error
+                elif cancelled:
+                    exc = ProviderError(
+                        "Request cancelled; provider usage may be incomplete",
+                        provider_fault=False,
+                        details={"origin": "cancelled"},
+                    )
+                elif isinstance(error, (httpx.TransportError, TimeoutError)):
+                    exc = ProviderError(
+                        f"{type(error).__name__}: {str(error) or 'Request timed out'}",
+                        details={"origin": "transport"},
+                    )
+                else:
+                    # A Python/adapter bug must never masquerade as upstream downtime.
+                    import traceback
+
+                    frames = traceback.extract_tb(error.__traceback__)
+                    exc = ProviderError(
+                        f"Local provider-client failure: {type(error).__name__}: {error}",
+                        provider_fault=False,
+                        details={
+                            "origin": "local_client",
+                            "exception_type": type(error).__name__,
+                            "location": [{"function": f.name, "line": f.lineno} for f in frames[-4:]],
+                        },
+                    )
+                origin = exc.details.get("origin") or (
+                    "upstream_http" if exc.http_status is not None else "request_configuration"
                 )
                 message = self.vault.redact(str(exc))[:3000]
                 record_diagnostics(
@@ -656,6 +626,8 @@ class ProviderPool:
                         "error_status": exc.http_status,
                         "provider_fault": exc.provider_fault,
                         "transport_http_status": status_code,
+                        "origin": origin,
+                        "details": exc.details,
                     },
                 )
                 metrics = normalized_usage(result.usage, profile)
@@ -678,7 +650,7 @@ class ProviderPool:
                                 {
                                     "partial": True,
                                     "content": strip_reasoning(result.content),
-                                    "tool_calls": result.tool_calls or list(calls.values()),
+                                    "tool_calls": result.tool_calls,
                                     "finish_reason": result.finish_reason,
                                     "provider_metadata": result.metadata,
                                     "pricing": metrics["pricing"],
@@ -697,6 +669,10 @@ class ProviderPool:
                         "http_status": status_code,
                         "error_status": exc.http_status,
                         "provider_fault": exc.provider_fault,
+                        "error_origin": origin,
+                        "response_format": result.response_diagnostics.get("response_format"),
+                        "frame_index": result.response_diagnostics.get("frame_index"),
+                        "field": exc.details.get("field"),
                     },
                     bot_id=bot["id"],
                     turn_id=turn_id,
@@ -710,15 +686,22 @@ class ProviderPool:
 
     async def probe(self, provider):
         start = time.perf_counter()
+        response = None
+        request_headers = None
         try:
+            request_headers = self.headers(provider, "")
             response = await self.client.get(
-                provider["base_url"] + "/models", headers=self.headers(provider, ""), timeout=20
+                provider["base_url"] + "/models", headers=request_headers, timeout=20
             )
             if response.status_code >= 300:
                 raise ProviderError(
-                    f"Model discovery returned HTTP {response.status_code}", http_status=response.status_code
+                    f"Provider returned HTTP {response.status_code}", http_status=response.status_code
                 )
             raw = response.json()
+            if not isinstance(raw, dict) or raw.get("error") or not isinstance(raw.get("data"), list):
+                raise ProviderError(
+                    "Provider did not return a valid model catalog", http_status=response.status_code
+                )
             models = [
                 {
                     "id": item.get("id"),
@@ -738,8 +721,83 @@ class ProviderPool:
             }
             self.store.emit("provider.discovery", {k: v for k, v in result.items() if k != "models"})
             return result
-        except (httpx.HTTPError, ValueError) as exc:
-            raise ProviderError(self.vault.redact(str(exc))) from exc
+        except (ProviderError, httpx.HTTPError, ValueError) as exc:
+            upstream_status = response.status_code if response is not None else None
+            evidence = {}
+            provider_message = ""
+            if response is not None:
+                # Only diagnostic response headers: never cookies, authorization,
+                # full outgoing headers, or transport wire logs.
+                evidence["response_headers"] = {
+                    key: self.vault.redact(response.headers[key])[:300]
+                    for key in (
+                        "content-type",
+                        "server",
+                        "cf-mitigated",
+                        "cf-ray",
+                        "x-request-id",
+                        "request-id",
+                        "retry-after",
+                    )
+                    if key in response.headers
+                }
+                try:
+                    raw = safe_payload(self.vault.redact(response.json()))
+                    if isinstance(raw, dict):
+                        error = raw.get("error")
+                        provider_message = error.get("message") if isinstance(error, dict) else error
+                        provider_message = (
+                            provider_message or raw.get("message") or raw.get("msg") or raw.get("detail")
+                        )
+                        raw = {
+                            key: raw[key]
+                            for key in (
+                                "error",
+                                "message",
+                                "msg",
+                                "detail",
+                                "code",
+                                "type",
+                                "success",
+                                "request_id",
+                            )
+                            if key in raw
+                        }
+                    preview = dumps(raw)
+                except ValueError:
+                    preview = self.vault.redact(response.text)
+                # Redact before truncation, so a credential cannot be split and leak.
+                evidence["response_excerpt"] = preview[:2000]
+                evidence["response_truncated"] = len(preview) > 2000
+            summary = (
+                f"Provider returned HTTP {upstream_status}"
+                if upstream_status is not None and upstream_status >= 300
+                else str(exc) or type(exc).__name__
+            )
+            if isinstance(provider_message, str) and provider_message:
+                summary += ": " + provider_message[:600]
+            message = self.vault.redact(
+                f"Model discovery for {provider['id']} failed (Hortator API HTTP 502): {summary}"
+            )
+            details = self.vault.redact(
+                {
+                    "provider_id": provider["id"],
+                    "operation": "model_discovery",
+                    "api_status": 502,
+                    "upstream_status": upstream_status,
+                    "endpoint": provider["base_url"] + "/models",
+                    "duration_ms": (time.perf_counter() - start) * 1000,
+                    "user_agent": request_headers.get("User-Agent", self.client.headers.get("User-Agent"))
+                    if request_headers is not None
+                    else None,
+                    **evidence,
+                }
+            )
+            self.store.emit("provider.discovery_failed", {**details, "error": message}, level="error")
+            # Discovery is separate from completion health, on failure as on success.
+            raise ProviderError(
+                message, http_status=upstream_status, provider_fault=False, details=details
+            ) from exc
 
     async def close(self):
         await self.client.aclose()

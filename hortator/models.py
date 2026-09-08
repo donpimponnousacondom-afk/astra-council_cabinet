@@ -97,6 +97,16 @@ class Provider(Entity):
     def safe_headers(cls, value):
         if any(k.lower() in {"host", "cookie", "content-length", "connection"} for k in value):
             raise ValueError("Transport and cookie headers cannot be overridden")
+        agents = [k for k in value if k.lower() == "user-agent"]
+        if len(agents) > 1:
+            raise ValueError("Specify User-Agent only once; HTTP header names are case-insensitive")
+        if agents:
+            agent = value[agents[0]]
+            if len(agent) > 1024 or any(ord(c) < 32 or ord(c) > 126 for c in agent):
+                raise ValueError("User-Agent must be one line of printable ASCII, at most 1024 characters")
+            value = {k: v for k, v in value.items() if k not in agents}
+            if agent.strip():
+                value["User-Agent"] = agent.strip()
         return value
 
 

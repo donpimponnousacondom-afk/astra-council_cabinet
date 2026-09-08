@@ -657,6 +657,30 @@ export function Editor({
                 "API base URL",
                 "Include the API prefix, such as /v1. Requests are sent to /chat/completions.",
               )}
+              <Field
+                label="User-Agent"
+                hint="Sent for model discovery and every model request, including compaction. Leave blank to use the HTTP client's default. This is the same User-Agent entry shown in Advanced HTTP headers."
+              >
+                <input
+                  value={
+                    (Object.entries(draft.headers || {}).find(
+                      ([key]) => key.toLowerCase() === "user-agent",
+                    )?.[1] as string) || ""
+                  }
+                  maxLength={1024}
+                  placeholder="HTTP client default"
+                  onChange={(event) => {
+                    const headers = Object.fromEntries(
+                      Object.entries(draft.headers || {}).filter(
+                        ([key]) => key.toLowerCase() !== "user-agent",
+                      ),
+                    );
+                    if (event.target.value)
+                      headers["User-Agent"] = event.target.value;
+                    set("headers", headers);
+                  }}
+                />
+              </Field>
               <div className="form-grid">
                 {numeric("timeout_seconds", "Total request timeout (seconds)")}
                 {numeric("max_concurrency", "Concurrent requests")}
@@ -735,16 +759,25 @@ export function Editor({
               </div>
               <div className="switch-stack">
                 <Switch
-                  label="Stream responses"
-                  checked={!!draft.stream}
+                  label="SSE streaming"
+                  checked={draft.stream !== false}
                   onChange={(v) => set("stream", v)}
                 />
                 <Switch
                   label="Request stream usage data"
                   checked={!!draft.include_usage}
+                  disabled={draft.stream === false}
                   onChange={(v) => set("include_usage", v)}
                 />
               </div>
+              <Notice>
+                Streaming is configured for this model profile and its selected
+                provider. Turn it off to request one complete JSON response.
+                Discord still waits for the complete answer either way. Buffered
+                responses retain reported usage and reasoning, but have no
+                measured TTFT or streaming TPS. Usage estimates are not
+                substituted for missing provider token counts.
+              </Notice>
               <ReasoningEditor
                 key={draft.provider_id}
                 value={draft.request_json || {}}
