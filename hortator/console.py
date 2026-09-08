@@ -67,6 +67,8 @@ QUIET_EVENTS = {
     "discord.history_imported",
 }
 SUMMARY_FIELDS = (
+    "engine",
+    "category",
     "error_origin",
     "response_format",
     "frame_index",
@@ -89,6 +91,7 @@ SUMMARY_FIELDS = (
     "close_code",
     "reconnect_duration_ms",
     "duration_ms",
+    "count",
     "ttft_ms",
     "input_tokens",
     "output_tokens",
@@ -110,7 +113,7 @@ def scope_for(kind):
         return "discord"
     if prefix in {"turn", "decision", "activation"}:
         return "bots"
-    if prefix in {"tool", "workspace", "job", "shell", "web_fetch", "document", "publishing"}:
+    if prefix in {"tool", "workspace", "job", "shell", "web_fetch", "web_search", "document", "publishing"}:
         return "tools"
     if prefix in {"context", "compaction", "memory"}:
         return "context"

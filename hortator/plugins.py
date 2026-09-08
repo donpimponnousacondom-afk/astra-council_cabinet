@@ -25,6 +25,11 @@ from .fetched_documents import (
 from .store import dumps, uid
 from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage, with_usage
 from .working_set import ToolEvidence
+from .web_search import (
+    DEFAULTS as SEARCH_DEFAULTS,
+    DESCRIPTION as SEARCH_DESCRIPTION,
+    PARAMETERS as SEARCH_PARAMETERS,
+)
 
 
 def schema(properties, required=()):
@@ -217,10 +222,10 @@ class Registry:
             PluginSpec(
                 "web_search",
                 "Web search",
-                "Search the web using Brave Search.",
-                schema({"query": {"type": "string", "minLength": 1, "maxLength": 1000}}, ("query",)),
+                SEARCH_DESCRIPTION,
+                SEARCH_PARAMETERS,
                 self.web_search,
-                {"endpoint": "https://api.search.brave.com/res/v1/web/search", "count": 5},
+                SEARCH_DEFAULTS,
             )
         )
         self.register(
@@ -253,16 +258,28 @@ class Registry:
             PluginSpec(
                 "memory",
                 "Private memory",
-                "Read or write your own persistent notes for this channel. Notes from other bots/channels are inaccessible.",
+                'Always include operation. Write: {"operation":"write","key":"topic","value":"Concise note"}. '
+                'Read all notes: {"operation":"read"}. Delete: {"operation":"delete","key":"topic"}. '
+                "Sending only key/value is invalid; never omit operation. {} returns usage, not notes. "
+                "Notes belong only to this bot and channel; other bots/channels are inaccessible. Writes replace that key's value.",
                 schema(
                     {
-                        "operation": {"type": "string", "enum": ["read", "write", "delete"]},
+                        "operation": {
+                            "type": "string",
+                            "enum": ["read", "write", "delete"],
+                            "description": "REQUIRED on every real call. Use write when saving key/value; read lists notes; delete removes one key. No default is inferred.",
+                        },
                         "key": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": r"\S"},
                         "value": {"type": "string", "maxLength": 8000},
                     },
                     ("operation",),
                 )
                 | {
+                    "examples": [
+                        {"operation": "write", "key": "topic", "value": "Concise note"},
+                        {"operation": "read"},
+                        {"operation": "delete", "key": "topic"},
+                    ],
                     "allOf": [
                         {
                             "if": {
@@ -415,6 +432,9 @@ class Registry:
                     result = self.evidence.read(args, context, self.allowed)
                 else:
                     result = self.vault.redact(await spec.handler(args, context, config, key))
+            search_failed = name == "web_search" and result.get("ok") is False
+            if search_failed:
+                result["usage"] = usage(name, spec.parameters, spec.description, args)
             if len(dumps(result)) > 60000:
                 result = {"truncated": True, "text": dumps(result)[:50000]}
             result = self.evidence.record(
@@ -427,15 +447,17 @@ class Registry:
                 else None,
             )
             self.store.emit(
-                "tool.completed",
+                "tool.failed" if search_failed else "tool.completed",
                 {
                     "name": name,
                     "call_id": call_id,
                     "result": result,
+                    **({"error": result["error"]} if search_failed else {}),
                     "duration_ms": (time.perf_counter() - start) * 1000,
                 },
                 bot_id=context.bot["id"],
                 turn_id=context.turn_id,
+                level="warning" if search_failed else "info",
             )
             return result
         except asyncio.CancelledError:
@@ -490,24 +512,9 @@ class Registry:
         return await self.fetched_documents.call(args, context, config, key)
 
     async def web_search(self, args, context, config, key):
-        if not key:
-            raise ControlError("Add a Brave Search API key in the dashboard")
-        async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as client:
-            result = await client.get(
-                config["endpoint"],
-                params={"q": args["query"], "count": min(int(config.get("count", 5)), 10)},
-                headers={"X-Subscription-Token": key, "Accept": "application/json"},
-                timeout=25,
-            )
-            result.raise_for_status()
-            values = result.json().get("web", {}).get("results", [])
-            return {
-                "results": [
-                    {"title": r.get("title"), "url": r.get("url"), "description": r.get("description")}
-                    for r in values[:10]
-                ],
-                "trust": "untrusted external content",
-            }
+        from .web_search import search
+
+        return await search(args, context, config, key, self.store)
 
     async def media_request(self, config, key, body):
         # Endpoints are operator configuration, never model-supplied URLs. No redirect credential forwarding.

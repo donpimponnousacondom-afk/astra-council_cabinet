@@ -167,8 +167,8 @@ class Service:
         elif kind == "plugins":
             value["key_configured"] = bool(self.vault.get(f"plugin/{value['id']}/api_key"))
             spec = self.registry.specs.get(value["id"])
-            if value["id"] == "shell" and spec:
-                # Older saved catalogs describe the retired offline toolchain.
+            if value["id"] in ("shell", "web_search", "memory") and spec:
+                # Display the installed contract, not obsolete seeded descriptions.
                 value["description"] = spec.description
             value["schema"] = spec.parameters if spec else None
             value["installed"] = bool(spec)
@@ -214,6 +214,14 @@ class Service:
         from .agentic import validate_configuration
 
         validate_configuration(self.registry, kind, entity)
+        if kind == "plugins" and entity["id"] == "web_search":
+            from .web_search import validate_config
+
+            validate_config(entity["config"])
+        elif kind == "bots" and "web_search" in entity["plugin_config"]:
+            from .web_search import validate_config
+
+            validate_config(entity["plugin_config"]["web_search"])
 
         def exists(k, value):
             if not self.store.get(k, value):

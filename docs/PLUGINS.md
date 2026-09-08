@@ -49,6 +49,10 @@ Installed plugins run in the Python process and are **trusted code**, not an OS 
 
 ## Shared model-facing contract
 
+The built-in `web_search` exposes Auto fallback, Brave, keyless DuckDuckGo and Both through `engine` and a per-engine `count` (1–10, default 5). Global/per-bot config validates these fields and the optional operator Brave `endpoint`; call arguments may override engine/count. Credential resolution stays in the existing vault path and the Brave key is never sent to DuckDuckGo. The plugin retains its credential box because Brave uses it; DuckDuckGo needs none. Engine events and structured partial results retain failure/provenance information; total failure includes usage and records `tool.failed`. Query-only calls remain compatible. See [WEB_SEARCH.md](WEB_SEARCH.md).
+
+Installed descriptions for search, memory and shell supersede obsolete seeded catalog text when read through the service, without rewriting operator configuration. Schemas can include complete top-level `examples`; shared usage prefers a schema-valid example for the selected operation. Memory explicitly requires operation even when key/value look like a write; shell explicitly requires `workspace.start` before running a task. Do not weaken validation or silently create missing resources to mask model mistakes.
+
 All registered tools receive the common [empty-call discovery and complete validation feedback](TOOLS.md) behavior. Supply the full action schema, including conditional required fields; `{}` is intercepted centrally before credentials or side effects. Never introduce a first-error-only parser.
 
 The built-in keyless `document_site` pack exposes explicit `create`, resume-only `start`/`edit`, list/status, paged read/history, write/append/replace/restore, scoped imports and publication. `published_files` and `import_published` permit public-source replication into an explicitly created owned destination, without private-draft access. One successful create/resume may use the turn's bounded document extension. Owner IDs come from trusted context; models cannot select a destination owner, delete assets or adopt a retired bot's namespace.
