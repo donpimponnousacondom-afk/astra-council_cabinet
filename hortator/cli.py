@@ -74,7 +74,9 @@ def main():
         key = os.getenv("HORTATOR_MASTER_KEY") or (directory / "master.key").read_text()
         (destination / "master.key").write_text(key)
         (destination / "master.key").chmod(0o600)
-        for folder in ("artifacts", "images", "sites", "ssh"):
+
+        for folder in ("artifacts", "images", "sites", "ssh", "workspaces", "jobs", "fetched_documents"):
+
             if (directory / folder).exists():
                 shutil.copytree(directory / folder, destination / folder)
                 (destination / folder).chmod(0o700)

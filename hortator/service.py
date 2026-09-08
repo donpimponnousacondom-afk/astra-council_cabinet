@@ -136,6 +136,13 @@ class Service:
             value.update(footer_settings(value))
             for field in ("document_task_rounds", "document_task_calls_per_round", "document_task_seconds"):
                 value.setdefault(field, SCHEMAS["bots"].model_fields[field].default)
+            for field in (
+                "work_task_rounds",
+                "work_task_calls_per_round",
+                "work_task_seconds",
+                "tool_working_set_tokens",
+            ):
+                value.setdefault(field, SCHEMAS["bots"].model_fields[field].default)
             value["token_configured"] = bool(self.vault.get(f"bot/{value['id']}/token"))
             value["key_override_configured"] = bool(self.vault.get(f"bot/{value['id']}/provider_key"))
             value["plugin_keys_configured"] = [
@@ -160,6 +167,14 @@ class Service:
             spec = self.registry.specs.get(value["id"])
             value["schema"] = spec.parameters if spec else None
             value["installed"] = bool(spec)
+            value["keyless"] = value["id"] in (
+                "memory",
+                "council_inspect",
+                "document_site",
+                "workspace",
+                "shell",
+                "web_fetch",
+            )
         return self.vault.redact(value)
 
     def readiness(self, bot):
@@ -190,6 +205,10 @@ class Service:
         return issues
 
     def validate_references(self, kind, entity):
+        from .agentic import validate_configuration
+
+        validate_configuration(self.registry, kind, entity)
+
         def exists(k, value):
             if not self.store.get(k, value):
                 raise ControlError(f"Referenced {k}/{value} does not exist")

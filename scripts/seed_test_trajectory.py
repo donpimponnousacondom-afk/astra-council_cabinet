@@ -13,6 +13,7 @@ import httpx
 from hortator.app import Kernel
 from hortator.models import OWNER_ID
 from site_preview_fixture import seed_site_preview
+from agentic_fixture import seed_agentic
 
 
 async def main(directory):
@@ -113,6 +114,7 @@ async def main(directory):
         await asyncio.gather(*list(k.engine.tasks.values()))
         assert k.store.context("ada", room["channel_id"])["compactions"] == 1
         await seed_site_preview(k)
+        await seed_agentic(k)
         # Prevent real gateway activity when the browser's API server opens this fixture.
         current = k.store.get("bots", "ada")
         current.pop("revision")

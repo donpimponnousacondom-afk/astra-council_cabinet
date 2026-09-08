@@ -96,6 +96,8 @@ class ContextBuilder:
             if state["last_sent"]
             else "never",
         }
+        if "active_task_budget" in bot:
+            values["task_budget"] = bot["active_task_budget"]
         custom = bot["dynamic_prompt"]
         # Literal substitutions only: no Python format attribute traversal or executable templates.
         for name, value in values.items():

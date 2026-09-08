@@ -17,6 +17,12 @@ import { FooterEditor } from "./Footer";
 import { PricingEditor } from "./Pricing";
 import { DocumentPluginSettings, DocumentSitesPanel } from "./Documents";
 import {
+  AgentToolSettings,
+  AgentToolsPanel,
+  WorkTaskSettings,
+  agentToolIds,
+} from "./AgentTools";
+import {
   Badge,
   Code,
   Empty,
@@ -437,6 +443,14 @@ export function Editor({
                       </div>
                     </>
                   )}
+                  {(draft.enabled_plugins || []).some((id: string) =>
+                    agentToolIds.includes(id),
+                  ) && (
+                    <>
+                      <WorkTaskSettings draft={draft} set={set} />
+                      {entity && <AgentToolsPanel botId={entity.id} />}
+                    </>
+                  )}
                   {entity && <DocumentSitesPanel botId={entity.id} />}
                   <details className="advanced">
                     <summary>Advanced · per-bot plugin configuration</summary>
@@ -453,7 +467,7 @@ export function Editor({
                       entity={entity}
                       field="plugin"
                       plugins={dashboard.plugins.filter(
-                        (plugin) => plugin.id !== "document_site",
+                        (plugin) => !plugin.keyless,
                       )}
                       changed={credentialChanged}
                       notify={notify}
@@ -795,13 +809,20 @@ export function Editor({
                   onChange={(value) => set("config", value)}
                 />
               )}
+              {agentToolIds.includes(draft.id) && (
+                <AgentToolSettings
+                  pluginId={draft.id}
+                  config={draft.config || {}}
+                  onChange={(value) => set("config", value)}
+                />
+              )}
               <JsonInput
                 label="Plugin configuration"
                 value={draft.config || {}}
                 onChange={(v) => set("config", v)}
                 hint="Configure the endpoint, model, and non-secret provider JSON. Bot overrides are applied after this configuration."
               />
-              {entity && draft.id !== "document_site" && (
+              {entity && !entity.keyless && (
                 <CredentialBox
                   kind="plugins"
                   entity={entity}
@@ -811,6 +832,7 @@ export function Editor({
                 />
               )}
               {draft.id === "document_site" && <DocumentSitesPanel />}
+              {agentToolIds.includes(draft.id) && <AgentToolsPanel />}
               <Code value={entity?.schema} label="Tool-call JSON schema" />
             </>
           )}

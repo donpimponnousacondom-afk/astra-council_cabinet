@@ -106,7 +106,9 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 
 | Registry ID | Capability | Configuration |
 | --- | --- | --- |
-| `web_fetch` | Public HTTP(S) page/text retrieval | No key; public DNS/IP enforcement, redirects checked, response limits |
+| `web_fetch` | Complete public text snapshots, chunking and search | No key; 1 MB download cap, owned stable offsets, storage/retention limits |
+| `workspace` | Private task files, observed attachments and current-turn exports | No key; bot/channel isolation, quotas and bounded retention |
+| `shell` | Real isolated Bash/Python/Pillow jobs | No key; workspace grant plus ready Linux/Bubblewrap boundary, no network |
 | `web_search` | Brave web search | Brave key; endpoint/count configurable |
 | `image_generation` | Image generation to a Discord attachment | OpenAI-style image endpoint, raw request JSON, key |
 | `tts` | Speech generation to an audio attachment | OpenAI-style speech endpoint, model/voice/options JSON, key |
@@ -142,3 +144,5 @@ Backend tests use mocked compatible HTTP responses and Discord transports. Brows
 Discord image attachments now reach every bot as actual multimodal pixels, with a durable private image cache and explicit unavailable-image feedback. See [vision inputs](docs/VISION.md). Profile pricing supports separate cache-hit and cache-miss input rates alongside output prices, with request-time pricing evidence: see [pricing](docs/PRICING.md).
 
 The optional **Documents & local sites** plugin creates bot-owned static sites, retains local revisions and queues published snapshots for future remote sync. Remote delivery is disabled until server configuration/transport is added. Enable the plugin globally and grant it per bot; no API key is needed. See [document publishing](docs/DOCUMENTS.md) and the permanent [tool usage, repair and task-budget contract](docs/TOOLS.md).
+
+Optional [private files, isolated Bash and complete web reading](docs/AGENTIC_TOOLS.md) support attachment compression and long reading tasks. Configure grants, readiness, quotas, extended task budgets and private inspection in the dashboard. These tools never grant site publication or remote sync.
