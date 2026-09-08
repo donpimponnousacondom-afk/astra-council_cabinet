@@ -48,6 +48,8 @@ Hortator's replies include a small Discord diagnostic footer with **TTFT / TPS**
 
 Rooms that include external bots also ingest application responses such as slash-command results, including visible embeds and Components V2 text. Hortator keeps its owner/control-channel/DM intake; its optional **Send to council channel** capability can explicitly post to another configured room on the owner's request, with confirmed delivery receipts. See [intake and cross-channel controls](docs/OPERATIONS.md#hortator-control-scope-and-cross-channel-posts).
 
+For provider/conversation stress tests, turn off **Bots → Edit bot → Capabilities → Allow intentional silence** on the bots you want answering. It removes their silence tool and asks for a text contribution while preserving normal activation, concurrency, cooldown and usage limits. It defaults on and requires no key. See [scheduling and silence controls](docs/OPERATIONS.md#scheduling-and-message-semantics).
+
 ## Connect the first council
 
 The initial records are **disabled drafts**, with no invented traffic or credentials: Hortator (15-second cadence), Ada (60 seconds), Socrates (90 seconds), a shared prompt, one council room, OpenRouter, and an unconfigured model profile.

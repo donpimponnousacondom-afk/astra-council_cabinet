@@ -344,9 +344,9 @@ export function Editor({
                   />
                   <Notice>
                     At every activation the model can speak, reply to a message,
-                    or choose silence. Timer evaluation starts once the channel
-                    has conversation history. Hortator activates only for new
-                    owner questions.
+                    or choose silence when allowed in Capabilities. Timer
+                    evaluation starts once the channel has conversation history.
+                    Hortator activates only for new owner questions.
                   </Notice>
                   <div className="form-grid">
                     {numeric(
@@ -403,6 +403,28 @@ export function Editor({
               )}
               {tab === "tools" && (
                 <>
+                  <fieldset className="check-list">
+                    <legend>Built-in capabilities</legend>
+                    <label>
+                      <input
+                        type="checkbox"
+                        aria-label="Allow intentional silence"
+                        checked={draft.allow_silence !== false}
+                        onChange={(e) => set("allow_silence", e.target.checked)}
+                      />
+                      <span>
+                        <strong>Allow intentional silence</strong>
+                        <small>
+                          Expose council_silence so this bot can end an
+                          activation without posting. Turn off for conversation
+                          and provider stress tests: the model is asked to
+                          finish with a text answer. No key required. Provider
+                          failures, empty responses, cooldowns and usage limits
+                          still apply; this does not add extra activations.
+                        </small>
+                      </span>
+                    </label>
+                  </fieldset>
                   {checkedList(
                     "enabled_plugins",
                     dashboard.plugins,

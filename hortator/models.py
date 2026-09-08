@@ -158,6 +158,7 @@ class Bot(Entity):
     interval_seconds: float = Field(default=60, ge=1, le=86400)
     cooldown_seconds: float = Field(default=60, ge=1, le=86400)
     evaluate_when_idle: bool = True
+    allow_silence: bool = True
     prompt_ids: list[str] = Field(default_factory=list, max_length=30)
     persona: str = Field(
         default="Be curious, thoughtful, concise, and willing to disagree constructively.", max_length=60000

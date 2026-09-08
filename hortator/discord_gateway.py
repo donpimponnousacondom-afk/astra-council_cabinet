@@ -629,13 +629,36 @@ class DiscordManager:
             for r in self.store.list("rooms")
             if r["id"] in bot["room_ids"] and r["channel_id"]
         }
-        channel_ids.update(
-            row["channel_id"]
-            for row in self.store.rows("SELECT channel_id FROM contexts WHERE bot_id=?", (bot["id"],))
-        )
+        for row in self.store.rows("SELECT channel_id FROM contexts WHERE bot_id=?", (bot["id"],)):
+            channel_id = row["channel_id"]
+            if channel_id in channel_ids or self.service.engine.room_for(bot, channel_id):
+                channel_ids.add(channel_id)
+            else:
+                self.store.emit(
+                    "discord.history_skipped",
+                    {"channel_id": channel_id, "reason": "historical_context_outside_current_rooms"},
+                    bot_id=bot["id"],
+                    level="debug",
+                )
         for channel_id in channel_ids:
+            stage = "fetch_channel"
             try:
                 channel = client.get_channel(int(channel_id)) or await client.fetch_channel(int(channel_id))
+                stage = "validate_scope"
+                bot = self.store.get("bots", client.bot_id)
+                if not bot:
+                    return
+                if not any(
+                    r["id"] in bot["room_ids"] and r["channel_id"] == channel_id
+                    for r in self.store.list("rooms")
+                ) and not self.service.engine.room_for(bot, channel_id):
+                    self.store.emit(
+                        "discord.history_skipped",
+                        {"channel_id": channel_id, "reason": "scope_changed_during_channel_fetch"},
+                        bot_id=bot["id"],
+                        level="debug",
+                    )
+                    continue
                 room = next(
                     (
                         r
@@ -657,6 +680,7 @@ class DiscordManager:
                     raise ControlError("Channel does not match an assigned room and configured guild")
                 if isinstance(channel, discord.ForumChannel):
                     continue
+                stage = "read_history"
                 last = self.store.one(
                     "SELECT discord_id FROM messages WHERE channel_id=? ORDER BY at DESC LIMIT 1",
                     (channel_id,),
@@ -724,7 +748,11 @@ class DiscordManager:
                 )
                 self.store.emit(
                     "discord.history_failed",
-                    {"channel_id": channel_id, "error": str(exc)},
+                    {
+                        "channel_id": channel_id,
+                        "stage": stage,
+                        "error": f"Channel {channel_id} ({stage}): {exc}",
+                    },
                     bot_id=bot["id"],
                     level="warning",
                 )

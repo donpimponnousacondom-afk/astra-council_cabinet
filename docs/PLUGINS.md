@@ -2,6 +2,8 @@
 
 Plugins are ordinary installed Python packages with an `hortator.plugins` entry point. The runtime loads these trusted local packages at startup; it never installs or executes code named by a model or Discord message.
 
+Engine terminal/file-preparation tools remain reserved IDs rather than ordinary registry plugins. The per-bot **Capabilities → Allow intentional silence** checkbox controls `council_silence` through `bots.allow_silence` (default true). It needs no credential/global switch; false removes its schema and prevents a successful silence decision. The ordinary engine budget, complete argument feedback and active-turn cancellation still apply. Do not register a second silence plugin or silently re-enable it from an extension.
+
 The built-in owner-only `council_inspect` accepts `resource: "version"` to read the same startup-captured source metadata as `!version` and `/api/version`. It requires Hortator's enabled grant and a runtime-verified owner context. The tool performs no Git mutation, configuration write or provider call. Source identity remains fixed for the running server.
 
 The separate keyless owner-only `discord_send` action posts owner-requested text/current-turn artifacts as Hortator to another configured room/channel or allowed observed thread. It requires explicit global/bot grants (off on new installations). It exposes targets/send/status, uses the existing outbox/destination lock and strict reply transport, and preserves per-turn delivery-key idempotence/uncertainty. It does not change Hortator intake, impersonate the owner or replace normal assistant content. See [the tool contract](TOOLS.md) and [cross-channel operations](OPERATIONS.md#hortator-control-scope-and-cross-channel-posts).
