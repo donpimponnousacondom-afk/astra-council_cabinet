@@ -3836,3 +3836,56 @@ td:not(:first-child) {
   z-index: 1;
   cursor: pointer;
 }
+.footer-editor {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.footer-editor > h3,
+.footer-editor > p {
+  margin: 0;
+}
+.footer-editor > p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.footer-placeholders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.footer-placeholders button {
+  padding: 6px 9px;
+  background: var(--panel-2);
+  color: var(--lime);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+}
+.footer-placeholders button:hover {
+  border-color: var(--lime);
+}
+.footer-example {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.footer-example p {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.footer-definitions {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  font-size: 12px;
+}
+.footer-definitions dt {
+  font-weight: 600;
+}
+.footer-definitions dd {
+  color: var(--muted);
+  margin: 3px 0 0;
+  line-height: 1.6;
+}

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from jsonschema import Draft202012Validator
 
 from .context import ContextBuilder
+from .footer import render_footer
 from .models import ControlError, OWNER_ID
 from .plugins import SILENCE, SPEAK, ToolContext
 from .provider import strip_reasoning
@@ -330,7 +331,16 @@ class Engine:
                     )
                 if not result.tool_calls:
                     if result.content:
-                        await self.deliver(bot, profile, provider, context, result.content, None, [])
+                        await self.deliver(
+                            bot,
+                            profile,
+                            provider,
+                            context,
+                            result.content,
+                            None,
+                            [],
+                            request_id=result.request_id,
+                        )
                         status, decision = "sent", "speak"
                     else:
                         status, decision = "silent", "empty_completion"
@@ -368,6 +378,7 @@ class Engine:
                             args["content"],
                             reply_to,
                             args.get("artifact_ids", []),
+                            request_id=result.request_id,
                         )
                         status, decision = "sent", "reply" if reply_to else "speak"
                     break
@@ -438,13 +449,24 @@ class Engine:
                 turn_id=turn_id,
             )
 
-    async def deliver(self, bot, profile, provider, context, content, reply_to, artifact_ids):
+    async def deliver(
+        self, bot, profile, provider, context, content, reply_to, artifact_ids, *, request_id=None
+    ):
         content = self.vault.redact(strip_reasoning(content))
         if not content:
             raise ControlError("No visible content remained after removing reasoning")
         paths = [self.registry.resolve_artifact(artifact_id, context) for artifact_id in artifact_ids]
         if len(content) > 12000:
             raise ControlError("Council contribution exceeds 12,000 characters")
+        request = (
+            self.store.one(
+                "SELECT model,input_tokens,output_tokens,ttft_ms,duration_ms FROM requests WHERE id=? AND bot_id=? AND turn_id=? AND purpose='generation' AND status='completed'",
+                (request_id, bot["id"], context.turn_id),
+            )
+            if request_id
+            else None
+        )
+        footer = render_footer(bot, profile, provider, request, redact=self.vault.redact)
         outbox_id = uid("out_")
         self.store.execute(
             "INSERT INTO outbox(id,turn_id,bot_id,channel_id,content,reply_to,artifacts,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
@@ -462,7 +484,14 @@ class Engine:
         )
         self.store.emit(
             "delivery.queued",
-            {"outbox_id": outbox_id, "content": content, "reply_to": reply_to, "artifact_ids": artifact_ids},
+            {
+                "outbox_id": outbox_id,
+                "content": content,
+                "reply_to": reply_to,
+                "artifact_ids": artifact_ids,
+                "footer": footer,
+                "request_id": request_id,
+            },
             bot_id=bot["id"],
             turn_id=context.turn_id,
         )
@@ -496,7 +525,7 @@ class Engine:
                     "delivery.sending", {"outbox_id": outbox_id}, bot_id=bot["id"], turn_id=context.turn_id
                 )
                 discord_id = await self.transport.send(
-                    bot, context.channel_id, content, reply_to, paths, nonce=outbox_id
+                    bot, context.channel_id, content, reply_to, paths, nonce=outbox_id, footer=footer
                 )
                 sent = time.time()
                 self.store.execute(

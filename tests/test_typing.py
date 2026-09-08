@@ -50,7 +50,7 @@ class BusyTransport:
         finally:
             self.stopped.set()
 
-    async def send(self, bot, channel_id, content, reply_to, paths, *, nonce=None):
+    async def send(self, bot, channel_id, content, reply_to, paths, *, nonce=None, footer=""):
         assert self.started.is_set() and not self.stopped.is_set()
         assert self.identity[:2] == (bot["id"], channel_id)
         self.sent = True

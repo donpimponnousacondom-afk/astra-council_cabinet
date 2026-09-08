@@ -26,10 +26,12 @@ async def test_help_is_complete_fenced_pages_without_preface_or_model_calls(kern
     pages = [call.kwargs["content"] for call in channel.send.await_args_list]
     assert pages
     for page in pages:
-        assert page.startswith("```\n") and page.endswith("\n```")
+        assert page.startswith("```\n") and page.endswith("\n```\n-# TTFT: — | TPS: —")
         assert len(page.encode("utf-16-le")) // 2 <= 2000
         assert OWNER_ID not in page and "Only The Boss" not in page
-    assert "".join(page[4:-4] for page in pages) == "\n".join(f"{cmd} — {desc}" for cmd, desc in COMMANDS)
+    assert "".join(page.rsplit("\n-# ", 1)[0][4:-4] for page in pages) == "\n".join(
+        f"{cmd} — {desc}" for cmd, desc in COMMANDS
+    )
     assert any("!version | !ver" in page for page in pages)
     assert all("file" not in call.kwargs for call in channel.send.await_args_list)
     assert not kernel.store.rows("SELECT * FROM requests")
@@ -84,7 +86,8 @@ async def test_every_bot_delivers_native_discord_markdown_without_escaping(kerne
     content = "# Heading\n-# Subtext\n**bold** *italic* __underline__ ~~strike~~ ||spoiler||\n- item\n1. ordered\n> quote\n[link](https://example.com) `code`\n```python\nprint('🙂')\n```"
     await kernel.connector.send(bot, channel_id, content, None, [], nonce="test-nonce")
     sent = channel.send.await_args
-    assert sent.args[0] == content and sent.kwargs["nonce"] == "test-nonce"
+    expected = content + ("\n-# TTFT: — | TPS: —" if bot_id == "hortator" else "")
+    assert sent.args[0] == expected and sent.kwargs["nonce"] == "test-nonce"
     assert not sent.kwargs["allowed_mentions"].everyone and not sent.kwargs["mention_author"]
     identity = kernel.engine.contexts.layers(bot, channel_id)[0]["content"]
     assert "Discord Markdown" in identity

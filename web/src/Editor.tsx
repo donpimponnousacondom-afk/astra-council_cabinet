@@ -13,6 +13,7 @@ import {
 import { api, control, credential, dateLabel, kindLabel, num } from "./api";
 import type { Dashboard, Kind, RecordData } from "./api";
 import { ReasoningEditor, reasoningFields } from "./Reasoning";
+import { FooterEditor } from "./Footer";
 import {
   Badge,
   Code,
@@ -42,7 +43,7 @@ function initial(
     if ("default" in prop) result[key] = prop.default;
   result.id = `${kind === "profiles" ? "model" : kind.slice(0, -1)}_${crypto.randomUUID().slice(0, 8)}`;
   result.name = "";
-  if (kind === "bots")
+  if (kind === "bots") {
     Object.assign(result, {
       model_profile_id: dashboard.profiles[0]?.id || "",
       room_ids: dashboard.rooms.length ? [dashboard.rooms[0].id] : [],
@@ -50,6 +51,9 @@ function initial(
       enabled_plugins: [],
       plugin_config: {},
     });
+    // Until explicitly chosen, a new bot's footer follows its selected role.
+    delete result.footer_enabled;
+  }
   if (kind === "profiles")
     Object.assign(result, {
       provider_id: dashboard.providers[0]?.id || "",
@@ -224,6 +228,7 @@ export function Editor({
               ["model", "Model & rhythm"],
               ["prompts", "Prompts"],
               ["tools", "Capabilities"],
+              ["footer", "Message footer"],
               ["discord", "Discord"],
             ].map(([id, label]) => (
               <button
@@ -415,6 +420,16 @@ export function Editor({
                     />
                   )}
                 </>
+              )}
+              {tab === "footer" && (
+                <FooterEditor
+                  draft={draft}
+                  dashboard={dashboard}
+                  defaultTemplate={
+                    schemas.bots.properties.footer_template.default
+                  }
+                  set={set}
+                />
               )}
               {tab === "discord" && (
                 <>

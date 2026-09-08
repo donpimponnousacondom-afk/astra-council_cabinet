@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 from pydantic import ValidationError
 
+from .footer import footer_settings
 from .models import ControlError, KINDS, OWNER_ID, SCHEMAS
 from .store import uid
 from .version import runtime_version
@@ -132,6 +133,7 @@ class Service:
                 (value["id"], time.time() - 900),
             )
         elif kind == "bots":
+            value.update(footer_settings(value))
             value["token_configured"] = bool(self.vault.get(f"bot/{value['id']}/token"))
             value["key_override_configured"] = bool(self.vault.get(f"bot/{value['id']}/provider_key"))
             value["plugin_keys_configured"] = [
