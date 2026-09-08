@@ -15,7 +15,11 @@ import type { Dashboard, Kind, RecordData } from "./api";
 import { ReasoningEditor, reasoningFields } from "./Reasoning";
 import { FooterEditor } from "./Footer";
 import { PricingEditor } from "./Pricing";
-import { DocumentPluginSettings, DocumentSitesPanel } from "./Documents";
+import {
+  DocumentBotSettings,
+  DocumentPluginSettings,
+  DocumentSitesPanel,
+} from "./Documents";
 import {
   AgentToolSettings,
   AgentToolsPanel,
@@ -441,6 +445,20 @@ export function Editor({
                           "Elapsed time after the first successful task start.",
                         )}
                       </div>
+                      <DocumentBotSettings
+                        config={draft.plugin_config?.document_site || {}}
+                        inheritedLocalUrl={
+                          dashboard.plugins.find(
+                            (plugin) => plugin.id === "document_site",
+                          )?.config?.local_base_url || "http://127.0.0.1:8000"
+                        }
+                        onChange={(value) =>
+                          set("plugin_config", {
+                            ...draft.plugin_config,
+                            document_site: value,
+                          })
+                        }
+                      />
                     </>
                   )}
                   {(draft.enabled_plugins || []).some((id: string) =>
@@ -458,7 +476,7 @@ export function Editor({
                       label="Plugin overrides"
                       value={draft.plugin_config || {}}
                       onChange={(v) => set("plugin_config", v)}
-                      hint='Map plugin IDs to non-secret configuration, for example {"tts":{"request_json":{"model":"tts-1","voice":"alloy"}}}. Nested values replace the global value.'
+                      hint='Map plugin IDs to non-secret configuration, for example {"tts":{"request_json":{"model":"tts-1","voice":"alloy"}}}. Nested values replace the global value. document_site permits only local_base_url; remote destination and automatic publication stay global.'
                     />
                   </details>
                   {entity && (
@@ -820,7 +838,11 @@ export function Editor({
                 label="Plugin configuration"
                 value={draft.config || {}}
                 onChange={(v) => set("config", v)}
-                hint="Configure the endpoint, model, and non-secret provider JSON. Bot overrides are applied after this configuration."
+                hint={
+                  draft.id === "document_site"
+                    ? "Non-secret publication settings. The SSH identity is a vault name. Bots may override only local_base_url."
+                    : "Configure the endpoint, model, and non-secret provider JSON. Bot overrides are applied after this configuration."
+                }
               />
               {entity && !entity.keyless && (
                 <CredentialBox

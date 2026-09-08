@@ -62,6 +62,7 @@ async def test_switching_task_plugins_never_stacks_or_renews_budgets(kernel, ord
         if name == "workspace":
             args["task"] = "notes"
         if name == "document_site":
+            args["operation"] = "create"
             args["site"] = "notes"
         return reply(tool(name, args))
 

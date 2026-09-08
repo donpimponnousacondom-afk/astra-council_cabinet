@@ -12,7 +12,14 @@ This workspace sets `HORTATOR_DATA_DIR=/home/codexy/.local/share/hortator`, outs
 - `master.key`: Fernet encryption key, unless supplied through `HORTATOR_MASTER_KEY`.
 - `initial-password`: one-time bootstrap password, created only if no password is configured.
 - `artifacts/`: bot/turn-owned generated media.
-- `ssh/`: public SSH key exports and, after server configuration, verified host pins. Private SSH keys stay encrypted inside the database, never as plaintext files here.
+- `images/`: private original-image cache used by the shared multimodal pipeline.
+- `sites/`: owned document drafts, immutable publication blobs and local revision data; queue metadata lives in SQLite.
+- `site_history/`: separate private Git snapshots of complete sites selected for remote delivery, with job/revision metadata; no source-code submodule or credentials.
+- `workspaces/`: private bot/channel/task files and generations.
+- `jobs/`: isolated execution metadata and retained stdout/stderr logs.
+- `fetched_documents/`: complete private text snapshots with stable reading offsets.
+- `ssh/`: public SSH key exports and verified host pins in `known_hosts`. Private SSH keys stay encrypted inside the database, never as plaintext files here.
+- `logs/`: private operational and rollout evidence, captured separately in complete operator archives.
 
 The data directory is mode 0700; database/key/artifacts are owner-readable. **The master key is required to recover credentials.** Protect the key separately from the database and restrict host access. Conversations, prompt snapshots and provider response content are intentionally stored as readable observability data; secret encryption is not full-disk encryption. Never commit the data directory.
 
@@ -122,6 +129,9 @@ Scope colors are consistent across events and help: system white, bots magenta, 
 | --- | --- |
 | `+` / `-` | Increase/decrease verbosity: ERROR → WARNING → INFO → DEBUG |
 | `f` | Fold/expand JSON and exception details; redisplay the last five matching entries |
+| `T` / `P` | Independently cycle tools/providers through concise → event JSON → stored evidence, replaying the latest matching entry |
+| `[` / `]` | Select an older/newer retained event in the selected tools/providers scope |
+| `n` / `N` | Next/previous page of the selected stored evidence snapshot |
 | `r` | Replay the last 20 matching entries with their original timestamps |
 | `e` | Replay recent warnings/errors, using a separate 50-entry history so polling cannot displace them |
 | `i` | Read-only snapshot: council enablement, bot enablement/gateway/profile/active turn, provider enablement/failure count/circuit delay |
@@ -133,6 +143,12 @@ Scope colors are consistent across events and help: system white, bots magenta, 
 | `?` or `h` | Show the current filters and key map |
 
 Every filter change prints its state. Disabled scopes hide their warnings/errors too; `0` restores visibility. `i` is an explicit snapshot independent of filters. Keys do not stop or reconfigure bots. Ctrl-C still stops the foreground server; Ctrl-A then D still detaches a Screen viewer. Normal terminal scrollback remains available: there is no alternate screen, cursor repaint or screen clearing. `f` affects subsequent output and appends a short replay; it does not rewrite old scrollback.
+
+For a terse `job.failed` line, press **`T` twice** from the default view, then use **`[` / `]`** to select the incident and **`n`** to read more. Stored evidence joins the original tool arguments and command, job state, exit code, stdout/stderr and retained tool result. A nonzero command exit with successful workspace copyback is labeled **`command_exit`**; runner/validation errors are identified separately. A command exit is still recorded as a failed job, but its output lets the operator decide whether that result was expected. Missing or expired evidence is stated explicitly, never reconstructed by rerunning the command.
+
+Use **`P` twice** for a provider request's recorded request body, response, context, usage, timings and error. Select a `request.*` event when a provider health event has no request ID. This reads the existing trajectory, not HTTP wire logs. Tools/providers detail levels are independent of each other and of the lowercase scope switches. Document and publishing events belong to the tools scope. The ordinary concise view stays available by cycling again or pressing `0`.
+
+Evidence pages contain at most 6,000 characters or 80 source lines. Navigation pins the selected snapshot; new live events cannot steal the reading cursor. A snapshot is bounded to 8,388,608 Unicode characters (individual job-log reads cap at 8 MiB), with explicit event/request/job/result IDs for further dashboard inspection if it reaches that limit. Full stored commands and output are available beyond the short event preview; credentials and omitted provider reasoning remain unavailable at every detail level. Secret redaction is applied again before each page is displayed. The global `f` switch can also expand event JSON while the independent tools/providers depth remains selected.
 
 The first occurrence of an incident is immediate. Identical errors/gateway transitions and repeated HTTP requests are grouped over 30 seconds, with a count and latest event reference. Different errors or bot/provider identities are separate groups. All operational occurrences remain in SQLite. The console keeps 200 recent entries plus 50 warnings/errors and loads bounded recent ledger history at startup for replay without automatic chatty backfill. Details are bounded and explicitly indicate truncation; use the event ledger/trajectory for the full stored record.
 
@@ -148,7 +164,7 @@ Available scopes are `system,bots,providers,discord,tools,context,dashboard`, or
 
 **This shared workspace inherits `NO_COLOR`.** The user explicitly wants colors in Screen, so append **`--color`** to its foreground serve command to override automatic detection and `NO_COLOR`. Do not unset the shell environment globally. `--color` and `--no-color` are mutually exclusive; without either flag, the normal automatic behavior above applies. Older branches may not support this new flag.
 
-Known credentials, secret fields, authorization values and vendor reasoning content are scrubbed. HTTP query strings, headers, cookies and bodies are not logged. Untrusted terminal controls are escaped. Low-level Discord/HTTP transport wire-debug payloads remain disabled even at console DEBUG; safe runtime events provide the inspection data. The Screen logfile records what was displayed; it is not an unfiltered substitute for SQLite. Discord incident notifications retain their existing independent dashboard setting and throttling. A richer dashboard log panel is deferred.
+Known credentials, secret fields, authorization values and vendor reasoning content are scrubbed. HTTP access logs omit query strings, headers, cookies and bodies. Explicit provider evidence inspection can display the redacted request/response bodies already retained in the trajectory. Untrusted terminal controls are escaped. Low-level Discord/HTTP transport wire-debug payloads remain disabled even at console DEBUG; safe runtime events provide the inspection data. The Screen logfile records what was displayed; it is not an unfiltered substitute for SQLite. Discord incident notifications retain their existing independent dashboard setting and throttling. A richer dashboard log panel is deferred.
 
 ## Scheduling and message semantics
 
@@ -264,7 +280,7 @@ Hourly activation limits stop excessive model wakeups. The optional bot daily mo
 
 ## Authentication and deployment
 
-Discord owner ID is the constant `1482143139828596916`. Both command handling and shared control-service methods check authority. Hortator ignores all non-owner chat, including bots and webhooks. Its model has only a bounded read-only inspector; prompt injection cannot transform that tool into configuration writes. Regular bot plugins have no administration API token or credential-reading capability.
+Discord owner ID is the constant `1482143139828596916`. Both command handling and shared control-service methods check authority. Hortator ignores all non-owner chat, including bots and webhooks. Its administrative inspection capability is bounded and read-only; prompt injection cannot transform it into configuration writes. Separately granted document, workspace and shell tools retain their own ownership and execution boundaries. No bot plugin has an administration API token or credential-reading capability.
 
 The web panel requires its local administrator password. It is intended for The Boss: do not share that password. Login is rate-limited; sessions are HttpOnly/SameSite Strict, mutations require the session CSRF token, and cross-site origins are rejected. No credentials appear in GET responses or exports. API credentials can only be written through the authenticated dashboard API, not a Discord command or model tool.
 
@@ -307,7 +323,74 @@ Then restart the server normally. The public file can be read/copied while it ru
 
 Normal backups include the encrypted identity in SQLite and public exports in `ssh/`. Move the complete backup and matching master key to the new installation, preserve owner-only permissions, and use its own `HORTATOR_DATA_DIR`; no source-host path is encoded in the identity. `ssh-key public publishing` can reconstruct a lost public export. The database and master key together can unlock all backed-up credentials, so transport them through a secure channel.
 
-Key creation does **not** start remote delivery. Once the account, address, port and destination are supplied, verify the server's host-key fingerprint through a trusted source and store pins with Hortator. The future worker will use an explicit identity, `BatchMode=yes`, `IdentitiesOnly=yes` and `StrictHostKeyChecking=yes`, without personal SSH-agent/config dependence. This keeps unattended connections from prompting or silently trusting a changed server. [OpenSSH client settings](https://man.openbsd.org/ssh_config#BatchMode). Remote command execution needs a separate capability design.
+Key creation does **not** start remote delivery. Verify the server's host-key fingerprint through a trusted source before storing its pin in `$HORTATOR_DATA_DIR/ssh/known_hosts`. The implemented worker decrypts the named identity into a short-lived Linux memory file descriptor and invokes OpenSSH with `BatchMode=yes`, `IdentitiesOnly=yes` and `StrictHostKeyChecking=yes`. It disables password/interactive fallback, agent use/forwarding, personal SSH configuration and automatic host-key updates. Missing or changed pins fail the connection; they never prompt or silently establish trust. [OpenSSH client settings](https://man.openbsd.org/ssh_config#BatchMode). This transport runs trusted publisher code only and grants models no remote command tool.
+
+## Automatic remote publishing
+
+Open **Plugins → Documents & local sites** to configure publication and delivery. Grant the plugin to each desired bot independently. **Automatically publish document changes** controls whether every save becomes a local public revision and queues remote sync. **Enable remote delivery** controls the independent SSH worker. Both default off for new installations. With automatic publication off, bots use `publish` explicitly; enabling remote delivery also processes already queued eligible work. Worker activity requires the council, bot and document plugin to remain enabled and the bot to retain its grant.
+
+The operator-selected DreamHost destination uses the following non-secret global plugin configuration. Deployment and live HTTPS verification are recorded separately in [VERIFICATION.md](VERIFICATION.md); this example does not establish current running state.
+
+```json
+{
+  "local_base_url": "http://127.0.0.1:8000",
+  "public_base_url": "https://council.zombiedawn.net",
+  "auto_publish": true,
+  "remote_enabled": true,
+  "remote": {
+    "host": "council.zombiedawn.net",
+    "port": 22,
+    "username": "theredroom",
+    "identity": "publishing",
+    "web_root": "/home/theredroom/council",
+    "state_root": "/home/theredroom/council-publishing",
+    "debounce_seconds": 5
+  }
+}
+```
+
+`identity` names the encrypted vault key; it is not a path or private key value. Remote account, host, roots, public URL and automation are global operator settings. The only permitted per-bot document override is `local_base_url`. The public URL must use HTTPS when remote delivery is enabled. Public and publisher-state roots must be absolute, separate directories, neither containing the other. `web_root` must already exist and be the actual domain document root. The publisher never changes the existing domain-root index or adopts an unmanaged bot/site folder.
+
+The local host needs OpenSSH, Git and Linux memory-file support. The remote account needs passwordless SSH with the verified pin, Python 3 and Git; cron is used for the optional periodic audit. On DreamHost the generated static-serving rules use Apache rewrite/header support and symlink traversal. Server setup must verify the HTTPS site and response headers after an actual test delivery; local readiness reports are configuration checks, not proof of remote login, TLS or browser behavior. Remote enablement can be configured through the fields above or the existing authenticated plugin-save API; no private key is sent through a model tool or placed in plugin JSON.
+
+### Save, snapshot, transfer and acknowledge
+
+The queue is driven by successful document operations. Arbitrary workspace, shell or host-file changes are not watched or published. A save fsyncs immutable bytes and commits its revision, local published pointer and queue row together. The worker checks pending work every two seconds and waits for the configured debounce interval (default five seconds, allowed 0–60). Newer revisions may supersede older jobs that have never been attempted, while every edit remains recoverable in SQLite and the blob store.
+
+Before an actual transfer, the worker commits the complete selected site plus job metadata to `$HORTATOR_DATA_DIR/site_history/`, a private Git repository on its `history` branch without remotes. It sends only that immutable revision to a versioned receiver installed under the configured remote state directory. The receiver verifies names, sizes, hashes, namespace ownership and its existing deployment state, then records a second private Git snapshot before atomically selecting the new public release. Neither content repository tracks the runtime database, master key, SSH credential or application checkout.
+
+The worker marks `delivered` only after a receipt matches the exact bot, site, revision, job and manifest hash and includes a remote snapshot commit. This is different from an upload merely starting. Queue rows retain `attempts`, `retry_at`, `last_error`, `delivered_at`, `snapshot_commit` and `remote_commit`. A failure retries with bounded exponential backoff, from five seconds up to five minutes. Pause, grant removal, destination changes and shutdown stop active transport; they cannot retract a release the server already activated. The same job is retried and its receipt reconciled after interruption. Repeating `publish` cannot reset a delivered entry.
+
+A previously attempted older job is preserved even when a newer edit arrives. The newer job waits behind that site's unresolved attempt, including its retry backoff, because the receiver may have reserved the older job before an acknowledgement was lost. Other eligible sites can proceed. Do not delete or manually reset these rows to bypass recovery: that can strand a remote reservation or obscure which content is live.
+
+The document panel and authenticated `GET /api/documents` show worker readiness and per-site state. `revision` is the latest local edit, `published_revision` selects the local public snapshot, and `synced_revision` is the last acknowledged remote revision. `public_url` refers to that last delivery; `planned_public_url` is destination metadata only. `delivery_current` tells whether the latest edits are included. A link to an older delivery remains useful while newer work is queued, but must not be described as already updated. See [DOCUMENTS.md](DOCUMENTS.md) for the model-facing commands, paged editing and public-source copies.
+
+The worker also retains the remote current revision and timestamp from verified receipts. An old successful receipt after restoring local data does not prove those bytes are still current remotely. If the remote host is ahead, delivery remains failed with an explicit reconciliation error; `observed_remote_revision` exposes that newer state and `delivery_current` stays false. Compare the matching database/content history and remote records before recovery rather than rewinding a remote pointer or clearing its reservation. Legacy rows without this evidence are explicitly marked `remote_currentness_verified: false`.
+
+### Remote filesystem and namespace ownership
+
+Public sites have the fixed form `<web_root>/<stable-bot-id>/<site-slug>/`. Each site requires an explicit create in the local tool. The bot-root path returns 404 and never lists sites or serves a bot-level index. A site's default page may link separate relative HTML/CSS/JS/SVG/media assets. The receiver reserves each namespace with ownership metadata, refuses unmanaged/colliding paths, and never lets one bot—including Hortator—write another bot's folder. Retired bot IDs stay reserved. Public source copies create independent owned files; they do not transfer ownership.
+
+The remote layout is:
+
+| Path | Purpose and access |
+| --- | --- |
+| `<web_root>/<bot-id>/.htaccess` | Receiver-managed static rules; bot root and hidden files blocked, no listings or server-side script execution |
+| `<web_root>/<bot-id>/<slug>` | Atomic symlink selecting that site's complete immutable release |
+| `<state_root>/releases/` | Retained public static bytes; traversable directories 0755 and asset files 0644 so Apache can serve them |
+| `<state_root>/metadata/` | Private 0700 ownership, job/receipt, pending-operation and audit metadata |
+| `<state_root>/history/` | Private 0700 Git repository on branch `snapshots`, containing publication and drift evidence |
+| `<state_root>/receiver-<source-hash>.py` | Versioned trusted application receiver; not model-generated code |
+
+The state root and release ancestors are traversable for static serving; metadata, Git history and receiver files retain owner-only access and are outside the web root. Previous releases remain retained. The receiver refuses a deployment that drops existing site paths; file restoration creates another revision while preserving other assets. There is no model delete, rename or ownership-transfer operation. Static suffix checks also reject compound executable names such as `report.php.html`. Local preview and remote serving both use sandboxed browser content without same-origin privileges; scripts and public-asset CORS support ordinary modular sites, while administrative APIs, credentials and server-side execution remain outside their authority.
+
+### Periodic remote audit and recovery
+
+The operator installer `SSHDelivery.install_audit_schedule()` in `hortator/publishing.py` installs the current receiver and runs an initial audit, then manages one remote crontab line tagged `# hortator-publishing-audit`. It runs every 15 minutes and preserves all unrelated cron entries. Re-run that installation step during a receiver upgrade so the cron line selects the intended receiver version. Creating an SSH key or enabling model tools does not install cron, and the worker's ordinary upload path does not edit the crontab.
+
+Audits inspect registered namespaces, public release pointers and checksums. Changed observations and safely readable changed assets are snapshotted in the private remote Git history; unchanged observations do not create repetitive commits. The latest result is `<state_root>/metadata/last-audit.json`, and scheduled output goes to `metadata/cron-audit.log`. Audit detects and records drift. It does not import remote edits into local documents, repair releases, adopt folders or overwrite another process's changes.
+
+Use the recorded local/remote snapshot commits and job IDs to trace what changed. For a normal content rollback, use the document tool's `history`, pinned `read` and single-file `restore`: this creates a new revision and follows the same publication path without deleting newer assets or rewriting history. Unexpected remote drift or ownership errors require operator inspection of the recorded evidence; do not remove metadata to force adoption. Remote snapshots complement the complete Hortator backup below. They cannot recover local drafts, bot configuration or credentials without the matching database, key and other data stores.
 
 ## Backup and restore
 
@@ -317,16 +400,11 @@ From the repository root, or with `--data-dir` before the command:
 hortator backup /absolute/path/to/new-backup-directory
 ```
 
-This uses SQLite's backup API, copies artifacts, cached images, site blobs and `ssh/` public exports/host pins, and saves the encryption key separately inside the new backup directory. It can read a running database. Move that key to separate secure storage after verifying the backup. Keep the artifacts and database from the same operational period; new artifacts created during a live backup may not be in the snapshot. For a complete point-in-time archive, pause the council first.
+This uses SQLite's backup API, copies `artifacts/`, `images/`, `sites/`, `ssh/`, `workspaces/`, `jobs/`, `fetched_documents/` and `site_history/` when present, and saves the matching encryption key separately inside the new backup directory. The SSH private identity is already encrypted in SQLite; `ssh/` contains public exports and verified host pins. The separate content history is backed up with its Git metadata, not added to the application repository. The command can read a running database, but filesystem changes during a live copy need not match its database snapshot. **Stop the foreground runtime in shared Screen for a complete point-in-time archive**; merely pausing model work does not stop every writer. Move the key to separate secure storage after verifying the backup.
 
-This workspace uses timestamped snapshots under `/home/codexy/.local/share/hortator-backups`, outside both the code checkout and live data directory. Its **`.latest-requested`** file identifies the latest requested snapshot; inspect that path and the snapshot's `manifest.json` for current evidence rather than relying on a copied session note. [VERIFICATION.md](VERIFICATION.md) records dated checks. A Git repository around a live SQLite database does not provide a consistent snapshot and risks tracking the master key and bootstrap password. Use the CLI's SQLite backup, then capture host settings and logs while the server is stopped for a complete archive. Complete snapshots include a matching key, artifacts, images, sites, SSH public exports/host pins, redacted configuration export, bootstrap password if present, logs, external launcher/environment and `.screenrc`, with `manifest.json` hashes and `RESTORE.md`. Verify SQLite integrity, hashes and matching-key decryption before declaring a snapshot usable. Keep directories 0700 and files 0600. These local snapshots provide rollback; an independent secure disk copy is still needed for disk-loss recovery. Never overwrite an earlier snapshot, commit these files, or confuse a redacted JSON export with a credentials backup.
+This workspace uses timestamped snapshots under `/home/codexy/.local/share/hortator-backups`, outside both the code checkout and live data directory. Its **`.latest-requested`** file identifies the latest requested snapshot; inspect that path and the snapshot's `manifest.json` for current evidence rather than relying on a copied session note. [VERIFICATION.md](VERIFICATION.md) records dated checks. A Git repository around a live SQLite database does not provide a consistent snapshot and risks tracking the master key and bootstrap password. Use the CLI's SQLite backup, then capture host settings and logs while the server is stopped for a complete archive. Complete snapshots include a matching key, all eight directories above, redacted configuration export, bootstrap password if present, logs, external launcher/environment and `.screenrc`, with `manifest.json` hashes and `RESTORE.md`. Verify SQLite integrity, hashes and matching-key decryption before declaring a snapshot usable. Keep directories 0700 and files 0600. These local snapshots provide rollback; an independent secure disk copy is still needed for disk-loss recovery. Never overwrite an earlier snapshot, commit these files to the application repository, or confuse a redacted JSON export with a credentials backup.
 
-To restore, stop Hortator, copy `council.sqlite3`, `master.key`, `artifacts/`, `images/`, `sites/`, and `ssh/` into an **empty** data directory, restore owner-only permissions, then start with that directory. Do not copy old `-wal`/`-shm` files over a restored database. If using an environment master key, supply the same key. The recovery logic marks unfinished work; it never blindly replays uncertain sends.
-This uses SQLite's backup API, copies artifacts, cached images, site blobs, private workspaces, job logs and fetched text snapshots, and saves the encryption key separately inside the new backup directory. It can read a running database. Move that key to separate secure storage after verifying the backup. Keep the artifacts and database from the same operational period; new artifacts created during a live backup may not be in the snapshot. For a complete point-in-time archive, stop the runtime first.
-
-This workspace uses timestamped snapshots under `/home/codexy/.local/share/hortator-backups`, outside both the code checkout and live data directory. Its **`.latest-requested`** file identifies the latest requested snapshot; inspect that path and the snapshot's `manifest.json` for current evidence rather than relying on a copied session note. [VERIFICATION.md](VERIFICATION.md) records dated checks. A Git repository around a live SQLite database does not provide a consistent snapshot and risks tracking the master key and bootstrap password. Use the CLI's SQLite backup, then capture host settings and logs while the server is stopped for a complete archive. Complete snapshots include a matching key, artifacts, images, sites, workspaces, jobs, fetched documents, redacted configuration export, bootstrap password if present, logs, external launcher/environment and `.screenrc`, with `manifest.json` hashes and `RESTORE.md`. Verify SQLite integrity, hashes and matching-key decryption before declaring a snapshot usable. Keep directories 0700 and files 0600. These local snapshots provide rollback; an independent secure disk copy is still needed for disk-loss recovery. Never overwrite an earlier snapshot, commit these files, or confuse a redacted JSON export with a credentials backup.
-
-To restore, stop Hortator, copy `council.sqlite3`, `master.key`, `artifacts/`, `images/`, `sites/`, `workspaces/`, `jobs/` and `fetched_documents/` into an **empty** data directory, restore owner-only permissions, then start with that directory. Do not copy old `-wal`/`-shm` files over a restored database. If using an environment master key, supply the same key. The recovery logic marks unfinished work; it never blindly replays uncertain sends.
+To restore, stop Hortator, copy `council.sqlite3`, `master.key` and all eight backed-up directories above into an **empty** data directory, restore owner-only permissions, then start with that directory. Do not copy old `-wal`/`-shm` files over a restored database. If using an environment master key, supply the same key. The recovery logic marks unfinished work; it never blindly replays uncertain Discord sends or interrupted shell commands. Publishing jobs resume using their same immutable identities and verify remote receipts; retain their queue records, local content history and the matching remote publisher state when relocating an installation.
 
 To reset the dashboard password, stop the runtime and run:
 
@@ -340,7 +418,7 @@ This prompts privately, revokes sessions, and removes the bootstrap password fil
 
 See [VISION.md](VISION.md) for image capture limits and upstream failures, [PRICING.md](PRICING.md) for profile cache rates and historical pricing evidence, and [DOCUMENTS.md](DOCUMENTS.md) for local drafts, publication and the durable sync queue. The [TOOLS.md](TOOLS.md) usage/error contract and document-task budgets apply to all bots.
 
-New data directories `images/` and `sites/` belong under the external data directory and are included by `hortator backup`. Stop the foreground runtime for a consistent snapshot including files and queue metadata. Older code may not understand new profile/bot configuration fields or document tables: preserve the matching backup and use compatible code rather than clearing configuration. Published local sites are intentionally readable without dashboard login; drafts require authentication. The sandboxed local preview permits scripts but denies dashboard origin privileges, external resources, and cross-site asset access. Persistent browser storage is unavailable in this opaque origin. Remote delivery is still disabled; setting an intended domain does not configure a transport.
+Image and document bytes and the separate `site_history/` repository belong under external runtime storage and are included by `hortator backup`. Stop the foreground runtime for a consistent snapshot including files, history and queue metadata. Older code may not understand new profile/bot configuration fields or document tables: preserve the matching backup and use compatible code rather than clearing configuration. Published local sites are intentionally readable without dashboard login; manual-mode drafts require authentication. The sandboxed local preview permits scripts but denies dashboard origin privileges, external resources, and cross-site asset access. Persistent browser storage is unavailable in this opaque origin. Remote transport is implemented with explicit global configuration; inspect the document panel for actual readiness and delivery evidence, as described [above](#automatic-remote-publishing).
 
 Image intake currently accepts up to **20 MiB per image**, with **40 MiB combined original image bytes per request**, eight images and 20 megapixels per image. These are separate from text-fetch, document-import and outbound-artifact limits. See [VISION.md](VISION.md) for the one-time retry of historical size rejections and unchanged pixel handling. Optional bot filesystem/Bash tools are described in [AGENTIC_TOOLS.md](AGENTIC_TOOLS.md). They preserve this image ceiling and require explicit plugin grants.
 

@@ -236,7 +236,7 @@ async def test_autonomous_document_start_unlocks_extended_rounds_and_call_batch_
         requests.append(body)
         index = len(requests)
         if index == 1:
-            return reply(tool("document_site", {"operation": "start", "site": "summary"}))
+            return reply(tool("document_site", {"operation": "create", "site": "summary"}))
         if index == 2:
             budget = responses(body)[-1]["task_budget"]
             assert budget["active"] is True and budget["rounds_remaining"] == 2
@@ -293,7 +293,7 @@ async def test_restarting_document_tasks_does_not_renew_extra_rounds_or_time(ker
         requests.append(body)
         if len(requests) > 1:
             budgets.append(responses(body)[-1]["task_budget"])
-        return reply(tool("document_site", {"operation": "start", "site": f"summary-{len(requests)}"}))
+        return reply(tool("document_site", {"operation": "create", "site": f"summary-{len(requests)}"}))
 
     await install_client(kernel, handle)
     await kernel.engine.tick()
@@ -318,7 +318,7 @@ async def test_zero_extra_rounds_preserves_normal_budget(kernel):
         body = json.loads(request.content)
         requests.append(body)
         if len(requests) == 1:
-            return reply(tool("document_site", {"operation": "start", "site": "summary"}))
+            return reply(tool("document_site", {"operation": "create", "site": "summary"}))
         assert responses(body)[-1]["task_budget"]["active"] is False
         assert {item["function"]["name"] for item in body["tools"]} == {"council_speak", "council_silence"}
         return reply(tool("council_silence", {"label": "Normal budget"}))
@@ -340,7 +340,7 @@ async def test_document_deadline_cancels_generation_and_preserves_local_draft(ke
         nonlocal count
         count += 1
         if count == 1:
-            return reply(tool("document_site", {"operation": "start", "site": "summary"}))
+            return reply(tool("document_site", {"operation": "create", "site": "summary"}))
         await asyncio.sleep(0.5)
         return reply(tool("council_speak", {"content": "Too late"}))
 
@@ -373,7 +373,7 @@ async def test_deadline_blocks_expired_cooldown_dispatch_but_does_not_cancel_acc
         nonlocal count
         count += 1
         if count == 1:
-            return reply(tool("document_site", {"operation": "start", "site": "summary"}))
+            return reply(tool("document_site", {"operation": "create", "site": "summary"}))
         return reply(tool("council_speak", {"content": "Local draft created"}))
 
     await install_client(kernel, handle)
