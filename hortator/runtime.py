@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-
-from jsonschema import Draft202012Validator
 
 from .context import ContextBuilder
 from .footer import render_footer
@@ -14,6 +11,7 @@ from .models import ControlError, OWNER_ID
 from .plugins import SILENCE, SPEAK, ToolContext
 from .provider import strip_reasoning
 from .store import dumps, uid
+from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage
 
 
 @dataclass
@@ -289,22 +287,52 @@ class Engine:
                 status, decision = "completed", "compacted"
                 return
             extras = []
-            for round_index in range(bot["max_tool_rounds"] + 1):
+            round_index, round_limit = 0, bot["max_tool_rounds"]
+            calls_limit = bot["max_calls_per_round"]
+            document_started = False
+            document_deadline = None
+
+            async def budgeted(awaitable):
+                try:
+                    async with asyncio.timeout_at(document_deadline):
+                        return await awaitable
+                except TimeoutError as exc:
+                    if (
+                        document_deadline is not None
+                        and asyncio.get_running_loop().time() >= document_deadline
+                    ):
+                        raise ControlError(
+                            "Document task time budget exhausted; saved local files remain available"
+                        ) from exc
+                    raise
+
+            while round_index <= round_limit:
                 if not self.valid(bot, profile, provider) or not self.channel_allowed(
                     bot, context.channel_id
                 ):
                     raise asyncio.CancelledError()
+                if document_deadline is not None and asyncio.get_running_loop().time() >= document_deadline:
+                    raise ControlError(
+                        "Document task time budget exhausted; saved local files remain available"
+                    )
                 available_tools = [SPEAK, SILENCE] + (
-                    self.registry.schemas(context) if round_index < bot["max_tool_rounds"] else []
+                    self.registry.schemas(context) if round_index < round_limit else []
                 )
+                budget_bot = {**bot, "max_tool_rounds": round_limit, "max_calls_per_round": calls_limit}
                 messages, meta = self.contexts.assemble(
-                    bot, profile, channel_id, rows, summary, round_index, extras, available_tools
+                    budget_bot, profile, channel_id, rows, summary, round_index, extras, available_tools
                 )
                 meta.update(
                     checkpoint=original_meta["checkpoint"],
                     through_sequence=through,
                     calibration_factor=original_meta["calibration_factor"],
+                    document_task=document_started,
+                    calls_per_round=calls_limit,
                 )
+                if document_deadline is not None:
+                    meta["document_seconds_remaining"] = max(
+                        0, document_deadline - asyncio.get_running_loop().time()
+                    )
                 if (
                     meta["estimated_tokens"] * original_meta["calibration_factor"]
                     + profile["response_tokens"]
@@ -317,13 +345,15 @@ class Engine:
                     "UPDATE contexts SET estimated_tokens=? WHERE bot_id=? AND channel_id=?",
                     (meta["estimated_tokens"], bot["id"], channel_id),
                 )
-                result = await self.pool.complete(
-                    bot=bot,
-                    profile=profile,
-                    messages=messages,
-                    tools=available_tools,
-                    turn_id=turn_id,
-                    context=meta,
+                result = await budgeted(
+                    self.pool.complete(
+                        bot=bot,
+                        profile=profile,
+                        messages=messages,
+                        tools=available_tools,
+                        turn_id=turn_id,
+                        context=meta,
+                    )
                 )
                 if result.finish_reason in ("length", "content_filter"):
                     raise ControlError(
@@ -340,74 +370,215 @@ class Engine:
                             None,
                             [],
                             request_id=result.request_id,
+                            draft_deadline=document_deadline,
                         )
                         status, decision = "sent", "speak"
                     else:
                         status, decision = "silent", "empty_completion"
                     break
-                names = [call["function"]["name"] for call in result.tool_calls]
-                if "council_speak" in names or "council_silence" in names:
-                    if len(names) != 1:
-                        raise ControlError(
-                            "Terminal speak/silence decision must be the only tool call; no partial actions were executed"
-                        )
-                    call = result.tool_calls[0]
-                    args = json.loads(call["function"]["arguments"])
-                    definition = SPEAK if names[0] == "council_speak" else SILENCE
-                    errors = list(
-                        Draft202012Validator(definition["function"]["parameters"]).iter_errors(args)
-                    )
-                    if errors:
-                        raise ControlError("Invalid council decision: " + errors[0].message)
-                    if names[0] == "council_silence":
-                        status, decision = "silent", "listen"
-                        self.store.emit(
-                            "decision.silence", {"label": args["label"]}, bot_id=bot["id"], turn_id=turn_id
-                        )
-                    else:
-                        reply_to = args.get("reply_to") or None
-                        if reply_to and (
-                            not reply_to.isdigit() or reply_to not in {row["discord_id"] for row in rows}
-                        ):
-                            raise ControlError("Reply target is not in this turn's channel context")
-                        await self.deliver(
-                            bot,
-                            profile,
-                            provider,
-                            context,
-                            args["content"],
-                            reply_to,
-                            args.get("artifact_ids", []),
-                            request_id=result.request_id,
-                        )
-                        status, decision = "sent", "reply" if reply_to else "speak"
-                    break
-                if round_index >= bot["max_tool_rounds"]:
-                    raise ControlError("Model called a tool after its round budget was exhausted")
-                if len(result.tool_calls) > bot["max_calls_per_round"]:
-                    raise ControlError("Too many tool calls in one round; none executed")
                 if len({c["id"] for c in result.tool_calls}) != len(result.tool_calls):
-                    raise ControlError("Provider returned duplicate tool-call IDs")
+                    raise ControlError("Provider returned duplicate tool-call IDs; no actions executed")
+                names = [call["function"]["name"] for call in result.tool_calls]
+                terminal = any(name in ("council_speak", "council_silence") for name in names)
+                batch_error = None
+                if terminal and len(names) != 1:
+                    batch_error = "Terminal speak/silence decision must be the only tool call; no partial actions were executed"
+                elif len(names) > calls_limit:
+                    batch_error = f"Too many tool calls: maximum {calls_limit} per round; none executed"
+                elif not terminal and round_index >= round_limit:
+                    batch_error = (
+                        "Tool round budget exhausted; only council_speak or council_silence is available"
+                    )
                 extras.append(result.message())
+                finished = False
                 for call in result.tool_calls:
-                    try:
-                        args = json.loads(call["function"]["arguments"])
-                    except ValueError:
-                        result_value = {"error": "Tool arguments must be valid JSON"}
+                    name = call["function"]["name"]
+                    definition = (
+                        SPEAK if name == "council_speak" else SILENCE if name == "council_silence" else None
+                    )
+                    if batch_error:
+                        spec = self.registry.specs.get(name) if self.registry.allowed(name, context) else None
+                        parameters = (
+                            definition["function"]["parameters"]
+                            if definition
+                            else spec.parameters
+                            if spec
+                            else {"type": "object"}
+                        )
+                        result_value = {
+                            "ok": False,
+                            "executed": False,
+                            "error": batch_error
+                            if definition or spec
+                            else "Tool is not enabled for this bot and trusted request",
+                        }
+                        if definition or spec:
+                            try:
+                                batch_args = parse_arguments(call["function"]["arguments"])
+                            except (ValueError, TypeError) as exc:
+                                argument_report = syntax_feedback(name, exc, parameters)
+                            else:
+                                argument_report = feedback(name, batch_args, parameters) or {
+                                    "usage": usage(name, parameters, arguments=batch_args)
+                                }
+                            result_value.update(
+                                usage=argument_report["usage"],
+                                errors=[
+                                    {"path": "$", "rule": "batch", "message": batch_error},
+                                    *argument_report.get("errors", []),
+                                ],
+                                error_count=1 + len(argument_report.get("errors", [])),
+                            )
+                    elif definition:
+                        parameters = definition["function"]["parameters"]
+                        description = definition["function"]["description"]
+                        try:
+                            args = parse_arguments(call["function"]["arguments"])
+                        except (ValueError, TypeError) as exc:
+                            result_value = syntax_feedback(name, exc, parameters, description)
+                        else:
+                            result_value = feedback(name, args, parameters, description)
+                            if (
+                                name == "council_speak"
+                                and isinstance(args, dict)
+                                and not (result_value or {}).get("usage_only")
+                            ):
+                                # Type-invalid fields cannot be inspected safely, but they must
+                                # not hide independent semantic failures in the remaining fields.
+                                issues = list((result_value or {}).get("errors", []))
+                                reply_to = args.get("reply_to") or None
+                                if (
+                                    isinstance(reply_to, str)
+                                    and reply_to
+                                    and (
+                                        not reply_to.isdigit()
+                                        or reply_to not in {row["discord_id"] for row in rows}
+                                    )
+                                ):
+                                    issues.append(
+                                        {
+                                            "path": "$.reply_to",
+                                            "message": "Reply target must be a message ID in this turn's channel context",
+                                        }
+                                    )
+                                artifact_ids = args.get("artifact_ids", [])
+                                for index, artifact_id in enumerate(
+                                    artifact_ids if isinstance(artifact_ids, list) else []
+                                ):
+                                    if not isinstance(artifact_id, str):
+                                        continue
+                                    try:
+                                        self.registry.resolve_artifact(artifact_id, context)
+                                    except ControlError as exc:
+                                        issues.append(
+                                            {"path": f"$.artifact_ids[{index}]", "message": str(exc)}
+                                        )
+                                if (
+                                    isinstance(args.get("content"), str)
+                                    and not strip_reasoning(args["content"]).strip()
+                                ):
+                                    issues.append(
+                                        {
+                                            "path": "$.content",
+                                            "message": "A nonempty visible answer is required; reasoning-only content cannot be delivered",
+                                        }
+                                    )
+                                if issues:
+                                    result_value = {
+                                        "ok": False,
+                                        "executed": False,
+                                        "error": "Invalid council decision; fix all errors",
+                                        "errors": issues,
+                                        "error_count": len(issues),
+                                        "usage": usage(name, parameters, description),
+                                    }
+                            if result_value is None:
+                                if name == "council_silence":
+                                    status, decision = "silent", "listen"
+                                    self.store.emit(
+                                        "decision.silence",
+                                        {"label": args["label"]},
+                                        bot_id=bot["id"],
+                                        turn_id=turn_id,
+                                    )
+                                else:
+                                    await self.deliver(
+                                        bot,
+                                        profile,
+                                        provider,
+                                        context,
+                                        args["content"],
+                                        args.get("reply_to") or None,
+                                        args.get("artifact_ids", []),
+                                        request_id=result.request_id,
+                                        draft_deadline=document_deadline,
+                                    )
+                                    status, decision = "sent", "reply" if args.get("reply_to") else "speak"
+                                finished = True
+                                break
+                    else:
+                        result_value = await budgeted(
+                            self.registry.call_raw(name, call["function"]["arguments"], context, call["id"])
+                        )
+                        if (
+                            name == "document_site"
+                            and isinstance(result_value, dict)
+                            and result_value.get("document_task_started")
+                        ):
+                            extra_rounds = bot.get("document_task_rounds", 20)
+                            if extra_rounds and not document_started:
+                                document_started = True
+                                round_limit = max(round_limit, round_index + 1 + extra_rounds)
+                                calls_limit = bot.get("document_task_calls_per_round", 8)
+                                seconds = bot.get("document_task_seconds", 900)
+                                document_deadline = asyncio.get_running_loop().time() + seconds
+                                self.store.emit(
+                                    "tool.task_started",
+                                    {
+                                        "plugin": name,
+                                        "rounds": extra_rounds,
+                                        "calls_per_round": calls_limit,
+                                        "seconds": seconds,
+                                    },
+                                    bot_id=bot["id"],
+                                    turn_id=turn_id,
+                                )
+                            result_value = {
+                                **result_value,
+                                "task_budget": {
+                                    "active": document_started,
+                                    "rounds_remaining": round_limit - round_index - 1,
+                                    "calls_per_round": calls_limit,
+                                    "seconds": bot.get("document_task_seconds", 900)
+                                    if document_started
+                                    else None,
+                                    "seconds_remaining": max(
+                                        0, document_deadline - asyncio.get_running_loop().time()
+                                    )
+                                    if document_deadline is not None
+                                    else None,
+                                    "renewable_this_turn": False,
+                                },
+                            }
+                    result_value = self.vault.redact(result_value)
+                    if definition or batch_error:
                         self.store.emit(
-                            "tool.failed",
-                            {"name": call["function"]["name"], "call_id": call["id"], **result_value},
+                            "tool.help" if result_value.get("usage_only") else "tool.failed",
+                            {"name": name, "call_id": call["id"], **result_value},
                             bot_id=bot["id"],
                             turn_id=turn_id,
-                            level="error",
-                        )
-                    else:
-                        result_value = await self.registry.call(
-                            call["function"]["name"], args, context, call["id"]
+                            level="info" if result_value.get("usage_only") else "warning",
                         )
                     extras.append(
                         {"role": "tool", "tool_call_id": call["id"], "content": dumps(result_value)}
                     )
+                if finished:
+                    break
+                round_index += 1
+            else:
+                raise ControlError(
+                    "Tool round budget exhausted without a valid final answer; no further calls executed"
+                )
             if status in ("sent", "silent"):
                 self.store.execute(
                     "UPDATE contexts SET last_seen=?,updated_at=? WHERE bot_id=? AND channel_id=?",
@@ -450,8 +621,23 @@ class Engine:
             )
 
     async def deliver(
-        self, bot, profile, provider, context, content, reply_to, artifact_ids, *, request_id=None
+        self,
+        bot,
+        profile,
+        provider,
+        context,
+        content,
+        reply_to,
+        artifact_ids,
+        *,
+        request_id=None,
+        draft_deadline=None,
     ):
+        def check_deadline():
+            if draft_deadline is not None and asyncio.get_running_loop().time() >= draft_deadline:
+                raise ControlError("Document task time budget exhausted before Discord dispatch")
+
+        check_deadline()
         content = self.vault.redact(strip_reasoning(content))
         if not content:
             raise ControlError("No visible content remained after removing reasoning")
@@ -513,7 +699,15 @@ class Engine:
                         bot_id=bot["id"],
                         turn_id=context.turn_id,
                     )
-                    await asyncio.sleep(wait)
+                    remaining = (
+                        max(0, draft_deadline - asyncio.get_running_loop().time())
+                        if draft_deadline is not None
+                        else wait
+                    )
+                    await asyncio.sleep(min(wait, remaining))
+                # Stop before dispatch, but never cancel an in-flight Discord send
+                # solely because the drafting deadline passed: acceptance may be uncertain.
+                check_deadline()
                 if not self.valid(bot, profile, provider) or not self.channel_allowed(
                     bot, context.channel_id
                 ):

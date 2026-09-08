@@ -134,6 +134,8 @@ class Service:
             )
         elif kind == "bots":
             value.update(footer_settings(value))
+            for field in ("document_task_rounds", "document_task_calls_per_round", "document_task_seconds"):
+                value.setdefault(field, SCHEMAS["bots"].model_fields[field].default)
             value["token_configured"] = bool(self.vault.get(f"bot/{value['id']}/token"))
             value["key_override_configured"] = bool(self.vault.get(f"bot/{value['id']}/provider_key"))
             value["plugin_keys_configured"] = [
@@ -227,6 +229,24 @@ class Service:
                 for r in self.store.list("rooms")
             ):
                 raise ControlError("This channel already belongs to a room", 409)
+        document_config = None
+        if kind == "plugins" and entity["id"] == "document_site":
+            document_config = entity["config"]
+        elif kind == "bots":
+            document_config = entity.get("plugin_config", {}).get("document_site")
+        if document_config is not None:
+            from .documents import public_base
+
+            if not isinstance(document_config, dict):
+                raise ControlError("document_site configuration must be an object")
+            for field in ("local_base_url", "public_base_url"):
+                if field in document_config:
+                    value = document_config[field]
+                    if not isinstance(value, str):
+                        raise ControlError(f"document_site.{field} must be a string URL")
+                    if field == "local_base_url" and not value:
+                        raise ControlError("document_site.local_base_url must not be empty")
+                    public_base(value)
         if kind == "plugins" and entity["id"] not in self.registry.specs:
             raise ControlError("Install a Python plugin entry point before configuring it")
 

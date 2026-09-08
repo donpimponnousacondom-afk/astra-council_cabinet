@@ -16,6 +16,8 @@ from .security import Actor
 from .discord_text import CodeBlock, code_pages, model_message, preview, with_footer
 from .footer import footer_settings, render_footer
 from .version import version_text
+from .vision import ImageCache, image_candidate, MAX_IMAGES
+from .store import dumps
 
 
 TYPING_INTERVAL_SECONDS = 5
@@ -128,6 +130,31 @@ class CouncilClient(discord.Client):
                 {"message_id": str(payload.message_id), "before": existing["content"], "after": content},
             )
 
+        if existing and not existing["deleted"] and "attachments" in payload.data:
+            # Embed-only edits omit attachments. Explicit attachment edits, including [],
+            # must update the transcript so removed pixels do not remain model-visible.
+            prior = {a["id"]: a for a in json.loads(existing["attachments"])}
+            attachments, image_index = [], 0
+            for value in payload.data["attachments"]:
+                item = {key: value.get(key) for key in ("id", "filename", "url", "size", "content_type")}
+                item["id"] = str(item["id"])
+                if prior.get(item["id"], {}).get("vision", {}).get("status") == "ready":
+                    item["vision"] = prior[item["id"]]["vision"]
+                if image_candidate(item):
+                    image_index += 1
+                    if image_index <= MAX_IMAGES:
+                        item = await self.manager.images.capture(item)
+                    else:
+                        item["vision"] = {
+                            "status": "unavailable",
+                            "error": "Message exceeds the 8-image capture limit",
+                        }
+                attachments.append(item)
+            self.manager.store.execute(
+                "UPDATE messages SET attachments=? WHERE discord_id=?",
+                (dumps(self.manager.vault.redact(attachments)), str(payload.message_id)),
+            )
+
     async def on_thread_join(self, thread):
         self.manager.store.emit(
             "discord.thread_joined",
@@ -151,6 +178,7 @@ class CouncilClient(discord.Client):
 class DiscordManager:
     def __init__(self, service):
         self.service, self.store, self.vault = service, service.store, service.vault
+        self.images = ImageCache(self.store)
         self.clients: dict[str, CouncilClient] = {}
         self.runners: dict[str, tuple[str, asyncio.Task]] = {}
         self.task = None
@@ -431,6 +459,41 @@ class DiscordManager:
             ),
             None,
         )
+        attachments = []
+        previous = self.store.one("SELECT attachments FROM messages WHERE discord_id=?", (str(message.id),))
+        prior = {a["id"]: a for a in json.loads(previous["attachments"])} if previous else {}
+        image_index = 0
+        for a in message.attachments:
+            attachment = {
+                "id": str(a.id),
+                "filename": a.filename,
+                "url": a.url,
+                "size": a.size,
+                "content_type": a.content_type,
+            }
+            if prior.get(str(a.id), {}).get("vision", {}).get("status") == "ready":
+                attachment["vision"] = prior[str(a.id)]["vision"]
+            if image_candidate(attachment):
+                image_index += 1
+                if image_index <= MAX_IMAGES:
+                    attachment = await self.images.capture(attachment)
+                else:
+                    attachment["vision"] = {
+                        "status": "unavailable",
+                        "error": "Message exceeds the 8-image capture limit",
+                    }
+                if attachment.get("vision", {}).get("status") == "unavailable":
+                    self.store.emit(
+                        "attachment.image_unavailable",
+                        {
+                            "message_id": str(message.id),
+                            "attachment_id": str(a.id),
+                            "error": attachment["vision"]["error"],
+                        },
+                        bot_id=bot_id,
+                        level="warning",
+                    )
+            attachments.append(attachment)
         self.store.ingest(
             discord_id=str(message.id),
             channel_id=str(message.channel.id),
@@ -445,17 +508,13 @@ class DiscordManager:
             reply_to=str(message.reference.message_id)
             if message.reference and message.reference.message_id
             else None,
-            attachments=[
-                {
-                    "id": str(a.id),
-                    "filename": a.filename,
-                    "url": a.url,
-                    "size": a.size,
-                    "content_type": a.content_type,
-                }
-                for a in message.attachments
-            ],
+            attachments=attachments,
         )
+        if previous:
+            self.store.execute(
+                "UPDATE messages SET attachments=? WHERE discord_id=?",
+                (dumps(self.vault.redact(attachments)), str(message.id)),
+            )
         self.store.context(bot_id, str(message.channel.id))
         self.store.runtime(bot_id)
 

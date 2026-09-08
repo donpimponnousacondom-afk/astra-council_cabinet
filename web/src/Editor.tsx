@@ -14,6 +14,8 @@ import { api, control, credential, dateLabel, kindLabel, num } from "./api";
 import type { Dashboard, Kind, RecordData } from "./api";
 import { ReasoningEditor, reasoningFields } from "./Reasoning";
 import { FooterEditor } from "./Footer";
+import { PricingEditor } from "./Pricing";
+import { DocumentPluginSettings, DocumentSitesPanel } from "./Documents";
 import {
   Badge,
   Code,
@@ -397,9 +399,45 @@ export function Editor({
                     "Bot capabilities",
                   )}
                   <div className="form-grid">
-                    {numeric("max_tool_rounds", "Maximum tool rounds")}
-                    {numeric("max_calls_per_round", "Calls per tool round")}
+                    {numeric(
+                      "max_tool_rounds",
+                      "Tool work rounds",
+                      "Maximum model → tool → model cycles before the final response.",
+                    )}
+                    {numeric(
+                      "max_calls_per_round",
+                      "Tool calls allowed in each round",
+                      "Calls are executed in order, not in parallel.",
+                    )}
                   </div>
+                  {(draft.enabled_plugins || []).includes("document_site") && (
+                    <>
+                      <h3>Extended document task budget</h3>
+                      <Notice>
+                        A successful document task start grants these additional
+                        rounds once per turn, whoever initiated the task.
+                        Provider limits and the daily cost threshold still
+                        apply.
+                      </Notice>
+                      <div className="form-grid">
+                        {numeric(
+                          "document_task_rounds",
+                          "Additional document work rounds",
+                          "0 keeps the normal budget; repeated starts do not renew it.",
+                        )}
+                        {numeric(
+                          "document_task_calls_per_round",
+                          "Document calls allowed in each round",
+                        )}
+                        {numeric(
+                          "document_task_seconds",
+                          "Document task time limit (seconds)",
+                          "Elapsed time after the first successful task start.",
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {entity && <DocumentSitesPanel botId={entity.id} />}
                   <details className="advanced">
                     <summary>Advanced · per-bot plugin configuration</summary>
                     <JsonInput
@@ -414,7 +452,9 @@ export function Editor({
                       kind="bots"
                       entity={entity}
                       field="plugin"
-                      plugins={dashboard.plugins}
+                      plugins={dashboard.plugins.filter(
+                        (plugin) => plugin.id !== "document_site",
+                      )}
                       changed={credentialChanged}
                       notify={notify}
                     />
@@ -720,23 +760,7 @@ export function Editor({
                   label="Effective compaction reasoning fields"
                 />
               </details>
-              <details className="advanced">
-                <summary>Optional · price estimates</summary>
-                <div className="form-grid">
-                  {numeric(
-                    "input_price_per_million",
-                    "Input USD / million tokens",
-                    "Only used when the provider omits cost.",
-                    "any",
-                  )}
-                  {numeric(
-                    "output_price_per_million",
-                    "Output USD / million tokens",
-                    undefined,
-                    "any",
-                  )}
-                </div>
-              </details>
+              <PricingEditor draft={draft} set={set} />
             </>
           )}
           {kind === "prompts" && (
@@ -765,13 +789,19 @@ export function Editor({
                 grant. Council inspection is additionally restricted to
                 owner-initiated Hortator turns.
               </Notice>
+              {draft.id === "document_site" && (
+                <DocumentPluginSettings
+                  config={draft.config || {}}
+                  onChange={(value) => set("config", value)}
+                />
+              )}
               <JsonInput
                 label="Plugin configuration"
                 value={draft.config || {}}
                 onChange={(v) => set("config", v)}
                 hint="Configure the endpoint, model, and non-secret provider JSON. Bot overrides are applied after this configuration."
               />
-              {entity && (
+              {entity && draft.id !== "document_site" && (
                 <CredentialBox
                   kind="plugins"
                   entity={entity}
@@ -780,6 +810,7 @@ export function Editor({
                   notify={notify}
                 />
               )}
+              {draft.id === "document_site" && <DocumentSitesPanel />}
               <Code value={entity?.schema} label="Tool-call JSON schema" />
             </>
           )}

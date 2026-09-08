@@ -5,13 +5,14 @@ import fcntl
 import hmac
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -159,6 +160,30 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         )
+        if request.url.path.startswith("/sites/"):
+            # Published documents are a separate opaque sandbox even though files use
+            # this loopback server. Never inherit dashboard script/API capabilities.
+            parts = request.url.path.split("/")
+            source = ""
+            if len(parts) >= 4 and all(re.fullmatch(r"[A-Za-z0-9_-]+", item) for item in parts[2:4]):
+                source = quote(str(request.base_url), safe=":/[]") + "sites/" + "/".join(parts[2:4]) + "/"
+            restricted = source or "'none'"
+            response.headers["Content-Security-Policy"] = (
+                "sandbox allow-scripts; default-src 'none'; "
+                f"script-src 'unsafe-inline' {restricted}; style-src 'unsafe-inline' {restricted}; "
+                f"img-src data: {restricted}; font-src {restricted}; media-src {restricted}; "
+                f"connect-src {restricted}; object-src 'none'; frame-src 'none'; "
+                "frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+            )
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+            response.headers["Permissions-Policy"] = (
+                "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+            )
+            if 200 <= response.status_code < 300:
+                # Site resources are deliberately public. Opaque-origin sandbox JS
+                # may read only these resources, without credentials.
+                response.headers["Access-Control-Allow-Origin"] = "*"
         if request.url.path.startswith("/api"):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -343,6 +368,35 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
         if not path.is_file():
             raise ControlError("Artifact file is missing from storage", 404)
         return FileResponse(path, media_type=value["mime"], filename=value["filename"])
+
+    @app.get("/api/documents")
+    async def documents(actor=Depends(authenticated), k=Depends(kernel)):
+        return {"sites": k.registry.documents.list_sites(), "remote_status": "disabled"}
+
+    @app.get("/api/documents/{bot_id}/{slug}/files/{filename:path}")
+    async def document_draft(
+        bot_id: str, slug: str, filename: str, actor=Depends(authenticated), k=Depends(kernel)
+    ):
+        data, mime = k.registry.documents.read_file(bot_id, slug, filename)
+        return Response(
+            data,
+            media_type=mime,
+            headers={
+                "Content-Disposition": "attachment; filename*=UTF-8''" + quote(Path(filename).name, safe=""),
+            },
+        )
+
+    @app.api_route("/sites/{bot_id}/{slug}/", methods=["GET", "HEAD"])
+    @app.api_route("/sites/{bot_id}/{slug}/{filename:path}", methods=["GET", "HEAD"])
+    async def published_document(
+        request: Request, bot_id: str, slug: str, filename: str = "index.html", k=Depends(kernel)
+    ):
+        data, mime = k.registry.documents.resolve_published(bot_id, slug, filename)
+        return Response(
+            data if request.method == "GET" else b"",
+            media_type=mime,
+            headers={"Content-Length": str(len(data))},
+        )
 
     @app.get("/api/export/config")
     async def export_config(actor=Depends(authenticated), k=Depends(kernel)):

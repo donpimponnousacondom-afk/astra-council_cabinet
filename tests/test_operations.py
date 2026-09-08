@@ -30,6 +30,9 @@ async def test_live_backup_restores_credentials_memory_and_trajectory(kernel, tm
     artifacts = source / "artifacts"
     artifacts.mkdir(exist_ok=True)
     (artifacts / "test-attachment.txt").write_text("Owned test artifact")
+    for folder in ("images", "sites"):
+        (source / folder / "test-owner").mkdir(parents=True, exist_ok=True)
+        (source / folder / "test-owner" / "blob").write_bytes(b"persistent media")
     destination = tmp_path / "backup"
     result = subprocess.run(
         [sys.executable, "-m", "hortator.cli", "--data-dir", str(source), "backup", str(destination)],
@@ -42,6 +45,11 @@ async def test_live_backup_restores_credentials_memory_and_trajectory(kernel, tm
     assert destination.stat().st_mode & 0o777 == 0o700
     assert (destination / "master.key").stat().st_mode & 0o777 == 0o600
     assert (destination / "council.sqlite3").stat().st_mode & 0o777 == 0o600
+    for folder in ("images", "sites"):
+        blob = destination / folder / "test-owner" / "blob"
+        assert blob.read_bytes() == b"persistent media"
+        assert blob.stat().st_mode & 0o777 == 0o600
+        assert blob.parent.stat().st_mode & 0o777 == 0o700
     restored = Kernel(destination)
     try:
         assert restored.vault.get("provider/openrouter/api_key") == "backup-test-credential"

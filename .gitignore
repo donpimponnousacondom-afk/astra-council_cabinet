@@ -17,6 +17,8 @@ htmlcov/
 /hortator/_build_info.json
 /web/test-results/
 /web/playwright-report/
+/test-results/
+/playwright-report/
 *.tsbuildinfo
 *.egg-info/
 

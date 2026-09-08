@@ -92,3 +92,13 @@ Bot token validation calls Discord to check both the application and bot identit
 `!get`, `!set`, `!create`, `!delete`, and `!clone` provide configuration parity instead of inventing a different command for every vendor parameter. Credentials are the deliberate exception: enter them in the dashboard. A command error never falls through to the model. A normal owner message is queued for Hortator's model, whose `council_inspect` tool can query version/status/statistics/configuration/events/contexts/trajectories but cannot mutate them.
 
 `!help` returns the complete command list in fenced code blocks with no repeated owner/credential preface. `!version` and `!ver` are aliases for the same deterministic, read-only version report, also fenced. Formatting does not change exact-owner authorization, introduce model calls or enable mutations through the inspector. Native Discord Markdown in generated messages is preserved under the existing reasoning/mention rules.
+
+## Local documents and publication
+
+- Authenticated `GET /api/documents` returns `{sites: [...], remote_status: "disabled"}` with draft/published revisions, files, URLs and queue state.
+- Authenticated `GET /api/documents/{bot_id}/{slug}/files/{filename}` downloads the current draft file as an attachment.
+- Public `GET`/`HEAD /sites/{bot_id}/{slug}/` resolves the published `index.html`; `/sites/{bot_id}/{slug}/{filename}` resolves only that published immutable manifest. Unpublished/missing files are not served. This is local publication, not remote sync confirmation.
+
+Published content receives a sandbox CSP without same-origin privileges, a site-specific resource allowlist and public asset CORS without credentials. Draft and administrative routes retain authentication and ordinary dashboard security headers. No remote transport endpoint is provided.
+
+Bots expose `document_task_rounds` (default20,0–100 additional rounds), `document_task_calls_per_round` (default8,1–20) and `document_task_seconds` (default900,30–3600) through the existing bot-save API. Model profiles expose nullable nonnegative `cache_hit_input_price_per_million` and `cache_miss_input_price_per_million`. See [TOOLS.md](TOOLS.md), [DOCUMENTS.md](DOCUMENTS.md) and [PRICING.md](PRICING.md) for semantics.

@@ -1966,6 +1966,17 @@ textarea {
   padding: 10px 2px;
   cursor: pointer;
 }
+.check-list > label > input[type="checkbox"] {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  cursor: pointer;
+}
+.check-list > label > input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
+}
 .check-list strong {
   display: block;
   font-size: 13px;
@@ -1978,6 +1989,7 @@ textarea {
   line-height: 1.5;
 }
 .check-list .badge {
+  flex-shrink: 0;
   margin-left: auto;
 }
 .check-list > label > span:not(.badge) {

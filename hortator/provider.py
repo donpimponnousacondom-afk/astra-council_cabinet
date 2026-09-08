@@ -14,6 +14,7 @@ import httpx
 
 from .models import ControlError
 from .store import dumps, uid
+from .vision import ImageCache
 
 
 class ProviderError(ControlError):
@@ -53,24 +54,97 @@ def number(value):
 
 
 def normalized_usage(usage, profile):
+    """Normalize reported counts and snapshot the estimate's exact billing basis.
+
+    Cache counts are parts of prompt_tokens; reasoning is already part of
+    completion_tokens. Missing or inconsistent split data is never guessed.
+    """
     inp, out = number(usage.get("prompt_tokens")), number(usage.get("completion_tokens"))
     completion_details = usage.get("completion_tokens_details") or {}
     prompt_details = usage.get("prompt_tokens_details") or {}
-    reasoning = number(completion_details.get("reasoning_tokens"))
-    cached = number(prompt_details.get("cached_tokens", usage.get("prompt_cache_hit_tokens")))
+    reasoning = (
+        number(completion_details.get("reasoning_tokens")) if isinstance(completion_details, dict) else None
+    )
+    standard_hit = number(prompt_details.get("cached_tokens")) if isinstance(prompt_details, dict) else None
+    vendor_hit = number(usage.get("prompt_cache_hit_tokens"))
+    cached = standard_hit if standard_hit is not None else vendor_hit
+    miss = number(usage.get("prompt_cache_miss_tokens"))
+    split_error = None
+    if standard_hit is not None and vendor_hit is not None and standard_hit != vendor_hit:
+        split_error = "Reported cache-hit counts disagree."
+    if inp is not None:
+        if cached is not None and miss is None and cached <= inp:
+            miss = inp - cached
+        elif miss is not None and cached is None and miss <= inp:
+            cached = inp - miss
+        if (cached is not None and cached > inp) or (miss is not None and miss > inp):
+            split_error = "Reported cache count exceeds total input tokens."
+        elif cached is not None and miss is not None and cached + miss != inp:
+            split_error = "Reported cache-hit and cache-miss counts do not sum to total input tokens."
+    rates = {
+        name: number(profile.get(name))
+        for name in (
+            "input_price_per_million",
+            "output_price_per_million",
+            "cache_hit_input_price_per_million",
+            "cache_miss_input_price_per_million",
+        )
+    }
+    split_configured = any(
+        profile.get(key) is not None
+        for key in ("cache_hit_input_price_per_million", "cache_miss_input_price_per_million")
+    )
+    mode = "cache_split" if split_configured else "flat"
     cost, cost_source = number(usage.get("cost")), "reported"
+    note = None
     if cost is None:
         cost_source = None
-        ip, op = profile.get("input_price_per_million"), profile.get("output_price_per_million")
-        if inp is not None and out is not None and ip is not None and op is not None:
+        ip, op = rates["input_price_per_million"], rates["output_price_per_million"]
+        hit_rate, miss_rate = (
+            rates["cache_hit_input_price_per_million"],
+            rates["cache_miss_input_price_per_million"],
+        )
+        if inp is None or out is None:
+            note = "Provider did not report both total input and output token counts."
+        elif split_configured:
+            if hit_rate is None or miss_rate is None or op is None:
+                note = "Cache-aware estimates require cache-hit, cache-miss and output rates."
+            elif split_error:
+                note = split_error
+            elif cached is None or miss is None:
+                note = "Provider did not report a cache split; no hit or miss count is assumed."
+            else:
+                cost, cost_source = (cached * hit_rate + miss * miss_rate + out * op) / 1_000_000, "estimated"
+        elif ip is not None and op is not None:
             cost, cost_source = (inp * ip + out * op) / 1_000_000, "estimated"
+        else:
+            note = "Flat estimates require input and output rates."
+    pricing = {
+        "version": 1,
+        "basis": "provider_reported" if cost_source == "reported" else mode,
+        "profile_id": profile.get("id"),
+        "profile_revision": profile.get("revision"),
+        "currency": "USD",
+        "rate_schedule": "manual_profile_snapshot",
+        "rates_per_million": rates,
+        "input_tokens": inp,
+        "output_tokens": out,
+        "cache_hit_tokens": cached,
+        "cache_miss_tokens": miss,
+        "output_includes_reasoning": True,
+        "cost": cost,
+        "cost_source": cost_source,
+        "note": note,
+        "cache_split_error": split_error,
+    }
     return dict(
         input_tokens=inp,
         output_tokens=out,
         reasoning_tokens=reasoning,
-        cached_tokens=cached,
+        cached_tokens=cached if split_error is None else None,
         cost=cost,
         cost_source=cost_source,
+        pricing=pricing,
     )
 
 
@@ -274,6 +348,10 @@ class ProviderPool:
             total_bytes = 0
             status_code = None
             try:
+                try:
+                    body["messages"] = ImageCache(self.store).wire_messages(messages)
+                except ControlError as exc:
+                    raise ProviderError(str(exc), provider_fault=False) from exc
                 # Total deadline covers streamed bodies as well as the connection, not just inactivity.
                 async with asyncio.timeout(provider["timeout_seconds"]):
                     async with self.client.stream(
@@ -463,6 +541,7 @@ class ProviderPool:
                                     "tool_calls": result.tool_calls,
                                     "finish_reason": result.finish_reason,
                                     "provider_metadata": result.metadata,
+                                    "pricing": metrics["pricing"],
                                 }
                             )
                         ),
@@ -523,6 +602,7 @@ class ProviderPool:
                                     "tool_calls": result.tool_calls or list(calls.values()),
                                     "finish_reason": result.finish_reason,
                                     "provider_metadata": result.metadata,
+                                    "pricing": metrics["pricing"],
                                 }
                             )
                         ),

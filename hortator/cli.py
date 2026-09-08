@@ -68,8 +68,12 @@ def main():
         key = os.getenv("HORTATOR_MASTER_KEY") or (directory / "master.key").read_text()
         (destination / "master.key").write_text(key)
         (destination / "master.key").chmod(0o600)
-        if (directory / "artifacts").exists():
-            shutil.copytree(directory / "artifacts", destination / "artifacts")
+        for folder in ("artifacts", "images", "sites"):
+            if (directory / folder).exists():
+                shutil.copytree(directory / folder, destination / folder)
+                (destination / folder).chmod(0o700)
+                for entry in (destination / folder).rglob("*"):
+                    entry.chmod(0o700 if entry.is_dir() else 0o600)
         print(f"Backup saved to {destination}. Store its encryption key separately from the database.")
         return
     import fcntl

@@ -113,6 +113,8 @@ class Profile(Entity):
     include_usage: bool = True
     input_price_per_million: float | None = Field(default=None, ge=0)
     output_price_per_million: float | None = Field(default=None, ge=0)
+    cache_hit_input_price_per_million: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    cache_miss_input_price_per_million: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
     @field_validator("request_json", "compaction_request_json")
     @classmethod
@@ -154,6 +156,9 @@ class Bot(Entity):
     plugin_config: dict[str, dict[str, Any]] = Field(default_factory=dict)
     max_tool_rounds: int = Field(default=3, ge=0, le=20)
     max_calls_per_round: int = Field(default=4, ge=1, le=20)
+    document_task_rounds: int = Field(default=20, ge=0, le=100)
+    document_task_calls_per_round: int = Field(default=8, ge=1, le=20)
+    document_task_seconds: float = Field(default=900, ge=30, le=3600)
     hourly_turn_limit: int = Field(default=120, ge=1, le=10000)
     daily_cost_limit: float | None = Field(default=None, gt=0)
     color: str = Field(default="#b9de89", pattern=r"^#[0-9a-fA-F]{6}$")
