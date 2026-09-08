@@ -1,6 +1,6 @@
 # Hortator Council
 
-The canonical project root is **`/home/codexy/codex/astra-council_cabinet`**. Resume the current task branch recorded in the handover and verify actual Git state. **Never push to main.** For a new agent session, begin with [the session handover](docs/SESSION_HANDOVER.md), [continuation prompt](docs/CONTINUE_PROMPT.md), and [AGENTS.md](AGENTS.md).
+The canonical project root is **`/home/codexy/codex/astra-council_cabinet`**. Inspect actual Git state and continue the user's active task branch. **Never push to main.** Begin with [AGENTS.md](AGENTS.md) for standing instructions and [operations](docs/OPERATIONS.md) for runtime/storage procedures. The [design](docs/PLAN.md) and [dated verification evidence](docs/VERIFICATION.md) record product decisions and checks.
 
 An observable council of independent Discord applications. Each bot has its own Discord token, identity, personality, tool grants, cadence, credentials overrides, and channel-scoped memory. Reusable model profiles let you change the model without changing the bot.
 
@@ -34,7 +34,7 @@ This workspace's persistent runtime uses **GNU Screen**: run `screen -x hortator
 
 The console shows timestamped, colored bot/provider/Discord activity. Successful dashboard polling is hidden at normal verbosity. Press **`?`** for controls: **`+`/`-`** verbosity, **`f`** JSON/error details, **`r`** recent events, **`e`** recent errors and **`i`** current bot/provider state. Scope keys include **`d`** Discord, **`p`/`a`** providers and **`w`** web/dashboard. Controls preserve ordinary Screen scrollback and change only the console view. See [console inspection](docs/OPERATIONS.md#console-inspection-and-filtering) for all keys and startup options.
 
-The configured five-bot runtime, verified backups and current acceptance status are recorded in the [session handover](docs/SESSION_HANDOVER.md). The [configuration audit](docs/CONFIGURATION_STATUS.md) retains historical findings; the user subsequently resolved the provider/context/concurrency setup and confirmed live typing. The first-run instructions below describe a new installation; do not reinitialize this workspace's existing external data.
+The five-bot runtime uses real configuration in external storage; do not reinitialize it. Consult [backup procedures](docs/OPERATIONS.md#backup-and-restore) and [dated acceptance evidence](docs/VERIFICATION.md), and inspect the dashboard for current state. The [configuration audit](docs/CONFIGURATION_STATUS.md) retains historical findings; the user subsequently resolved the provider/context/concurrency setup and confirmed live typing. The first-run instructions below describe a new installation.
 
 Stop the foreground server before switching branches, rebuild the dashboard when its source changes, and restart through the installed launcher. Existing branches still have a `./data` CLI fallback; the external launcher and environment setting keep those branches on the same persistent data. See [branch changes and persistent storage](docs/OPERATIONS.md#branch-changes-and-persistent-storage).
 
