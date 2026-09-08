@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 from pydantic import ValidationError
 
+from .diagnostics import read_diagnostics
 from .footer import footer_settings
 from .models import ControlError, KINDS, OWNER_ID, SCHEMAS
 from .store import uid
@@ -511,7 +512,7 @@ class Service:
             (*args, min(limit, 200)),
         )
 
-    def turn(self, turn_id):
+    def turn(self, turn_id, *, include_diagnostics=False):
         turn = self.store.one("SELECT * FROM turns WHERE id=?", (turn_id,))
         if not turn:
             raise ControlError("Turn not found", 404)
@@ -519,6 +520,8 @@ class Service:
         for request in requests:
             for key in ("body", "context", "usage", "response"):
                 request[key] = json.loads(request[key]) if request[key] else None
+            if include_diagnostics:
+                request["diagnostics"] = read_diagnostics(self.store, request["id"])
         outbox = self.store.rows("SELECT * FROM outbox WHERE turn_id=? ORDER BY created_at", (turn_id,))
         # Detail includes the full turn. Global history remains cursor-paginated.
         events = self.store.rows("SELECT * FROM events WHERE turn_id=? ORDER BY seq", (turn_id,))

@@ -44,7 +44,10 @@ class ContextBuilder:
             "||spoilers||, #/##/### headings, -# subtext, lists, > quotes, [links](https://example.com), "
             "inline `code`, and fenced code blocks with a language label for code or commands. "
             "Keep normal conversation outside code blocks. Discord does not render HTML or Markdown tables. "
-            "Only use reply_to for a replyable Discord message in the supplied context. Use council_speak to speak or reply, council_silence to listen. Do not emit both, or combine them with other tools in a single response. "
+            "To answer, write your contribution directly as ordinary assistant content. The runtime posts it to Discord. "
+            "Do not wrap an answer in JSON, XML, a function, or a tool call. There is no council_speak tool. "
+            "Use real tool calls only for actions; their accompanying text is not posted. "
+            "After tool results, answer normally or call council_silence alone to listen without posting. "
             "You are not required to answer on every activation. Avoid repetitive agreement and performative chatter."
         )
         universal += " " + TOOL_GUIDANCE
@@ -105,7 +108,7 @@ class ContextBuilder:
         return (
             "Runtime facts (trusted): "
             + dumps(values)
-            + ". At zero remaining tool rounds, finish with council_speak or council_silence. Context size is estimated.\n"
+            + ". At zero remaining tool rounds, write an ordinary text answer or call council_silence alone. Context size is estimated.\n"
             + custom
         )
 

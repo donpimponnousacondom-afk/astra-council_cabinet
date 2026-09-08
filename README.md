@@ -91,7 +91,7 @@ Profile cloning copies only configuration, never credentials. Bot cloning clears
 ## What is recorded
 
 - Each activation and its outcome: running, sent, silent, failed, cancelled, interrupted, or manual compaction.
-- Every provider request: exact effective body with secret/reasoning redactions, provider/profile revisions, model, purpose, prompt layers and hashes, selected message IDs/sequences, previous summary, token estimate/calibration, and tool-round budget.
+- Every provider request: effective body with credentials redacted and native reasoning replay separated into private diagnostics, provider/profile revisions, model, purpose, prompt layers and hashes, selected message IDs/sequences, previous summary, token estimate/calibration, and tool-round budget.
 - Provider-reported input/output/reasoning/cached tokens, raw usage JSON, reported or explicitly estimated costs, TTFT, first visible token time, queue time, completion duration, HTTP status and sanitized errors.
 - Tool calls: arguments, results, timing, permission failures, artifacts and cancellation.
 - Compaction: original and new summaries, compacted/retained message IDs, checkpoints, and before/after context estimates. Original transcripts are retained.
@@ -116,7 +116,7 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 | `memory` | Persistent bot + channel scoped notes | No key; 24,000-character total per scoped memory |
 | `council_inspect` | Running version, status, statistics, configuration, context and trajectory queries | Hortator only, for authenticated owner questions; read-only |
 
-Global enablement and a bot grant are both required. Each bot can override plugin configuration and credentials. Plugin tools cannot run administration commands. `council_speak` and `council_silence` are built-in terminal decisions, not optional plugins. Tool rounds and per-round call limits are enforced outside the model.
+Global enablement and a bot grant are both required. Each bot can override plugin configuration and credentials. Plugin tools cannot run administration commands. Models answer directly through ordinary assistant content. `council_silence` explicitly ends a turn without posting; there is no `council_speak` reply tool. When the turn has generated/exported artifacts, optional `discord_attach` prepares owned files (and an optional reply target) for the next ordinary answer. Preparation does not send or finish the turn. Tool rounds and per-round call limits are enforced outside the model.
 
 ## Docker
 

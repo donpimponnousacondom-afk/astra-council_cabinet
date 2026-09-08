@@ -11,6 +11,7 @@ from hortator.plugins import ToolContext
 from hortator.store import dumps
 from hortator.vision import validate_image
 from test_provider import install_client
+from test_runtime import completion
 from test_runtime_feedback import ready, reply, responses, tool
 
 
@@ -96,10 +97,14 @@ PY"""
             artifact_id = responses(body)[-1]["artifact_id"]
             return reply(
                 tool(
-                    "council_speak",
-                    {"content": "Compressed a copy; original preserved.", "artifact_ids": [artifact_id]},
+                    "discord_attach",
+                    {"artifact_ids": [artifact_id]},
                 )
             )
+        if count == 6:
+            assert responses(body)[-1]["prepared"] is True
+            assert responses(body)[-1]["posted"] is False
+            return completion("Compressed a copy; original preserved.")
         raise AssertionError("Unexpected extra model call")
 
     await install_client(kernel, handle)

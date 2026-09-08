@@ -55,7 +55,7 @@ async def test_switching_task_plugins_never_stacks_or_renews_budgets(kernel, ord
                 key: value for key, value in result.items() if key != "result_id"
             }
         if index == 3:
-            assert {x["function"]["name"] for x in body["tools"]} == {"council_speak", "council_silence"}
+            assert {x["function"]["name"] for x in body["tools"]} == {"council_silence"}
             return reply(tool("council_silence", {"label": "Finished within shared budget"}))
         name = order[index]
         args = {"operation": "start"}

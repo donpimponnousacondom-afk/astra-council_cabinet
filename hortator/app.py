@@ -294,12 +294,13 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
 
     @app.get("/api/trajectory/{turn_id}")
     async def trajectory(turn_id: str, actor=Depends(authenticated), k=Depends(kernel)):
-        return k.service.turn(turn_id)
+        return k.service.turn(turn_id, include_diagnostics=True)
 
     @app.get("/api/trajectory/{turn_id}/export")
     async def trajectory_export(turn_id: str, actor=Depends(authenticated), k=Depends(kernel)):
         return JSONResponse(
-            k.service.turn(turn_id), headers={"Content-Disposition": f'attachment; filename="{turn_id}.json"'}
+            k.service.turn(turn_id, include_diagnostics=True),
+            headers={"Content-Disposition": f'attachment; filename="{turn_id}.json"'},
         )
 
     @app.get("/api/events/stream")

@@ -161,7 +161,7 @@ async def test_footer_reserves_discord_budget_closes_code_and_preserves_attachme
     assert not captured["kwargs"]["allowed_mentions"].everyone
 
 
-@pytest.mark.parametrize("terminal", ["tool_call", "content"])
+@pytest.mark.parametrize("terminal", ["content_parts", "content"])
 async def test_final_request_footer_survives_tool_rounds_and_is_separate_from_canonical_answer(
     kernel, terminal
 ):
@@ -195,31 +195,15 @@ async def test_final_request_footer_survives_tool_rounds_and_is_separate_from_ca
                     ]
                 },
             )
+        content = (
+            "A considered answer"
+            if terminal == "content"
+            else [{"type": "text", "text": "A considered answer"}]
+        )
         packets = [
-            {
-                "choices": [
-                    {
-                        "delta": {
-                            "tool_calls": [
-                                {
-                                    "index": 0,
-                                    "id": "speak1",
-                                    "type": "function",
-                                    "function": {
-                                        "name": "council_speak",
-                                        "arguments": '{"content":"A considered answer"}',
-                                    },
-                                }
-                            ]
-                        },
-                        "finish_reason": "tool_calls",
-                    }
-                ]
-            },
+            {"choices": [{"delta": {"content": content}, "finish_reason": "stop"}]},
             {"choices": [], "usage": {"prompt_tokens": 5678, "completion_tokens": 42}},
         ]
-        if terminal == "content":
-            packets[0] = {"choices": [{"delta": {"content": "A considered answer"}, "finish_reason": "stop"}]}
         stream = "".join("data: " + json.dumps(packet) + "\n\n" for packet in packets) + "data: [DONE]\n\n"
         return httpx.Response(
             200, headers={"content-type": "text/event-stream"}, stream=Fragments(stream.encode())

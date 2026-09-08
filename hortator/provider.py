@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from .models import ControlError
+from .diagnostics import record_diagnostics, text_content
 from .store import dumps, uid
 from .vision import ImageCache
 
@@ -24,7 +25,8 @@ class ProviderError(ControlError):
 
 
 def strip_reasoning(content: str) -> str:
-    # Never serialize vendor reasoning fields. Also defend against commonly tagged inline thought blocks.
+    # Public/model-facing content excludes tagged reasoning. Private diagnostics
+    # retain the original provider fields separately, before this filter runs.
     content = re.sub(
         r"<(think|thinking|analysis|reasoning)\b[^>]*>.*?(?:</\1\s*>|$)", "", content, flags=re.S | re.I
     )
@@ -40,6 +42,41 @@ def safe_payload(value):
     if isinstance(value, list):
         return [safe_payload(v) for v in value]
     return value
+
+
+def envelope_error(error, *, private_key=False):
+    """HTTP-200 error envelopes still carry request/auth/rate/server semantics.
+
+    Keep the actual HTTP status in the ledger. Do not trip every bot's shared
+    provider circuit for a single invalid model request.
+    """
+    fields = error if isinstance(error, dict) else {}
+    code = str(fields.get("code") or fields.get("type") or "").lower()
+    status = fields.get("status") or fields.get("status_code")
+    try:
+        status = int(status if status is not None else code)
+    except ValueError, TypeError:
+        status = None
+    if code in {
+        "bad_request",
+        "invalid_request",
+        "invalid_request_error",
+        "invalid_argument",
+        "context_length_exceeded",
+        "unsupported_parameter",
+        "model_not_found",
+    }:
+        status = 400
+    elif code in {"unauthorized", "authentication_error", "invalid_api_key"}:
+        status = 401
+    elif code in {"permission_denied", "permission_error", "forbidden"}:
+        status = 403
+    elif code in {"rate_limit_exceeded", "rate_limit_error", "too_many_requests"}:
+        status = 429
+    elif code in {"capacity_exhausted", "overloaded", "overloaded_error", "service_unavailable"}:
+        status = 503
+    fault = status is None or status >= 500 or (status in (401, 403, 429) and not private_key)
+    return ProviderError(f"Provider error: {error}", http_status=status, provider_fault=fault)
 
 
 def number(value):
@@ -155,7 +192,8 @@ class Completion:
     usage: dict[str, Any] = field(default_factory=dict)
     finish_reason: str | None = None
     # Some compatible APIs require replaying the assistant reasoning alongside tool results.
-    # It lives only in the active task; it is scrubbed from stored request snapshots and never delivered.
+    # Replay stays intact in the active task and private diagnostics, but is scrubbed
+    # from model-readable request snapshots and never delivered to Discord.
     reasoning_content: str = ""
     reasoning_details: list[dict] = field(default_factory=list)
     request_id: str = ""
@@ -347,6 +385,9 @@ class ProviderPool:
             calls: dict[int, dict] = {}
             total_bytes = 0
             status_code = None
+            error_data = None
+            diagnostic_at = clock
+            record_diagnostics(self.store, self.vault, request_id, result, body, status="running")
             try:
                 try:
                     body["messages"] = ImageCache(self.store).wire_messages(messages)
@@ -369,6 +410,10 @@ class ProviderPool:
                                 if len(error_bytes) >= 12000:
                                     break
                             raw = error_bytes.decode(errors="replace")
+                            try:
+                                error_data = json.loads(raw)
+                            except ValueError:
+                                error_data = raw
                             try:
                                 retry = float(response.headers.get("retry-after", "0"))
                             except ValueError:
@@ -424,16 +469,22 @@ class ProviderPool:
                                         if key in packet
                                     }
                                 )
-                                if packet.get("error"):
-                                    raise ProviderError(str(packet["error"]))
                                 if packet.get("usage"):
                                     result.usage.update(packet["usage"])
+                                if packet.get("error"):
+                                    error_data = packet["error"]
+                                    raise envelope_error(
+                                        error_data,
+                                        private_key=bool(self.vault.get(f"bot/{bot['id']}/provider_key")),
+                                    )
                                 for choice in packet.get("choices", []):
                                     if choice.get("index", 0) != 0:
                                         continue
                                     delta = choice.get("delta") or {}
-                                    token = delta.get("content") or ""
-                                    reasoning = delta.get("reasoning_content") or delta.get("reasoning") or ""
+                                    token = text_content(delta.get("content"))
+                                    reasoning = text_content(
+                                        delta.get("reasoning_content") or delta.get("reasoning")
+                                    )
                                     details = delta.get("reasoning_details") or []
                                     if (
                                         token
@@ -474,6 +525,11 @@ class ProviderPool:
                                         entry["function"]["arguments"] += fn.get("arguments") or ""
                                     if choice.get("finish_reason"):
                                         result.finish_reason = choice["finish_reason"]
+                                if time.perf_counter() - diagnostic_at >= 2:
+                                    record_diagnostics(
+                                        self.store, self.vault, request_id, result, body, status="running"
+                                    )
+                                    diagnostic_at = time.perf_counter()
                             if not finished and not result.finish_reason:
                                 raise ProviderError("Stream disconnected before a completion boundary")
                             result.tool_calls = [calls[k] for k in sorted(calls)]
@@ -501,24 +557,32 @@ class ProviderPool:
                                     if key in packet
                                 }
                             )
+                            result.usage = packet.get("usage") or {}
                             if packet.get("error"):
-                                raise ProviderError(str(packet["error"]))
+                                error_data = packet["error"]
+                                raise envelope_error(
+                                    error_data,
+                                    private_key=bool(self.vault.get(f"bot/{bot['id']}/provider_key")),
+                                )
                             choices = packet.get("choices") or []
                             if not choices:
                                 raise ProviderError("Response has no choices", provider_fault=False)
                             msg = choices[0]["message"]
-                            result.content = msg.get("content") or ""
+                            result.content = text_content(msg.get("content"))
                             result.tool_calls = msg.get("tool_calls") or []
-                            result.reasoning_content = msg.get("reasoning_content") or ""
+                            result.reasoning_content = text_content(
+                                msg.get("reasoning_content") or msg.get("reasoning")
+                            )
                             result.reasoning_details = msg.get("reasoning_details") or []
                             result.usage = packet.get("usage") or {}
                             result.finish_reason = choices[0].get("finish_reason")
                             # A buffered response has no measurable time-to-first-token.
-                result.content = strip_reasoning(result.content)
                 if len(result.tool_calls) > 100 or any(
                     not c.get("id") or c.get("type") != "function" for c in result.tool_calls
                 ):
                     raise ProviderError("Invalid or excessive tool calls", provider_fault=False)
+                record_diagnostics(self.store, self.vault, request_id, result, body, status="completed")
+                result.content = strip_reasoning(result.content)
                 self.success(provider)
                 metrics = normalized_usage(result.usage, profile)
                 duration = (time.perf_counter() - clock) * 1000
@@ -579,6 +643,21 @@ class ProviderPool:
                     )
                 )
                 message = self.vault.redact(str(exc))[:3000]
+                record_diagnostics(
+                    self.store,
+                    self.vault,
+                    request_id,
+                    result,
+                    body,
+                    status="cancelled" if cancelled else "failed",
+                    error={
+                        "envelope": error_data,
+                        "message": message,
+                        "error_status": exc.http_status,
+                        "provider_fault": exc.provider_fault,
+                        "transport_http_status": status_code,
+                    },
+                )
                 metrics = normalized_usage(result.usage, profile)
                 self.store.execute(
                     """UPDATE requests SET ended_at=:ended,status=:status,error=:error,
@@ -616,6 +695,8 @@ class ProviderPool:
                         "provider_id": provider["id"],
                         "profile_id": profile["id"],
                         "http_status": status_code,
+                        "error_status": exc.http_status,
+                        "provider_fault": exc.provider_fault,
                     },
                     bot_id=bot["id"],
                     turn_id=turn_id,

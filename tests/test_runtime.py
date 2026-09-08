@@ -14,8 +14,8 @@ from hortator.runtime import DeliveryError
 
 
 def completion(content="Hello", silence=False):
-    fn = "council_silence" if silence else "council_speak"
-    args = {"label": "Listening"} if silence else {"content": content}
+    fn = "council_silence"
+    args = {"label": "Listening"}
     return httpx.Response(
         200,
         json={
@@ -29,8 +29,10 @@ def completion(content="Hello", silence=False):
                                 "function": {"name": fn, "arguments": json.dumps(args)},
                             }
                         ]
-                    },
-                    "finish_reason": "tool_calls",
+                    }
+                    if silence
+                    else {"content": content},
+                    "finish_reason": "tool_calls" if silence else "stop",
                 }
             ],
             "usage": {"prompt_tokens": 100, "completion_tokens": 10},

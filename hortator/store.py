@@ -81,6 +81,9 @@ class Store:
           body TEXT NOT NULL, context TEXT NOT NULL, response TEXT, http_status INTEGER);
         CREATE INDEX IF NOT EXISTS request_bot ON requests(bot_id,started_at);
         CREATE INDEX IF NOT EXISTS request_turn ON requests(turn_id,started_at);
+        CREATE TABLE IF NOT EXISTS request_diagnostics (
+          request_id TEXT PRIMARY KEY REFERENCES requests(id) ON DELETE CASCADE,
+          body TEXT NOT NULL, updated_at REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS outbox (
           id TEXT PRIMARY KEY, turn_id TEXT NOT NULL, bot_id TEXT NOT NULL, channel_id TEXT NOT NULL,
           content TEXT NOT NULL, reply_to TEXT, artifacts TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL,

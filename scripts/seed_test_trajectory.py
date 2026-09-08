@@ -68,18 +68,7 @@ async def main(directory):
                 ],
             }
         else:
-            msg = {
-                "tool_calls": [
-                    {
-                        "id": "fixture-speak",
-                        "type": "function",
-                        "function": {
-                            "name": "council_speak",
-                            "arguments": '{"content":"We can inspect the full request timeline. [Synthetic test output]","reply_to":"555555555555555555"}',
-                        },
-                    }
-                ]
-            }
+            msg = {"content": "We can inspect the full request timeline. [Synthetic test output]"}
         return httpx.Response(
             200,
             json={

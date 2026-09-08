@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -8,11 +9,33 @@ from dataclasses import dataclass
 from .context import ContextBuilder
 from .footer import render_footer
 from .models import ControlError, OWNER_ID
-from .plugins import SILENCE, SPEAK, ToolContext
+from .plugins import ATTACH, SILENCE, ToolContext
 from .provider import strip_reasoning
 from .store import dumps, uid
 from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage
 from .working_set import bound_exchanges, prompt_exchanges
+
+
+REPLY_REPAIR = (
+    "Your previous answer was withheld because it used a tool wrapper instead of an answer. "
+    "council_speak does not exist. Write only the final Discord message as ordinary assistant "
+    "content, without JSON/XML/function wrappers or a description of your tool decision. "
+    "Use actual tool_calls for actions, or council_silence alone to say nothing."
+)
+
+
+def wrapped_reply(content):
+    """Recognize obsolete reply envelopes, never parse or execute text as a tool.
+
+    Deliberately narrow: ordinary JSON, prose about tools, and fenced examples are valid answers.
+    """
+    text = content.lstrip()
+    return bool(
+        re.match(r'\{\s*"(?:tool|name)"\s*:\s*"council_speak"', text)
+        or re.match(r'\{\s*"function"\s*:\s*\{\s*"name"\s*:\s*"council_speak"', text)
+        or re.match(r"<(?:tool_call|function(?:=|\s|>))", text, re.I)
+        or ("```" not in text and re.search(r"</(?:parameter|function)\s*>\s*$", text, re.I))
+    )
 
 
 @dataclass
@@ -280,7 +303,7 @@ class Engine:
                 )
                 # Start presence before context preparation, including compaction and provider queues.
                 await asyncio.sleep(0)
-            tools = [SPEAK, SILENCE] + self.registry.schemas(context)
+            tools = [SILENCE] + self.registry.schemas(context)
             rows, summary, through, original_meta = await self.contexts.prepare(
                 bot, profile, channel_id, turn_id, tools, force=compact_only
             )
@@ -295,6 +318,8 @@ class Engine:
             task_extension_used = False
             task_plugin = None
             task_seconds = None
+            reply_to, artifact_ids = None, []
+            reply_repairs = 0
 
             async def budgeted(awaitable):
                 try:
@@ -319,9 +344,17 @@ class Engine:
                     raise ControlError(
                         "Extended task time budget exhausted; saved local files remain available"
                     )
-                available_tools = [SPEAK, SILENCE] + (
+                available_tools = [SILENCE] + (
                     self.registry.schemas(context) if round_index < round_limit else []
                 )
+                # Most chat turns need no attachment schema. Expose preparation only
+                # after a real artifact exists, and keep it inside the ordinary budget.
+                can_attach = round_index < round_limit and self.store.one(
+                    "SELECT id FROM artifacts WHERE bot_id=? AND turn_id=? LIMIT 1",
+                    (bot["id"], turn_id),
+                )
+                if can_attach:
+                    available_tools.append(ATTACH)
                 budget_bot = {**bot, "max_tool_rounds": round_limit, "max_calls_per_round": calls_limit}
                 if task_extension_used:
                     budget_bot["active_task_budget"] = {
@@ -398,10 +431,49 @@ class Engine:
                     )
                 )
                 if result.finish_reason in ("length", "content_filter"):
-                    raise ControlError(
-                        f"Provider stopped with {result.finish_reason}; incomplete output was withheld"
+                    cap_name = (
+                        "max_completion_tokens"
+                        if "max_completion_tokens" in profile["request_json"]
+                        else "max_tokens"
                     )
+                    cap = profile["request_json"].get(cap_name, "provider default")
+                    message = (
+                        f"Provider stopped with {result.finish_reason}; incomplete output was withheld "
+                        f"(output_tokens={result.usage.get('completion_tokens', 'unknown')}, {cap_name}={cap}). "
+                        "Inspect the request's provider diagnostics for partial output and reasoning."
+                    )
+                    self.store.emit(
+                        "request.output_withheld",
+                        {"error": message, "finish_reason": result.finish_reason},
+                        bot_id=bot["id"],
+                        turn_id=turn_id,
+                        request_id=result.request_id,
+                        level="warning",
+                    )
+                    raise ControlError(message)
                 if not result.tool_calls:
+                    if wrapped_reply(result.content):
+                        self.store.emit(
+                            "request.reply_rejected",
+                            {
+                                "error": REPLY_REPAIR,
+                                "repair_available": not reply_repairs and round_index < round_limit,
+                            },
+                            bot_id=bot["id"],
+                            turn_id=turn_id,
+                            request_id=result.request_id,
+                            level="warning",
+                        )
+                        if reply_repairs or round_index >= round_limit:
+                            raise ControlError(
+                                "Model repeated a tool-wrapped answer or exhausted its repair budget; nothing posted"
+                            )
+                        reply_repairs += 1
+                        # The original response remains in the request ledger. Avoid
+                        # teaching the malformed wrapper back through the active prompt.
+                        extras.append({"role": "system", "content": REPLY_REPAIR})
+                        round_index += 1
+                        continue
                     if result.content:
                         await self.deliver(
                             bot,
@@ -409,14 +481,17 @@ class Engine:
                             provider,
                             context,
                             result.content,
-                            None,
-                            [],
+                            reply_to,
+                            artifact_ids,
                             request_id=result.request_id,
                             draft_deadline=document_deadline,
                         )
-                        status, decision = "sent", "speak"
+                        status, decision = "sent", "reply" if reply_to else "speak"
                     else:
-                        status, decision = "silent", "empty_completion"
+                        raise ControlError(
+                            "Provider returned no visible answer or tool call; use council_silence for intentional silence. "
+                            "Inspect provider diagnostics for reasoning-only output."
+                        )
                     break
                 if len({c["id"] for c in result.tool_calls}) != len(result.tool_calls):
                     raise ControlError("Provider returned duplicate tool-call IDs; no actions executed")
@@ -424,19 +499,21 @@ class Engine:
                 terminal = any(name in ("council_speak", "council_silence") for name in names)
                 batch_error = None
                 if terminal and len(names) != 1:
-                    batch_error = "Terminal speak/silence decision must be the only tool call; no partial actions were executed"
+                    batch_error = "A silence decision (or obsolete reply call) must be the only tool call; no partial actions were executed"
                 elif len(names) > calls_limit:
                     batch_error = f"Too many tool calls: maximum {calls_limit} per round; none executed"
                 elif not terminal and round_index >= round_limit:
-                    batch_error = (
-                        "Tool round budget exhausted; only council_speak or council_silence is available"
-                    )
+                    batch_error = "Tool round budget exhausted; write an ordinary text answer or call council_silence alone"
                 extras.append(result.message())
                 finished = False
                 for call in result.tool_calls:
                     name = call["function"]["name"]
                     definition = (
-                        SPEAK if name == "council_speak" else SILENCE if name == "council_silence" else None
+                        SILENCE
+                        if name == "council_silence"
+                        else ATTACH
+                        if name == "discord_attach" and can_attach
+                        else None
                     )
                     if batch_error:
                         spec = self.registry.specs.get(name) if self.registry.allowed(name, context) else None
@@ -471,6 +548,8 @@ class Engine:
                                 ],
                                 error_count=1 + len(argument_report.get("errors", [])),
                             )
+                    elif name == "council_speak":
+                        result_value = {"ok": False, "executed": False, "error": REPLY_REPAIR}
                     elif definition:
                         parameters = definition["function"]["parameters"]
                         description = definition["function"]["description"]
@@ -481,20 +560,20 @@ class Engine:
                         else:
                             result_value = feedback(name, args, parameters, description)
                             if (
-                                name == "council_speak"
+                                name == "discord_attach"
                                 and isinstance(args, dict)
                                 and not (result_value or {}).get("usage_only")
                             ):
                                 # Type-invalid fields cannot be inspected safely, but they must
                                 # not hide independent semantic failures in the remaining fields.
                                 issues = list((result_value or {}).get("errors", []))
-                                reply_to = args.get("reply_to") or None
+                                target = args.get("reply_to") or None
                                 if (
-                                    isinstance(reply_to, str)
-                                    and reply_to
+                                    isinstance(target, str)
+                                    and target
                                     and (
-                                        not reply_to.isdigit()
-                                        or reply_to not in {row["discord_id"] for row in rows}
+                                        not target.isdigit()
+                                        or target not in {row["discord_id"] for row in rows}
                                     )
                                 ):
                                     issues.append(
@@ -503,9 +582,9 @@ class Engine:
                                             "message": "Reply target must be a message ID in this turn's channel context",
                                         }
                                     )
-                                artifact_ids = args.get("artifact_ids", [])
+                                selected = args.get("artifact_ids", [])
                                 for index, artifact_id in enumerate(
-                                    artifact_ids if isinstance(artifact_ids, list) else []
+                                    selected if isinstance(selected, list) else []
                                 ):
                                     if not isinstance(artifact_id, str):
                                         continue
@@ -515,21 +594,11 @@ class Engine:
                                         issues.append(
                                             {"path": f"$.artifact_ids[{index}]", "message": str(exc)}
                                         )
-                                if (
-                                    isinstance(args.get("content"), str)
-                                    and not strip_reasoning(args["content"]).strip()
-                                ):
-                                    issues.append(
-                                        {
-                                            "path": "$.content",
-                                            "message": "A nonempty visible answer is required; reasoning-only content cannot be delivered",
-                                        }
-                                    )
                                 if issues:
                                     result_value = {
                                         "ok": False,
                                         "executed": False,
-                                        "error": "Invalid council decision; fix all errors",
+                                        "error": "Invalid attachment preparation; fix all errors",
                                         "errors": issues,
                                         "error_count": len(issues),
                                         "usage": usage(name, parameters, description),
@@ -544,20 +613,21 @@ class Engine:
                                         turn_id=turn_id,
                                     )
                                 else:
-                                    await self.deliver(
-                                        bot,
-                                        profile,
-                                        provider,
-                                        context,
-                                        args["content"],
+                                    reply_to, artifact_ids = (
                                         args.get("reply_to") or None,
-                                        args.get("artifact_ids", []),
-                                        request_id=result.request_id,
-                                        draft_deadline=document_deadline,
+                                        args["artifact_ids"],
                                     )
-                                    status, decision = "sent", "reply" if args.get("reply_to") else "speak"
-                                finished = True
-                                break
+                                    result_value = {
+                                        "ok": True,
+                                        "prepared": True,
+                                        "artifact_ids": artifact_ids,
+                                        "reply_to": reply_to,
+                                        "posted": False,
+                                        "next": "Write your answer as ordinary assistant content; no reply tool is needed.",
+                                    }
+                                if name == "council_silence":
+                                    finished = True
+                                    break
                     else:
                         result_value = await budgeted(
                             self.registry.call_raw(name, call["function"]["arguments"], context, call["id"])
@@ -615,13 +685,19 @@ class Engine:
                     result_value = self.vault.redact(result_value)
                     if "result_id" not in result_value:
                         result_value = self.registry.evidence.record(context, name, call["id"], result_value)
-                    if definition or batch_error:
+                    if definition or batch_error or name == "council_speak":
                         self.store.emit(
-                            "tool.help" if result_value.get("usage_only") else "tool.failed",
+                            "tool.help"
+                            if result_value.get("usage_only")
+                            else "tool.completed"
+                            if result_value.get("ok")
+                            else "tool.failed",
                             {"name": name, "call_id": call["id"], **result_value},
                             bot_id=bot["id"],
                             turn_id=turn_id,
-                            level="info" if result_value.get("usage_only") else "warning",
+                            level="info"
+                            if result_value.get("usage_only") or result_value.get("ok")
+                            else "warning",
                         )
                     extras.append(
                         {"role": "tool", "tool_call_id": call["id"], "content": dumps(result_value)}
