@@ -8,7 +8,7 @@ import pytest
 
 from conftest import configured, ingest
 from test_provider import install_client
-from test_runtime import settle
+from test_runtime import completion, settle
 
 
 def tool(name, arguments, call_id="call"):
@@ -56,7 +56,7 @@ def enable_documents(kernel):
     kernel.store.put("plugins", {**plugin, "enabled": True})
 
 
-@pytest.mark.parametrize("name", ["council_speak", "council_silence"])
+@pytest.mark.parametrize("name", ["council_silence"])
 async def test_empty_terminal_call_returns_usage_then_allows_repaired_final_decision(kernel, name):
     _, transport = ready(kernel)
     requests = []
@@ -69,7 +69,7 @@ async def test_empty_terminal_call_returns_usage_then_allows_repaired_final_deci
         assert report["usage_only"] is True
         assert report["executed"] is False
         assert report["usage"]["tool"] == name
-        return reply(tool("council_speak", {"content": "Ready now"}))
+        return completion("Ready now")
 
     await install_client(kernel, handle)
     await kernel.engine.tick()
@@ -85,7 +85,7 @@ async def test_empty_terminal_call_returns_usage_then_allows_repaired_final_deci
     [
         (
             {"content": 17, "reply_to": "unknown", "artifact_ids": ["missing", 4]},
-            {"$.content", "$.reply_to", "$.artifact_ids[0]", "$.artifact_ids[1]"},
+            {"$", "$.reply_to", "$.artifact_ids[0]", "$.artifact_ids[1]"},
         ),
         (
             {
@@ -93,11 +93,11 @@ async def test_empty_terminal_call_returns_usage_then_allows_repaired_final_deci
                 "reply_to": "unknown",
                 "artifact_ids": ["missing", "also-missing"],
             },
-            {"$.content", "$.reply_to", "$.artifact_ids[0]", "$.artifact_ids[1]"},
+            {"$", "$.reply_to", "$.artifact_ids[0]", "$.artifact_ids[1]"},
         ),
     ],
 )
-async def test_terminal_schema_and_semantic_failures_are_aggregated_without_dispatch(
+async def test_attachment_schema_and_semantic_failures_are_aggregated_without_dispatch(
     kernel, arguments, paths
 ):
     _, transport = ready(kernel)
@@ -107,18 +107,29 @@ async def test_terminal_schema_and_semantic_failures_are_aggregated_without_disp
         body = json.loads(request.content)
         requests.append(body)
         if len(requests) == 1:
-            return reply(tool("council_speak", arguments))
+            # Seed an owned artifact; next request discovers attachment preparation.
+            from hortator.plugins import ToolContext
+
+            bot = kernel.store.get("bots", "ada")
+            turn = kernel.store.one("SELECT id FROM turns")["id"]
+            kernel.registry.artifact(
+                b"fixture", "text/plain", ".txt", ToolContext(bot, "222222222222222222", turn)
+            )
+            return reply(tool("council_silence", {}))
+        if len(requests) == 2:
+            assert "discord_attach" in [t["function"]["name"] for t in body["tools"]]
+            return reply(tool("discord_attach", arguments))
         report = responses(body)[-1]
         assert {error["path"] for error in report["errors"]} == paths
         assert report["error_count"] == 4
         assert report["executed"] is False
-        assert report["usage"]["parameters"]["required"] == ["content"]
+        assert report["usage"]["parameters"]["required"] == ["artifact_ids"]
         return reply(tool("council_silence", {"label": "Repaired"}))
 
     await install_client(kernel, handle)
     await kernel.engine.tick()
     await settle(kernel)
-    assert len(requests) == 2
+    assert len(requests) == 3
     assert kernel.store.one("SELECT status FROM turns")["status"] == "silent"
     transport.send.assert_not_awaited()
     assert not kernel.store.rows("SELECT * FROM outbox")
@@ -135,7 +146,7 @@ async def test_mixed_terminal_and_mutating_tool_batch_executes_neither(kernel, t
         if len(requests) == 1:
             calls = [
                 tool("memory", {"operation": "write", "key": "bad", "value": "Must not be saved"}, "write"),
-                tool("council_speak", {"content": "Must not be sent"}, "speak"),
+                tool("council_silence", {"label": "Listen"}, "silent"),
             ]
             return reply(*(list(reversed(calls)) if terminal_first else calls))
         reports = responses(body)
@@ -152,7 +163,7 @@ async def test_mixed_terminal_and_mutating_tool_batch_executes_neither(kernel, t
     transport.send.assert_not_awaited()
 
 
-@pytest.mark.parametrize("name,raw", [("council_speak", '{"content":'), ("memory", '{"operation":')])
+@pytest.mark.parametrize("name,raw", [("council_silence", '{"label":'), ("memory", '{"operation":')])
 async def test_malformed_terminal_or_plugin_call_delivers_full_usage_to_next_request(kernel, name, raw):
     ready(kernel, enabled_plugins=["memory"])
     count = 0
@@ -181,7 +192,7 @@ async def test_repeated_terminal_help_stops_at_existing_round_budget(kernel):
 
     async def handle(request):
         requests.append(json.loads(request.content))
-        return reply(tool("council_speak", {}))
+        return reply(tool("council_silence", {}))
 
     await install_client(kernel, handle)
     await kernel.engine.tick()
@@ -201,9 +212,9 @@ async def test_mixed_batch_does_not_disclose_usage_for_ungranted_or_unknown_tool
         body = json.loads(request.content)
         requests.append(body)
         if len(requests) == 1:
-            return reply(tool("council_speak", {"content": 12}, "terminal"), tool(denied, {}, "denied"))
+            return reply(tool("council_silence", {"label": 12}, "terminal"), tool(denied, {}, "denied"))
         reports = responses(body)
-        assert reports[0]["usage"]["tool"] == "council_speak"
+        assert reports[0]["usage"]["tool"] == "council_silence"
         assert reports[0]["error_count"] == 2  # Batch error and invalid content type together.
         assert "usage" not in reports[1]
         assert "not enabled" in reports[1]["error"]
@@ -265,7 +276,7 @@ async def test_autonomous_document_start_unlocks_extended_rounds_and_call_batch_
             )
         if index == 3:
             return reply(tool("document_site", {"operation": "publish", "site": "summary"}))
-        assert {item["function"]["name"] for item in body["tools"]} == {"council_speak", "council_silence"}
+        assert {item["function"]["name"] for item in body["tools"]} == {"council_silence"}
         report = responses(body)[-1]
         assert report["local_ready"] is True
         assert report["remote_status"] == "disabled"
@@ -320,7 +331,7 @@ async def test_zero_extra_rounds_preserves_normal_budget(kernel):
         if len(requests) == 1:
             return reply(tool("document_site", {"operation": "create", "site": "summary"}))
         assert responses(body)[-1]["task_budget"]["active"] is False
-        assert {item["function"]["name"] for item in body["tools"]} == {"council_speak", "council_silence"}
+        assert {item["function"]["name"] for item in body["tools"]} == {"council_silence"}
         return reply(tool("council_silence", {"label": "Normal budget"}))
 
     await install_client(kernel, handle)
@@ -342,7 +353,7 @@ async def test_document_deadline_cancels_generation_and_preserves_local_draft(ke
         if count == 1:
             return reply(tool("document_site", {"operation": "create", "site": "summary"}))
         await asyncio.sleep(0.5)
-        return reply(tool("council_speak", {"content": "Too late"}))
+        return completion("Too late")
 
     await install_client(kernel, handle)
     await kernel.engine.tick()
@@ -374,7 +385,7 @@ async def test_deadline_blocks_expired_cooldown_dispatch_but_does_not_cancel_acc
         count += 1
         if count == 1:
             return reply(tool("document_site", {"operation": "create", "site": "summary"}))
-        return reply(tool("council_speak", {"content": "Local draft created"}))
+        return completion("Local draft created")
 
     await install_client(kernel, handle)
     await kernel.engine.tick()

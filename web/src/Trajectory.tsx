@@ -490,8 +490,17 @@ export function Trajectory({
                             <Notice warning>{request.error}</Notice>
                           )}
                           <Code
+                            value={
+                              request.diagnostics ?? {
+                                capture: "unavailable",
+                                note: "Reasoning was not recorded for this request. Older discarded reasoning cannot be recovered.",
+                              }
+                            }
+                            label="Provider reasoning & diagnostics (private; credentials redacted)"
+                          />
+                          <Code
                             value={request.body}
-                            label="Exact request body (secrets and reasoning redacted)"
+                            label="Request body (credentials redacted; reasoning replay in private diagnostics)"
                           />
                           <Code
                             value={request.response}

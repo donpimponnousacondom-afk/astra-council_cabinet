@@ -70,7 +70,9 @@ class ToolEvidence:
         if not row:
             raise ControlError("Tool result is missing or belongs to another bot, channel or turn", 404)
         for name in {row["tool"], *json.loads(row["required_tools"])}:
-            if name not in ("council_speak", "council_silence") and not allowed(name, context):
+            if name not in ("council_speak", "council_silence", "discord_attach") and not allowed(
+                name, context
+            ):
                 raise ControlError("The original tool grant is no longer available", 403)
         offset, length = args.get("offset", 0), args.get("length", 6000)
         content = row["content"]

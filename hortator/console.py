@@ -19,6 +19,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from .models import SECRET_FIELDS
 from .provider import strip_reasoning
+from .diagnostics import read_diagnostics
 
 LEVELS = {"error": 40, "warning": 30, "info": 20, "debug": 10}
 SCOPES = {
@@ -119,8 +120,9 @@ def plain(value):
     return "".join(c if c.isprintable() else f"\\u{ord(c):04x}" for c in str(value))
 
 
-def safe_text(value):
-    value = strip_reasoning(value)
+def safe_text(value, *, include_reasoning=False):
+    if not include_reasoning:
+        value = strip_reasoning(value)
     value = re.sub(r"(?i)\b(bearer\s+)[\w.~+/-]+=*", r"\1[REDACTED]", value)
     value = re.sub(
         r"(?i)\b(authorization|api[_-]?key|token|password|secret|cookie|csrf)([\s\"']*[:=][\s\"']*)[^\s,;\"']+",
@@ -139,7 +141,7 @@ def safe_text(value):
     return re.sub(r"https?://[^\s\"'<>]+", safe_url, value)
 
 
-def safe_value(value, depth=0, *, bounded=True):
+def safe_value(value, depth=0, *, bounded=True, include_reasoning=False):
     if depth > (8 if bounded else 32):
         return "[nested detail omitted]"
     if isinstance(value, dict):
@@ -153,27 +155,32 @@ def safe_value(value, depth=0, *, bounded=True):
                 "cookie",
                 "set-cookie",
                 "headers",
-                "reasoning_content",
-                "reasoning_details",
-            }:
+            } or (not include_reasoning and name.lower() in {"reasoning_content", "reasoning_details"}):
                 result[plain(name)] = "[REDACTED]"
             else:
-                result[plain(name)] = safe_value(item, depth + 1, bounded=bounded)
+                result[plain(name)] = safe_value(
+                    item, depth + 1, bounded=bounded, include_reasoning=include_reasoning
+                )
         if bounded and len(value) > 80:
             result["…"] = "Additional fields are available in the event ledger"
         return result
     if isinstance(value, (list, tuple)):
-        return [safe_value(v, depth + 1, bounded=bounded) for v in (value[:40] if bounded else value)] + (
-            ["[additional items omitted]"] if bounded and len(value) > 40 else []
-        )
+        return [
+            safe_value(v, depth + 1, bounded=bounded, include_reasoning=include_reasoning)
+            for v in (value[:40] if bounded else value)
+        ] + (["[additional items omitted]"] if bounded and len(value) > 40 else [])
     if isinstance(value, str):
-        text = safe_text(value)
+        text = safe_text(value, include_reasoning=include_reasoning)
         return (
             text
             if not bounded or len(text) <= 6000
             else text[:6000] + "… [truncated; inspect the event ledger]"
         )
-    return value if value is None or isinstance(value, (int, float, bool)) else safe_text(str(value))
+    return (
+        value
+        if value is None or isinstance(value, (int, float, bool))
+        else safe_text(str(value), include_reasoning=include_reasoning)
+    )
 
 
 def job_outcome(data):
@@ -718,9 +725,15 @@ class OperationalConsole(logging.Handler):
             if request:
                 payloads = {name: request.pop(name) for name in ("body", "response", "context", "usage")}
                 sections.append(("Stored request state and timings (null means unknown)", request))
+                sections.append(
+                    (
+                        "Private provider reasoning and diagnostics",
+                        read_diagnostics(self.store, request_id, limit=EVIDENCE_LIMIT),
+                    )
+                )
                 for name, encoded in payloads.items():
                     if encoded is None:
-                        value = "Not recorded; raw reasoning and omitted fields cannot be recovered."
+                        value = "Not recorded; inspect private diagnostics for any captured reasoning."
                     elif len(encoded) > EVIDENCE_LIMIT:
                         value = f"This field exceeds {EVIDENCE_LIMIT} characters; inspect request {request_id} in the dashboard."
                     else:
@@ -809,7 +822,11 @@ class OperationalConsole(logging.Handler):
         output = []
         remaining = EVIDENCE_LIMIT
         for title, value in sections:
-            value = safe_value(self.redact(value), bounded=False)
+            value = safe_value(
+                self.redact(value),
+                bounded=False,
+                include_reasoning=title == "Private provider reasoning and diagnostics",
+            )
             encoded = (
                 value
                 if isinstance(value, str)
@@ -837,6 +854,7 @@ class OperationalConsole(logging.Handler):
             "offsets": [0],
             "page": 0,
             "pinned": False,
+            "private_diagnostics": event["scope"] == "providers",
         }
         if selected or self.evidence is None or not self.evidence.get("pinned"):
             self.evidence = snapshot
@@ -845,7 +863,9 @@ class OperationalConsole(logging.Handler):
 
     def print_evidence_page(self, snapshot):
         # Redact again before slicing so a newly added secret cannot span page boundaries.
-        text = safe_text(self.redact(snapshot["text"]))
+        text = safe_text(
+            self.redact(snapshot["text"]), include_reasoning=snapshot.get("private_diagnostics", False)
+        )
         start = snapshot["offsets"][snapshot["page"]]
         end = min(len(text), start + EVIDENCE_PAGE_CHARS)
         rows = text[start:end].splitlines(keepends=True)

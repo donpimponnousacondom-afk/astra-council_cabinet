@@ -618,13 +618,31 @@ test("populated trajectory shows exact requests, tool results, delivery, and com
     .click();
   await expect(inspector.locator(".request-detail")).toHaveCount(2);
   await inspector
-    .getByText("Exact request body (secrets and reasoning redacted)", {
-      exact: true,
-    })
+    .getByText(
+      "Request body (credentials redacted; reasoning replay in private diagnostics)",
+      {
+        exact: true,
+      },
+    )
     .first()
     .click();
-  await expect(inspector.locator("pre").first()).toContainText(
-    "Browser verification fixture",
+  await expect(
+    inspector
+      .locator("details")
+      .filter({
+        hasText:
+          "Request body (credentials redacted; reasoning replay in private diagnostics)",
+      })
+      .first()
+      .locator("pre"),
+  ).toContainText("Browser verification fixture");
+  const diagnostics = inspector
+    .locator("details")
+    .filter({ hasText: "Provider reasoning & diagnostics" })
+    .first();
+  await diagnostics.locator("summary").click();
+  await expect(diagnostics.locator("pre")).toContainText(
+    "hidden fixture reasoning",
   );
   await inspector.getByRole("button", { name: "tools", exact: true }).click();
   await expect(inspector).toContainText(

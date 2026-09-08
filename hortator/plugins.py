@@ -50,16 +50,18 @@ def function(name, description, parameters):
     }
 
 
-SPEAK = function(
-    "council_speak",
-    "Publish one considered council contribution using Discord Markdown where helpful, optionally replying to a message ID in this context. This ends your turn. Never include reasoning or analysis traces.",
+ATTACH = function(
+    "discord_attach",
+    "Prepare files for your next ordinary text answer. This does not post or end your turn. "
+    "Use artifact IDs created in this turn; an optional reply_to must be a message ID in this context. "
+    "The list replaces your previous selection; [] clears it. After preparation, write your answer "
+    "as normal assistant content. No tool is needed for an answer without files.",
     schema(
         {
-            "content": {"type": "string", "minLength": 1, "maxLength": 12000},
             "reply_to": STR,
             "artifact_ids": {"type": "array", "items": STR, "maxItems": 4},
         },
-        ("content",),
+        ("artifact_ids",),
     ),
 )
 SILENCE = function(
@@ -224,7 +226,7 @@ class Registry:
             PluginSpec(
                 "image_generation",
                 "Image generation",
-                "Generate an image from a prompt. Returns an artifact ID that you can attach with council_speak.",
+                "Generate an image from a prompt. Returns an artifact ID for discord_attach, then answer normally.",
                 schema({"prompt": {"type": "string", "minLength": 1, "maxLength": 8000}}, ("prompt",)),
                 self.image_generation,
                 {
@@ -327,7 +329,7 @@ class Registry:
             entry.load()(self)
 
     def register(self, spec):
-        if spec.id in self.specs or spec.id in ("council_speak", "council_silence"):
+        if spec.id in self.specs or spec.id in ("council_speak", "council_silence", "discord_attach"):
             raise ValueError("Duplicate/reserved plugin ID")
         Draft202012Validator.check_schema(spec.parameters)
         self.specs[spec.id] = spec

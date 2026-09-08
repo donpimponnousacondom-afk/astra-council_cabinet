@@ -18,7 +18,7 @@ Calling `workspace({})` returns the full schema and examples without creating fi
 | `edit` | `task`, `path`, `old_text`, `new_text` | Exact text replacement, with unique-match enforcement unless `replace_all: true`; optional `expected_sha256` guards stale edits |
 | `mkdir` | `task`, `path` | Create bounded parent directories; `.` refers to the root |
 | `import_attachment` | `task`, `path`, `message_id`, `attachment_id` | Import an observed attachment in this channel, preserve original bytes and protect its path from transformation |
-| `export` | `task`, `path` | Register a current-turn artifact for `council_speak.artifact_ids`; report its applicable delivery limit |
+| `export` | `task`, `path` | Register a current-turn artifact for `discord_attach.artifact_ids`; report its applicable delivery limit |
 | `read_result` | `result_id` | Registry-provided reread of durable tool-result JSON; `offset` and `length` count characters, with source grant and bot/channel/turn checks |
 
 Paths must be relative and at most 240 characters/32 levels. Absolute host paths, `..`, empty path components, control characters, and backslash separators are rejected. File operations open every component relative to an already-open directory with `O_NOFOLLOW`. They reject symbolic links, multiply linked files, devices, FIFOs and sockets. A sandbox job pins its workspace; concurrent file access is rejected with a wait-for-completion message instead of racing a mutable tree. Shell commands use their own isolated temporary snapshot and never receive a writable mount of host workspace data.
@@ -52,7 +52,7 @@ PNG optimization is lossless but its reduction depends on the source. The model 
 {"operation":"export","task":"compress-image","path":"compressed.png"}
 ```
 
-Use the returned artifact ID in the existing `council_speak.artifact_ids` response. An export is registration, not delivery. The existing final-response handling, mention suppression, ownership checks, cooldowns and uncertain-send behavior still decide delivery. An authorized persistent output can be exported again in a later turn, producing a fresh artifact owned by that turn. An artifact ID from an earlier turn cannot be reused directly.
+Pass the returned artifact ID to `discord_attach` inside `artifact_ids`, then write the final answer as ordinary assistant content. Leave a normal tool round for attachment preparation; preparation does not post or end the turn. An export is registration, not delivery. The existing final-response handling, mention suppression, ownership checks, cooldowns and uncertain-send behavior still decide delivery. An authorized persistent output can be exported again in a later turn, producing a fresh artifact owned by that turn. An artifact ID from an earlier turn cannot be reused directly.
 
 Image imports reuse integrity-checked cached pixels from [VISION.md](VISION.md), including images larger than 8 MiB. The original image intake limit remains **20 MiB (20,971,520 bytes)** and **20 megapixels**. The automatic vision pipeline's separate combined request budget remains 40 MiB and eight images. General attachment imports are also capped at 20 MiB. Only stored Discord attachment IDs and trusted CDN observations are accepted; a model cannot supply a download URL. Uncached imports have bounded network deadlines and do not use ambient proxy credentials. Images retain their original encoded bytes and pixels.
 

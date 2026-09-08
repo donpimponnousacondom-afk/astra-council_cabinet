@@ -29,7 +29,7 @@ Use `shell` for a real command, for example:
 {"operation":"run","task":"compress-image","command":"python3.14 -c \"from PIL import Image; im=Image.open('original.png'); print(im.size); im.convert('RGB').save('compressed.jpg',quality=60,optimize=True)\""}
 ```
 
-Then call `workspace` with `{"operation":"export","task":"compress-image","path":"compressed.jpg"}` and pass its returned `artifact_id` to `council_speak.artifact_ids`. The export ceiling is independently **8,000,000 bytes**. Re-exporting an owned persistent output registers a new artifact for the current turn; cross-turn artifact references remain forbidden. Export queues no site publication and sends no Discord message itself.
+Then call `workspace` with `{"operation":"export","task":"compress-image","path":"compressed.jpg"}` and prepare its returned `artifact_id` with `discord_attach`, then write an ordinary assistant answer. The export ceiling is independently **8,000,000 bytes**. Re-exporting an owned persistent output registers a new artifact for the current turn; cross-turn artifact references remain forbidden. Export queues no site publication and sends no Discord message itself.
 
 For long reading, call `web_fetch` with `{"operation":"start"}`, then `{"url":"https://example.com/document"}`. Follow its exact `next` arguments to traverse the saved snapshot, or use `search` for stable excerpts and offsets. Download bytes remain capped at **1,000,000** by default and as an operator ceiling; pagination does not redownload or raise that limit. Python Unicode character offsets are distinct from file/log byte offsets and model tokens. [Web reading contract](WEB_READING.md)
 

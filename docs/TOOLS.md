@@ -1,6 +1,6 @@
 # Tool discovery, repair and task budgets
 
-This is a deliberate model compatibility contract for **every built-in and future plugin**, including `council_speak` and `council_silence`. Keep it when changing validators or tool schemas. Small models should receive enough information to repair a call in one attempt instead of spending successive rounds discovering one missing field at a time.
+This is a deliberate model compatibility contract for **every built-in and future plugin**, including `council_silence` and optional `discord_attach`. Keep it when changing validators or tool schemas. Small models should receive enough information to repair a call in one attempt instead of spending successive rounds discovering one missing field at a time.
 
 ## Discovery without side effects
 
@@ -14,11 +14,17 @@ For parseable JSON, validation collects all detectable schema errors: missing re
 
 Malformed JSON returns its syntax error and full usage together. Duplicate keys and non-JSON numbers such as NaN/Infinity are rejected. Field validation cannot reliably examine an unparseable document; the response explains that limitation. Handler failures also include usage, but an external failure cannot imply that no side effect occurred. Credentials are redacted before feedback reaches the model or ledger.
 
-Terminal delivery checks collect visible-content, reply-target and artifact-reference problems together. A terminal call must be alone in its batch; mixed terminal/plugin batches or batches exceeding the call limit execute nothing and return repair information. Duplicate call IDs fail the turn because results cannot be associated unambiguously. Providers and plugins can still reject semantically invalid values or fail externally; this design gives the model complete available feedback, not a guarantee that its next attempt succeeds.
+Attachment preparation collects schema, reply-target and artifact-reference problems together. The terminal `council_silence` call must be alone in its batch; mixed terminal/plugin batches or batches exceeding the call limit execute nothing and return repair information. Duplicate call IDs fail the turn because results cannot be associated unambiguously. Providers and plugins can still reject semantically invalid values or fail externally; this design gives the model complete available feedback, not a guarantee that its next attempt succeeds.
 
 Plugin authors must express all independently checkable argument requirements in JSON Schema, including operation-specific `if`/`then` requirements. When checks require runtime state, aggregate independent failures where practical. Preserve the central validation path rather than adding first-error parsers or coercion. Put examples on unusual constrained fields; generated examples are illustrative and do not invent valid account/resource IDs. Tools installed through Python entry points are trusted host code, not a process sandbox.
 
 ## Normal and extended turns
+
+Models send their final answer as ordinary OpenAI assistant `content` (a string or ordered text parts). There is **no `council_speak` tool**. Genuine `tool_calls` execute actions; accompanying narration is not sent to Discord. After reading tool results, the model answers normally or calls `council_silence` with a short label. Empty/reasoning-only completions are reported as failures, not invented silence decisions. Length/content-filter stops withhold incomplete output and retain private provider evidence.
+
+`discord_attach` becomes available only after this bot has a current-turn artifact. Call it with `{"artifact_ids":["<returned-id>"]}` and optionally `reply_to` from the current channel context, then write the final text answer. It prepares metadata only, replaces the previous selection, accepts `[]` to clear files, and consumes an ordinary tool round. Leave a round after generation/export for preparation. Ordinary text replies need no preparation. Artifact ownership, cooldowns, cancellation, footer calculation and uncertain delivery checks still apply at dispatch. A bot choosing silence after preparation sends nothing.
+
+Obsolete native `council_speak` calls receive migration feedback and execute nothing. Obvious unfenced JSON/XML reply wrappers are withheld; the runtime allows at most one text-format repair, charged to the existing round budget. It never executes textual pseudo-tools or rewrites old messages. Ordinary JSON answers and fenced examples remain valid. Preserve this contract when adding new packs: do not reintroduce a tool that contains the answer text.
 
 **Tool work rounds** limits the number of model/tool cycles. **Tool calls allowed in each round** limits how many calls one model response may request. Calls currently execute sequentially; this setting is independent of provider request concurrency. A final response opportunity follows the normal tool rounds, and all retries/discovery remain bounded.
 
