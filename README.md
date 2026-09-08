@@ -109,6 +109,7 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 | `web_fetch` | Complete public text snapshots, chunking and search | No key; 1 MB download cap, owned stable offsets, storage/retention limits |
 | `workspace` | Private task files, observed attachments and current-turn exports | No key; bot/channel isolation, quotas and bounded retention |
 | `shell` | Real isolated Bash/Python/Pillow jobs | No key; workspace grant plus ready Linux/Bubblewrap boundary, no network |
+| `document_site` | Owned static documents, local publication and durable sync intent | No key; explicit grant, bounded document tasks and immutable local revisions |
 | `web_search` | Brave web search | Brave key; endpoint/count configurable |
 | `image_generation` | Image generation to a Discord attachment | OpenAI-style image endpoint, raw request JSON, key |
 | `tts` | Speech generation to an audio attachment | OpenAI-style speech endpoint, model/voice/options JSON, key |
