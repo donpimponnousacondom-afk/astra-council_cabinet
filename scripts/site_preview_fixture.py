@@ -47,7 +47,7 @@ async def seed_site_preview(kernel):
         kernel.store.get("bots", "ada"), "222222222222222222", "site-preview-fixture", False
     )
     sites = kernel.registry.documents
-    await sites.call({"operation": "start", "site": "sandbox-fixture"}, context, DEFAULTS)
+    await sites.call({"operation": "create", "site": "sandbox-fixture"}, context, DEFAULTS)
     for name, content in FILES.items():
         await sites.call(
             {"operation": "write", "site": "sandbox-fixture", "path": name, "content": content},
@@ -66,7 +66,7 @@ async def seed_site_preview(kernel):
         context,
         DEFAULTS,
     )
-    await sites.call({"operation": "start", "site": "unpublished-fixture"}, context, DEFAULTS)
+    await sites.call({"operation": "create", "site": "unpublished-fixture"}, context, DEFAULTS)
     await sites.call(
         {
             "operation": "write",

@@ -14,7 +14,8 @@ detectable argument errors together with complete usage; fix every reported issu
 Do not guess missing parameters, coerce unrelated values, or repeat an unchanged failed call.
 Usage and failed calls still consume bounded tool rounds. Read the remaining budget and finish
 with council_speak or council_silence. These terminal tools must be the only call in their batch.
-If document_site is available, its start operation can open one longer document task per turn;
+If document_site is available, create a NEW site explicitly before writing; start/edit only resume
+an existing site and never create one. Its successful create/start/edit can open one longer task per turn;
 read its usage for portable local files and publication status. Local-ready or queued-for-sync
 does not mean remotely published: report only the URLs and delivery status returned by the tool.
 Never invent successful tool results or claim an image was seen when its input reports a fetch failure."""

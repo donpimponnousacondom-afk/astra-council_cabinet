@@ -36,7 +36,7 @@ async def call(documents, context, operation, **args):
 
 
 async def test_publish_is_local_only_atomic_persistent_and_draft_does_not_leak(documents, context):
-    started = await call(documents, context, "start", site="summary", title="Meeting")
+    started = await call(documents, context, "create", site="summary", title="Meeting")
     assert started["document_task_started"] is True
     assert not started["local_ready"]
     await call(
@@ -72,7 +72,7 @@ async def test_publish_is_local_only_atomic_persistent_and_draft_does_not_leak(d
 async def test_publish_transaction_rolls_back_manifest_pointer_when_queue_fails(
     documents, context, monkeypatch
 ):
-    await call(documents, context, "start", site="summary")
+    await call(documents, context, "create", site="summary")
     await call(documents, context, "write", site="summary", path="index.html", content="x")
 
     def fail(*args):
@@ -86,7 +86,7 @@ async def test_publish_transaction_rolls_back_manifest_pointer_when_queue_fails(
 
 
 async def test_bot_isolation_scoped_import_and_secret_redaction(documents, context):
-    await call(documents, context, "start", site="summary")
+    await call(documents, context, "create", site="summary")
     await call(documents, context, "write", site="summary", path="index.html", content="secret-test-value")
     assert documents.read_file("ada", "summary", "index.html")[0] == b"[REDACTED]"
     foreign = ToolContext({"id": "curie"}, context.channel_id, context.turn_id)
@@ -138,6 +138,10 @@ async def test_bot_isolation_scoped_import_and_secret_redaction(documents, conte
         "a//b.html",
         "page.html\n",
         "assets/link?.js",
+        "report.php.html",
+        "report.PHP8.HTML",
+        "assets/test.py.svg",
+        "page.shtml.txt",
     ],
 )
 def test_path_validation_rejects_traversal_and_server_programs(path):
@@ -146,7 +150,7 @@ def test_path_validation_rejects_traversal_and_server_programs(path):
 
 
 async def test_symlink_and_corrupt_blob_cannot_escape_or_be_published(documents, context, tmp_path):
-    await call(documents, context, "start", site="summary")
+    await call(documents, context, "create", site="summary")
     await call(documents, context, "write", site="summary", path="index.html", content="hello")
     manifest = documents._manifest(documents._site("ada", "summary"))
     blob = documents._blob("ada", manifest["index.html"]["blob"])
@@ -165,7 +169,7 @@ async def test_symlink_and_corrupt_blob_cannot_escape_or_be_published(documents,
 async def test_file_count_size_and_empty_publish_fail_before_mutation(documents, context, monkeypatch):
     import hortator.documents as module
 
-    await call(documents, context, "start", site="summary")
+    await call(documents, context, "create", site="summary")
     with pytest.raises(ControlError, match="at least one"):
         await call(documents, context, "publish", site="summary")
     monkeypatch.setattr(module, "MAX_FILE", 5)
@@ -191,7 +195,7 @@ def test_operation_schema_reports_all_missing_and_wrong_fields():
 
 
 async def test_attachment_scope_and_malformed_url_never_fetch(documents, context, monkeypatch):
-    await call(documents, context, "start", site="summary")
+    await call(documents, context, "create", site="summary")
     documents.store.ingest(
         discord_id="987654",
         channel_id="another-channel",
@@ -227,7 +231,7 @@ async def test_attachment_scope_and_malformed_url_never_fetch(documents, context
 
 
 async def test_revoked_grant_cannot_commit_download_result(documents, context, monkeypatch):
-    await call(documents, context, "start", site="summary")
+    await call(documents, context, "create", site="summary")
     monkeypatch.setattr(documents, "_attachment", AsyncMock(return_value=b"downloaded"))
     with pytest.raises(ControlError, match="grant was removed"):
         await call(
@@ -248,7 +252,7 @@ async def test_cached_attachment_import_survives_expired_cdn_url_without_network
     import hashlib
     import hortator.documents as module
 
-    await call(documents, context, "start", site="summary")
+    await call(documents, context, "create", site="summary")
     data = b"\x89PNG\r\n\x1a\nlocal-cache-test"
     digest = hashlib.sha256(data).hexdigest()
     images = documents.directory.parent / "images"
@@ -293,7 +297,7 @@ async def test_remote_enabled_config_cannot_activate_transfer(documents, context
     monkeypatch.setattr(module.aiohttp, "ClientSession", no_network)
     config = {"remote_enabled": True, "public_base_url": "https://council.example.test"}
     for args in (
-        {"operation": "start", "site": "summary"},
+        {"operation": "create", "site": "summary"},
         {"operation": "write", "site": "summary", "path": "index.html", "content": "local"},
         {"operation": "publish", "site": "summary"},
     ):
@@ -305,7 +309,7 @@ async def test_remote_enabled_config_cannot_activate_transfer(documents, context
 
 @pytest.mark.parametrize("damage", ["missing", "corrupt", "symlink"])
 async def test_publish_never_claims_ready_or_queues_damaged_snapshot(documents, context, damage, tmp_path):
-    await call(documents, context, "start", site="summary")
+    await call(documents, context, "create", site="summary")
     await call(documents, context, "write", site="summary", path="index.html", content="valid")
     entry = documents._manifest(documents._site("ada", "summary"))["index.html"]
     blob = documents._blob("ada", entry["blob"])
@@ -322,7 +326,9 @@ async def test_publish_never_claims_ready_or_queues_damaged_snapshot(documents, 
     assert not documents.store.rows("SELECT * FROM document_sync_queue")
 
 
-async def test_list_preserves_configured_per_bot_urls_and_document_only_entrypoint(documents, context):
+async def test_list_preserves_per_bot_local_url_and_global_remote_url_with_document_only_entrypoint(
+    documents, context
+):
     documents.store.put(
         "plugins",
         {
@@ -337,7 +343,7 @@ async def test_list_preserves_configured_per_bot_urls_and_document_only_entrypoi
         "bots",
         {"id": "ada", "plugin_config": {"document_site": {"local_base_url": "https://ada.example.test"}}},
     )
-    await call(documents, context, "start", site="summary")
+    await call(documents, context, "create", site="summary")
     await call(documents, context, "write", site="summary", path="reports/meeting notes.txt", content="notes")
     await call(documents, context, "publish", site="summary")
     listed = documents.list_sites()[0]
@@ -346,7 +352,7 @@ async def test_list_preserves_configured_per_bot_urls_and_document_only_entrypoi
     assert listed["planned_public_url"] == "https://remote.example.test/ada/summary/"
     assert (await call(documents, context, "list"))["sites"][0][
         "planned_public_url"
-    ] == "http://council.example.test/ada/summary/"
+    ] == "https://remote.example.test/ada/summary/"
     await call(documents, context, "write", site="summary", path="index.html", content="private landing page")
     assert documents.list_sites()[0]["published_entrypoint"] == "reports/meeting notes.txt"
     await call(documents, context, "publish", site="summary")

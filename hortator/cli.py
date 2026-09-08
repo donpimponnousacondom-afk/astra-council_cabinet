@@ -75,7 +75,16 @@ def main():
         (destination / "master.key").write_text(key)
         (destination / "master.key").chmod(0o600)
 
-        for folder in ("artifacts", "images", "sites", "ssh", "workspaces", "jobs", "fetched_documents"):
+        for folder in (
+            "artifacts",
+            "images",
+            "sites",
+            "ssh",
+            "workspaces",
+            "jobs",
+            "fetched_documents",
+            "site_history",
+        ):
             if (directory / folder).exists():
                 shutil.copytree(directory / folder, destination / folder)
                 (destination / folder).chmod(0o700)

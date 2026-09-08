@@ -21,6 +21,7 @@ from .discord_gateway import COMMANDS, DiscordManager
 from .models import ControlError, OWNER_ID, SCHEMAS
 from .plugins import Registry
 from .provider import ProviderPool
+from .publishing import PublishingWorker
 from .runtime import Engine
 from .security import Actor, Auth, Vault
 from .service import Service
@@ -46,17 +47,20 @@ class Kernel:
         self.connector = DiscordManager(self.service)
         self.service.connector = self.connector
         self.engine.transport = self.connector
+        self.publishing = PublishingWorker(self.store, self.vault, self.directory, self.registry.documents)
 
     def start(self):
         self.started = True
         self.store.recover()
         self.connector.start()
         self.engine.start()
+        self.publishing.start()
         self.store.emit(
             "runtime.started", {"version": __version__, "build": self.service.version(), "pid": os.getpid()}
         )
 
     async def close(self):
+        await self.publishing.close()
         await self.engine.close()
         await self.registry.agentic.close()
         await self.connector.close()
@@ -372,7 +376,12 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
 
     @app.get("/api/documents")
     async def documents(actor=Depends(authenticated), k=Depends(kernel)):
-        return {"sites": k.registry.documents.list_sites(), "remote_status": "disabled"}
+        state = k.publishing.status()
+        return {
+            "sites": k.registry.documents.list_sites(),
+            "remote_status": state["status"],
+            "publishing": state,
+        }
 
     @app.get("/api/agentic-tools")
     async def agentic_tools(

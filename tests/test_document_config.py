@@ -34,10 +34,17 @@ async def test_document_url_bot_overrides_and_budget_defaults(kernel, owner):
         await kernel.service.save(
             owner, "bots", "ada", {"plugin_config": {"document_site": {"local_base_url": ""}}}
         )
+    with pytest.raises(ControlError, match="global plugin settings"):
+        await kernel.service.save(
+            owner,
+            "bots",
+            "ada",
+            {"plugin_config": {"document_site": {"public_base_url": "https://example.com/council"}}},
+        )
     value = await kernel.service.save(
         owner,
         "bots",
         "ada",
-        {"plugin_config": {"document_site": {"public_base_url": "https://example.com/council"}}},
+        {"plugin_config": {"document_site": {"local_base_url": "https://local.example.com"}}},
     )
-    assert value["plugin_config"]["document_site"]["public_base_url"] == "https://example.com/council"
+    assert value["plugin_config"]["document_site"]["local_base_url"] == "https://local.example.com"

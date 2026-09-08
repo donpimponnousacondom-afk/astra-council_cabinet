@@ -255,6 +255,7 @@ class Service:
             document_config = entity.get("plugin_config", {}).get("document_site")
         if document_config is not None:
             from .documents import public_base
+            from .publishing import validate_config
 
             if not isinstance(document_config, dict):
                 raise ControlError("document_site configuration must be an object")
@@ -266,6 +267,7 @@ class Service:
                     if field == "local_base_url" and not value:
                         raise ControlError("document_site.local_base_url must not be empty")
                     public_base(value)
+            validate_config(document_config, per_bot=kind == "bots")
         if kind == "plugins" and entity["id"] not in self.registry.specs:
             raise ControlError("Install a Python plugin entry point before configuring it")
 
