@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Install as ~/.local/bin/hortator-next-feature (a symlink is sufficient).
+set -euo pipefail
+hortator_script_dir="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
+source /home/codexy/.config/hortator/runtime.env
+exec python3 "$hortator_script_dir/next_feature.py" "$@"

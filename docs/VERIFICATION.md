@@ -2,6 +2,16 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks are identified separately and keep configured credentials in memory without exposing them or making paid completion probes.
 
+## One-command branch/build/Screen workflow (2026-09-08)
+
+Implemented on the user's clean local `feat/next_feature` placeholder after merged commit `294a164`. The new command preserves the user's practice of renaming that placeholder before publishing; it does not push or manufacture a merge commit.
+
+- **18 focused tests passed** in `tests/test_next_feature.py`. Real temporary repositories cover fresh/reused placeholders, preserving an older placeholder under an archive name, exact squash-head verification, extra unmerged commits, dirty tracked/untracked files, divergent main, another worktree owning main, and concurrent checkout changes. Test pushes target only a temporary bare repository, never this project's remote.
+- Worker tests verify dependency/build/start ordering, mismatch refusal, interruption reporting and lock release. A subprocess timeout test confirms a spawned process group is stopped. A real, separately named GNU Screen test verifies Ctrl-C stops the intended test process while preserving its Bash, and an unrelated foreground command is refused. The shared production Screen session is not used by those tests.
+- Bash syntax, Ruff lint/format and whitespace checks passed. Read-only live discovery correctly identified the existing shared Screen Bash/window and foreground Hortator PID without `screen -Q` or reading unrelated process environments. GitHub CLI confirmed the exact published head and squash commit of PR13, validating the selected merge-evidence fields against the real API.
+
+The local installation links `~/.local/bin/hortator-next-feature` to its tracked shell entry point. A successful external run writes the selected branch/commit and health/build verification to `$HORTATOR_DATA_DIR/logs/next-feature.json`. Final feature deployment uses `--refresh` after committing; the normal post-merge mode must refuse this feature until its PR is actually merged. Inspect that receipt and the startup version for current deployment state rather than treating this dated record as a rolling handover.
+
 ## Automatic remote publishing and deep console inspection (2026-09-08)
 
 Implemented on `feat/document_generation_and_sync_v2`, continuing the user's merged baseline and the continuity repair below. No source-repository push or main-branch implementation was performed.
