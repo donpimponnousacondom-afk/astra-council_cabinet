@@ -128,7 +128,8 @@ async def test_version_inspection_requires_trusted_hortator_context(kernel):
         ToolContext(bot, "channel", "turn", owner_verified=True),
         "version-call",
     )
-    assert result == kernel.service.version()
+    assert {key: value for key, value in result.items() if key != "result_id"} == kernel.service.version()
+    assert kernel.store.one("SELECT id FROM tool_result_evidence WHERE id=?", (result["result_id"],))
     assert not kernel.store.rows("SELECT * FROM requests")
     denied = await kernel.registry.call(
         "council_inspect",
@@ -136,7 +137,8 @@ async def test_version_inspection_requires_trusted_hortator_context(kernel):
         ToolContext(bot, "channel", "turn", owner_verified=False),
         "untrusted-call",
     )
-    assert denied == {
+    assert {key: value for key, value in denied.items() if key != "result_id"} == {
         "ok": False,
         "error": "ControlError: Tool is not enabled for this bot and trusted request",
     }
+    assert kernel.store.one("SELECT id FROM tool_result_evidence WHERE id=?", (denied["result_id"],))

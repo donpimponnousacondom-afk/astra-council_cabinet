@@ -1488,9 +1488,7 @@ function Catalog({
                   <KeyRound size={14} />
                   {item.key_configured
                     ? "Credential configured"
-                    : ["memory", "web_fetch", "council_inspect"].includes(
-                          item.id,
-                        )
+                    : item.keyless
                       ? "No credential required"
                       : "Add a credential or local endpoint"}
                 </div>
