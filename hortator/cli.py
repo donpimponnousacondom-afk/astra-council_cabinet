@@ -128,7 +128,7 @@ def main():
             )
         except ControlError as exc:
             raise SystemExit(str(exc)) from None
-        except (InvalidToken, ValueError):
+        except InvalidToken, ValueError:
             raise SystemExit("Cannot unlock Hortator credentials; check the matching master key") from None
         finally:
             if store is not None:

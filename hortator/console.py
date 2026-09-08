@@ -304,7 +304,7 @@ class OperationalConsole(logging.Handler):
             termios.tcsetattr(fd, termios.TCSANOW, state)
             self.input_fd, self.tty_state = fd, saved
             self.loop.add_reader(fd, self.read_key)
-        except (OSError, ValueError, termios.error):
+        except OSError, ValueError, termios.error:
             self.stop_keys()
 
     def stop_keys(self):
@@ -313,7 +313,7 @@ class OperationalConsole(logging.Handler):
                 self.loop.remove_reader(self.input_fd)
             try:
                 termios.tcsetattr(self.input_fd, termios.TCSANOW, self.tty_state)
-            except (OSError, termios.error):
+            except OSError, termios.error:
                 pass
         self.input_fd = self.tty_state = None
 
@@ -431,7 +431,7 @@ class OperationalConsole(logging.Handler):
         try:
             self.stream.write(text + "\n")
             self.stream.flush()
-        except (OSError, ValueError):
+        except OSError, ValueError:
             self.output_failed = True  # A broken log sink must never fail a model turn.
 
     def notice(self, text):

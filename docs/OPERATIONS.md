@@ -65,7 +65,7 @@ ln -s /home/codexy/codex/astra-council_cabinet/scripts/hortator-next-feature \
   /home/codexy/.local/bin/hortator-next-feature
 ```
 
-Installation does not alter `.bashrc`, `.profile`, `.screenrc`, the runtime launcher or credentials. It requires the existing runtime environment/launcher plus Git, GNU Screen, Python3, uv, npm and `ss`; GitHub CLI authentication is needed for squash-merge verification when ordinary ancestry cannot prove inclusion. This launcher is local operator automation, not a bot tool.
+Installation does not alter `.bashrc`, `.profile`, `.screenrc`, the runtime launcher or credentials. It requires the existing runtime environment/launcher plus Git, GNU Screen, Python 3.14, uv, npm and `ss`; GitHub CLI authentication is needed for squash-merge verification when ordinary ancestry cannot prove inclusion. This launcher is local operator automation, not a bot tool.
 
 For the manual equivalent, attach with `screen -x hortator`, let active work finish, then press Ctrl-C and wait for the shared Bash prompt. Use a new task name when the placeholder already exists:
 
@@ -463,3 +463,12 @@ Backups now include `workspaces/`, `jobs/` and `fetched_documents/`, with their 
 `job.*`, `workspace.*` and `web_fetch.*` operational events belong to the console tools scope (`t`). Polling stays at DEBUG; model source text and binary payloads are not printed in normal concise events. Grant/configuration edits, bot/global pause and shutdown cancel active shell jobs and wait for namespace cleanup. Remote publication configuration is independent.
 
 For an explicitly owner-authorized parallel linked worktree, keep dependency/build/test storage isolated and use an unused test port: `HORTATOR_TEST_PORT=18110 ./scripts/check.sh`. The browser server owns temporary `/tmp/hortator-e2e-*` data and refuses port 8000. Never point its fixture/server at production storage or reuse another session’s server.
+
+
+## Python 3.14 and sandbox toolchain maintenance
+
+The application now requires Python 3.14 (`.python-version` and `requires-python >=3.14,<3.15`). Provision it with `uv python install 3.14` or use an existing operator-managed Python 3.14; leave distribution Python symlinks alone. Use `uv sync --frozen --python 3.14`. Stop the shared Screen foreground runtime before replacing its `.venv`; validate in a separate `UV_PROJECT_ENVIRONMENT` while it is still running. The `hortator-next-feature` helper also invokes Python 3.14 explicitly. Historical verification records describe the interpreters actually used then, not today's baseline. External SSH receivers retain their independent system-Python contract.
+
+Install the OS tools and pinned micromamba bootstrap described in [SHELL_RUNNER.md](SHELL_RUNNER.md#operator-requirements-and-readiness). Keep uv and micromamba discoverable in the service PATH, then refresh runner readiness. Missing tools or another application Python version fail closed. Never use readiness as evidence that every package fits the finite limits. A public package smoke check is opt-in: `HORTATOR_REQUIRE_SANDBOX=1 HORTATOR_TEST_PACKAGE_NETWORK=1 uv run pytest -q tests/test_shell_runner.py`. It downloads a small Python package and zstd inside disposable namespaces, not into host applications.
+
+New package storage defaults are 2 GiB/50,000 entries per job; shell address space is 2 GiB per process, with 16 processes/threads. Existing explicit global or per-bot values remain authoritative and may need deliberate operator adjustment for a package workload. All installs/caches in `/packages` disappear at job completion. Backups continue to include persistent workspaces/jobs; package scratch needs no archive. Host networking includes loopback reachability; bot filesystem credentials and the application environment remain unmounted.

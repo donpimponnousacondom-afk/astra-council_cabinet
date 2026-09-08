@@ -27,8 +27,10 @@ from .models import ControlError
 DEFAULTS = {
     "timeout_seconds": 90,
     "output_bytes": 1_048_576,
-    "memory_bytes_per_process": 268_435_456,
-    "process_limit": 12,
+    "memory_bytes_per_process": 2_147_483_648,
+    "process_limit": 16,
+    "package_bytes": 2_147_483_648,
+    "package_entries": 50_000,
     "retention_days": 7,
     "max_jobs_per_bot": 200,
     "job_storage_bytes_per_bot": 104_857_600,
@@ -38,8 +40,10 @@ CONFIG_SCHEMA = {
     "properties": {
         "timeout_seconds": {"type": "number", "minimum": 0.1, "maximum": 90},
         "output_bytes": {"type": "integer", "minimum": 1024, "maximum": 4_194_304},
-        "memory_bytes_per_process": {"type": "integer", "minimum": 67_108_864, "maximum": 536_870_912},
+        "memory_bytes_per_process": {"type": "integer", "minimum": 67_108_864, "maximum": 4_294_967_296},
         "process_limit": {"type": "integer", "minimum": 4, "maximum": 32},
+        "package_bytes": {"type": "integer", "minimum": 67_108_864, "maximum": 4_294_967_296},
+        "package_entries": {"type": "integer", "minimum": 1000, "maximum": 100_000},
         "retention_days": {"type": "integer", "minimum": 1, "maximum": 30},
         "max_jobs_per_bot": {"type": "integer", "minimum": 1, "maximum": 1000},
         "job_storage_bytes_per_bot": {"type": "integer", "minimum": 1_048_576, "maximum": 1_073_741_824},
@@ -49,8 +53,16 @@ CONFIG_SCHEMA = {
 TOOLS = (
     "bash sh env ls stat cat head tail wc du cp mv mkdir rm rmdir touch find grep sed awk "
     "sort uniq cut tr xargs tee date sleep printf basename dirname realpath sha256sum base64 "
-    "od file gzip gunzip tar zip unzip timeout true false"
+    "od file gzip gunzip tar zip unzip timeout true false "
+    "curl wget git jq perl ps pgrep pkill id whoami groups ss netstat ip "
+    "arch b2sum base32 basenc chcon chgrp chmod chown cksum comm csplit dd df dir dircolors "
+    "dirname expand expr factor fmt fold hostid install join link ln logname md5sum mkfifo "
+    "mknod mktemp nice nl nohup nproc numfmt paste pathchk pinky pr printenv ptx readlink "
+    "rev runcon seq sha1sum sha224sum sha384sum sha512sum shred shuf split stdbuf stty sum "
+    "sync tac test truncate tsort tty uname unexpand unlink uptime users vdir who yes "
+    "cut diff patch xz unxz bzip2 bunzip2 readelf"
 ).split()
+TOOLS = list(dict.fromkeys(TOOLS))
 FINAL_STATES = {
     "succeeded",
     "failed",
@@ -62,8 +74,8 @@ FINAL_STATES = {
 }
 SETUP = (
     "Provide Linux with unprivileged user/PID/mount namespaces, bubblewrap supporting "
-    "--disable-userns and --size, libseccomp.so.2, Bash, this app's installed Python/Pillow, "
-    "system DNS configuration and a CA certificate bundle. "
+    "--disable-userns and --size, libseccomp.so.2, Python 3.14/Pillow/pip, uv, micromamba, "
+    "the documented OS tool packages, system DNS configuration and a CA certificate bundle. "
     "Install operator-managed OS packages and enable the required namespace policy, then retry readiness. "
     "No unrestricted-host fallback exists."
 )
@@ -76,8 +88,10 @@ def limits(configuration=None):
     bounds = {
         "timeout_seconds": (0.1, 90),
         "output_bytes": (1024, 4_194_304),
-        "memory_bytes_per_process": (67_108_864, 536_870_912),
+        "memory_bytes_per_process": (67_108_864, 4_294_967_296),
         "process_limit": (4, 32),
+        "package_bytes": (67_108_864, 4_294_967_296),
+        "package_entries": (1000, 100_000),
         "retention_days": (1, 30),
         "max_jobs_per_bot": (1, 1000),
         "job_storage_bytes_per_bot": (1_048_576, 1_073_741_824),
@@ -154,7 +168,7 @@ class ShellRunner:
             try:
                 self._safe_job(path.parent.name)
                 metadata = json.loads(path.read_text())
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 continue
             if metadata.get("status") == "running":
                 metadata.update(status="interrupted", finished_at=time.time(), workspace_committed=False)
@@ -322,6 +336,8 @@ class ShellRunner:
         bwrap = shutil.which("bwrap", path="/usr/bin:/bin")
         if not bwrap:
             raise ControlError("bubblewrap is unavailable. " + SETUP)
+        if sys.version_info[:2] != (3, 14):
+            raise ControlError("The application and sandbox require Python 3.14. " + SETUP)
         mounts = {}
         dependencies = set()
         available = []
@@ -347,7 +363,10 @@ class ShellRunner:
                 if match:
                     library = Path(match.group(1)).resolve()
                     mounts[f"/lib/{Path(match.group(1)).name}"] = library
-                    if "ld-linux" in library.name:
+                    if (
+                        match.group(1).startswith(("/lib/", "/lib64/", "/usr/lib/"))
+                        or "ld-linux" in library.name
+                    ):
                         mounts[match.group(1)] = library
 
         for name in TOOLS:
@@ -357,19 +376,60 @@ class ShellRunner:
                 mounts[f"/bin/{name}"] = source
                 available.append(name)
                 libraries(source)
-        if "bash" not in available:
-            raise ControlError("Bash is unavailable. " + SETUP)
+        missing = sorted(set(TOOLS) - set(available))
+        if missing:
+            raise ControlError("Missing sandbox tools: " + ", ".join(missing) + ". " + SETUP)
+        for name in ("uv", "micromamba"):
+            selected = shutil.which(name)
+            if not selected:
+                raise ControlError(f"{name} is unavailable. " + SETUP)
+            source = Path(selected).resolve()
+            mounts[f"/bin/{name}"] = source
+            libraries(source)
+            available.append(name)
+        git_core = Path(subprocess.check_output(["/usr/bin/git", "--exec-path"], text=True).strip())
+        mounts["/usr/lib/git-core"] = git_core
+        for executable in git_core.iterdir():
+            if executable.is_file():
+                libraries(executable.resolve())
+        for directory in ("/usr/share/git-core/templates", "/usr/libexec/coreutils", "/usr/lib/coreutils"):
+            if Path(directory).is_dir():
+                mounts[directory] = Path(directory)
+                for executable in Path(directory).glob("*.so"):
+                    libraries(executable)
+        perl_dirs = subprocess.check_output(
+            ["/usr/bin/perl", "-e", 'print join("\\n", @INC)'],
+            text=True,
+            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+        ).splitlines()
+        for directory in perl_dirs:
+            path = Path(directory)
+            if path.is_absolute() and path.is_dir():
+                mounts[directory] = path
+                for extension in path.rglob("*.so"):
+                    libraries(extension.resolve())
+        assets = Path(__file__).with_name("shell_assets")
+        for name in ("passwd", "group"):
+            mounts[f"/etc/{name}"] = assets / name
+        mounts["/bin/pip"] = assets / "pip"
+        mounts["/bin/pkg"] = assets / "pkg"
+        available += ["pip", "pip3", "pip3.14", "pkg"]
         python = Path(sys.executable).resolve()
-        mounts["/runtime/python/bin/python3"] = python
+        mounts["/runtime/python/bin/python3.14"] = python
         libraries(python)
         stdlib = Path(sysconfig.get_path("stdlib"))
         version = f"python{sys.version_info.major}.{sys.version_info.minor}"
         for entry in stdlib.iterdir():
-            if entry.name not in {"site-packages", "__pycache__", "ensurepip", "idlelib", "test"}:
+            if entry.name not in {"site-packages", "__pycache__", "idlelib", "test"}:
                 mounts[f"/runtime/python/lib/{version}/{entry.name}"] = entry
         for extension in (stdlib / "lib-dynload").glob("*.so"):
             if not extension.name.startswith("_tkinter"):
                 libraries(extension)
+        mounts[f"/runtime/python/lib/{version}/EXTERNALLY-MANAGED"] = assets / "EXTERNALLY-MANAGED"
+        pip = importlib.util.find_spec("pip")
+        if pip is None or pip.origin is None:
+            raise ControlError("pip is unavailable. " + SETUP)
+        mounts[f"/runtime/python/lib/{version}/site-packages/pip"] = Path(pip.origin).parent
         pillow = importlib.util.find_spec("PIL")
         if pillow is None or pillow.origin is None:
             raise ControlError("Pillow is unavailable in the application environment. " + SETUP)
@@ -429,7 +489,11 @@ class ShellRunner:
         if certificates is None:
             raise ControlError("System CA certificate bundle is unavailable. " + SETUP)
         mounts["/etc/ssl/certs/ca-certificates.crt"] = certificates.resolve()
-        return {"bwrap": bwrap, "mounts": mounts, "tools": available + ["python", "python3", "Pillow"]}
+        return {
+            "bwrap": bwrap,
+            "mounts": mounts,
+            "tools": available + ["python", "python3", "python3.14", "Pillow"],
+        }
 
     async def readiness(self, refresh=False):
         async with self._readiness_lock:
@@ -447,7 +511,13 @@ class ShellRunner:
                     source.mkdir(mode=0o700)
                     config = {
                         **limits(),
-                        "command": "python3 -c 'from PIL import Image; print(\"ready\")'",
+                        "command": (
+                            "set -e; python3.14 -c 'import ensurepip, pip, venv; "
+                            'from PIL import Image; print("ready")\'; '
+                            "uv --version; micromamba --version; git --version; "
+                            "perl -MJSON::PP -e 'print encode_json({ready=>1})'; "
+                            "curl --version > /dev/null; wget --version > /dev/null"
+                        ),
                         "cwd": ".",
                         "quota_bytes": 1_048_576,
                         "max_file_bytes": 524_288,
@@ -467,7 +537,9 @@ class ShellRunner:
                     "ready": True,
                     "boundary": "bubblewrap + seccomp",
                     "network": "host",
-                    "message": "Host networking enabled; DNS and HTTPS trust use read-only system configuration.",
+                    "message": "Host networking, DNS and HTTPS enabled. Python 3.14, uv/venv and disposable native packages ready.",
+                    "python": "3.14",
+                    "package_storage": "Per-job /packages tmpfs; discarded after every job",
                     "tools": self._toolchain["tools"],
                     "limits": limits(),
                     "memory_scope": "per process; process count bounds multiplied address space",
@@ -502,7 +574,7 @@ class ShellRunner:
             "--clearenv",
             "--setenv",
             "PATH",
-            "/bin",
+            "/packages/venv/bin:/packages/native/bin:/runtime/python/bin:/bin",
             "--setenv",
             "HOME",
             "/workspace",
@@ -514,7 +586,7 @@ class ShellRunner:
             "C",
             "--setenv",
             "LD_LIBRARY_PATH",
-            "/lib",
+            "/packages/native/lib:/lib",
             "--setenv",
             "PYTHONDONTWRITEBYTECODE",
             "1",
@@ -533,6 +605,10 @@ class ShellRunner:
             "16777216",
             "--tmpfs",
             "/tmp",
+            "--size",
+            str(config["package_bytes"]),
+            "--tmpfs",
+            "/packages",
             "--ro-bind",
             str(source),
             "/source",
@@ -543,22 +619,54 @@ class ShellRunner:
             str(config_path),
             "/runner/config.json",
         ]
+        environment = {
+            "VIRTUAL_ENV": "/packages/venv",
+            "UV_PYTHON": "/packages/venv/bin/python3.14",
+            "UV_PYTHON_DOWNLOADS": "never",
+            "UV_CACHE_DIR": "/packages/cache/uv",
+            "UV_TOOL_DIR": "/packages/uv-tools",
+            "UV_TOOL_BIN_DIR": "/packages/native/bin",
+            "UV_SYSTEM_CERTS": "true",
+            "UV_CONCURRENT_DOWNLOADS": "2",
+            "UV_CONCURRENT_BUILDS": "1",
+            "UV_CONCURRENT_INSTALLS": "1",
+            "RAYON_NUM_THREADS": "1",
+            "PIP_CACHE_DIR": "/packages/cache/pip",
+            "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+            "MAMBA_ROOT_PREFIX": "/packages/mamba",
+            "MAMBA_DOWNLOAD_THREADS": "2",
+            "MAMBA_EXTRACT_THREADS": "1",
+            "MAMBA_REPODATA_USE_ZST": "true",
+            "GIT_EXEC_PATH": "/usr/lib/git-core",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_SSL_CAINFO": "/etc/ssl/certs/ca-certificates.crt",
+            "CURL_CA_BUNDLE": "/etc/ssl/certs/ca-certificates.crt",
+            "REQUESTS_CA_BUNDLE": "/etc/ssl/certs/ca-certificates.crt",
+            "MAMBA_SSL_VERIFY": "/etc/ssl/certs/ca-certificates.crt",
+        }
+        for name, value in environment.items():
+            command += ["--setenv", name, value]
         for device in ("null", "zero", "random", "urandom"):
             command += ["--dev-bind", f"/dev/{device}", f"/dev/{device}"]
         for destination, path in sorted(self._toolchain["mounts"].items()):
             command += ["--ro-bind", str(path), destination]
+        for name in ("python", "python3", "python3.14"):
+            command += ["--symlink", "/runtime/python/bin/python3.14", f"/bin/{name}"]
+        for name in ("pip3", "pip3.14"):
+            command += ["--symlink", "/bin/pip", f"/bin/{name}"]
         command += [
             "--symlink",
-            "/runtime/python/bin/python3",
-            "/bin/python3",
+            "/bin",
+            "/usr/bin",
             "--symlink",
-            "/runtime/python/bin/python3",
-            "/bin/python",
+            "/etc/ssl/certs/ca-certificates.crt",
+            "/etc/ssl/cert.pem",
             "--remount-ro",
             "/",
             "--chdir",
             "/workspace",
-            "/runtime/python/bin/python3",
+            "/runtime/python/bin/python3.14",
             "-I",
             "/runner/worker.py",
         ]
@@ -727,7 +835,7 @@ class ShellRunner:
             if parent == active.process.pid:
                 active.init_pidfd = descriptor
                 descriptor = None
-        except (OSError, ValueError, KeyError):
+        except OSError, ValueError, KeyError:
             pass
         finally:
             if descriptor is not None:

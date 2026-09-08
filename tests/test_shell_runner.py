@@ -29,6 +29,8 @@ async def sandbox(tmp_path):
     ready = await runner.readiness()
     if not ready["ready"]:
         store.close()
+        if os.environ.get("HORTATOR_REQUIRE_SANDBOX") == "1":
+            pytest.fail("Required sandbox unavailable: " + ready["error"])
         pytest.skip("Real namespace execution unavailable: " + ready["error"])
     yield runner, workspace, context
     await runner.close()
@@ -93,7 +95,7 @@ def namespace_pids(namespace):
             try:
                 if os.readlink(item / "ns/pid") == namespace:
                     found.append(int(item.name))
-            except (FileNotFoundError, PermissionError, ProcessLookupError):
+            except FileNotFoundError, PermissionError, ProcessLookupError:
                 pass
     return found
 
@@ -155,16 +157,13 @@ async def test_real_files_environment_network_and_supervisor_isolation(sandbox, 
 import os, socket, ctypes, pathlib
 assert os.getuid() == 1000
 assert os.environ.get('HORTATOR_TEST_PRIVATE') is None
-for p in [{str(sentinel)!r}, '/home/codexy/.ssh', '/home/codexy/.local/share/hortator', '/proc/1/root{str(sentinel)}', '/sys/fs/cgroup', '/run', '/bin/sudo', '/bin/curl']:
+for p in [{str(sentinel)!r}, '/home/codexy/.ssh', '/home/codexy/.local/share/hortator', '/proc/1/root{str(sentinel)}', '/sys/fs/cgroup', '/run', '/bin/sudo', '/bin/node', '/bin/python3.12', '/bin/python3.13']:
  try:
   assert not pathlib.Path(p).exists(), p
  except PermissionError:
   pass
 assert 'CapEff:\\t0000000000000000' in pathlib.Path('/proc/self/status').read_text()
-try:
- socket.create_connection(('127.0.0.1', {port}), .1)
- raise AssertionError('network succeeded')
-except OSError:
+with socket.create_connection(('127.0.0.1', {port}), 1):
  pass
 libc = ctypes.CDLL(None, use_errno=True)
 assert libc.unshare(0x10000000) == -1
@@ -182,7 +181,7 @@ PY"""
         await server.wait_closed()
     assert result["status"] == "succeeded", result
     assert result["stdout"]["text"] == "isolated\n"
-    assert not received
+    assert received
     assert sentinel.read_text() == "unshared-private-fixture"
 
 
@@ -263,7 +262,7 @@ asyncio.run(main())
         str(isolated),
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
-        env={"PATH": "/usr/bin:/bin"},
+        env={"PATH": os.environ["PATH"]},
     )
     pidfd = None
     try:
@@ -278,7 +277,7 @@ asyncio.run(main())
                     if ready:
                         pidfd = os.pidfd_open(info["child-pid"])
                         break
-                except (ValueError, OSError):
+                except ValueError, OSError:
                     pass
             if controller.returncode is not None:
                 pytest.fail((await controller.stderr.read()).decode())
@@ -321,18 +320,18 @@ async def test_close_waits_for_actual_tree_cleanup_and_workspace_release(sandbox
     assert not runner.active and not workspace._active
 
 
-async def test_real_workspace_hard_byte_and_per_file_limits(sandbox, monkeypatch):
+async def test_real_workspace_byte_and_export_file_limits(sandbox, monkeypatch):
     from hortator.workspaces import validate_config as workspace_limits
 
     runner, workspace, context = sandbox
     config = workspace_limits({"max_workspace_bytes": 20 * 1024 * 1024, "max_file_bytes": 20 * 1024 * 1024})
     monkeypatch.setattr(workspace, "effective_config", lambda bot: config)
-    result = await runner.run(
-        context,
-        command="python3 - <<'PY'\nimport errno,os\ntry:\n os.truncate('too-big',21*1024*1024)\nexcept FileNotFoundError:\n open('too-big','wb').close()\ntry:\n os.truncate('too-big',21*1024*1024)\n raise AssertionError('file byte cap bypassed')\nexcept OSError as e:\n assert e.errno == errno.EFBIG,e\n print('file-bounded')\ntry:\n for i in range(6):\n  with open('f'+str(i),'wb') as f: f.write(b'x'*4194304)\n raise AssertionError('workspace byte cap bypassed')\nexcept OSError as e:\n assert e.errno == errno.ENOSPC,e\n print('workspace-bounded')\nPY",
-    )
+    result = await runner.run(context, command="truncate -s 21M too-big")
+    assert result["status"] == "failed" and not result["workspace_committed"]
+    assert "per-file" in result["error"]
+    result = await runner.run(context, command="dd if=/dev/zero of=full bs=1M count=21; rm -f full")
     assert result["status"] == "succeeded", result
-    assert result["stdout"]["text"] == "file-bounded\nworkspace-bounded\n"
+    assert "No space left" in result["stderr"]["text"]
     assert result["workspace_committed"]
 
 
@@ -493,3 +492,92 @@ def test_pidfd_pins_process_before_parent_check_and_closes_rejected_handles(tmp_
     finally:
         if active.init_pidfd is not None:
             os.close(active.init_pidfd)
+
+
+async def test_real_expanded_toolchain_and_python314_aliases(sandbox):
+    runner, _, context = sandbox
+    command = """set -eu
+for tool in curl wget git jq perl ps pgrep id whoami ss netstat ip chmod ln dd uv micromamba pkg; do
+ command -v "$tool"
+done
+! command -v node
+for python_name in python python3 python3.14; do
+ "$python_name" -c 'import sys; assert sys.version_info[:2] == (3,14); assert sys.prefix == "/packages/venv"'
+done
+[ "$(whoami)" = agent ]; [ "$(id -u)" = 1000 ]
+ps -eo pid,comm; pgrep bash; ss -ltn > /packages/ss; netstat -ltn > /packages/netstat; ip -brief address
+printf '{"value":42}' | jq -e '.value == 42'
+perl -MJSON::PP -MDigest::SHA=sha256_hex -e 'print encode_json({ok => sha256_hex("abc")})'
+git init -q /packages/repo
+git -C /packages/repo -c user.name=Test -c user.email=test@example.invalid commit --allow-empty -qm test
+git -C /packages/repo log --oneline
+python3.14 -m venv /packages/second
+/packages/second/bin/python3.14 -m pip --version
+/bin/python3.14 -m pip install --no-index example 2> /packages/system-pip-error && exit 9
+cat /packages/system-pip-error
+"""
+    result = await runner.run(context, command=command)
+    assert result["status"] == "succeeded", result
+    assert "externally-managed-environment" in result["stdout"]["text"]
+    assert result["workspace_committed"]
+
+
+async def test_real_python_package_install_and_disposable_environments(sandbox):
+    runner, workspace, context = sandbox
+    # A local synthetic wheel exercises real uv/pip without relying on an index.
+    command = """set -eu
+python3.14 - <<'WHEEL'
+from zipfile import ZipFile
+with ZipFile('/packages/sandbox_fixture-1.0-py3-none-any.whl','w') as w:
+ w.writestr('sandbox_fixture.py', 'VALUE = 42')
+ w.writestr('sandbox_fixture-1.0.dist-info/METADATA', 'Metadata-Version: 2.1\\nName: sandbox-fixture\\nVersion: 1.0\\n')
+ w.writestr('sandbox_fixture-1.0.dist-info/WHEEL', 'Wheel-Version: 1.0\\nGenerator: fixture\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n')
+ w.writestr('sandbox_fixture-1.0.dist-info/RECORD', '')
+WHEEL
+uv pip install --no-index /packages/sandbox_fixture-1.0-py3-none-any.whl
+python3.14 -c 'import sandbox_fixture; assert sandbox_fixture.VALUE == 42'
+uv venv --python python3.14 --system-site-packages /packages/uv-env
+/packages/uv-env/bin/python3.14 -m pip install --no-index /packages/sandbox_fixture-1.0-py3-none-any.whl
+/packages/uv-env/bin/python3.14 -c 'import sandbox_fixture; assert sandbox_fixture.VALUE == 42'
+printf saved > deliverable.txt
+"""
+    result = await runner.run(context, command=command)
+    assert result["status"] == "succeeded", result
+    assert result["workspace_committed"]
+    assert (await read_file(workspace, context, "deliverable.txt"))["content"] == "saved"
+    next_job = await runner.run(
+        context,
+        command="python3.14 -c 'import importlib.util; assert importlib.util.find_spec(\"sandbox_fixture\") is None'; test ! -e /packages/uv-env; cat deliverable.txt",
+    )
+    assert next_job["status"] == "succeeded", next_job
+    assert next_job["stdout"]["text"] == "saved"
+
+
+async def test_real_package_storage_byte_and_entry_limits(sandbox):
+    runner, _, context = sandbox
+    result = await runner.run(
+        context,
+        command="dd if=/dev/zero of=/packages/full bs=1M count=70; rm -f /packages/full; echo retained > result.txt",
+        configuration={"package_bytes": 67_108_864},
+    )
+    assert result["status"] == "succeeded" and result["workspace_committed"], result
+    assert "No space left" in result["stderr"]["text"]
+    result = await runner.run(
+        context,
+        command="python3.14 -c 'from pathlib import Path; import time; [Path(f\"/packages/f{i}\").touch() for i in range(2000)]; time.sleep(3)'",
+        configuration={"package_entries": 1000},
+    )
+    assert result["status"] == "resource_limited" and not result["workspace_committed"], result
+
+
+@pytest.mark.skipif(
+    os.environ.get("HORTATOR_TEST_PACKAGE_NETWORK") != "1", reason="Opt-in public package download"
+)
+async def test_real_public_https_and_native_package_install(sandbox):
+    runner, _, context = sandbox
+    result = await runner.run(
+        context,
+        command="set -eu; curl -fsS https://pypi.org/simple/six/ -o /packages/curl-index; wget -q https://pypi.org/simple/six/ -O /packages/wget-index; uv pip install six==1.17.0; python3.14 -c 'import six; assert six.__version__ == \"1.17.0\"'; git ls-remote --exit-code https://github.com/mamba-org/micromamba-releases.git refs/tags/2.9.0-0 > /packages/git-refs; pkg install zstd; zstd --version; pkg install zstd; echo installed > native-result.txt",
+    )
+    assert result["status"] == "succeeded" and result["workspace_committed"], result
+    assert "Zstandard" in result["stdout"]["text"]

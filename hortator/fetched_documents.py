@@ -152,7 +152,7 @@ def _text_payload(data, content_type):
     try:
         codec = codecs.lookup(charset)
         text = data.decode(codec.name, errors="replace")
-    except (LookupError, UnicodeError, TypeError):
+    except LookupError, UnicodeError, TypeError:
         raise ControlError(
             "The text document declares an unsupported character encoding; use a UTF-8 source or attachment import"
         ) from None

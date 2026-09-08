@@ -202,3 +202,13 @@ def test_snapshot_job_path_cannot_escape(tmp_path):
     with pytest.raises(ControlError):
         local_snapshot(tmp_path, {"bot_id": "ada", "slug": "site", "job_id": "../outside"})
     assert not (tmp_path / "site_history").exists()
+
+
+def test_standalone_receiver_retains_remote_host_syntax_compatibility():
+    import ast
+    from pathlib import Path
+
+    from hortator import publishing_receiver
+
+    source = Path(publishing_receiver.__file__).read_text()
+    ast.parse(source, feature_version=(3, 10))

@@ -299,7 +299,7 @@ def public_base(value: str) -> str:
             and not parsed.fragment
             and not any(ord(c) < 33 for c in value)
         )
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         valid = False
     if not valid:
         raise ControlError(

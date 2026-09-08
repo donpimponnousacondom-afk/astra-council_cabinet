@@ -20,6 +20,7 @@ import stat
 import subprocess
 import sys
 import time
+import venv
 
 
 def emit(kind, **fields):
@@ -36,7 +37,7 @@ def restrict(config):
     limits = {
         resource.RLIMIT_AS: config["memory_bytes_per_process"],
         resource.RLIMIT_NPROC: config["process_limit"],
-        resource.RLIMIT_FSIZE: config["max_file_bytes"],
+        resource.RLIMIT_FSIZE: max(config["max_file_bytes"], config["package_bytes"]),
         resource.RLIMIT_NOFILE: 128,
         resource.RLIMIT_CORE: 0,
         resource.RLIMIT_MEMLOCK: 0,
@@ -119,7 +120,7 @@ def kill_descendants():
                 if status != "Z":
                     found = True
                     os.kill(int(name), signal.SIGKILL)
-            except (FileNotFoundError, ProcessLookupError):
+            except FileNotFoundError, ProcessLookupError:
                 pass
         if not found:
             return
@@ -162,6 +163,9 @@ def main():
     cwd = root / config["cwd"]
     if not cwd.is_dir() or cwd.resolve().is_relative_to(root) is False:
         raise ValueError("Working directory is missing or outside the workspace")
+    venv.EnvBuilder(system_site_packages=True, symlinks=True).create("/packages/venv")
+    Path("/packages/tmp").mkdir()
+    os.environ["TMPDIR"] = "/packages/tmp"
     restrict(config)
     if select.select([0], [], [], 0)[0] and not os.read(0, 1):
         raise RuntimeError("Runner parent disconnected before Bash startup")
@@ -192,7 +196,11 @@ def main():
             state = "timed_out"
         if time.monotonic() - last_scan >= 0.05 and state is None:
             last_scan = time.monotonic()
-            if too_many_entries(root, config["max_files"]) or too_many_entries("/tmp", config["max_files"]):
+            if (
+                too_many_entries(root, config["max_files"])
+                or too_many_entries("/tmp", config["max_files"])
+                or too_many_entries("/packages", config["package_entries"])
+            ):
                 state = "resource_limited"
         if (state is not None or child.poll() is not None) and not cleaned:
             kill_descendants()
@@ -231,7 +239,7 @@ def main():
         candidate_path = Path(candidate)
         if candidate_path.is_relative_to(root) and candidate_path.is_dir():
             new_cwd = candidate_path.relative_to(root).as_posix()
-    except (OSError, ValueError):
+    except OSError, ValueError:
         pass
     emit(
         "result",

@@ -43,7 +43,7 @@ def source_info(root=None):
                 "dirty": bool(git("status", "--porcelain", "--untracked-files=normal")),
                 "provenance": "git",
             }
-    except (OSError, subprocess.SubprocessError, ValueError):
+    except OSError, subprocess.SubprocessError, ValueError:
         pass
     # Container/release builds can carry the same explicit source stamp as their dashboard bundle.
     try:
@@ -68,7 +68,7 @@ def source_info(root=None):
             "dirty": value["dirty"],
             "provenance": "build",
         }
-    except (OSError, ValueError, KeyError, TypeError):
+    except OSError, ValueError, KeyError, TypeError:
         return {**unknown, "provenance": "unknown"}
 
 

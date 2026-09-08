@@ -8,11 +8,11 @@ One Python process runs the Discord clients, scheduler, provider HTTP clients, F
 
 ## Start locally
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/); Node 22+ is used for the dashboard build. Run commands from the repository root, `/home/codexy/codex/astra-council_cabinet`:
+Requires **Python 3.14** and [uv](https://docs.astral.sh/uv/); Node 22+ is used for the dashboard build. Run commands from the repository root, `/home/codexy/codex/astra-council_cabinet`:
 
 ```bash
 export HORTATOR_DATA_DIR="$HOME/.local/share/hortator"
-uv sync --frozen
+uv sync --python 3.14 --frozen
 npm ci --prefix web
 npm run build --prefix web
 uv run hortator serve
@@ -108,7 +108,7 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 | --- | --- | --- |
 | `web_fetch` | Complete public text snapshots, chunking and search | No key; 1 MB download cap, owned stable offsets, storage/retention limits |
 | `workspace` | Private task files, observed attachments and current-turn exports | No key; bot/channel isolation, quotas and bounded retention |
-| `shell` | Real isolated Bash/Python/Pillow jobs | No key; workspace grant plus ready Linux/Bubblewrap boundary, no network |
+| `shell` | Real isolated Bash/Python 3.14/Pillow jobs | No key; workspace grant plus ready Linux/Bubblewrap boundary; host networking and disposable packages |
 | `document_site` | Owned static documents, paged editing, revision recovery and automatic publication | Keyless bot tools; global SSH delivery settings, immutable revisions and private snapshot history |
 | `web_search` | Brave web search | Brave key; endpoint/count configurable |
 | `image_generation` | Image generation to a Discord attachment | OpenAI-style image endpoint, raw request JSON, key |

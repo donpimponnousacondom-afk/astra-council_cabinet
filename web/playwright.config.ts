@@ -18,7 +18,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: `uv run --project .. python ../scripts/seed_test_trajectory.py /tmp/hortator-e2e-${process.pid} && uv run --project .. hortator --data-dir /tmp/hortator-e2e-${process.pid} serve --port ${port}`,
+    command: `uv run --project .. python3.14 ../scripts/seed_test_trajectory.py /tmp/hortator-e2e-${process.pid} && uv run --project .. hortator --data-dir /tmp/hortator-e2e-${process.pid} serve --port ${port}`,
     url: `${baseURL}/api/health`,
     reuseExistingServer: false,
     timeout: 30000,
