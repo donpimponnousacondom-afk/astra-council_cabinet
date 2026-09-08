@@ -6,6 +6,7 @@ import io
 import json
 import math
 import time
+from types import SimpleNamespace
 
 import discord
 import httpx
@@ -18,6 +19,7 @@ from .footer import footer_settings, render_footer
 from .version import version_text
 from .vision import ImageCache, image_candidate, MAX_IMAGES
 from .store import dumps
+from .discord_content import compose, from_message, saved_parts, embed_text, component_text
 
 
 TYPING_INTERVAL_SECONDS = 5
@@ -117,18 +119,19 @@ class CouncilClient(discord.Client):
         existing = self.manager.store.one(
             "SELECT * FROM messages WHERE discord_id=?", (str(payload.message_id),)
         )
-        content = payload.data.get("content")
-        if existing and content is not None:
-            content = self.manager.canonical_edit(existing, content)
-        if existing and content is not None and content != existing["content"]:
-            content = self.manager.vault.redact(content)
-            self.manager.store.execute(
-                "UPDATE messages SET content=? WHERE discord_id=?", (content, str(payload.message_id))
-            )
-            self.manager.store.emit(
-                "message.edited",
-                {"message_id": str(payload.message_id), "before": existing["content"], "after": content},
-            )
+        if not existing or existing["deleted"] or not self.manager.stored_scope(self.bot_id, existing):
+            return
+        if str(payload.data.get("channel_id", existing["channel_id"])) != existing["channel_id"]:
+            return
+        parts = saved_parts(existing)
+        if isinstance(payload.data.get("content"), str):
+            parts["content"] = self.manager.canonical_edit(existing, payload.data["content"])
+        if not existing["bot_id"]:
+            if "embeds" in payload.data:
+                parts["embeds"] = embed_text(payload.data["embeds"])
+            if "components" in payload.data:
+                parts["components"] = component_text(payload.data["components"])
+        self.manager.update_parts(existing["discord_id"], parts)
 
         if existing and not existing["deleted"] and "attachments" in payload.data:
             # Embed-only edits omit attachments. Explicit attachment edits, including [],
@@ -365,7 +368,12 @@ class DiscordManager:
                     and parent_id == room["channel_id"]
                 )
             ):
-                if message.webhook_id:
+                # Application-owned interaction responses also have a webhook ID.
+                # Admit those under the existing external-bot grant; ordinary
+                # incoming webhooks remain excluded, regardless of display name.
+                if message.webhook_id and (
+                    not getattr(message, "application_id", None) or not room["allow_external_bots"]
+                ):
                     return None
                 known = {
                     self.vault.get(f"bot/{b['id']}/user_id") or b["application_id"]
@@ -381,6 +389,52 @@ class DiscordManager:
                     return None
                 return room["id"]
         return None
+
+    def stored_scope(self, bot_id, row):
+        bot = self.store.get("bots", bot_id)
+        channel = self.store.one("SELECT * FROM channels WHERE id=?", (row["channel_id"],))
+        if not bot or not channel:
+            return None
+        addressing = row.get("addressing") or {}
+        if isinstance(addressing, str):
+            addressing = json.loads(addressing)
+        return self.scope(
+            bot,
+            SimpleNamespace(
+                channel=SimpleNamespace(id=row["channel_id"], parent_id=channel["parent_id"]),
+                guild=SimpleNamespace(id=channel["guild_id"]) if channel["guild_id"] else None,
+                author=SimpleNamespace(
+                    id=row["author_id"],
+                    bot=bool(row["bot_id"]) or addressing.get("author_kind") in ("bot", "webhook"),
+                ),
+                webhook_id=addressing.get("webhook_id"),
+                application_id=addressing.get("application_id"),
+            ),
+        )
+
+    def update_parts(self, message_id, parts, *, historical=False):
+        # Re-read after any awaited image capture: another gateway may have
+        # already applied the same observation. One canonical edit event only.
+        existing = self.store.one("SELECT * FROM messages WHERE discord_id=?", (message_id,))
+        if not existing or existing["deleted"]:
+            return
+        parts = self.vault.redact(parts)
+        content = compose(parts)
+        self.store.execute(
+            "UPDATE messages SET content=?,discord_parts=? WHERE discord_id=?",
+            (content, dumps(parts), message_id),
+        )
+        if content != existing["content"]:
+            self.store.emit(
+                "message.edited",
+                {
+                    "message_id": message_id,
+                    "channel_id": existing["channel_id"],
+                    "before": existing["content"],
+                    "after": content,
+                    "historical": historical,
+                },
+            )
 
     async def restart(self, bot_id):
         entry = self.runners.pop(bot_id, None)
@@ -455,7 +509,9 @@ class DiscordManager:
             (
                 b
                 for b in self.store.list("bots")
-                if str(message.author.id) == (self.vault.get(f"bot/{b['id']}/user_id") or b["application_id"])
+                if not message.webhook_id
+                and str(message.author.id)
+                == (self.vault.get(f"bot/{b['id']}/user_id") or b["application_id"])
             ),
             None,
         )
@@ -463,7 +519,11 @@ class DiscordManager:
 
         addressing = await capture(self.store, self.vault, message, historical=historical)
         attachments = []
-        previous = self.store.one("SELECT attachments FROM messages WHERE discord_id=?", (str(message.id),))
+        previous = self.store.one(
+            "SELECT attachments,deleted,discord_parts FROM messages WHERE discord_id=?", (str(message.id),)
+        )
+        if previous and previous["deleted"]:
+            return
         prior = {a["id"]: a for a in json.loads(previous["attachments"])} if previous else {}
         image_index = 0
         for a in message.attachments:
@@ -497,6 +557,11 @@ class DiscordManager:
                         level="warning",
                     )
             attachments.append(attachment)
+        parts = from_message(
+            message,
+            canonical_content if canonical_content is not None else message.content,
+            council=known is not None,
+        )
         self.store.ingest(
             discord_id=str(message.id),
             channel_id=str(message.channel.id),
@@ -504,7 +569,7 @@ class DiscordManager:
             author_id=str(message.author.id),
             author_name=message.author.display_name,
             bot_id=known["id"] if known else None,
-            content=canonical_content or message.content,
+            content=compose(parts),
             at=message.created_at.timestamp(),
             guild_id=str(message.guild.id) if message.guild else None,
             parent_id=str(message.channel.parent_id) if getattr(message.channel, "parent_id", None) else None,
@@ -513,12 +578,17 @@ class DiscordManager:
             else None,
             attachments=attachments,
             addressing=addressing,
+            discord_parts=parts,
         )
         if previous:
-            self.store.execute(
-                "UPDATE messages SET attachments=? WHERE discord_id=?",
-                (dumps(self.vault.redact(attachments)), str(message.id)),
-            )
+            # A second gateway's delayed MESSAGE_CREATE is not an edit. Never
+            # replace newer component updates with that original observation.
+            if historical or previous["discord_parts"] == "{}":
+                self.update_parts(str(message.id), parts, historical=historical)
+                self.store.execute(
+                    "UPDATE messages SET attachments=? WHERE discord_id=?",
+                    (dumps(self.vault.redact(attachments)), str(message.id)),
+                )
             # Enrich old records from authenticated history, without making history
             # a live priority trigger or replacing an already recorded live event.
             self.store.execute(
@@ -596,6 +666,20 @@ class DiscordManager:
                     if last and last["discord_id"].isdigit()
                     else None
                 )
+                if after:
+                    # A bounded overlap recovers recently skipped application
+                    # messages and edits missed while offline. Historical reads
+                    # preserve identity and never manufacture human priority.
+                    recent = [
+                        message
+                        async for message in channel.history(
+                            limit=100,
+                            before=discord.Object(id=int(last["discord_id"]) + 1),
+                            oldest_first=False,
+                        )
+                    ]
+                    for message in reversed(recent):
+                        await self.receive(bot["id"], message, historical=True)
                 count = 0
                 async for message in channel.history(
                     limit=5000 if after else 100, after=after, oldest_first=True if after else False
@@ -613,7 +697,12 @@ class DiscordManager:
                         await self.receive(bot["id"], message, historical=True)
                 self.store.emit(
                     "discord.history_imported",
-                    {"channel_id": channel_id, "observed": count, "initial_tail": not bool(after)},
+                    {
+                        "channel_id": channel_id,
+                        "observed": count,
+                        "initial_tail": not bool(after),
+                        "overlap_observed": len(recent) if after else 0,
+                    },
                     bot_id=bot["id"],
                 )
                 if count == 5000:
@@ -904,7 +993,37 @@ class DiscordManager:
                         reported_failure = True
             await asyncio.sleep(TYPING_INTERVAL_SECONDS)
 
-    async def send(self, bot, channel_id, content, reply_to, paths, *, nonce=None, footer=None):
+    async def check_destination(self, bot, channel_id, guild_id, parent_id, reply_to=None):
+        client = self.clients.get(bot["id"])
+        if not client or not client.is_ready():
+            raise ControlError("Hortator's Discord gateway is not ready")
+        channel = client.get_channel(int(channel_id)) or await client.fetch_channel(int(channel_id))
+        if str(getattr(getattr(channel, "guild", None), "id", "")) != guild_id or (
+            parent_id is not None and str(getattr(channel, "parent_id", "")) != parent_id
+        ):
+            raise ControlError("Discord destination does not match the configured room/server")
+        if isinstance(channel, discord.ForumChannel) or not hasattr(channel, "send"):
+            raise ControlError(
+                "Choose a text channel or allowed forum/thread post, not a forum/category root"
+            )
+        if reply_to:
+            original = await channel.fetch_message(int(reply_to))
+            if str(original.channel.id) != channel_id:
+                raise ControlError("Reply target does not belong to the destination channel")
+
+    async def send(
+        self,
+        bot,
+        channel_id,
+        content,
+        reply_to,
+        paths,
+        *,
+        nonce=None,
+        footer=None,
+        strict_reply=False,
+        destination_guard=None,
+    ):
         client = self.clients.get(bot["id"])
         if not client or not client.is_ready():
             raise DeliveryError("Discord gateway is not ready")
@@ -920,11 +1039,18 @@ class DiscordManager:
                 files.append(discord.File(io.BytesIO(content.encode()), filename="full-response.txt"))
             reference = (
                 discord.MessageReference(
-                    message_id=int(reply_to), channel_id=int(channel_id), fail_if_not_exists=False
+                    message_id=int(reply_to), channel_id=int(channel_id), fail_if_not_exists=strict_reply
                 )
                 if reply_to
                 else None
             )
+            if destination_guard:
+                try:
+                    destination_guard()
+                except ControlError as exc:
+                    # The grant was revoked before channel.send was attempted.
+                    # This is a definite refusal, not an ambiguous network send.
+                    raise DeliveryError(str(exc)) from exc
             async with asyncio.timeout(60):
                 sent = await channel.send(
                     message,

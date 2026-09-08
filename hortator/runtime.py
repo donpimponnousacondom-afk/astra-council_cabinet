@@ -850,10 +850,16 @@ class Engine:
         *,
         request_id=None,
         draft_deadline=None,
+        routing=None,
+        delivery_id=None,
     ):
+        destination = routing["target_channel_id"] if routing else context.channel_id
+
         def check_deadline():
             if draft_deadline is not None and asyncio.get_running_loop().time() >= draft_deadline:
                 raise ControlError("Document task time budget exhausted before Discord dispatch")
+            if routing:
+                self.registry.discord_dispatch.check(context, routing)
 
         check_deadline()
         content = self.vault.redact(strip_reasoning(content))
@@ -871,19 +877,27 @@ class Engine:
             else None
         )
         footer = render_footer(bot, profile, provider, request, redact=self.vault.redact)
-        outbox_id = uid("out_")
+        if routing:
+            marker = (
+                "-# "
+                + ("Directed reply" if routing["mode"] == "directed" else "Cross-post")
+                + " from Hortator"
+            )
+            footer = marker + ("\n" + footer if footer else "")
+        outbox_id = delivery_id or uid("out_")
         self.store.execute(
-            "INSERT INTO outbox(id,turn_id,bot_id,channel_id,content,reply_to,artifacts,status,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO outbox(id,turn_id,bot_id,channel_id,content,reply_to,artifacts,status,created_at,routing) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (
                 outbox_id,
                 context.turn_id,
                 bot["id"],
-                context.channel_id,
+                destination,
                 content,
                 reply_to,
                 dumps(artifact_ids),
                 "pending",
                 time.time(),
+                dumps(routing or {}),
             ),
         )
         self.store.emit(
@@ -895,6 +909,7 @@ class Engine:
                 "artifact_ids": artifact_ids,
                 "footer": footer,
                 "request_id": request_id,
+                **({"routing": routing} if routing else {}),
             },
             bot_id=bot["id"],
             turn_id=context.turn_id,
@@ -930,10 +945,14 @@ class Engine:
                     await asyncio.sleep(min(wait, remaining))
                 finally:
                     self.delivery_waiting.pop(bot["id"], None)
-            async with self.room_locks[context.channel_id]:
-                room = self.room_for(bot, context.channel_id)
+            async with self.room_locks[destination]:
+                room = (
+                    self.registry.discord_dispatch.check(context, routing)
+                    if routing
+                    else self.room_for(bot, context.channel_id)
+                )
                 gap = room["send_gap_seconds"] if room else 1.5
-                wait = self.room_last[context.channel_id] + gap - time.time()
+                wait = self.room_last[destination] + gap - time.time()
                 if wait > 0:
                     self.store.emit(
                         "delivery.cooldown",
@@ -965,7 +984,23 @@ class Engine:
                     "delivery.sending", {"outbox_id": outbox_id}, bot_id=bot["id"], turn_id=context.turn_id
                 )
                 discord_id = await self.transport.send(
-                    bot, context.channel_id, content, reply_to, paths, nonce=outbox_id, footer=footer
+                    bot,
+                    destination,
+                    content,
+                    reply_to,
+                    paths,
+                    nonce=outbox_id,
+                    footer=footer,
+                    **(
+                        {
+                            "strict_reply": True,
+                            "destination_guard": lambda: self.registry.discord_dispatch.check(
+                                context, routing
+                            ),
+                        }
+                        if routing
+                        else {}
+                    ),
                 )
                 sent = time.time()
                 self.store.execute(
@@ -973,18 +1008,38 @@ class Engine:
                     (sent, discord_id, outbox_id),
                 )
                 self.store.execute("UPDATE bot_runtime SET last_sent=? WHERE bot_id=?", (sent, bot["id"]))
-                self.room_last[context.channel_id] = sent
+                self.room_last[destination] = sent
                 self.store.ingest(
                     discord_id=discord_id,
-                    channel_id=context.channel_id,
+                    channel_id=destination,
                     author_id=self.vault.get(f"bot/{bot['id']}/user_id") or bot["application_id"],
                     author_name=bot["name"],
                     content=content,
                     room_id=room["id"] if room else f"owner:{bot['id']}",
                     bot_id=bot["id"],
                     reply_to=reply_to,
+                    addressing={
+                        "author_kind": "bot",
+                        "live": False,
+                        "routing": {"mode": routing["mode"], "source_bot_id": bot["id"]},
+                    }
+                    if routing
+                    else None,
+                    guild_id=routing["guild_id"] if routing else None,
+                    parent_id=room["channel_id"] if routing and destination != room["channel_id"] else None,
                 )
                 self.store.execute("UPDATE messages SET content=? WHERE discord_id=?", (content, discord_id))
+                if routing:
+                    observed = self.store.one(
+                        "SELECT addressing FROM messages WHERE discord_id=?", (discord_id,)
+                    )
+                    addressing = json.loads(observed["addressing"])
+                    addressing.update(
+                        author_kind="bot", routing={"mode": routing["mode"], "source_bot_id": bot["id"]}
+                    )
+                    self.store.execute(
+                        "UPDATE messages SET addressing=? WHERE discord_id=?", (dumps(addressing), discord_id)
+                    )
                 self.store.emit(
                     "delivery.sent",
                     {"outbox_id": outbox_id, "discord_id": discord_id, "content": content},

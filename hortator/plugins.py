@@ -187,6 +187,7 @@ class Registry:
         self.directory = directory / "artifacts"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.inspect = inspect
+        self.discord_dispatch = None
         self.evidence = ToolEvidence(store, vault)
         from .documents import DocumentSites, DEFAULTS, DESCRIPTION, PARAMETERS
 
@@ -324,6 +325,20 @@ class Registry:
         )
         from .agentic import AgentTools
 
+        from .discord_dispatch import DESCRIPTION as SEND_DESCRIPTION, PARAMETERS as SEND_PARAMETERS
+
+        self.register(
+            PluginSpec(
+                "discord_send",
+                "Send to council channel",
+                SEND_DESCRIPTION,
+                SEND_PARAMETERS,
+                self.send_discord,
+                {},
+                True,
+            )
+        )
+
         self.agentic = AgentTools(self, directory)
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
             entry.load()(self)
@@ -333,6 +348,11 @@ class Registry:
             raise ValueError("Duplicate/reserved plugin ID")
         Draft202012Validator.check_schema(spec.parameters)
         self.specs[spec.id] = spec
+
+    async def send_discord(self, args, context, config, key):
+        if self.discord_dispatch is None:
+            raise ControlError("Discord dispatch is unavailable")
+        return await self.discord_dispatch.call(args, context, config, key)
 
     def allowed(self, name, context):
         spec = self.specs.get(name)
