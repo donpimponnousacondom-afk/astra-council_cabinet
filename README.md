@@ -134,3 +134,9 @@ npm test --prefix web
 ```
 
 Backend tests use mocked compatible HTTP responses and Discord transports. Browser tests start a separate real API/server with temporary storage; they exercise login, owner controls, configuration, raw parameter JSON, encrypted credential entry, readiness errors, mobile layout, and trajectory inspection. They do not contact live Discord or spend provider credit. See [verification notes](docs/VERIFICATION.md) for the checks performed and external acceptance steps.
+
+## Images, cache prices and local publications
+
+Discord image attachments now reach every bot as actual multimodal pixels, with a durable private image cache and explicit unavailable-image feedback. See [vision inputs](docs/VISION.md). Profile pricing supports separate cache-hit and cache-miss input rates alongside output prices, with request-time pricing evidence: see [pricing](docs/PRICING.md).
+
+The optional **Documents & local sites** plugin creates bot-owned static sites, retains local revisions and queues published snapshots for future remote sync. Remote delivery is disabled until server configuration/transport is added. Enable the plugin globally and grant it per bot; no API key is needed. See [document publishing](docs/DOCUMENTS.md) and the permanent [tool usage, repair and task-budget contract](docs/TOOLS.md).

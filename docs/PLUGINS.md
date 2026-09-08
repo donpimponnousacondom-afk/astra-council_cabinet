@@ -42,3 +42,9 @@ Plugin configuration is shallow merged: built-in defaults → global plugin conf
 The `memory` implementation demonstrates scoped storage. Media artifacts are written with a generated safe filename and bot/turn ownership. `council_speak.artifact_ids` can reference only artifacts from its current bot and turn. The `web_fetch` implementation resolves/validates actual socket DNS answers and rejects private/reserved addresses, credentials in URLs and nonstandard ports; redirects are validated again. Operator-configured provider/plugin endpoints may point to trusted local servers, because these URLs are configuration rather than model-supplied arguments.
 
 Installed plugins run in the Python process and are **trusted code**, not an OS sandbox. A malicious installed package can access that process's permissions. Do not mistake per-bot capability checks for isolation against hostile Python code. The built-ins expose no shell, unrestricted filesystem, credential read, or administration tool to a model. Use separate service/container boundaries if adding untrusted executable plugins later.
+
+## Shared model-facing contract
+
+All registered tools receive the common [empty-call discovery and complete validation feedback](TOOLS.md) behavior. Supply the full action schema, including conditional required fields; `{}` is intercepted centrally before credentials or side effects. Never introduce a first-error-only parser.
+
+The built-in keyless `document_site` pack exposes start/list/read/write/import/publish/status operations under the normal global/per-bot grant system. It grants one bounded longer task on successful start, retains immutable local revisions and queues remote delivery without running a transport. See [DOCUMENTS.md](DOCUMENTS.md). Vision is a shared input pipeline, not a grantable plugin: see [VISION.md](VISION.md).

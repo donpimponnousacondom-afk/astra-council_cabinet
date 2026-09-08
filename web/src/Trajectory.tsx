@@ -501,6 +501,12 @@ export function Trajectory({
                             value={request.usage}
                             label="Raw provider usage"
                           />
+                          {request.response?.pricing && (
+                            <Code
+                              value={request.response.pricing}
+                              label="Pricing basis at request time"
+                            />
+                          )}
                         </section>
                       ),
                     )}

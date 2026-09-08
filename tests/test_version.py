@@ -136,4 +136,7 @@ async def test_version_inspection_requires_trusted_hortator_context(kernel):
         ToolContext(bot, "channel", "turn", owner_verified=False),
         "untrusted-call",
     )
-    assert denied == {"error": "ControlError: Tool is not enabled for this bot and trusted request"}
+    assert denied == {
+        "ok": False,
+        "error": "ControlError: Tool is not enabled for this bot and trusted request",
+    }

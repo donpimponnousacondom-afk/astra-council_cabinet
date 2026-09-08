@@ -81,3 +81,11 @@ Reuse the final response's recorded request ID, timings and usage; do not issue 
 - Provider reasoning fields are excluded from Discord. Raw reasoning is not persisted; only reported reasoning-token counts and requested reasoning configuration are retained. Explicit reasoning delimiters in visible text are removed; semantic leakage inside ordinary prose cannot be mechanically guaranteed.
 - Pausing cancels in-flight model/tool tasks and suppresses queued outputs. A Discord send already accepted remotely cannot be undone. Ambiguous delivery after a crash/network interruption is marked unknown and is never blindly resent.
 - Usage is measured only when returned by the provider. Estimates and unknown values are labeled; missing cost or reasoning tokens never become invented measurements.
+
+## 2026-09-08: multimodal input, cache pricing and document tasks
+
+The user approved actual Discord image inputs for every bot without model-name gating, explicit cache-hit/miss pricing, local static publications and a durable sync queue with remote transport deferred. Current active vision input/output prices remain operator-set; only the requested $0.014/M hit price is added, with the existing input rate used for misses. No automated time-of-day pricing or other profile repricing is authorized.
+
+An enabled bot with the document plugin grant may open its extended document-task budget regardless of who requested the document or whether the bot initiated it. Defaults: 20 additional rounds, 8 calls per round, 900 seconds, once per turn; ordinary limits remain independently configurable. The plugin creates local files without shell access and publishes immutable manifests, preserving queued remote intent across restarts. The model must report local versus remote state honestly.
+
+The permanent [tool contract](TOOLS.md) requires `{}` discovery and all detectable argument errors plus complete usage in one response for every current/future plugin and terminal tool. This is intentional support for model repair, not overdesign to remove. Follow [DOCUMENTS.md](DOCUMENTS.md), [VISION.md](VISION.md) and [PRICING.md](PRICING.md) for implementation boundaries; dated test evidence belongs in VERIFICATION.

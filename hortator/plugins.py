@@ -18,6 +18,7 @@ from jsonschema import Draft202012Validator
 
 from .models import ControlError
 from .store import dumps, uid
+from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage, with_usage
 
 
 def schema(properties, required=()):
@@ -35,7 +36,11 @@ STR = {"type": "string"}
 def function(name, description, parameters):
     return {
         "type": "function",
-        "function": {"name": name, "description": description, "parameters": parameters},
+        "function": {
+            "name": name,
+            "description": description + " Call with {} for usage only; no action is executed.",
+            "parameters": with_usage(parameters),
+        },
     }
 
 
@@ -174,7 +179,20 @@ class Registry:
         self.directory = directory / "artifacts"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.inspect = inspect
+        from .documents import DocumentSites, DEFAULTS, DESCRIPTION, PARAMETERS
+
+        self.documents = DocumentSites(store, directory, vault)
         self.specs: dict[str, PluginSpec] = {}
+        self.register(
+            PluginSpec(
+                "document_site",
+                "Documents & local sites",
+                DESCRIPTION,
+                PARAMETERS,
+                self.documents.call,
+                DEFAULTS,
+            )
+        )
         self.register(
             PluginSpec(
                 "web_fetch",
@@ -229,11 +247,22 @@ class Registry:
                 schema(
                     {
                         "operation": {"type": "string", "enum": ["read", "write", "delete"]},
-                        "key": {"type": "string", "maxLength": 100},
+                        "key": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": r"\S"},
                         "value": {"type": "string", "maxLength": 8000},
                     },
                     ("operation",),
-                ),
+                )
+                | {
+                    "allOf": [
+                        {
+                            "if": {
+                                "properties": {"operation": {"enum": ["write", "delete"]}},
+                                "required": ["operation"],
+                            },
+                            "then": {"required": ["key"]},
+                        }
+                    ],
+                },
                 self.memory,
                 {},
             )
@@ -263,11 +292,22 @@ class Registry:
                                 "context",
                             ],
                         },
-                        "id": STR,
+                        "id": {"type": "string", "minLength": 1},
                         "channel_id": STR,
                     },
                     ("resource",),
-                ),
+                )
+                | {
+                    "allOf": [
+                        {
+                            "if": {
+                                "properties": {"resource": {"enum": ["turn", "context"]}},
+                                "required": ["resource"],
+                            },
+                            "then": {"required": ["id"]},
+                        }
+                    ],
+                },
                 self.council_inspect,
                 {},
                 True,
@@ -302,6 +342,7 @@ class Registry:
 
     async def call(self, name, args, context, call_id):
         start = time.perf_counter()
+        spec = None
         self.store.emit(
             "tool.started",
             {"name": name, "call_id": call_id, "arguments": args},
@@ -312,9 +353,17 @@ class Registry:
             if not self.allowed(name, context):
                 raise ControlError("Tool is not enabled for this bot and trusted request")
             spec = self.specs[name]
-            errors = list(Draft202012Validator(spec.parameters).iter_errors(args))
-            if errors:
-                raise ControlError(errors[0].message)
+            report = feedback(name, args, spec.parameters, spec.description)
+            if report is not None:
+                report = self.vault.redact(report)
+                self.store.emit(
+                    "tool.help" if report.get("usage_only") else "tool.failed",
+                    {"name": name, "call_id": call_id, **report},
+                    bot_id=context.bot["id"],
+                    turn_id=context.turn_id,
+                    level="info" if report.get("usage_only") else "warning",
+                )
+                return report
             config = {
                 **spec.defaults,
                 **self.store.get("plugins", name)["config"],
@@ -350,19 +399,40 @@ class Registry:
             raise
         except Exception as exc:
             error = self.vault.redact(f"{type(exc).__name__}: {exc}")[:2000]
+            result = {"ok": False, "error": error}
+            if spec:
+                result["usage"] = self.vault.redact(usage(name, spec.parameters, spec.description, args))
             self.store.emit(
                 "tool.failed",
                 {
                     "name": name,
                     "call_id": call_id,
-                    "error": error,
+                    **result,
                     "duration_ms": (time.perf_counter() - start) * 1000,
                 },
                 bot_id=context.bot["id"],
                 turn_id=context.turn_id,
                 level="error",
             )
-            return {"error": error}
+            return result
+
+    async def call_raw(self, name, raw, context, call_id):
+        if not self.allowed(name, context):
+            return await self.call(name, None, context, call_id)
+        try:
+            args = parse_arguments(raw)
+        except (ValueError, TypeError) as exc:
+            spec = self.specs[name]
+            result = self.vault.redact(syntax_feedback(name, exc, spec.parameters, spec.description))
+            self.store.emit(
+                "tool.failed",
+                {"name": name, "call_id": call_id, **result},
+                bot_id=context.bot["id"],
+                turn_id=context.turn_id,
+                level="warning",
+            )
+            return result
+        return await self.call(name, args, context, call_id)
 
     async def web_fetch(self, args, context, config, key):
         data, content_type, url = await fetch_public(args["url"])

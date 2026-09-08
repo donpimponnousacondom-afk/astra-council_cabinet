@@ -39,3 +39,10 @@ Do not create rolling session handover documents or continuation prompts: the us
 - Discord diagnostic footers use `-#` subtext. Default on for Hortator and off for council bots, with per-bot dashboard fields and deterministic owner `!footer` controls. Templates are bounded literal substitutions, never executable expressions. Use the final generating request's measured TTFT and reported output usage; keep unknowns explicit and diagnostics separate from canonical model answers, including gateway/history/edit reconciliation. Never spend provider credit to produce a footer. See OPERATIONS for placeholders and timing definitions.
 - Preserve arbitrary vendor parameter JSON, independent cadence/cooldowns, intentional silence, bounded tools/compaction, durable trajectories and explicit delivery uncertainty. Do not publish provider reasoning fields to Discord.
 - Follow the existing test and build commands. Run checks appropriate to changes; never claim live Discord/provider validation from mocked tests. Do not expose secret values in tool output, documentation or commits.
+
+## Images, pricing and document tools
+
+- Preserve the shared empty-argument usage and complete argument-error contract in [docs/TOOLS.md](docs/TOOLS.md) for every tool/plugin, including terminal tools. Do not replace it with first-error validation or unbounded repair retries.
+- Images use the shared multimodal pipeline for every bot; unsupported models fail upstream visibly. Keep image bytes and site blobs outside Git, and include `images/` and `sites/` in consistent backups.
+- Cache pricing is explicit per model profile. Preserve operator input/output rates; never replace them with a published tariff or schedule without authorization. Unknown usage remains unknown.
+- Any enabled, granted bot may start its bounded extended document task, autonomously or on request from any permitted participant. One extension per turn, no self-renewal. Local publication and durable remote sync queue are implemented; remote transport remains disabled until separately configured. Never claim a queued site was delivered remotely.

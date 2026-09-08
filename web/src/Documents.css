@@ -1,0 +1,47 @@
+.document-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.document-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.document-heading h3 {
+  margin: 0;
+}
+.document-card {
+  border: 1px solid #344132;
+  border-radius: 8px;
+  padding: 16px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.document-card h4 {
+  margin: 0 0 8px;
+}
+.document-card p {
+  line-height: 1.6;
+}
+.document-card a {
+  color: #b9de89;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.document-card a svg {
+  vertical-align: middle;
+}
+.document-card summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+.document-card li {
+  padding: 5px 0;
+}
+.document-card .badge {
+  margin-bottom: 5px;
+}
