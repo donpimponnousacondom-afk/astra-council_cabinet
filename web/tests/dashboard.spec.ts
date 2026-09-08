@@ -476,6 +476,107 @@ test("reasoning controls protect invalid JSON and custom structures and distingu
   await dialog.getByRole("button", { name: "Close dialog" }).click();
 });
 
+test("per-bot footer defaults, templates, validation and mobile preview persist", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Bots", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await page
+    .getByRole("button", { name: "Edit Hortator", exact: true })
+    .click();
+  await dialog
+    .getByRole("button", { name: "Message footer", exact: true })
+    .click();
+  const toggle = dialog.getByRole("checkbox", {
+    name: "Show diagnostic footer",
+  });
+  await expect(toggle).toBeChecked();
+  await expect(
+    dialog.getByLabel("Footer template", { exact: true }),
+  ).toHaveValue("TTFT: {{TTFT}} | TPS: {{TPS}}");
+  await toggle.uncheck();
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  expect(
+    (await (await page.request.get("/api/config/bots/hortator")).json())
+      .footer_enabled,
+  ).toBe(false);
+
+  const before = await (await page.request.get("/api/config/bots/ada")).json();
+  await page.getByRole("button", { name: "Edit Ada", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Message footer", exact: true })
+    .click();
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  const template =
+    "{{BOT}} | {{MODEL SELECTED}} | {{PROVIDER}} | {{CONTEXT}} | {{TTFT}} | {{TPS}}";
+  await dialog.getByLabel("Footer template", { exact: true }).fill(template);
+  const preview = dialog.getByRole("region", {
+    name: "Footer example preview",
+  });
+  await expect(preview).toContainText("1858ms | 477.7");
+  await expect(preview).toContainText("Ada");
+  await expect(preview).not.toContainText("{{");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(preview).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "test-results/footer-mobile.png",
+    animations: "disabled",
+  });
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const after = await (await page.request.get("/api/config/bots/ada")).json();
+  expect(after.footer_enabled).toBe(true);
+  expect(after.footer_template).toBe(template);
+  for (const field of [
+    "enabled",
+    "model_profile_id",
+    "persona",
+    "enabled_plugins",
+    "cooldown_seconds",
+  ])
+    expect(after[field]).toEqual(before[field]);
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("button", { name: "Edit Ada", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Message footer", exact: true })
+    .click();
+  await expect(toggle).toBeChecked();
+  await expect(
+    dialog.getByLabel("Footer template", { exact: true }),
+  ).toHaveValue(template);
+  await dialog
+    .getByText("Advanced · full configuration JSON", { exact: true })
+    .click();
+  const raw = dialog.getByLabel("Configuration record", { exact: true });
+  expect(JSON.parse(await raw.inputValue()).footer_template).toBe(template);
+  await dialog
+    .getByLabel("Footer template", { exact: true })
+    .fill("{{PASSWORD}}");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Supported footer placeholders",
+  );
+  expect(
+    (await (await page.request.get("/api/config/bots/ada")).json())
+      .footer_template,
+  ).toBe(template);
+  await dialog.getByRole("button", { name: "Close dialog" }).click();
+});
+
 test("all operational pages render without errors", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));

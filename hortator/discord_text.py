@@ -14,10 +14,10 @@ def preview(text, budget=1800):
     return data[: budget * 2].decode("utf-16-le", errors="ignore")
 
 
-def code_pages(text, language=""):
+def code_pages(text, language="", *, limit=2000):
     # A commit title or inspected value must not break out of the enclosing block.
     text = text.replace("```", "``\u200b`")
-    budget = 2000 - len(f"```{language}\n\n```".encode("utf-16-le")) // 2
+    budget = limit - len(f"```{language}\n\n```".encode("utf-16-le")) // 2
     while text:
         chunk = preview(text, budget)
         if len(chunk) < len(text) and "\n" in chunk:
@@ -31,3 +31,23 @@ def markdown_preview(text, budget=1700):
     if result.count("```") % 2:
         result += "\n```"
     return result
+
+
+def with_footer(text, footer):
+    if not footer:
+        return text
+    # Keep diagnostic subtext outside an unterminated model-authored code block.
+    if text.count("```") % 2:
+        text += "\n```"
+    return text + "\n" + footer
+
+
+def model_message(content, footer):
+    """Return the wire text and whether a full-response attachment is needed."""
+    message = with_footer(content, footer)
+    attached = len(content.encode("utf-16-le")) > 3900 or len(message.encode("utf-16-le")) > 4000
+    if attached:
+        note = "\n\n↳ Full response attached."
+        suffix_size = len(("\n" + footer + note).encode("utf-16-le")) // 2
+        message = with_footer(markdown_preview(content, min(1700, 2000 - suffix_size - 4)) + note, footer)
+    return message, attached

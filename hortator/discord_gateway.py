@@ -13,7 +13,8 @@ import httpx
 from .models import ControlError, OWNER_ID
 from .runtime import DeliveryError
 from .security import Actor
-from .discord_text import CodeBlock, code_pages, markdown_preview, preview
+from .discord_text import CodeBlock, code_pages, model_message, preview, with_footer
+from .footer import footer_settings, render_footer
 from .version import version_text
 
 
@@ -26,6 +27,11 @@ COMMANDS = [
     ("!version | !ver", "Running code: commit, ISO date/time, title and startup time"),
     ("!status", "Council, Discord gateway and provider status"),
     ("!stats [hours]", "Usage, timings, costs and failures; default 24 hours"),
+    ("!footer [bot-id] [enable | disable]", "Inspect or toggle message footer; defaults to Hortator"),
+    (
+        "!footer [bot-id] template <text>",
+        "Set footer template; {{TTFT}}, {{TPS}}, {{PROVIDER}}, {{CONTEXT}}, {{MODEL}}, {{BOT}}",
+    ),
     ("!stop [bot-id | all | providers:id]", "Pause and cancel active work immediately"),
     ("!restart <bot-id>", "Reconnect a failed Discord gateway without changing configuration"),
     ("!start [bot-id | all | providers:id]", "Resume a configured bot, provider or council"),
@@ -110,6 +116,8 @@ class CouncilClient(discord.Client):
             "SELECT * FROM messages WHERE discord_id=?", (str(payload.message_id),)
         )
         content = payload.data.get("content")
+        if existing and content is not None:
+            content = self.manager.canonical_edit(existing, content)
         if existing and content is not None and content != existing["content"]:
             content = self.manager.vault.redact(content)
             self.manager.store.execute(
@@ -355,11 +363,29 @@ class DiscordManager:
 
     def reconcile(self, message):
         nonce = getattr(message, "nonce", None)
-        if not nonce or not message.author.bot or message.webhook_id:
+        if not message.author.bot or message.webhook_id:
             return None
-        pending = self.store.one(
-            "SELECT * FROM outbox WHERE id=? AND channel_id=?", (str(nonce), str(message.channel.id))
+        message_id = str(getattr(message, "id", ""))
+        pending = (
+            self.store.one(
+                "SELECT * FROM outbox WHERE id=? AND channel_id=?", (str(nonce), str(message.channel.id))
+            )
+            if nonce
+            else None
         )
+        if not pending:
+            canonical = self.store.one(
+                "SELECT content FROM messages WHERE discord_id=? AND channel_id=? AND author_id=? AND bot_id IS NOT NULL",
+                (message_id, str(message.channel.id), str(message.author.id)),
+            )
+            if canonical:
+                return canonical["content"]
+            # History/backfill can omit nonces. A recorded Discord ID still proves
+            # which canonical model answer belongs here, without its diagnostic footer.
+            pending = self.store.one(
+                "SELECT * FROM outbox WHERE discord_id=? AND channel_id=?",
+                (message_id, str(message.channel.id)),
+            )
         if not pending:
             return None
         bot = self.store.get("bots", pending["bot_id"])
@@ -432,6 +458,28 @@ class DiscordManager:
         )
         self.store.context(bot_id, str(message.channel.id))
         self.store.runtime(bot_id)
+
+    def canonical_edit(self, existing, content):
+        if not existing["bot_id"]:
+            return content
+        sent = self.store.one(
+            "SELECT id,turn_id,content FROM outbox WHERE discord_id=? AND bot_id=? AND channel_id=?",
+            (existing["discord_id"], existing["bot_id"], existing["channel_id"]),
+        )
+        if not sent:
+            return content
+        queued = self.store.one(
+            "SELECT data FROM events WHERE turn_id=? AND kind='delivery.queued' AND json_extract(data,'$.outbox_id')=? ORDER BY seq DESC LIMIT 1",
+            (sent["turn_id"], sent["id"]),
+        )
+        footer = json.loads(queued["data"]).get("footer", "") if queued else ""
+        if footer:
+            # Discord embed updates may repeat the unchanged wire text. Preserve
+            # the full canonical answer, including when Discord only saw a preview.
+            if content == model_message(sent["content"], footer)[0]:
+                return sent["content"]
+            return content.removesuffix("\n" + footer)
+        return content
 
     async def backfill(self, client):
         bot = self.store.get("bots", client.bot_id)
@@ -524,20 +572,26 @@ class DiscordManager:
                 )
 
     async def reply(self, channel, result):
+        bot = next((b for b in self.store.list("bots") if b["role"] == "hortator"), None)
+        footer = self.footer(bot) if bot else ""
+        limit = 2000 - (len(footer.encode("utf-16-le")) // 2 + 1 if footer else 0)
         if isinstance(result, CodeBlock):
-            for page in code_pages(self.vault.redact(result.text), result.language):
-                await channel.send(content=page, allowed_mentions=discord.AllowedMentions.none())
+            for page in code_pages(self.vault.redact(result.text), result.language, limit=limit):
+                await channel.send(
+                    content=with_footer(page, footer), allowed_mentions=discord.AllowedMentions.none()
+                )
             return
         content = result if isinstance(result, str) else json.dumps(result, indent=2, ensure_ascii=False)
         content = self.vault.redact(content)
-        if len(content.encode("utf-16-le")) <= 3800:
+        message = with_footer(content if isinstance(result, str) else "```json\n" + content + "\n```", footer)
+        if len(message.encode("utf-16-le")) <= 4000:
             await channel.send(
-                content=content if isinstance(result, str) else "```json\n" + content + "\n```",
+                content=message,
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         else:
             await channel.send(
-                content="Council report attached.",
+                content=with_footer("Council report attached.", footer),
                 file=discord.File(
                     io.BytesIO(content.encode()),
                     filename="council-report.txt" if isinstance(result, str) else "council-report.json",
@@ -585,6 +639,8 @@ class DiscordManager:
                 result = CodeBlock("\n".join(f"{cmd} — {desc}" for cmd, desc in COMMANDS))
             elif name == "version":
                 result = CodeBlock(version_text(self.service.version()))
+            elif name == "footer":
+                result = await self.footer_command(actor, bot, rest)
             elif name == "status":
                 status = self.service.status()
                 result = {
@@ -706,6 +762,37 @@ class DiscordManager:
             )
             await self.reply(channel, "Command failed: " + error[:1500])
 
+    def footer(self, bot):
+        profile = self.store.get("profiles", bot["model_profile_id"])
+        provider = self.store.get("providers", profile["provider_id"]) if profile else None
+        # Command/incident responses have no model request: never reuse old timings.
+        return render_footer(bot, profile, provider, redact=self.vault.redact)
+
+    async def footer_command(self, actor, hortator, rest):
+        args = rest.split(maxsplit=1)
+        actions = {"enable", "enabled", "disable", "disabled", "template"}
+        bot_id = hortator["id"]
+        if args and args[0].lower() not in actions:
+            bot_id = args[0]
+            args = args[1].split(maxsplit=1) if len(args) > 1 else []
+        bot = self.service.entity("bots", bot_id)
+        if args:
+            action = args[0].lower()
+            if action == "template" and len(args) == 2:
+                data = {"footer_template": args[1]}
+            elif action in actions - {"template"} and len(args) == 1:
+                data = {"footer_enabled": action in {"enable", "enabled"}}
+            else:
+                raise ControlError("Use !footer [bot-id] enable|disable or !footer [bot-id] template <text>")
+            bot = await self.service.control(
+                actor, {"action": "save", "kind": "bots", "id": bot_id, "data": data}
+            )
+        settings = footer_settings(bot)
+        return CodeBlock(
+            f"Footer · {bot_id}: {'enabled' if settings['footer_enabled'] else 'disabled'}\n"
+            f"Template: {settings['footer_template']}"
+        )
+
     @staticmethod
     def parse_json(raw):
         raw = raw.strip()
@@ -748,7 +835,7 @@ class DiscordManager:
                         reported_failure = True
             await asyncio.sleep(TYPING_INTERVAL_SECONDS)
 
-    async def send(self, bot, channel_id, content, reply_to, paths, *, nonce=None):
+    async def send(self, bot, channel_id, content, reply_to, paths, *, nonce=None, footer=None):
         client = self.clients.get(bot["id"])
         if not client or not client.is_ready():
             raise DeliveryError("Discord gateway is not ready")
@@ -758,9 +845,10 @@ class DiscordManager:
             if isinstance(channel, discord.ForumChannel):
                 raise DeliveryError("Forum messages must target a thread; create one with !thread")
             files = [discord.File(path) for path in paths]
-            if len(content.encode("utf-16-le")) > 3900:
+            footer = self.footer(bot) if footer is None else footer
+            message, attached = model_message(content, footer)
+            if attached:
                 files.append(discord.File(io.BytesIO(content.encode()), filename="full-response.txt"))
-                content = markdown_preview(content) + "\n\n↳ Full response attached."
             reference = (
                 discord.MessageReference(
                     message_id=int(reply_to), channel_id=int(channel_id), fail_if_not_exists=False
@@ -770,7 +858,7 @@ class DiscordManager:
             )
             async with asyncio.timeout(60):
                 sent = await channel.send(
-                    content,
+                    message,
                     files=files,
                     reference=reference,
                     nonce=nonce,
@@ -810,7 +898,7 @@ class DiscordManager:
         if isinstance(channel, discord.ForumChannel):
             created = await channel.create_thread(
                 name=name,
-                content="Council discussion opened by The Boss.",
+                content=with_footer("Council discussion opened by The Boss.", self.footer(bot)),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
             thread = created.thread

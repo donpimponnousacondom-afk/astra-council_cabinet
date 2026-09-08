@@ -171,6 +171,50 @@ Long council output is sent as one message with a readable preview and `full-res
 
 First connection imports the latest 100 messages for a configured text channel. Reconnection can backfill up to 5,000 messages after the most recent stored message; hitting that bound emits `discord.history_gap`. Discord only exposes history the application can access, so the ledger is an authoritative record of **observed** input and actual requests, not a claim to contain messages that predate installation or were never accessible. Private and archived threads may require explicit membership/permissions or a direct configured room. There is no unbounded historical scrape at installation.
 
+## Discord message footers
+
+Open **Bots → Edit bot → Message footer** to toggle **Show diagnostic footer**, edit its template and see an example preview. Save applies only to that bot. Hortator defaults to enabled; Ada, Socrates, Dirac, Curie and other council bots default to disabled. Existing configurations acquire these effective defaults without a database rewrite. An explicitly saved choice survives restarts and model-profile changes.
+
+The default template is `TTFT: {{TTFT}} | TPS: {{TPS}}`. Discord receives a final subtext line such as:
+
+```text
+-# TTFT: 1858ms | TPS: 477.7
+```
+
+`-# ` is added automatically; a pasted leading prefix is accepted and normalized. Templates allow one line of 1–300 characters, with no code fences or control characters. Unknown/malformed placeholders are rejected. Substitution is literal and case-insensitive; templates cannot access credentials, request JSON or arbitrary expressions. Rendered metadata is redacted, flattened, Markdown-escaped and limited to 500 UTF-16 units. Longer metadata is visibly truncated. The example preview uses sample timings/usage, not a live measurement.
+
+| Placeholder | Meaning |
+| --- | --- |
+| `{{TTFT}}` | Final generating request's time to first streamed token, rounded milliseconds including `ms` |
+| `{{TPS}}` | Approximate streaming output tokens/second, one decimal place |
+| `{{PROVIDER}}` | Configured provider display name |
+| `{{CONTEXT}}` | Provider-reported input tokens / configured context window, e.g. `8192/262144` |
+| `{{MODEL}}`, `{{MODEL SELECTED}}` | Selected model identifier for that request |
+| `{{BOT}}` | Bot display name |
+
+TTFT starts when the HTTP model request is sent, after the provider concurrency queue. The first non-empty reasoning/content/tool-argument delta counts, matching the existing trajectory metric. TPS is `output_tokens × 1000 / (duration_ms − ttft_ms)` when usage and a positive streaming interval are available. Reported completion tokens may include reasoning/tool arguments; this is an approximate generation rate, not a count of visible Discord words. Neither metric includes earlier tool/compaction requests or delivery cooldowns. Context uses measured input tokens, not a silently substituted estimate.
+
+Missing measurements show **`—`**. Buffered responses have no measured TTFT or streaming TPS. Deterministic commands, incident notices and forum starter messages have no generating request, so their timing fields are unknown; their provider/model fields describe the selected configuration. No old request's measurements are reused. Silence does not send a footer-only message.
+
+Owner commands work while models are paused and use the same validated, audited configuration service as the dashboard:
+
+```text
+!footer
+!footer enable
+!footer disable
+!footer ada
+!footer ada enable
+!footer ada disable
+!footer template TTFT: {{TTFT}} | TPS: {{TPS}}
+!footer curie template {{BOT}} | {{MODEL SELECTED}} | {{PROVIDER}} | {{CONTEXT}} | {{TTFT}} | {{TPS}}
+```
+
+Omitting the bot ID targets Hortator. `enabled` and `disabled` are also accepted. Template edits preserve the enable switch and unrelated bot settings. These are ordinary bot configuration saves, so existing revision/validation/cancellation rules apply. The model's inspector remains read-only.
+
+Footers appear outside help/version code blocks and on report attachments' accompanying messages. Model output reserves space within Discord's 2,000 UTF-16-unit budget; long answers retain their full-response attachment and a balanced preview. The footer is kept separately in `delivery.queued` evidence with its generating request ID. Canonical model content in the outbox, full-response attachment and conversation context excludes it. Known gateway echoes, history without nonces, and repeated-content embed edits preserve that canonical answer. Mention suppression and reasoning filtering remain intact.
+
+The fields are `footer_enabled` and `footer_template` on a bot. No SQLite migration is required. After saving these fields, a branch predating them can run the existing configuration but its older schema may reject bot edits; return to compatible code or the matching backup instead of clearing the data directory.
+
 ## Context and compaction
 
 The request combines runtime identity/The Boss, a shared system prompt, selected templates in order, persona, scoped persistent notes, prior summary, ordered message records, tool exchanges, and a final dynamic system message. Dynamic placeholders are literal substitutions, never executable templates. Every speaker has a trusted author ID and timestamp outside their untrusted message content.

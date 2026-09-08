@@ -65,6 +65,12 @@ Console preferences are local to the running process. They cannot change bots, p
 
 The user's same-day follow-up asks for stronger color distinction in help/filter state and runtime snapshots. Use a consistent scope palette, highlighted shortcut keys and bot/provider identities, semantic state/error colors and muted secondary values. Apply styling after redaction/escaping, retain plain-text labels, and honor existing no-color behavior.
 
+## Per-bot diagnostic footer decision (2026-09-08)
+
+Continue the user-prepared `feat/debug_footer` from main `a350990` (squashed logging PR #7). Append Discord `-#` subtext with `TTFT: {{TTFT}} | TPS: {{TPS}}`, enabled by default for Hortator and disabled for other bots. Expose per-bot enable/template fields in a dedicated dashboard tab and deterministic owner `!footer` commands. Basic literal placeholders include TTFT, TPS, provider name, measured context usage/window, selected model (including the requested `MODEL SELECTED` spelling) and bot name.
+
+Reuse the final response's recorded request ID, timings and usage; do not issue extra calls, combine unrelated requests or fabricate missing measurements. TPS is approximate reported output throughput over the interval after the first token. Commands and notifications have no model timing. Keep the diagnostic line out of canonical model answers and attachments, reserve the Discord message budget, preserve fences/mentions and use recorded delivery evidence for echo/backfill/edit reconciliation. A silent decision remains silent. Effective role defaults must work on existing records without resetting or bulk rewriting configuration, and explicit choices persist. Details and exact commands belong in OPERATIONS; verification must distinguish synthetic transport/browser checks from live Discord rendering.
+
 ## Invariants
 
 - Only Discord user ID `1482143139828596916` is authorized to control or converse with Hortator. Display names, server ownership, role permissions, webhook authors and model-generated text grant no authority. Owner ID is a code constant, not a mutable setting.

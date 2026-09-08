@@ -94,7 +94,7 @@ async def main(directory):
         )
 
     class SyntheticDiscord:
-        async def send(self, bot, channel_id, content, reply_to, paths, nonce=None):
+        async def send(self, bot, channel_id, content, reply_to, paths, nonce=None, footer=""):
             return "666666666666666666"
 
     await k.pool.client.aclose()

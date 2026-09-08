@@ -2,6 +2,18 @@
 
 Verified in this workspace on 2026-09-07. Automated provider/Discord tests use controlled transports and synthetic credentials. Later read-only live checks used the user's configured credentials in memory without exposing them or making paid completion probes; see the typing/configuration verification below.
 
+## Per-bot diagnostic footers (2026-09-08)
+
+On the user-prepared `feat/debug_footer`, based on main `a350990` (squashed logging PR #7, tree equal to the prior local `1fbaae8`):
+
+- **142 backend tests passed**, including **26 footer cases**. Coverage includes legacy defaults without writes, explicit disable persistence, literal templates/aliases, honest missing measurements, redaction before escaping, UTF-16 bounds, owner-only commands, per-bot settings isolation, all five identities, streaming content and terminal tool-call delivery after an earlier tool round, final-request attribution, separate canonical answer/attachment content, nonce/history reconciliation, embed updates/actual edits, silence, command pagination and incident notices. Providers and Discord transports are synthetic; no model credits were spent.
+- **12 Playwright tests passed**: ten Chromium dashboard flows plus two Node build-metadata cases. The new footer flow verifies Hortator-on/Ada-off defaults, saves/reopens per-bot templates, preserves model/persona/activation/tool settings, matches the raw JSON editor, rejects invalid placeholders and checks a 390px mobile layout. After improving button contrast, the affected browser flow was rerun successfully and its screenshot inspected. Generated images remain ignored under `web/test-results/`.
+- Ruff lint/format, Prettier, strict TypeScript, Vite build and `git diff --check` passed. The final production build must follow the final commit for matching server/dashboard source stamps.
+- Before rollout, the external configuration fingerprint remained unchanged throughout edits/tests. Three recent completed real Hortator generation requests already had TTFT and output-token measurements; this is read-only historical evidence, not a new footer delivery test. No live provider/model/credential/activation setting or SQLite schema was changed.
+- Stopped the idle foreground server in attached `387556.hortator`, preserving its shell, terminal configuration and user attachment. Created `/home/codexy/.local/share/hortator-backups/20260908T001457Z-before-debug-footer`: SQLite integrity, **11 file hashes**, owner-only permissions and matching-key decryption of **14 encrypted records** passed. All entity bodies/revisions and encrypted entries matched the stopped live database. This is the latest rollback snapshot.
+
+After the committed build and Screen restart, write sanitized local rollout evidence to `/home/codexy/.local/share/hortator/logs/footer-verification.json`: one loopback API process, matching clean server/dashboard commit stamps, unchanged configuration fingerprint, effective per-bot footer defaults/readiness, session revocation and preserved Screen attachment. These checks establish local deployment; visual Discord subtext and full council activation remain for operator acceptance. No manual Discord posts or paid probes are part of this verification.
+
 ## Operational console logging
 
 On `feat/improving_logging`, already prepared by the user from main `d33cf80` (version PR #6), on 2026-09-07:

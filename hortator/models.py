@@ -6,6 +6,8 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .footer import DEFAULT_FOOTER_TEMPLATE, footer_settings, validate_template
+
 OWNER_ID = "1482143139828596916"
 KINDS = ("providers", "profiles", "bots", "prompts", "rooms", "plugins", "settings")
 ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$")
@@ -155,6 +157,20 @@ class Bot(Entity):
     hourly_turn_limit: int = Field(default=120, ge=1, le=10000)
     daily_cost_limit: float | None = Field(default=None, gt=0)
     color: str = Field(default="#b9de89", pattern=r"^#[0-9a-fA-F]{6}$")
+    footer_enabled: bool = False
+    footer_template: str = DEFAULT_FOOTER_TEMPLATE
+
+    @model_validator(mode="before")
+    @classmethod
+    def footer_defaults(cls, value):
+        if isinstance(value, dict):
+            return {**value, **footer_settings(value)}
+        return value
+
+    @field_validator("footer_template")
+    @classmethod
+    def footer_valid(cls, value):
+        return validate_template(value)
 
     @field_validator("application_id")
     @classmethod

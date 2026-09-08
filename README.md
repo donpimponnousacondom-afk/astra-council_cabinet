@@ -42,6 +42,8 @@ After a PR is squash-merged, use a clean working tree, `git switch main`, `git p
 
 Use **`!version` / `!ver`** or the panel's **Running server** banner to see the loaded commit, ISO UTC date/time and commit title. **Build details** also shows server start time and the dashboard's separately embedded build identity. Unknown metadata and uncommitted builds are explicit. Commit before the final build/restart so the release identifies the final task commit.
 
+Hortator's replies include a small Discord diagnostic footer with **TTFT / TPS** by default. Other bots start with it off. Configure each at **Bots → Edit bot → Message footer**, or use `!footer enable`, `!footer disable`, `!footer ada enable` and `!footer ada template {{TTFT}} | {{TPS}} | {{MODEL}}`. Provider, context and bot-name placeholders are also available; missing measurements remain `—`. See [message footer controls and metric definitions](docs/OPERATIONS.md#discord-message-footers).
+
 ## Connect the first council
 
 The initial records are **disabled drafts**, with no invented traffic or credentials: Hortator (15-second cadence), Ada (60 seconds), Socrates (90 seconds), a shared prompt, one council room, OpenRouter, and an unconfigured model profile.

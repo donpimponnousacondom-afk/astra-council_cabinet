@@ -314,7 +314,7 @@ async def test_two_bots_share_room_delivery_lock_not_context(kernel):
     order = []
 
     class Transport:
-        async def send(self, bot, channel_id, content, reply_to, paths, nonce=None):
+        async def send(self, bot, channel_id, content, reply_to, paths, nonce=None, footer=""):
             nonlocal peak, active
             active += 1
             peak = max(peak, active)
