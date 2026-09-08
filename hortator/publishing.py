@@ -250,7 +250,7 @@ class SSHDelivery:
                     await process.stdin.drain()
                     process.stdin.close()
                     await process.stdin.wait_closed()
-                except (BrokenPipeError, ConnectionResetError):
+                except BrokenPipeError, ConnectionResetError:
                     pass  # Preserve the actual SSH/receiver diagnostic below.
 
             io_tasks = [

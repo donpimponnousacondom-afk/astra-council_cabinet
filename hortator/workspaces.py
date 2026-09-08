@@ -741,7 +741,7 @@ class Workspaces:
                         "source": "observed Discord attachment",
                         "original_preserved": True,
                     }
-                except (ValueError, OSError):
+                except ValueError, OSError:
                     pass
             captured = await self.images.capture(attachment)
             vision = captured.get("vision", {})

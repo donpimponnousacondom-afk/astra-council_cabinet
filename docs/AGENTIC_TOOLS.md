@@ -6,10 +6,10 @@ Bots can import an observed attachment, inspect its measured size/dimensions, co
 
 1. In **Plugins**, enable **Private workspaces** (`workspace`) for file operations. Enable **Isolated Bash** (`shell`) when execution is wanted. Both are disabled in a newly seeded configuration and require no API key. Existing installations receive these disabled entries without changing any bot grant or provider configuration.
 2. In **Bots → Edit → Capabilities**, grant the desired tools to each bot. Bash requires both workspace and shell grants. **Web fetch** retains its existing ID/global setting and URL-only behavior; grant it for durable reading. Hortator still accepts only the genuine human owner `1482143139828596916`.
-3. Inspect **Files, web reading and jobs** for actual runner readiness and selected utilities. A non-root Linux account, a compatible Bubblewrap, unprivileged namespaces, pidfds, libseccomp, Bash and the installed Python/Pillow are needed. Readiness executes a real isolated probe. The runner fails closed when these requirements are unavailable. See [operator setup and execution boundary](SHELL_RUNNER.md).
+3. Inspect **Files, web reading and jobs** for actual runner readiness and selected utilities. A non-root Linux account, a compatible Bubblewrap, unprivileged namespaces, pidfds, libseccomp, Bash and the installed Python 3.14/Pillow/pip, uv, micromamba and documented utilities are needed. Readiness executes a real isolated probe. The runner fails closed when these requirements are unavailable. See [operator setup and execution boundary](SHELL_RUNNER.md).
 4. Adjust the visible global working limits and per-bot **Extended file and reading tasks** fields. Advanced per-bot plugin JSON overrides the global configuration under the same validation. Provider keys, Discord credentials and document publication settings are independent.
 
-No model call installs tools or changes host policy. Installing/enabling the feature in another checkout requires the ordinary integration, backup, committed build and shared-Screen rollout procedure; the parallel implementation branch itself is not a deployment.
+Model commands may install Python/native packages into disposable sandbox storage; they cannot install host packages or change host policy. Installing/enabling the feature in another checkout requires the ordinary integration, backup, committed build and shared-Screen rollout procedure; the parallel implementation branch itself is not a deployment.
 
 ## Model workflow
 
@@ -26,7 +26,7 @@ The three calls above use `workspace`. IDs must come from messages already obser
 Use `shell` for a real command, for example:
 
 ```json
-{"operation":"run","task":"compress-image","command":"python3 -c \"from PIL import Image; im=Image.open('original.png'); print(im.size); im.convert('RGB').save('compressed.jpg',quality=60,optimize=True)\""}
+{"operation":"run","task":"compress-image","command":"python3.14 -c \"from PIL import Image; im=Image.open('original.png'); print(im.size); im.convert('RGB').save('compressed.jpg',quality=60,optimize=True)\""}
 ```
 
 Then call `workspace` with `{"operation":"export","task":"compress-image","path":"compressed.jpg"}` and pass its returned `artifact_id` to `council_speak.artifact_ids`. The export ceiling is independently **8,000,000 bytes**. Re-exporting an owned persistent output registers a new artifact for the current turn; cross-turn artifact references remain forbidden. Export queues no site publication and sends no Discord message itself.
@@ -52,7 +52,7 @@ Complete redacted tool results are immutable in SQLite `tool_result_evidence`, a
 
 ## Inspection, storage and retention
 
-Authenticated **Files, web reading and jobs** panels show bounded recent records, runner readiness, owned files, image/binary metadata, paged text and job output. Text appears as escaped source data, never executable HTML. Read-only inspection does not run model commands, publish a site or extend expiry. The dashboard remains the owner's administrative view; model tools stay scoped and cannot call its API.
+Authenticated **Files, web reading and jobs** panels show bounded recent records, runner readiness, owned files, image/binary metadata, paged text and job output. Text appears as escaped source data, never executable HTML. Read-only inspection does not run model commands, publish a site or extend expiry. The dashboard remains the owner's administrative view; workspace APIs stay scoped. Granted shell networking shares host reachability, including local HTTP services; it supplies no dashboard credentials.
 
 | Store | Location under external `HORTATOR_DATA_DIR` | Policy |
 | --- | --- | --- |

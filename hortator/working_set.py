@@ -93,7 +93,7 @@ def result_reference(message):
     """Keep trusted addressing and bounded progress metadata, never invent a summary."""
     try:
         body = json.loads(message.get("content", ""))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         body = {}
     if not isinstance(body, dict):
         body = {}

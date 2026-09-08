@@ -1,0 +1,2 @@
+[externally-managed]
+Error=The sandbox baseline is read-only Python 3.14. Use the active /packages/venv with uv pip install or pip install. Create additional environments with python3.14 -m venv /packages/myenv. Packages disappear after this job. Save deliverables in /workspace.

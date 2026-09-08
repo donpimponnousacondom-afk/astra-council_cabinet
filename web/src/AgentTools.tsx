@@ -25,6 +25,8 @@ const labels: Record<string, string> = {
   memory_bytes_per_process: "Address space per process (bytes)",
   max_processes: "Processes per job",
   process_limit: "Processes per job",
+  package_bytes: "Disposable package storage per job (bytes)",
+  package_entries: "Disposable package entries per job",
   max_jobs_per_bot: "Saved jobs per bot",
   job_storage_bytes_per_bot: "Job output storage per bot (bytes)",
 };
@@ -217,7 +219,7 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
             {data.runner?.message ||
               data.runner?.reason ||
               data.runner?.error ||
-              "Network is disabled. Commands use the selected local toolchain."}
+              "Inspect runner readiness for network status and the available toolchain."}
           </p>
           {!data.runner?.ready && <p className="muted">{data.runner?.setup}</p>}
           <details>

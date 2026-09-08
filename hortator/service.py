@@ -165,6 +165,9 @@ class Service:
         elif kind == "plugins":
             value["key_configured"] = bool(self.vault.get(f"plugin/{value['id']}/api_key"))
             spec = self.registry.specs.get(value["id"])
+            if value["id"] == "shell" and spec:
+                # Older saved catalogs describe the retired offline toolchain.
+                value["description"] = spec.description
             value["schema"] = spec.parameters if spec else None
             value["installed"] = bool(spec)
             value["keyless"] = value["id"] in (

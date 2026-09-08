@@ -64,7 +64,7 @@ def trusted_discord_url(url):
             and not parsed.fragment
             and bool(re.fullmatch(r"/attachments/[0-9]+/[0-9]+/[^/]+", parsed.path))
         )
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return False
 
 
@@ -132,7 +132,7 @@ class ImageCache:
                 try:
                     self.read(prior)
                     return result
-                except (ValueError, OSError):
+                except ValueError, OSError:
                     pass  # A refreshed Discord URL can repair missing cached bytes.
             url = result.get("url")
             if not trusted_discord_url(url):

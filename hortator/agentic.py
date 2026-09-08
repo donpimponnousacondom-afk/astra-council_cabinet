@@ -5,7 +5,14 @@ from .models import ControlError
 
 
 SHELL_DESCRIPTION = (
-    "Run real Bash pipelines/scripts in a bounded, network-disabled OS sandbox with Python and file utilities. "
+    "Run real Bash pipelines/scripts with host networking, DNS and HTTPS in a bounded OS sandbox. "
+    "Includes curl, wget, git, jq, Perl, coreutils, ps/pgrep, id/whoami, ss/netstat/ip, uv and Python 3.14/Pillow. "
+    "python and python3 both mean Python 3.14; Node is not supplied. Each job activates /packages/venv: "
+    "use uv pip install PACKAGE or pip install PACKAGE. For native tools use pkg install PACKAGE "
+    "(conda-forge); installed commands enter PATH. Extra environments: python3.14 -m venv /packages/myenv. "
+    "All /packages installs/caches are disposable and vanish when this job ends: install AND use them in "
+    "one command. Save deliverables in /workspace; never put venvs, linked trees or package caches there. "
+    "The base Python 3.14 is read-only; no host apt/sudo. Large downloads/builds can hit finite job limits. "
     "Requires both shell and workspace grants. Start a named workspace first; run uses its saved working "
     "directory unless cwd is supplied. Commands run synchronously for at most 90 seconds; no detached job "
     "survives completion. Original imported files are protected; write transformed copies to new paths. "

@@ -37,7 +37,7 @@ def ssh_identity(vault: Vault, name: str, *, create: bool = False) -> PublicIden
     if stored:
         try:
             key = serialization.load_ssh_private_key(stored.encode(), password=None)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             raise ControlError("Stored SSH identity is invalid; it was not replaced") from None
         if not isinstance(key, Ed25519PrivateKey):
             raise ControlError("Stored SSH identity is not Ed25519; it was not replaced")

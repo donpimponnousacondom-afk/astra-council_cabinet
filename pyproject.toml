@@ -2,7 +2,7 @@
 name = "hortator-council"
 version = "0.1.0"
 description = "An observable council of independent Discord applications"
-requires-python = ">=3.12"
+requires-python = ">=3.14,<3.15"
 dependencies = [
   "fastapi>=0.115,<1",
   "uvicorn[standard]>=0.34,<1",
@@ -14,6 +14,7 @@ dependencies = [
   "tiktoken>=0.9,<1",
   "jsonschema>=4.23,<5",
   "pillow>=11,<13",
+  "pip>=26,<27",
 ]
 [project.scripts]
 hortator = "hortator.cli:main"
@@ -31,3 +32,7 @@ testpaths = ["tests"]
 line-length = 110
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
+
+# This standalone file is also executed by independently managed SSH receiver hosts.
+[tool.ruff.per-file-target-version]
+"hortator/publishing_receiver.py" = "py310"

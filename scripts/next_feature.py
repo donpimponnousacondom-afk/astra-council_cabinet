@@ -218,7 +218,7 @@ def process(pid):
             "cwd": (directory / "cwd").resolve(),
             "argv": (directory / "cmdline").read_bytes().decode(errors="replace").split("\0"),
         }
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
 
 
@@ -399,7 +399,7 @@ def ready(job):
             and event["build"]["dirty"] is False
             and build["dirty"] is False
         )
-    except (OSError, ValueError, KeyError, sqlite3.Error, Stop):
+    except OSError, ValueError, KeyError, sqlite3.Error, Stop:
         return False
 
 
@@ -425,7 +425,7 @@ def main():
     data = Path(os.environ.get("HORTATOR_DATA_DIR", "/home/codexy/.local/share/hortator")).resolve()
     if not (data / "council.sqlite3").is_file() or data.is_relative_to(ROOT):
         raise Stop("Expected the existing external Hortator data directory; nothing was initialized.")
-    for name in ("git", "screen", "uv", "npm", "python3", "ss"):
+    for name in ("git", "screen", "uv", "npm", "python3.14", "ss"):
         if not shutil.which(name):
             raise Stop(f"Required command is missing: {name}")
     if not LAUNCHER.is_file():
@@ -452,7 +452,7 @@ def main():
         fresh = screen_state(ROOT)
         if fresh["shell"] != state["shell"] or fresh["server"]:
             raise Stop("Screen changed before the worker launch; no shell command was sent.")
-        stuff(state, shlex.join(["python3", str(script), "--worker", str(path)]) + "\r")
+        stuff(state, shlex.join(["python3.14", str(script), "--worker", str(path)]) + "\r")
         deadline, previous = time.monotonic() + 1000, None
         while time.monotonic() < deadline:
             job = json.loads(path.read_text())
