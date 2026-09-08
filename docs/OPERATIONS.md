@@ -515,6 +515,18 @@ Image intake currently accepts up to **20 MiB per image**, with **40 MiB combine
 
 ## Private tools and isolated execution
 
+### Web search credentials and engine selection
+
+Create a Brave Search API key in the [Brave API dashboard](https://api-dashboard.search.brave.com/) after activating a Search plan (**API Keys → Add API Key**). In Hortator, open **Plugins → Edit Web search → API key → Save credential**. Enable the plugin globally and grant **Web search** under each desired bot's **Capabilities**. DuckDuckGo needs no key. The global Brave key is shared; **Per-bot plugin key**, with **Plugin credential → Web search**, is an optional override. Saving credentials never performs a paid probe.
+
+The editor exposes **Default search engine**: Auto (Brave then DuckDuckGo after failure/empty results), Brave only, DuckDuckGo only, and Both. Select **Both** with **Search results per engine = 5** for up to five from each, deduplicated and attributed. Bots can override engine/count per call. Save non-secret settings with **Save changes**, separately from the credential button. Existing endpoint/count settings and bot grants are preserved. A saved key flag means stored, not verified by a live search.
+
+Failures remain visible per engine and one engine's failure does not discard usable results from the other. DuckDuckGo can return rate limits/challenges; no bypass is attempted. See [WEB_SEARCH.md](WEB_SEARCH.md) for setup, JSON fields, bounded response behavior and error categories. `web_search.*` events use the tools console scope (`t`, with `T` evidence inspection).
+
+For the separate text reader, a **1,000,000-byte download-limit** failure occurs before pagination; small returned pages do not lift that download ceiling. Before running Bash, the bot must call **workspace** with `{"operation":"start","task":"aa-data"}`, wait for success, then reuse `aa-data` in `shell.run`. Shell has no start action and a missing task means the command was not run. Private memory writes require the explicit `operation: "write"` field even when key/value are supplied. These hints preserve existing data and strict validation; no reset is part of search setup.
+
+### Workspace and shell setup
+
 Enable/grant private workspaces and isolated Bash separately in the dashboard; neither needs a key. Web fetch keeps its current ID and adds durable reading/search. The tool panel exposes runner readiness, selected utilities, working limits, bounded private inspection and per-bot extended file/reading budgets. Read [setup and resource scope](SHELL_RUNNER.md) before enabling execution. Bubblewrap, namespaces/pidfds, libseccomp and the Python/Pillow toolchain are operator-supplied; no readiness failure falls back to host Bash. The existing human Screen shell and production launcher stay unchanged.
 
 Backups now include `workspaces/`, `jobs/` and `fetched_documents/`, with their SQLite scope/reference/evidence tables. Restore the matching directories and database/key into empty external storage; stopped-runtime snapshots are needed for file/DB consistency. Job recovery marks unfinished commands interrupted, never replayed. Default inactive retention is 30 days for workspaces and seven days for fetched snapshots/job logs; active jobs/running-turn references are protected. Cleanup occurs on new work admission, so time expiry is an eligibility/read-access limit, not a promise of immediate physical erasure. Saved-job count exhaustion requires operator archival of old inactive directories. Immutable tool-result evidence follows existing trajectory retention. See the [storage policies](AGENTIC_TOOLS.md#inspection-storage-and-retention) before archiving data.

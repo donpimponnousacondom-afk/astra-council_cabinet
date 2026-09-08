@@ -13,7 +13,8 @@ SHELL_DESCRIPTION = (
     "All /packages installs/caches are disposable and vanish when this job ends: install AND use them in "
     "one command. Save deliverables in /workspace; never put venvs, linked trees or package caches there. "
     "The base Python 3.14 is read-only; no host apt/sudo. Large downloads/builds can hit finite job limits. "
-    "Requires both shell and workspace grants. Start a named workspace first; run uses its saved working "
+    'Requires both shell and workspace grants. First call workspace with {"operation":"start","task":"your-task"} '
+    "and wait for success; use that returned task here. shell has no start operation and cannot create a workspace. run uses its saved working "
     "directory unless cwd is supplied. Commands run synchronously for at most 90 seconds; no detached job "
     "survives completion. Original imported files are protected; write transformed copies to new paths. "
     "Operations: run(task,command,cwd,timeout_seconds), status(job_id), read(job_id,stream,offset,limit), "
@@ -22,7 +23,10 @@ SHELL_DESCRIPTION = (
 )
 SHELL_FIELDS = {
     "operation": {"type": "string", "enum": ["run", "status", "read", "cancel", "read_result"]},
-    "task": workspaces.PROPERTIES["task"],
+    "task": {
+        **workspaces.PROPERTIES["task"],
+        "description": "Existing workspace task slug in this bot/channel. First call workspace.start with the same task; shell.run cannot create it.",
+    },
     "command": {
         "type": "string",
         "minLength": 1,

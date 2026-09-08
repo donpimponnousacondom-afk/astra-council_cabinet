@@ -876,6 +876,71 @@ export function Editor({
                 grant. Council inspection is additionally restricted to
                 owner-initiated Hortator turns.
               </Notice>
+              {draft.id === "web_search" && (
+                <>
+                  <Field label="Default search engine">
+                    <select
+                      value={draft.config?.engine || "auto"}
+                      onChange={(e) =>
+                        set("config", {
+                          ...draft.config,
+                          engine: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="auto">
+                        Auto · Brave, then DuckDuckGo fallback
+                      </option>
+                      <option value="both">
+                        Both · combine Brave and DuckDuckGo
+                      </option>
+                      <option value="brave">Brave only</option>
+                      <option value="duckduckgo">
+                        DuckDuckGo only · no key
+                      </option>
+                    </select>
+                  </Field>
+                  <Field
+                    label="Search results per engine"
+                    hint="Default 5, maximum 10. Both requests this many from each engine and removes duplicate URLs."
+                  >
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      step={1}
+                      value={draft.config?.count ?? 5}
+                      onChange={(e) =>
+                        set("config", {
+                          ...draft.config,
+                          count:
+                            e.target.value === ""
+                              ? null
+                              : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </Field>
+                  <Notice>
+                    DuckDuckGo needs no API key. For Brave, activate a Search
+                    plan at the{" "}
+                    <a
+                      href="https://api-dashboard.search.brave.com/"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Brave API dashboard
+                    </a>
+                    , create a key under API Keys, then paste it into the API
+                    key field below and save the credential. Bots can select
+                    either engine or both per call. Auto falls back when Brave
+                    fails or has no results; Both preserves the other engine's
+                    results on a partial failure. DuckDuckGo's HTML search can
+                    return a rate limit or challenge, which is reported
+                    explicitly.
+                  </Notice>
+                </>
+              )}
               {draft.id === "document_site" && (
                 <DocumentPluginSettings
                   config={draft.config || {}}

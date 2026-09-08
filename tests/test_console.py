@@ -98,6 +98,28 @@ async def test_filters_do_not_affect_ledger_and_replay_respects_filters(kernel):
         assert console.threshold == logging.INFO and "providers" in console.scopes
 
 
+async def test_search_console_identifies_failed_engine_and_partial_recovery(kernel):
+    with output() as console:
+        console.bind(kernel)
+        console.stream.seek(0)
+        console.stream.truncate()
+        kernel.store.emit(
+            "web_search.engine_failed",
+            {"engine": "brave", "category": "configuration", "error": "Brave key missing"},
+            bot_id="hortator",
+            level="warning",
+        )
+        kernel.store.emit(
+            "web_search.engine_completed",
+            {"engine": "duckduckgo", "status": "ok", "count": 5},
+            bot_id="hortator",
+        )
+        rendered = console.stream.getvalue()
+        assert "tools" in rendered and "engine=brave" in rendered
+        assert "category=configuration" in rendered
+        assert "engine=duckduckgo" in rendered and "count=5" in rendered
+
+
 def test_http_debug_and_errors_never_print_queries_or_client_credentials():
     with output() as console:
         access("/api/status?password=query-test-secret")

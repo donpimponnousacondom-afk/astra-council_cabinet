@@ -254,7 +254,11 @@ class Workspaces:
             (bot_id, channel_id, safe_task(task)),
         )
         if not row:
-            raise ControlError("Workspace not found in this bot/channel; use start to create a task")
+            raise ControlError(
+                "Workspace not found in this bot/channel; first call workspace with "
+                + dumps({"operation": "start", "task": task})
+                + ". After success, reuse that task for shell.run. shell has no start operation."
+            )
         return row
 
     def _idle(self, row):

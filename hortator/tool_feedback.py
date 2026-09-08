@@ -29,7 +29,10 @@ Older tool exchanges may be explicitly omitted from the active prompt while thei
 evidence stays durable. Save concise progress notes with granted memory/workspace tools.
 Use document/file/job continuation handles or read_result with result_id and a small length
 to recover needed sections. Omitted content is not still in your prompt. Shell execution
-requires its own grant and a ready isolated runner; a workspace grant alone cannot execute Bash."""
+requires its own grant and a ready isolated runner; a workspace grant alone cannot execute Bash.
+Before shell.run, call workspace with {"operation":"start","task":"your-task"} and wait for success;
+reuse that returned task in shell.run. shell has no start operation and never creates a workspace.
+When writing memory, include {"operation":"write","key":"topic","value":"your note"}; key/value alone is invalid."""
 
 
 def with_usage(parameters):
@@ -79,6 +82,16 @@ def example_value(name, field):
 
 def example_arguments(parameters, arguments=None):
     properties = parameters.get("properties", {})
+    # Prefer explicit, schema-valid examples and match a valid operation when
+    # supplied. This avoids showing a read example to a bot trying to save a note.
+    operation = arguments.get("operation") if isinstance(arguments, dict) else None
+    for example in parameters.get("examples", [])[:5]:
+        if (
+            isinstance(example, dict)
+            and Draft202012Validator(parameters).is_valid(example)
+            and (operation is None or example.get("operation") == operation)
+        ):
+            return copy.deepcopy(example)
     required = set(parameters.get("required", []))
     example = {key: example_value(key, properties.get(key, {})) for key in sorted(required)}
     # Preserve a valid discriminant so conditional tool packs show the requested operation's usage.

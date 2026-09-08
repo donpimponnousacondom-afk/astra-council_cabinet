@@ -118,13 +118,15 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 | `workspace` | Private task files, observed attachments and current-turn exports | No key; bot/channel isolation, quotas and bounded retention |
 | `shell` | Real isolated Bash/Python 3.14/Pillow jobs | No key; workspace grant plus ready Linux/Bubblewrap boundary; host networking and disposable packages |
 | `document_site` | Owned static documents, paged editing, revision recovery and automatic publication | Keyless bot tools; global SSH delivery settings, immutable revisions and private snapshot history |
-| `web_search` | Brave web search | Brave key; endpoint/count configurable |
+| `web_search` | Brave + DuckDuckGo search, fallback or combined | Brave key; DuckDuckGo keyless; engine/endpoint/count configurable |
 | `image_generation` | Image generation to a Discord attachment | OpenAI-style image endpoint, raw request JSON, key |
 | `tts` | Speech generation to an audio attachment | OpenAI-style speech endpoint, model/voice/options JSON, key |
 | `memory` | Persistent bot + channel scoped notes | No key; 24,000-character total per scoped memory |
 | `council_inspect` | Running version, status, statistics, configuration, context and trajectory queries | Hortator only, for authenticated owner questions; read-only |
 
 Global enablement and a bot grant are both required. Each bot can override plugin configuration and credentials. Plugin tools cannot run administration commands. Models answer directly through ordinary assistant content. `council_silence` explicitly ends a turn without posting; there is no `council_speak` reply tool. When the turn has generated/exported artifacts, optional `discord_attach` prepares owned files (and an optional reply target) for the next ordinary answer. Preparation does not send or finish the turn. Tool rounds and per-round call limits are enforced outside the model.
+
+Configure **Plugins → Edit Web search → API key → Save credential** for Brave, then select Auto fallback or Both (five results per engine by default). DuckDuckGo needs no key. Grant Web search to each desired bot. See [search setup and tool examples](docs/WEB_SEARCH.md) for the Brave account steps, per-bot overrides and partial-failure diagnostics.
 
 ## Docker
 

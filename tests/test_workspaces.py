@@ -57,6 +57,18 @@ async def call(workspaces, context, operation, config=None, **args):
     return await workspaces.call({"operation": operation, **args}, context, config)
 
 
+def test_missing_task_gives_exact_workspace_prerequisite_without_implicit_creation(workspaces, context):
+    with pytest.raises(ControlError) as error:
+        workspaces.prepare_job(context, "aa-data")
+    message = str(error.value)
+    assert "first call workspace with " in message
+    example = message.split("with ", 1)[1].split(". After success", 1)[0]
+    assert json.loads(example) == {"operation": "start", "task": "aa-data"}
+    assert "shell has no start operation" in message
+    assert not workspaces.store.rows("SELECT * FROM workspaces")
+    assert not workspaces._active
+
+
 async def test_durable_scopes_atomic_write_edit_and_current_turn_export(workspaces, context):
     started = await call(workspaces, context, "start", task="notes")
     assert started["workspace_task_started"]

@@ -24,6 +24,34 @@ FOUR_FIELDS = schema(
 VALID = {"title": "Summary", "body": "Document", "weight": 0.5, "count": 2}
 
 
+async def test_missing_memory_operation_returns_write_example_without_mutating_notes(kernel):
+    bot = configured(kernel, enabled_plugins=["memory"])
+    context = ToolContext(bot, "channel", "memory-guidance")
+    await kernel.registry.call(
+        "memory", {"operation": "write", "key": "existing", "value": "keep"}, context, "seed"
+    )
+    before = await kernel.registry.call("memory", {"operation": "read"}, context, "before")
+    result = await kernel.registry.call("memory", {"key": "topic", "value": "note"}, context, "missing")
+    assert result["error_count"] == 1 and not result["executed"]
+    assert "operation" in result["errors"][0]["message"]
+    assert result["usage"]["example"] == {"operation": "write", "key": "topic", "value": "Concise note"}
+    spec = kernel.registry.specs["memory"]
+    assert '"operation":"write"' in spec.description
+    assert "REQUIRED" in spec.parameters["properties"]["operation"]["description"]
+    after = await kernel.registry.call("memory", {"operation": "read"}, context, "after")
+    assert after["notes"] == before["notes"]
+
+
+@pytest.mark.parametrize("operation", ["read", "write", "delete"])
+def test_explicit_usage_examples_preserve_the_requested_memory_operation(kernel, operation):
+    spec = kernel.registry.specs["memory"]
+    example = usage("memory", spec.parameters, spec.description, {"operation": operation})["example"]
+    assert example["operation"] == operation
+    assert Draft202012Validator(spec.parameters).is_valid(example)
+    example["operation"] = "invalid"
+    assert all(value["operation"] != "invalid" for value in spec.parameters["examples"])
+
+
 def probe(kernel, *, owner_only=False):
     name = "feedback_probe"
     handler = AsyncMock(return_value={"ok": True, "saved": True})

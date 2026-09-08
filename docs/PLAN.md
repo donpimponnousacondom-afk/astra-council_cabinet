@@ -2,6 +2,12 @@
 
 This implementation lives at `/home/codexy/codex/astra-council_cabinet`. [AGENTS.md](../AGENTS.md) records standing agent rules; [OPERATIONS.md](OPERATIONS.md) covers the shared GNU Screen runtime, storage and branch workflow. The design below remains the accepted foundation.
 
+## Search recovery and model tool guidance (2026-09-09)
+
+The owner requested DuckDuckGo alongside Brave, model-selectable engines, automatic fallback and combined results that survive one engine's failure. The existing `web_search` plugin now defaults to Auto (Brave first, DuckDuckGo after failure or empty results); Both requests five per engine by default, interleaves and deduplicates URLs, and retains per-engine provenance/status. The dashboard exposes engine/count and explains the separate Brave credential step. DuckDuckGo uses bounded HTML search without a key; challenges and changed formats remain failures. Grants, stored keys and custom Brave endpoints are preserved. See [WEB_SEARCH.md](WEB_SEARCH.md).
+
+The reported fetch failure was the existing 1,000,000-byte download ceiling, unrelated to returned text pagination. The shell command never ran because its `aa-data` workspace did not exist; guidance now names the separate `workspace.start` call and exact task. In the eight hours ending at reported event #10837, all 20 Dirac memory failures omitted `operation`; none were empty usage requests. The descriptions now lead with complete write/read/delete examples and missing-operation feedback offers a valid write example. Strict validation still collects every detectable error and never infers a mutation. Existing memories, personas, limits and logs are preserved; any later test reset needs a separate request. Automated contracts cannot guarantee that a model always follows its first-call hints.
+
 ## Per-bot intentional silence and reconnect history scope (2026-09-08)
 
 The owner wants a visible per-bot switch to remove the silence decision while exercising models/providers. `bots.allow_silence` defaults true and is shown as **Allow intentional silence** under **Capabilities → Built-in capabilities**, using the same checkbox layout as plugin grants. It is an engine terminal capability, with no key or extra global enablement. Existing records and new drafts retain silence until explicitly disabled. Normal owner configuration saves, revisions and active-turn cancellation apply.

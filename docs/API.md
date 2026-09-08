@@ -76,6 +76,8 @@ Credential kinds/fields:
 
 Bot token validation calls Discord to check both the application and bot identity before storage. The Bot token is not an OAuth client secret or a user account token. All other keys are stored without sending a paid probe; use provider discovery or a real configured activation to verify the endpoint.
 
+For the `web_search` plugin, non-secret `config` fields are `engine` (`auto`, `brave`, `duckduckgo`, `both`), `count` (integer 1–10 per engine), and optional Brave `endpoint`. Defaults are Auto, 5 and the existing Brave web-search API. Equivalent bot overrides live in `plugin_config.web_search`; remember that control patches replace nested config objects. Validation occurs before persistence and preserves unrelated records. `plugins/web_search/api_key` stores the global Brave key; `bots/{id}/plugin:web_search` is its optional per-bot override. DuckDuckGo needs no key. GET returns only credential-presence flags, never the saved value, and does not prove the key works. See [search setup](WEB_SEARCH.md).
+
 ## Discord examples
 
 ```text
