@@ -92,6 +92,14 @@ class Store:
           id TEXT PRIMARY KEY, bot_id TEXT NOT NULL, turn_id TEXT NOT NULL,
           filename TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL, created_at REAL NOT NULL);
         """)
+        if "addressing" not in {row["name"] for row in self.rows("PRAGMA table_info(messages)")}:
+            self.execute("ALTER TABLE messages ADD COLUMN addressing TEXT NOT NULL DEFAULT '{}'")
+        if "retry_until" not in {row["name"] for row in self.rows("PRAGMA table_info(bot_runtime)")}:
+            self.execute("ALTER TABLE bot_runtime ADD COLUMN retry_until REAL NOT NULL DEFAULT 0")
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS human_attention_claims (bot_id TEXT NOT NULL, message_id TEXT NOT NULL, "
+            "turn_id TEXT NOT NULL, claimed_at REAL NOT NULL, PRIMARY KEY(bot_id,message_id))"
+        )
         path.chmod(0o600)
 
     def rows(self, sql, args=()):
@@ -178,6 +186,7 @@ class Store:
         )
         for row in rows:
             row["attachments"] = json.loads(row["attachments"])
+            row["addressing"] = json.loads(row["addressing"])
         return rows
 
     def ingest(
@@ -195,6 +204,7 @@ class Store:
         attachments=None,
         guild_id=None,
         parent_id=None,
+        addressing=None,
     ):
         room = self.get("rooms", room_id) if room_id else None
         if guild_id is None and room and room["channel_id"] == channel_id:
@@ -206,7 +216,7 @@ class Store:
         content = self.redact(content)
         cur = self.execute(
             """INSERT OR IGNORE INTO messages(discord_id,channel_id,room_id,author_id,
-          author_name,bot_id,content,at,reply_to,attachments) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+          author_name,bot_id,content,at,reply_to,attachments,addressing) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 discord_id,
                 channel_id,
@@ -218,6 +228,7 @@ class Store:
                 at or time.time(),
                 reply_to,
                 dumps(self.redact(attachments or [])),
+                dumps(self.redact(addressing or {"author_kind": "bot" if bot_id else "unknown"})),
             ),
         )
         if cur.rowcount:
@@ -229,6 +240,7 @@ class Store:
                     "author_name": author_name,
                     "content": content,
                     "seq": cur.lastrowid,
+                    "addressing": self.redact(addressing or {}),
                 },
                 bot_id=bot_id,
             )
@@ -263,6 +275,11 @@ class Store:
         )
         self.execute(
             "UPDATE requests SET status='interrupted',ended_at=?,error='Process restarted; usage may be incomplete' WHERE ended_at IS NULL",
+            (time.time(),),
+        )
+        self.execute(
+            "UPDATE request_diagnostics SET body=json_set(body,'$.status','interrupted'),updated_at=? "
+            "WHERE json_extract(body,'$.status')='running' AND request_id IN (SELECT id FROM requests WHERE status='interrupted')",
             (time.time(),),
         )
 

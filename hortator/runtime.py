@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import time
 from collections import defaultdict
 from dataclasses import dataclass
 
 from .context import ContextBuilder
+from .addressing import human_directed_elsewhere
 from .footer import render_footer
 from .models import ControlError, OWNER_ID
 from .plugins import ATTACH, SILENCE, ToolContext
@@ -47,6 +49,10 @@ class DeliveryError(Exception):
         return self.message
 
 
+class TurnSuperseded(ControlError):
+    pass
+
+
 class Engine:
     def __init__(self, store, vault, pool, registry, transport=None):
         self.store, self.vault, self.pool, self.registry = store, vault, pool, registry
@@ -57,6 +63,8 @@ class Engine:
         self.room_last = defaultdict(float)
         self.task = None
         self.closed = False
+        self.delivery_waiting = {}
+        self.human_superseded = set()
 
     def start(self):
         self.task = asyncio.create_task(self.loop(), name="council-scheduler")
@@ -142,9 +150,10 @@ class Engine:
                 ]
                 or 0
             )
-            unseen = bool(
-                self.store.one(
-                    "SELECT 1 FROM messages WHERE channel_id=? AND seq>? AND (bot_id IS NULL OR bot_id<>?) LIMIT 1",
+            unseen = any(
+                not human_directed_elsewhere(self.store, row, bot["id"])
+                for row in self.store.rows(
+                    "SELECT * FROM messages WHERE channel_id=? AND seq>? AND deleted=0 AND (bot_id IS NULL OR bot_id<>?)",
                     (channel_id, context["last_seen"], bot["id"]),
                 )
             )
@@ -160,6 +169,49 @@ class Engine:
             if latest:
                 candidates.append((not unseen, context["updated_at"], channel_id))
         return min(candidates)[2] if candidates else None
+
+    def attention(self, bot, channel_id=None, through=None):
+        rows = self.store.rows(
+            "SELECT m.* FROM messages m JOIN contexts c ON c.channel_id=m.channel_id AND c.bot_id=? "
+            "WHERE m.seq>c.last_seen AND m.deleted=0 AND json_extract(m.addressing,'$.author_kind')='human' "
+            "AND json_extract(m.addressing,'$.live')=1 "
+            "AND EXISTS (SELECT 1 FROM json_each(m.addressing,'$.targets') t WHERE json_extract(t.value,'$.bot_id')=?) "
+            "AND NOT EXISTS (SELECT 1 FROM human_attention_claims h WHERE h.bot_id=? AND h.message_id=m.discord_id) "
+            "AND (? IS NULL OR m.channel_id=?) AND (? IS NULL OR m.seq<=?) ORDER BY m.seq DESC",
+            (bot["id"], bot["id"], bot["id"], channel_id, channel_id, through, through),
+        )
+        return [
+            row
+            for row in rows
+            if self.channel_allowed(bot, row["channel_id"])
+            and (bot["role"] != "hortator" or row["author_id"] == OWNER_ID)
+        ]
+
+    def claim_attention(self, bot, channel_id, turn_id, *, through=None):
+        pending = self.attention(bot, channel_id, through)
+        for row in pending:
+            self.store.execute(
+                "INSERT OR IGNORE INTO human_attention_claims VALUES(?,?,?,?)",
+                (bot["id"], row["discord_id"], turn_id, time.time()),
+            )
+        if not pending:
+            return None
+        row = pending[0]
+        target = next(t for t in json.loads(row["addressing"])["targets"] if t.get("bot_id") == bot["id"])
+        activation = {
+            "kind": "human_reply" if "reply" in target["via"] else "human_mention",
+            "message_id": row["discord_id"],
+            "channel_id": channel_id,
+            "author_id": row["author_id"],
+            "cooldown_bypassed": True,
+        }
+        self.store.emit(
+            "activation.human_directed",
+            {**activation, "coalesced_messages": len(pending)},
+            bot_id=bot["id"],
+            turn_id=turn_id,
+        )
+        return activation
 
     def budget_error(self, bot):
         now = time.time()
@@ -185,31 +237,44 @@ class Engine:
         if not settings["enabled"]:
             return
         now = time.time()
-        for bot in self.store.list("bots"):
+        bots = self.store.list("bots")
+        pending = {bot["id"]: self.attention(bot) for bot in bots if self.available(bot)}
+        # A human's intended recipient gets a free scheduler slot before routine chatter.
+        for bot in sorted(bots, key=lambda b: not bool(pending.get(b["id"]))):
+            attention = pending.get(bot["id"], [])
+            if attention and bot["id"] in self.tasks and bot["id"] in self.delivery_waiting:
+                self.human_superseded.add(self.delivery_waiting[bot["id"]])
+                self.tasks[bot["id"]].cancel()
+                continue
             if bot["id"] in self.tasks or len(self.tasks) >= settings["max_concurrent_turns"]:
                 continue
             if not self.available(bot):
                 continue
             state = self.store.runtime(bot["id"])
-            if state["gateway_status"] != "online" or state["next_at"] > now:
+            if (
+                state["gateway_status"] != "online"
+                or state["retry_until"] > now
+                or (state["next_at"] > now and not attention)
+            ):
                 continue
             profile, provider = self.configuration(bot)
             health = self.store.health(provider["id"])
             if health["circuit_until"] > now:
                 continue
-            channel_id = self.pick_channel(bot)
+            channel_id = attention[0]["channel_id"] if attention else self.pick_channel(bot)
             if not channel_id:
                 continue
             error = self.budget_error(bot)
             if error:
                 self.store.execute(
-                    "UPDATE bot_runtime SET next_at=?,error=? WHERE bot_id=?", (now + 60, error, bot["id"])
+                    "UPDATE bot_runtime SET next_at=?,retry_until=?,error=? WHERE bot_id=?",
+                    (now + 60, now + 60, error, bot["id"]),
                 )
                 self.store.emit(
                     "activation.budget_blocked", {"error": error}, bot_id=bot["id"], level="warning"
                 )
                 continue
-            self.launch(bot, channel_id)
+            self.launch(bot, channel_id, human_directed=bool(attention))
 
     async def loop(self):
         while not self.closed:
@@ -221,7 +286,7 @@ class Engine:
                 self.store.emit("runtime.scheduler_error", {"error": str(exc)}, level="error")
             await asyncio.sleep(0.5)
 
-    def launch(self, bot, channel_id, *, compact_only=False):
+    def launch(self, bot, channel_id, *, compact_only=False, human_directed=False):
         if bot["id"] in self.tasks:
             raise ControlError("Bot already has an active turn", 409)
         if not self.available(bot, manual=compact_only):
@@ -230,6 +295,9 @@ class Engine:
             raise ControlError("Channel is outside this bot's configured scope")
         turn_id = uid("turn_")
         profile, provider = self.configuration(bot)
+        activation = self.claim_attention(bot, channel_id, turn_id) if human_directed else None
+        if activation:
+            bot = {**bot, "activation": activation}
         self.store.execute(
             "INSERT INTO turns(id,bot_id,channel_id,profile_id,provider_id,model,started_at,status,trigger,revision) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (
@@ -243,6 +311,8 @@ class Engine:
                 "running",
                 "manual_compaction"
                 if compact_only
+                else activation["kind"]
+                if activation
                 else "owner_message"
                 if bot["role"] == "hortator"
                 else "timer",
@@ -310,6 +380,12 @@ class Engine:
             if compact_only:
                 status, decision = "completed", "compacted"
                 return
+            activation = self.claim_attention(bot, channel_id, turn_id, through=through) or bot.get(
+                "activation"
+            )
+            if activation:
+                bot = {**bot, "activation": activation}
+                self.store.execute("UPDATE turns SET trigger=? WHERE id=?", (activation["kind"], turn_id))
             extras = []
             round_index, round_limit = 0, bot["max_tool_rounds"]
             calls_limit = bot["max_calls_per_round"]
@@ -318,7 +394,7 @@ class Engine:
             task_extension_used = False
             task_plugin = None
             task_seconds = None
-            reply_to, artifact_ids = None, []
+            reply_to, artifact_ids = activation["message_id"] if activation else None, []
             reply_repairs = 0
 
             async def budgeted(awaitable):
@@ -614,7 +690,7 @@ class Engine:
                                     )
                                 else:
                                     reply_to, artifact_ids = (
-                                        args.get("reply_to") or None,
+                                        args.get("reply_to", reply_to) or None,
                                         args["artifact_ids"],
                                     )
                                     result_value = {
@@ -715,8 +791,15 @@ class Engine:
                     (through, time.time(), bot["id"], channel_id),
                 )
                 self.store.execute("UPDATE bot_runtime SET error=NULL WHERE bot_id=?", (bot["id"],))
+        except TurnSuperseded:
+            status, error = "cancelled", "New human-directed message superseded an unsent draft"
         except asyncio.CancelledError:
-            status, error = "cancelled", "Stopped by operator, configuration change, or shutdown"
+            status, error = (
+                "cancelled",
+                "New human-directed message superseded a cooldown wait"
+                if turn_id in self.human_superseded
+                else "Stopped by operator, configuration change, or shutdown",
+            )
         except Exception as exc:
             status, error = "failed", self.vault.redact(f"{type(exc).__name__}: {exc}")[:3000]
             retry_delay = getattr(exc, "retry_after", 0)
@@ -729,6 +812,7 @@ class Engine:
                 level="error",
             )
         finally:
+            self.human_superseded.discard(turn_id)
             if typing_task:
                 typing_task.cancel()
                 await asyncio.gather(typing_task, return_exceptions=True)
@@ -740,8 +824,12 @@ class Engine:
             current = self.store.get("bots", bot["id"])
             interval = current["interval_seconds"] if current else bot["interval_seconds"]
             self.store.execute(
-                "UPDATE bot_runtime SET next_at=? WHERE bot_id=?",
-                (time.time() + max(interval, retry_delay), bot["id"]),
+                "UPDATE bot_runtime SET next_at=?,retry_until=? WHERE bot_id=?",
+                (
+                    time.time() + max(interval, retry_delay),
+                    time.time() + retry_delay if retry_delay else 0,
+                    bot["id"],
+                ),
             )
             self.store.emit(
                 "turn.ended",
@@ -812,16 +900,40 @@ class Engine:
             turn_id=context.turn_id,
         )
         try:
+            if self.attention(bot, context.channel_id):
+                raise TurnSuperseded("New directed human input is waiting; regenerate from current context")
+            priority = self.store.one(
+                "SELECT 1 FROM human_attention_claims WHERE bot_id=? AND turn_id=? LIMIT 1",
+                (bot["id"], context.turn_id),
+            )
+            # A personal cooldown must never hold the channel send lock. Another
+            # bot may be responding to a human while this draft waits its cadence.
+            wait = (
+                0
+                if priority
+                else self.store.runtime(bot["id"])["last_sent"] + bot["cooldown_seconds"] - time.time()
+            )
+            if wait > 0:
+                self.delivery_waiting[bot["id"]] = context.turn_id
+                self.store.emit(
+                    "delivery.cooldown",
+                    {"outbox_id": outbox_id, "wait_seconds": wait, "scope": "bot"},
+                    bot_id=bot["id"],
+                    turn_id=context.turn_id,
+                )
+                try:
+                    remaining = (
+                        max(0, draft_deadline - asyncio.get_running_loop().time())
+                        if draft_deadline is not None
+                        else wait
+                    )
+                    await asyncio.sleep(min(wait, remaining))
+                finally:
+                    self.delivery_waiting.pop(bot["id"], None)
             async with self.room_locks[context.channel_id]:
-                state = self.store.runtime(bot["id"])
                 room = self.room_for(bot, context.channel_id)
                 gap = room["send_gap_seconds"] if room else 1.5
-                wait = (
-                    max(
-                        state["last_sent"] + bot["cooldown_seconds"], self.room_last[context.channel_id] + gap
-                    )
-                    - time.time()
-                )
+                wait = self.room_last[context.channel_id] + gap - time.time()
                 if wait > 0:
                     self.store.emit(
                         "delivery.cooldown",
@@ -838,6 +950,10 @@ class Engine:
                 # Stop before dispatch, but never cancel an in-flight Discord send
                 # solely because the drafting deadline passed: acceptance may be uncertain.
                 check_deadline()
+                if self.attention(bot, context.channel_id):
+                    raise TurnSuperseded(
+                        "New directed human input is waiting; regenerate from current context"
+                    )
                 if not self.valid(bot, profile, provider) or not self.channel_allowed(
                     bot, context.channel_id
                 ):
@@ -882,7 +998,7 @@ class Engine:
                 "unknown"
                 if uncertain
                 else "suppressed"
-                if isinstance(exc, asyncio.CancelledError)
+                if isinstance(exc, (asyncio.CancelledError, TurnSuperseded))
                 else "failed"
             )
             if uncertain:

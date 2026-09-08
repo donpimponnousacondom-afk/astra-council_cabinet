@@ -124,6 +124,31 @@ async def test_cancelled_stream_retains_partial_reasoning(kernel):
     assert "unfinished" not in request["response"]
 
 
+def test_restart_marks_checkpointed_diagnostics_interrupted_without_losing_evidence(kernel):
+    for request_id, status, ended in (
+        ("interrupted-fixture", "running", None),
+        ("finished-fixture", "completed", 2),
+    ):
+        kernel.store.execute(
+            "INSERT INTO requests(id,turn_id,bot_id,provider_id,profile_id,model,purpose,started_at,ended_at,status,body,context) "
+            "VALUES(?,'turn-fixture','ada','openrouter','balanced','fixture','generation',1,?,?, '{}','{}')",
+            (request_id, ended, status),
+        )
+        kernel.store.execute(
+            "INSERT INTO request_diagnostics VALUES(?,?,1)",
+            (
+                request_id,
+                json.dumps(
+                    {"capture": "recorded", "status": status, "reasoning_content": "Last stored packet"}
+                ),
+            ),
+        )
+    kernel.store.recover()
+    assert read_diagnostics(kernel.store, "interrupted-fixture")["status"] == "interrupted"
+    assert read_diagnostics(kernel.store, "interrupted-fixture")["reasoning_content"] == "Last stored packet"
+    assert read_diagnostics(kernel.store, "finished-fixture")["status"] == "completed"
+
+
 async def test_replay_is_private_and_console_P_can_page_reasoning_without_secret_leak(kernel):
     ready(kernel, enabled_plugins=["memory"])
     calls = 0

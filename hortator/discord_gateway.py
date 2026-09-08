@@ -459,6 +459,9 @@ class DiscordManager:
             ),
             None,
         )
+        from .addressing import capture
+
+        addressing = await capture(self.store, self.vault, message, historical=historical)
         attachments = []
         previous = self.store.one("SELECT attachments FROM messages WHERE discord_id=?", (str(message.id),))
         prior = {a["id"]: a for a in json.loads(previous["attachments"])} if previous else {}
@@ -509,11 +512,18 @@ class DiscordManager:
             if message.reference and message.reference.message_id
             else None,
             attachments=attachments,
+            addressing=addressing,
         )
         if previous:
             self.store.execute(
                 "UPDATE messages SET attachments=? WHERE discord_id=?",
                 (dumps(self.vault.redact(attachments)), str(message.id)),
+            )
+            # Enrich old records from authenticated history, without making history
+            # a live priority trigger or replacing an already recorded live event.
+            self.store.execute(
+                "UPDATE messages SET addressing=? WHERE discord_id=? AND addressing='{}'",
+                (dumps(self.vault.redact({**addressing, "live": False})), str(message.id)),
             )
         self.store.context(bot_id, str(message.channel.id))
         self.store.runtime(bot_id)
