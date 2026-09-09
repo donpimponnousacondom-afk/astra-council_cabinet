@@ -272,7 +272,10 @@ class Engine:
                     (now + 60, now + 60, error, bot["id"]),
                 )
                 self.store.emit(
-                    "activation.budget_blocked", {"error": error}, bot_id=bot["id"], level="warning"
+                    "activation.budget_blocked",
+                    {"error": error, "reason": "No turn started; budget will be checked again in 60 seconds"},
+                    bot_id=bot["id"],
+                    level="warning",
                 )
                 continue
             self.launch(bot, channel_id, human_directed=bool(attention))
@@ -284,7 +287,11 @@ class Engine:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self.store.emit("runtime.scheduler_error", {"error": error_text(exc)}, level="error")
+                self.store.emit(
+                    "runtime.scheduler_error",
+                    {"error": error_text(exc), "reason": "Scheduler tick failed; next check in 0.5 seconds"},
+                    level="error",
+                )
             await asyncio.sleep(0.5)
 
     def launch(self, bot, channel_id, *, compact_only=False, human_directed=False):
@@ -358,7 +365,11 @@ class Engine:
             # Presence is best effort: a failed indicator must not fail model work or delivery.
             self.store.emit(
                 "discord.typing_failed",
-                {"channel_id": channel_id, "error": self.vault.redact(str(exc))},
+                {
+                    "channel_id": channel_id,
+                    "error": error_text(exc),
+                    "reason": "Typing task stopped; the bot turn continues without its indicator",
+                },
                 bot_id=bot["id"],
                 turn_id=turn_id,
                 level="warning",
@@ -829,9 +840,16 @@ class Engine:
             self.store.execute("UPDATE bot_runtime SET error=? WHERE bot_id=?", (error, bot["id"]))
             self.store.emit(
                 "turn.failed",
-                {"error": error, "provider_id": provider["id"], "profile_id": profile["id"]},
+                {
+                    "error": error,
+                    "provider_id": provider["id"],
+                    "profile_id": profile["id"],
+                    "channel_id": channel_id,
+                    "error_origin": getattr(exc, "details", {}).get("origin"),
+                },
                 bot_id=bot["id"],
                 turn_id=turn_id,
+                request_id=getattr(exc, "request_id", None),
                 level="error",
             )
         finally:
@@ -1084,11 +1102,21 @@ class Engine:
                 )
             self.store.execute(
                 "UPDATE outbox SET status=?,error=? WHERE id=?",
-                (status, self.vault.redact(str(exc) or "Cancelled"), outbox_id),
+                (status, self.vault.redact(error_text(exc)), outbox_id),
             )
             self.store.emit(
                 "delivery." + status,
-                {"outbox_id": outbox_id, "error": str(exc) or "Cancelled", "content": content},
+                {
+                    "outbox_id": outbox_id,
+                    "channel_id": context.channel_id,
+                    "error": error_text(exc),
+                    "content": content,
+                    "reason": (
+                        "Discord acceptance is unknown; automatic resend withheld to avoid duplicates"
+                        if uncertain
+                        else "Message was not delivered"
+                    ),
+                },
                 bot_id=bot["id"],
                 turn_id=context.turn_id,
                 level="warning" if status == "suppressed" else "error",

@@ -2,6 +2,16 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
 
+## Warning/error explanations and local deadlines (2026-09-09)
+
+Read-only inspection of Dirac's incidents #15901–15905 and the preceding attempt showed HTTP 200 SSE compactions stopped at 120.024 and 120.023 seconds. The latter inspected response retained 5,516 frames, 53,156 private reasoning characters and 10,432 visible candidate characters. The provider setting was then 120 seconds; the operator subsequently changed it to 600. No diagnostic request, configuration change or memory edit was made by this task. Review covered application WARNING/ERROR emit sites and the previous 24 hours of retained incidents.
+
+- `HORTATOR_REQUIRE_SANDBOX=1 uv run pytest -q`: **782 passed, 1 skipped**, two existing TestClient dependency deprecation warnings, 147.88 seconds. The skip is the opt-in public package-download test; real namespace/shell tests were required and passed. Full output: `/tmp/hortator-logging-full-tests.log`.
+- The earlier focused provider/parser/discovery/console/compaction/typing run passed **132 tests**. Thirteen new regression cases exercise deadlines before headers and during SSE/JSON, retained private partial reasoning, unchanged provider health, real HTTP timeout phases versus local pool capacity, owner cancellation, compaction checkpoint retention/correlation, redacted callback failures, typing retry/throttling, separate channel incidents and visible runner/cleanup explanations.
+- Ruff lint, format checks and `git diff --check` passed. No dashboard source or dependency changes are needed; the final dashboard build still follows the source commit so its version matches the restarted server.
+
+Deployment uses the existing attached Screen session and a complete stopped-runtime backup. The external `logs/logging-improvements-deployment.json` receipt records the final startup/build identity, health, backup verification and configuration/credential comparison. Automated failures above use synthetic fixtures; no live provider failure or Discord message is deliberately generated to exercise the new logs. Existing runtime traffic resumes under the operator's saved settings. No push is authorized.
+
 ## Retained summary limits independent of reasoning (2026-09-09)
 
 - Continued the user's clean `feat/compat_debug` from merged `0d89634` (PR21). The owner explicitly authorized omitting compaction's combined reasoning/output cap and removing the fixed 32,000 ceiling. Existing `summary_tokens` values now cap only retained text; saved profile JSON, reasoning settings, generation caps and activation/budget settings are preserved. No database migration, context reset, alternate compactor model or background batch API was introduced.

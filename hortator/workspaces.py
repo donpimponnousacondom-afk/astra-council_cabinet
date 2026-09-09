@@ -1082,11 +1082,12 @@ class Workspaces:
             old = self.directory / row["id"] / row["generation"]
             try:
                 shutil.rmtree(old)
-            except OSError:
+            except OSError as error:
                 self.store.emit(
                     "workspace.cleanup_pending",
                     {
                         "task": row["task"],
+                        "error": f"{type(error).__name__}: {error}",
                         "notice": "Workspace commit succeeded; obsolete generation cleanup will retry on the next start/job",
                     },
                     bot_id=row["bot_id"],

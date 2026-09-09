@@ -195,6 +195,7 @@ class ShellRunner:
             "stdout_bytes",
             "stderr_bytes",
             "workspace_committed",
+            "error",
         )
         self.workspaces.store.emit(
             kind,
@@ -945,7 +946,7 @@ class ShellRunner:
             metadata.update(status="cancelled", error="Job cancelled; sandbox workspace changes discarded")
             raise
         except Exception as error:
-            metadata.update(status="failed", error=str(error)[:1200])
+            metadata.update(status="failed", error=error_text(error)[:1200])
         finally:
             self.workspaces.release_job(prepared["workspace_id"])
             metadata.update(finished_at=time.time(), elapsed_seconds=round(time.monotonic() - started, 3))

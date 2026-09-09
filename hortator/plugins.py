@@ -467,7 +467,11 @@ class Registry:
         except asyncio.CancelledError:
             self.store.emit(
                 "tool.cancelled",
-                {"name": name, "call_id": call_id},
+                {
+                    "name": name,
+                    "call_id": call_id,
+                    "reason": "Tool interrupted by its owning turn or runtime; inspect retained results before retrying",
+                },
                 bot_id=context.bot["id"],
                 turn_id=context.turn_id,
                 level="warning",
