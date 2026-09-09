@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test("web search engine settings and write-only Brave credential persist", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy/");
   await page
     .getByLabel("Dashboard password")
     .fill("test-only-password-never-use-in-production");

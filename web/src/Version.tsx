@@ -22,7 +22,10 @@ export function Version({ version }: { version?: RuntimeVersion }) {
     dashboardBuild.commit &&
     version.commit !== dashboardBuild.commit;
   return (
-    <section className="build-banner" aria-label="Running version">
+    <section
+      className={`build-banner${mismatch ? " has-mismatch" : ""}`}
+      aria-label="Running version"
+    >
       <div className="build-identity">
         <strong>Running server</strong>
         <code>{version?.short_commit || "Commit unavailable"}</code>
@@ -35,7 +38,7 @@ export function Version({ version }: { version?: RuntimeVersion }) {
           <span className="build-state">Uncommitted changes at startup</span>
         )}
       </div>
-      <p className="build-title">
+      <p className="build-title" title={version?.commit_title || undefined}>
         {version?.commit_title ||
           "Commit metadata was not supplied by this server."}
       </p>
@@ -47,56 +50,80 @@ export function Version({ version }: { version?: RuntimeVersion }) {
       )}
       <details className="build-details">
         <summary>Build details</summary>
-        <dl>
-          <div>
-            <dt>Server started</dt>
-            <dd>{dateLabel(version?.started_at)}</dd>
-          </div>
-          <div>
-            <dt>Server commit</dt>
-            <dd>{version?.commit || "Unavailable"}</dd>
-          </div>
-          <div>
-            <dt>Server branch</dt>
-            <dd>{version?.branch || "Unavailable / detached"}</dd>
-          </div>
-          <div>
-            <dt>Package version</dt>
-            <dd>{version?.package_version || "Unavailable"}</dd>
-          </div>
-          <div>
-            <dt>Dashboard built</dt>
-            <dd>{dateLabel(dashboardBuild.built_at)}</dd>
-          </div>
-          <div>
-            <dt>Dashboard commit</dt>
-            <dd>{dashboardBuild.commit || "Unavailable"}</dd>
-          </div>
-          <div>
-            <dt>Dashboard commit date</dt>
-            <dd>{dateLabel(dashboardBuild.committed_at)}</dd>
-          </div>
-          <div>
-            <dt>Dashboard commit title</dt>
-            <dd>{dashboardBuild.commit_title || "Unavailable"}</dd>
-          </div>
-          <div>
-            <dt>Dashboard source</dt>
-            <dd>
-              {dashboardBuild.dirty === null
-                ? "Unknown"
-                : dashboardBuild.dirty
-                  ? "Uncommitted changes at build time"
-                  : "Clean at build time"}
-            </dd>
-          </div>
-        </dl>
-        <p>
-          Dates use the council timezone with explicit UTC offsets. Server
-          identity is captured at startup; dashboard identity is embedded at
-          build time. Uncommitted builds can differ even when their commits
-          match.
-        </p>
+        <div className="build-details-content">
+          <dl>
+            <div>
+              <dt>Server started</dt>
+              <dd>{dateLabel(version?.started_at)}</dd>
+            </div>
+            <div>
+              <dt>Server commit</dt>
+              <dd>{version?.commit || "Unavailable"}</dd>
+            </div>
+            <div>
+              <dt>Server branch</dt>
+              <dd>{version?.branch || "Unavailable / detached"}</dd>
+            </div>
+            <div>
+              <dt>Server source</dt>
+              <dd>
+                {version?.dirty == null
+                  ? "Unknown"
+                  : version.dirty
+                    ? "Uncommitted changes at startup"
+                    : "Clean at startup"}
+              </dd>
+            </div>
+            <div>
+              <dt>Server provenance</dt>
+              <dd>{version?.provenance || "Unavailable"}</dd>
+            </div>
+            <div>
+              <dt>Package version</dt>
+              <dd>{version?.package_version || "Unavailable"}</dd>
+            </div>
+            <div>
+              <dt>Dashboard built</dt>
+              <dd>{dateLabel(dashboardBuild.built_at)}</dd>
+            </div>
+            <div>
+              <dt>Dashboard commit</dt>
+              <dd>{dashboardBuild.commit || "Unavailable"}</dd>
+            </div>
+            <div>
+              <dt>Dashboard commit date</dt>
+              <dd>{dateLabel(dashboardBuild.committed_at)}</dd>
+            </div>
+            <div>
+              <dt>Dashboard commit title</dt>
+              <dd>{dashboardBuild.commit_title || "Unavailable"}</dd>
+            </div>
+            <div>
+              <dt>Dashboard source</dt>
+              <dd>
+                {dashboardBuild.dirty === null
+                  ? "Unknown"
+                  : dashboardBuild.dirty
+                    ? "Uncommitted changes at build time"
+                    : "Clean at build time"}
+              </dd>
+            </div>
+            <div>
+              <dt>Dashboard branch</dt>
+              <dd>{dashboardBuild.branch || "Unavailable / detached"}</dd>
+            </div>
+            <div>
+              <dt>Dashboard provenance</dt>
+              <dd>{dashboardBuild.provenance || "Unavailable"}</dd>
+            </div>
+          </dl>
+          <p>
+            Dates use the council timezone with explicit UTC offsets. Server
+            identity is captured at startup; dashboard identity is embedded at
+            build time. Uncommitted builds can differ even when their commits
+            match.
+          </p>
+        </div>
       </details>
     </section>
   );

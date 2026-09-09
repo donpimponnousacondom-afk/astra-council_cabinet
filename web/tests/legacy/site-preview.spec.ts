@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test("published site runs local assets but cannot read dashboard cookies, DOM or APIs", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy/");
   await page
     .getByLabel("Dashboard password")
     .fill("test-only-password-never-use-in-production");

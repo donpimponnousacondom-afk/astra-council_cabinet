@@ -1,0 +1,510 @@
+/* Modern workbench editors. Legacy has its own frozen component and styles. */
+.dialog-dock {
+  position: fixed;
+  inset: 65px 0 23px auto;
+  z-index: 35;
+  width: min(1040px, 72vw);
+  min-width: 560px;
+  background: var(--panel, #252526);
+  border-left: 1px solid var(--border, #454545);
+  box-shadow: -5px 0 16px #0003;
+}
+.editor-pane .dialog-dock {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border: 0;
+  box-shadow: none;
+}
+.dialog-dock.is-maximized,
+.editor-pane .dialog-dock.is-maximized {
+  position: fixed;
+  inset: 0 0 23px;
+  width: auto;
+  height: auto;
+  z-index: 65;
+  border: 1px solid var(--border, #454545);
+}
+.dialog-dock .modal,
+.dialog-dock .modal.wide {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+  background: var(--panel, #252526);
+  color: var(--text, #d4d4d4);
+}
+.dialog-dock .modal-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border, #454545);
+  background: var(--bg, #1e1e1e);
+}
+.dialog-dock .modal-header > div:first-child {
+  min-width: 0;
+}
+.dialog-dock .modal-header h2 {
+  margin: 0;
+  font: 600 13px/1.5 var(--mono, Consolas, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+.dialog-dock .modal-header p {
+  margin: 3px 0 0;
+  color: var(--muted, #a0a0a0);
+  font: 11px/1.4 var(--mono, Consolas, monospace);
+  overflow-wrap: anywhere;
+}
+.dialog-dock .dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.dialog-dock .icon-button {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  padding: 4px;
+  border-radius: 2px;
+}
+.dialog-dock .editor-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.dialog-dock .modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  scroll-padding-top: 10px;
+}
+.dialog-dock .editor-tabs,
+.dialog-dock .editor-outline {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0;
+  padding: 0 5px;
+  min-height: 31px;
+  background: var(--bg, #1e1e1e);
+  border-bottom: 1px solid var(--border, #454545);
+}
+.dialog-dock .editor-tabs button,
+.dialog-dock .editor-outline button {
+  flex: 0 0 auto;
+  padding: 7px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted, #a0a0a0);
+  font: 11px/1.3 var(--mono, Consolas, monospace);
+  cursor: pointer;
+}
+.dialog-dock .editor-tabs button:hover,
+.dialog-dock .editor-outline button:hover {
+  background: #ffffff0a;
+  color: var(--text, #d4d4d4);
+}
+.dialog-dock .editor-tabs button.selected,
+.dialog-dock .editor-outline button.selected {
+  color: #fff;
+  background: var(--panel, #252526);
+  border-bottom-color: var(--accent, #007acc);
+}
+.dialog-dock .editor-section {
+  margin: 0 0 13px;
+  scroll-margin-top: 0;
+}
+.dialog-dock .editor-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.dialog-dock .editor-section-heading {
+  margin: 0 0 9px;
+  padding: 0 0 5px;
+  border-bottom: 1px solid #ffffff12;
+  color: #9cdcfe;
+  font: 600 11px/1.4 var(--mono, Consolas, monospace);
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+.dialog-dock .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 10px;
+  min-width: 0;
+}
+.dialog-dock .field-label {
+  color: var(--text, #d4d4d4);
+  font: 11px/1.35 var(--mono, Consolas, monospace);
+}
+.dialog-dock .field small,
+.dialog-dock .small-text {
+  color: var(--muted, #a0a0a0);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.dialog-dock .field input:not([type="checkbox"]),
+.dialog-dock .field select,
+.dialog-dock .field textarea {
+  width: 100%;
+  min-height: 28px;
+  padding: 5px 7px;
+  border: 1px solid var(--border, #454545);
+  border-radius: 2px;
+  background: var(--input, #3c3c3c);
+  color: var(--text, #d4d4d4);
+  font: 12px/1.4 var(--mono, Consolas, monospace);
+  box-sizing: border-box;
+}
+.dialog-dock .field input:disabled {
+  opacity: 0.7;
+}
+.dialog-dock .field input:focus,
+.dialog-dock .field textarea:focus,
+.dialog-dock .field select:focus {
+  outline: 1px solid var(--accent, #007acc);
+  outline-offset: -1px;
+}
+.dialog-dock .field textarea {
+  min-height: 76px;
+  resize: vertical;
+  tab-size: 2;
+}
+.dialog-dock .field .json-input {
+  font-size: 11.5px;
+  line-height: 1.5;
+  min-height: 132px;
+  background: var(--bg, #1e1e1e);
+}
+.dialog-dock .field input[type="color"] {
+  width: 64px;
+  height: 28px;
+  padding: 2px;
+}
+.dialog-dock .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+  margin: 0;
+}
+.dialog-dock .switch-stack {
+  display: flex;
+  gap: 7px 18px;
+  flex-wrap: wrap;
+  margin: 6px 0 10px;
+}
+.dialog-dock .switch-label {
+  min-height: 25px;
+  margin: 0;
+  gap: 7px;
+  font-size: 11px;
+}
+.dialog-dock .switch-track {
+  width: 26px;
+  height: 14px;
+  flex-shrink: 0;
+  border-color: var(--border, #454545);
+  background: var(--input, #3c3c3c);
+}
+.dialog-dock .switch-track::after {
+  width: 10px;
+  height: 10px;
+  top: 1px;
+  left: 1px;
+  background: #a0a0a0;
+}
+.dialog-dock .switch-label input:checked + .switch-track {
+  background: var(--accent, #007acc);
+  border-color: var(--accent, #007acc);
+}
+.dialog-dock .switch-label input:checked + .switch-track::after {
+  left: 1px;
+  background: #fff;
+  transform: translateX(12px);
+}
+.dialog-dock .check-list {
+  margin: 8px 0 12px;
+  padding: 0 8px 3px;
+  border: 1px solid var(--border, #454545);
+  border-radius: 2px;
+}
+.dialog-dock .check-list legend {
+  padding: 0 4px;
+  font: 11px/1.5 var(--mono, Consolas, monospace);
+}
+.dialog-dock .check-list > label {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 7px 2px;
+  margin: 0;
+  border-bottom: 1px solid #ffffff0b;
+}
+.dialog-dock .check-list > label:last-child {
+  border-bottom: 0;
+}
+.dialog-dock .check-list > label > input[type="checkbox"] {
+  display: block;
+  appearance: auto;
+  position: static;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  flex-shrink: 0;
+  margin: 1px 0 0;
+  accent-color: var(--accent, #007acc);
+  opacity: 1;
+}
+.dialog-dock .check-list > label > span:not(.badge) {
+  min-width: 0;
+}
+.dialog-dock .check-list strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 500;
+}
+.dialog-dock .check-list small {
+  display: block;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--muted, #a0a0a0);
+}
+.dialog-dock .check-list .badge {
+  align-self: start;
+  margin-top: 1px;
+  font-size: 9px;
+}
+.dialog-dock .notice {
+  align-items: flex-start;
+  margin: 8px 0 10px;
+  padding: 7px 9px;
+  border-radius: 1px;
+  border: 0;
+  border-left: 2px solid #569cd6;
+  background: #569cd60d;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.dialog-dock .notice > svg {
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.dialog-dock .notice.warning {
+  border-left-color: #d7ba7d;
+  background: #d7ba7d0d;
+}
+.dialog-dock .advanced {
+  margin: 8px 0;
+  padding: 0;
+  border-radius: 2px;
+  border: 1px solid var(--border, #454545);
+}
+.dialog-dock .advanced > summary {
+  padding: 7px 8px;
+  font: 11px/1.4 var(--mono, Consolas, monospace);
+  cursor: pointer;
+}
+.dialog-dock .advanced[open] > summary {
+  margin-bottom: 7px;
+  border-bottom: 1px solid var(--border, #454545);
+}
+.dialog-dock .advanced > :not(summary) {
+  margin-left: 9px;
+  margin-right: 9px;
+}
+.dialog-dock .full-json {
+  margin-bottom: 2px;
+}
+.dialog-dock .code-block {
+  margin: 7px 0;
+  border-radius: 2px;
+}
+.dialog-dock .code-block summary {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.dialog-dock .code-block pre {
+  padding: 8px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.dialog-dock .credential-box {
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid var(--border, #454545);
+  border-radius: 2px;
+  background: #00000013;
+}
+.dialog-dock .credential-box > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+.dialog-dock .credential-box h3 {
+  font: 12px/1.4 var(--mono, Consolas, monospace);
+  margin: 0;
+}
+.dialog-dock .credential-box .badge {
+  margin-left: auto;
+}
+.dialog-dock .credential-box .field {
+  margin-bottom: 8px;
+}
+.dialog-dock .credential-entry > .field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.dialog-dock .credential-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dialog-dock .button {
+  min-height: 27px;
+  padding: 5px 9px;
+  gap: 6px;
+  border-radius: 2px;
+  font-size: 11px;
+}
+.dialog-dock .modal-footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  min-height: 42px;
+  border-top: 1px solid var(--border, #454545);
+  background: var(--bg, #1e1e1e);
+}
+.dialog-dock .modal-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  min-width: 0;
+}
+.dialog-dock .editor-draft-state {
+  color: var(--muted, #a0a0a0);
+  font: 10px/1.4 var(--mono, Consolas, monospace);
+  white-space: nowrap;
+}
+.dialog-dock .editor-draft-state.has-changes {
+  color: #d7ba7d;
+}
+.dialog-dock .editor-shortcut {
+  color: var(--muted, #a0a0a0);
+  font: 10px/1.3 var(--mono, Consolas, monospace);
+  white-space: nowrap;
+}
+.dialog-dock .editor-shortcut kbd {
+  padding: 1px 3px;
+  border: 1px solid var(--border, #454545);
+  border-radius: 2px;
+  background: #ffffff05;
+}
+.dialog-dock .form-error {
+  margin: 0 0 10px;
+  padding: 8px;
+  border-radius: 2px;
+  font-size: 12px;
+}
+.dialog-dock .json-draft-error {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+}
+.dialog-dock .json-draft-error .text-button {
+  font-size: 11px;
+}
+.dialog-dock .reasoning-editor,
+.dialog-dock .footer-editor {
+  padding: 10px;
+  gap: 8px;
+  margin: 8px 0;
+  border-radius: 2px;
+}
+.dialog-dock .reasoning-editor h3,
+.dialog-dock .footer-editor h3 {
+  margin: 0;
+  font-size: 12px;
+}
+.dialog-dock .reasoning-editor p,
+.dialog-dock .footer-editor p {
+  font-size: 11px;
+  line-height: 1.45;
+}
+.dialog-dock .discord-guide {
+  padding: 10px;
+  margin: 0 0 12px;
+  border-radius: 2px;
+}
+.dialog-dock .discord-guide h3 {
+  font-size: 12px;
+  margin: 5px 0;
+}
+.dialog-dock .discord-guide li {
+  margin: 5px 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.dialog-dock .invite-box {
+  padding: 9px;
+  margin: 9px 0;
+  border-radius: 2px;
+}
+.dialog-dock .locked-identity {
+  padding: 8px;
+  margin: 0 0 10px;
+  font-size: 11px;
+}
+.dialog-dock .readiness {
+  margin: 9px 0;
+  padding: 8px;
+}
+.dialog-dock .readiness p {
+  margin: 5px 0;
+  font-size: 11px;
+}

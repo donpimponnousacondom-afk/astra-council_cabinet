@@ -6,6 +6,8 @@ An observable council of independent Discord applications. Each bot has its own 
 
 One Python process runs the Discord clients, scheduler, provider HTTP clients, FastAPI control service, and production React dashboard. Vite/Node is needed to build the UI or run its development server, not to run the production council.
 
+The root dashboard is a dense desktop workbench with Dark+ styling, sortable compact lists and docked/maximizable editors. **Ctrl-K** opens pages or records, **Ctrl-B** toggles navigation, **Ctrl-S** saves the active configuration editor, and **/** focuses the inventory filter. The previous dashboard remains at **`/legacy/`** as a frozen fallback while the owner evaluates workflow parity. Both use the same API and authentication; no settings or credentials are migrated. New features belong only to the workbench. See the [dashboard boundary and parity contract](docs/DASHBOARD.md) and [dashboard controls](docs/OPERATIONS.md#dashboard-workbench).
+
 ## Start locally
 
 Requires **Python 3.14** and [uv](https://docs.astral.sh/uv/); Node 22+ is used for the dashboard build. Run commands from the repository root, `/home/codexy/codex/astra-council_cabinet`:

@@ -8,19 +8,8 @@ import {
   useState,
 } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import {
-  Check,
-  ChevronDown,
-  Copy,
-  Info,
-  Maximize2,
-  Minimize2,
-  X,
-} from "lucide-react";
+import { Check, ChevronDown, Copy, Info, X } from "lucide-react";
 import type { RecordData } from "./api";
-import "./Editor.css";
-
-export const jsonValidityEvent = "hortator:json-validity";
 
 export function Logo({ small = false }: { small?: boolean }) {
   return (
@@ -192,18 +181,12 @@ export function JsonInput({
   const accepted = useRef(JSON.stringify(value || {}));
   useEffect(() => {
     const serialized = JSON.stringify(value || {});
-    if (
-      serialized !== accepted.current &&
-      !input.current?.validity.customError
-    ) {
+    if (serialized !== accepted.current) {
       accepted.current = serialized;
       setRaw(JSON.stringify(value || {}, null, 2));
       setError("");
       input.current?.setCustomValidity("");
       onValidityChange?.(true);
-      input.current?.dispatchEvent(
-        new Event(jsonValidityEvent, { bubbles: true }),
-      );
     }
   }, [value, onValidityChange]);
   return (
@@ -221,42 +204,19 @@ export function JsonInput({
             if (!parsed || Array.isArray(parsed) || typeof parsed !== "object")
               throw new Error("Use a JSON object");
             setError("");
-            accepted.current = JSON.stringify(parsed);
-            e.target.setCustomValidity("");
             onValidityChange?.(true);
+            accepted.current = JSON.stringify(parsed);
             onChange(parsed);
+            e.target.setCustomValidity("");
           } catch (err) {
             const message = err instanceof Error ? err.message : "Invalid JSON";
             setError(message);
-            e.target.setCustomValidity(message);
             onValidityChange?.(false);
+            e.target.setCustomValidity(message);
           }
-          e.target.dispatchEvent(
-            new Event(jsonValidityEvent, { bubbles: true }),
-          );
         }}
       />
-      {error && (
-        <span className="json-draft-error">
-          <span className="field-error">{error}</span>
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => {
-              accepted.current = JSON.stringify(value || {});
-              setRaw(JSON.stringify(value || {}, null, 2));
-              setError("");
-              input.current?.setCustomValidity("");
-              onValidityChange?.(true);
-              input.current?.dispatchEvent(
-                new Event(jsonValidityEvent, { bubbles: true }),
-              );
-            }}
-          >
-            Reset to current form values
-          </button>
-        </span>
-      )}
+      {error && <span className="field-error">{error}</span>}
     </Field>
   );
 }
@@ -311,60 +271,65 @@ export function Modal({
 }) {
   const id = useId();
   const dialog = useRef<HTMLDivElement>(null);
-  const [maximized, setMaximized] = useState(false);
   const closeRef = useRef(close);
   closeRef.current = close;
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     const el = dialog.current;
     el?.focus();
+    const bodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && el?.contains(document.activeElement)) {
-        e.preventDefault();
-        closeRef.current();
+      if (e.key === "Escape") closeRef.current();
+      if (e.key === "Tab" && el) {
+        const items = Array.from(
+          el.querySelectorAll<HTMLElement>(
+            'button, input, select, textarea, a[href], summary, [tabindex="0"]',
+          ),
+        ).filter(
+          (x) => !x.hasAttribute("disabled") && x.getClientRects().length,
+        );
+        const first = items[0],
+          last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
       }
     };
     document.addEventListener("keydown", handler);
     return () => {
+      document.body.style.overflow = bodyOverflow;
       document.removeEventListener("keydown", handler);
-      if (prev?.isConnected) prev.focus();
+      prev?.focus();
     };
   }, []);
   return (
-    <div className={`dialog-dock ${maximized ? "is-maximized" : ""}`}>
+    <div className="modal-shade">
       <div
         className={`modal ${wide ? "wide" : ""}`}
         role="dialog"
-        aria-modal="false"
+        aria-modal="true"
         aria-labelledby={id}
         tabIndex={-1}
         ref={dialog}
       >
         <header className="modal-header">
           <div>
+            <span className="eyebrow">COUNCIL CONFIGURATION</span>
             <h2 id={id}>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <div className="dialog-actions">
-            <button
-              type="button"
-              className="icon-button"
-              onClick={() => setMaximized((value) => !value)}
-              aria-label={maximized ? "Restore editor size" : "Maximize editor"}
-              title={maximized ? "Restore editor size" : "Maximize editor"}
-            >
-              {maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              onClick={close}
-              aria-label="Close dialog"
-              title="Close editor (Escape)"
-            >
-              <X size={17} />
-            </button>
-          </div>
+          <button
+            className="icon-button"
+            onClick={close}
+            aria-label="Close dialog"
+          >
+            <X size={20} />
+          </button>
         </header>
         {children}
       </div>

@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test("retained summary budget accepts 65536 and distinguishes provider caps", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy/");
   await page
     .getByLabel("Dashboard password")
     .fill("test-only-password-never-use-in-production");

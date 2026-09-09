@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test("keyless workspace and reading controls persist with private inspection", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy/");
   await page
     .getByLabel("Dashboard password")
     .fill("test-only-password-never-use-in-production");
@@ -128,7 +128,7 @@ test("keyless workspace and reading controls persist with private inspection", a
 test("web fetch distinguishes download bytes, returned characters, storage and retention", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy/");
   await page
     .getByLabel("Dashboard password")
     .fill("test-only-password-never-use-in-production");

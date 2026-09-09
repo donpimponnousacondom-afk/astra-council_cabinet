@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { dateLabel, setCouncilTimezone } from "../src/api";
+import { dateLabel, setCouncilTimezone } from "../../src/legacy/api";
 
 test("intentional silence is a persistent per-bot capability with a usable checkbox", async ({
   page,
@@ -221,7 +221,7 @@ test("trajectory explains missing private capture for the selected request", asy
 });
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/legacy/");
   await page
     .getByLabel("Dashboard password")
     .fill("test-only-password-never-use-in-production");

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { dateLabel, setCouncilTimezone } from "../src/api";
+import { dateLabel, setCouncilTimezone } from "../../src/legacy/api";
 
 test("council dates preserve instants across midnight and seasonal offsets", () => {
   setCouncilTimezone("Europe/Madrid");
@@ -26,7 +26,7 @@ test.describe("a browser in another timezone", () => {
       status.version.committed_at = "2026-09-08T23:46:00Z";
       await route.fulfill({ json: status });
     });
-    await page.goto("/");
+    await page.goto("/legacy/");
     await page
       .getByLabel("Dashboard password")
       .fill("test-only-password-never-use-in-production");
