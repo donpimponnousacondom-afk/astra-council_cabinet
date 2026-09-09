@@ -5,7 +5,9 @@ import hashlib
 import io
 import json
 import math
+import sys
 import time
+import traceback
 from types import SimpleNamespace
 
 import discord
@@ -103,7 +105,15 @@ class CouncilClient(discord.Client):
             await self.manager.receive(self.bot_id, message)
         except Exception as exc:
             self.manager.store.emit(
-                "discord.receive_failed", {"error": str(exc)}, bot_id=self.bot_id, level="error"
+                "discord.receive_failed",
+                {
+                    "error": error_text(exc),
+                    "channel_id": str(message.channel.id),
+                    "message_id": str(message.id),
+                    "traceback": "".join(traceback.format_exception(exc)),
+                },
+                bot_id=self.bot_id,
+                level="error",
             )
 
     async def on_raw_message_delete(self, payload):
@@ -170,8 +180,16 @@ class CouncilClient(discord.Client):
         )
 
     async def on_error(self, event_method, *args, **kwargs):
+        error = sys.exception()
         self.manager.store.emit(
-            "discord.handler_error", {"handler": event_method}, bot_id=self.bot_id, level="error"
+            "discord.handler_error",
+            {
+                "handler": event_method,
+                "error": error_text(error) if error else "Discord callback failed without exception details",
+                "traceback": "".join(traceback.format_exception(error)) if error else None,
+            },
+            bot_id=self.bot_id,
+            level="error",
         )
 
     async def close(self):
@@ -338,7 +356,11 @@ class DiscordManager:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self.store.emit("discord.supervisor_error", {"error": error_text(exc)}, level="error")
+                self.store.emit(
+                    "discord.supervisor_error",
+                    {"error": error_text(exc), "reason": "Supervisor tick failed; next check in 2 seconds"},
+                    level="error",
+                )
             await asyncio.sleep(2)
 
     def scope(self, bot, message):
@@ -753,7 +775,7 @@ class DiscordManager:
                     {
                         "channel_id": channel_id,
                         "stage": stage,
-                        "error": f"Channel {channel_id} ({stage}): {exc}",
+                        "error": f"Channel {channel_id} ({stage}): {error_text(exc)}",
                     },
                     bot_id=bot["id"],
                     level="warning",
@@ -946,7 +968,7 @@ class DiscordManager:
             error = self.vault.redact(str(exc)) or "Invalid command arguments. Use !help."
             self.store.emit(
                 "discord.command_failed",
-                {"actor": actor.label, "error": error},
+                {"actor": actor.label, "command": name, "channel_id": str(channel.id), "error": error},
                 bot_id=bot["id"],
                 level="warning",
             )
@@ -1004,7 +1026,8 @@ class DiscordManager:
                 try:
                     # Renew before Discord's ten-second expiry. A separate task prevents a slow
                     # presence request from delaying context, tools, generation, or delivery.
-                    async with asyncio.timeout(TYPING_TIMEOUT_SECONDS):
+                    deadline = asyncio.timeout(TYPING_TIMEOUT_SECONDS)
+                    async with deadline:
                         channel = client.get_channel(int(channel_id)) or await client.fetch_channel(
                             int(channel_id)
                         )
@@ -1017,7 +1040,15 @@ class DiscordManager:
                     if not reported_failure:
                         self.store.emit(
                             "discord.typing_failed",
-                            {"channel_id": channel_id, "error": self.vault.redact(str(exc))},
+                            {
+                                "channel_id": channel_id,
+                                "error": (
+                                    f"Typing indicator exceeded its local {TYPING_TIMEOUT_SECONDS:g}-second deadline"
+                                    if isinstance(exc, TimeoutError) and deadline.expired()
+                                    else error_text(exc)
+                                ),
+                                "reason": "The bot turn continues; typing will retry on the next interval",
+                            },
                             bot_id=bot["id"],
                             turn_id=turn_id,
                             level="warning",
@@ -1241,7 +1272,9 @@ class DiscordManager:
             self.last_notification[key] = time.time()
         except Exception as exc:
             self.store.emit(
-                "notification.failed", {"source_event": event["seq"], "error": str(exc)}, level="warning"
+                "notification.failed",
+                {"source_event": event["seq"], "error": error_text(exc)},
+                level="warning",
             )
 
     async def close(self):

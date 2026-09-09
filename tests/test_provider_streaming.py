@@ -351,10 +351,18 @@ async def test_keepalives_cannot_extend_total_request_deadline(kernel):
     await install_client(
         kernel, lambda r: httpx.Response(200, headers={"content-type": "text/event-stream"}, stream=Stream())
     )
-    with pytest.raises(ProviderError, match="timed out"):
+    with pytest.raises(ProviderError, match="Local total request deadline exceeded: 0.03 seconds") as raised:
         await kernel.pool.complete(**call_args(kernel, bot))
     _, diagnostic = stored(kernel)
-    assert diagnostic["provider_error"]["origin"] == "transport"
+    assert diagnostic["provider_error"]["origin"] == "local_deadline"
+    assert raised.value.provider_fault is False
+    assert kernel.store.health("openrouter")["consecutive_failures"] == 0
+    event = next(e for e in kernel.store.events() if e["kind"] == "request.failed")
+    assert event["data"]["timeout_seconds"] == 0.03
+    assert event["data"]["timeout_kind"] == "total"
+    assert event["data"]["purpose"] == "generation"
+    assert event["data"]["phase"] == "read_sse"
+    assert not any(e["kind"] == "provider.failure" for e in kernel.store.events())
     assert diagnostic["reasoning_status"] == "none_received"
 
 

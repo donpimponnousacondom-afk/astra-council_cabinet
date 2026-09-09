@@ -35,6 +35,34 @@ class ProviderError(ControlError):
         self.details = details or {}
 
 
+def transport_error(error, timeout_seconds):
+    """Identify the observed HTTP phase without treating local capacity as an outage."""
+    phases = {
+        httpx.ConnectTimeout: ("connect", "Timed out establishing the provider connection", True),
+        httpx.ReadTimeout: ("read", "Timed out waiting for provider response data", True),
+        httpx.WriteTimeout: ("write", "Timed out sending request data to the provider", True),
+        httpx.PoolTimeout: ("pool", "Timed out waiting for a local HTTP connection slot", False),
+    }
+    for kind, (phase, explanation, fault) in phases.items():
+        if isinstance(error, kind):
+            return ProviderError(
+                f"{explanation} ({phase} timeout: {timeout_seconds:g} seconds; {kind.__name__})",
+                provider_fault=fault,
+                details={
+                    "origin": "transport" if fault else "local_client",
+                    "timeout_kind": phase,
+                    "timeout_seconds": timeout_seconds,
+                    "exception_type": kind.__name__,
+                    "transport_message": str(error) or None,
+                },
+            )
+    return ProviderError(
+        f"Provider connection/protocol failure: {type(error).__name__}: "
+        f"{str(error) or 'HTTP transport supplied no further detail'}",
+        details={"origin": "transport", "exception_type": type(error).__name__},
+    )
+
+
 def strip_reasoning(content: str) -> str:
     # Public/model-facing content excludes tagged reasoning. Private diagnostics
     # retain the original provider fields separately, before this filter runs.
@@ -289,7 +317,7 @@ class ProviderPool:
                 {"provider_id": provider["id"], "previous_failures": old["consecutive_failures"]},
             )
 
-    def failure(self, provider, exc):
+    def failure(self, provider, exc, *, bot_id=None, turn_id=None, request_id=None):
         if not exc.provider_fault:
             return
         old = self.store.health(provider["id"])
@@ -310,7 +338,11 @@ class ProviderPool:
                     "consecutive_failures": count,
                     "retry_in_seconds": delay,
                     "error": error,
+                    "reason": "Provider circuit is open; requests wait until the retry delay expires",
                 },
+                bot_id=bot_id,
+                turn_id=turn_id,
+                request_id=request_id,
                 level="error",
             )
         self.store.emit(
@@ -320,7 +352,12 @@ class ProviderPool:
                 "consecutive_failures": count,
                 "retry_in_seconds": delay,
                 "error": error,
+                "error_origin": exc.details.get("origin")
+                or ("upstream_http" if exc.http_status is not None else "unknown"),
             },
+            bot_id=bot_id,
+            turn_id=turn_id,
+            request_id=request_id,
             level="error",
         )
 
@@ -416,6 +453,8 @@ class ProviderPool:
             status_code = None
             error_data = None
             diagnostic_at = clock
+            deadline = asyncio.timeout(provider["timeout_seconds"])
+            phase = "prepare_request"
             try:
                 record_diagnostics(self.store, self.vault, request_id, result, body, status="running")
                 try:
@@ -423,7 +462,8 @@ class ProviderPool:
                 except ControlError as exc:
                     raise ProviderError(str(exc), provider_fault=False) from exc
                 # Total deadline covers streamed bodies as well as the connection, not just inactivity.
-                async with asyncio.timeout(provider["timeout_seconds"]):
+                async with deadline:
+                    phase = "await_response_headers"
                     async with self.client.stream(
                         "POST",
                         provider["base_url"] + "/chat/completions",
@@ -432,6 +472,7 @@ class ProviderPool:
                         timeout=provider["timeout_seconds"],
                     ) as response:
                         status_code = response.status_code
+                        phase = "read_error_response" if status_code >= 300 else "read_response"
                         if response.status_code >= 300:
                             error_bytes = bytearray()
                             async for chunk in response.aiter_bytes():
@@ -461,6 +502,7 @@ class ProviderPool:
                             response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
                         )
                         is_sse = content_type == "text/event-stream"
+                        phase = "read_sse" if is_sse else "read_json"
                         result.response_diagnostics.update(
                             response_format="sse" if is_sse else "json", content_type=content_type
                         )
@@ -596,15 +638,23 @@ class ProviderPool:
                     exc = error
                 elif cancelled:
                     exc = ProviderError(
-                        "Request cancelled; provider usage may be incomplete",
+                        "Request cancelled by its owning turn or runtime; partial output withheld, provider usage may be incomplete",
                         provider_fault=False,
                         details={"origin": "cancelled"},
                     )
-                elif isinstance(error, (httpx.TransportError, TimeoutError)):
+                elif isinstance(error, TimeoutError) and deadline.expired():
                     exc = ProviderError(
-                        f"{type(error).__name__}: {str(error) or 'Request timed out'}",
-                        details={"origin": "transport"},
+                        f"Local total request deadline exceeded: {provider['timeout_seconds']:g} seconds. "
+                        "Partial output withheld; adjust Providers → Total request timeout for longer requests.",
+                        provider_fault=False,
+                        details={
+                            "origin": "local_deadline",
+                            "timeout_kind": "total",
+                            "timeout_seconds": provider["timeout_seconds"],
+                        },
                     )
+                elif isinstance(error, httpx.TransportError):
+                    exc = transport_error(error, provider["timeout_seconds"])
                 else:
                     # A Python/adapter bug must never masquerade as upstream downtime.
                     import traceback
@@ -622,6 +672,16 @@ class ProviderPool:
                 origin = exc.details.get("origin") or (
                     "upstream_http" if exc.http_status is not None else "request_configuration"
                 )
+                exc.request_id = request_id
+                if cancelled:
+                    error.request_id = request_id
+                failure_context = {
+                    "purpose": purpose,
+                    "model": profile["model"],
+                    "phase": phase,
+                    "duration_ms": (time.perf_counter() - clock) * 1000,
+                    **{k: exc.details[k] for k in ("timeout_kind", "timeout_seconds") if k in exc.details},
+                }
                 message = self.vault.redact(str(exc))[:3000]
                 record_diagnostics(
                     self.store,
@@ -637,7 +697,7 @@ class ProviderPool:
                         "provider_fault": exc.provider_fault,
                         "transport_http_status": status_code,
                         "origin": origin,
-                        "details": exc.details,
+                        "details": {**exc.details, **failure_context},
                     },
                 )
                 metrics = normalized_usage(result.usage, profile)
@@ -674,6 +734,7 @@ class ProviderPool:
                     "request.cancelled" if cancelled else "request.failed",
                     {
                         "error": message,
+                        **failure_context,
                         "provider_id": provider["id"],
                         "profile_id": profile["id"],
                         "http_status": status_code,
@@ -690,7 +751,7 @@ class ProviderPool:
                     level="warning" if cancelled else "error",
                 )
                 if not cancelled:
-                    self.failure(provider, exc)
+                    self.failure(provider, exc, bot_id=bot["id"], turn_id=turn_id, request_id=request_id)
                     raise exc from error
                 raise
 
@@ -782,6 +843,8 @@ class ProviderPool:
             summary = (
                 f"Provider returned HTTP {upstream_status}"
                 if upstream_status is not None and upstream_status >= 300
+                else str(transport_error(exc, 20))
+                if isinstance(exc, httpx.TransportError)
                 else str(exc) or type(exc).__name__
             )
             if isinstance(provider_message, str) and provider_message:

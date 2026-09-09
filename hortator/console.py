@@ -110,6 +110,44 @@ SUMMARY_FIELDS = (
     "before_tokens",
     "after_tokens",
 )
+INCIDENT_FIELDS = (
+    "purpose",
+    "operation",
+    "handler",
+    "name",
+    "channel_id",
+    "error",
+    "reason",
+    "message",
+    "notice",
+    "note",
+    "outcome",
+    "error_origin",
+    "phase",
+    "timeout_kind",
+    "timeout_seconds",
+    "status",
+    "exit_code",
+    "site",
+    "revision",
+    "stage",
+    "retry_in_seconds",
+    "http_status",
+    "upstream_status",
+    "api_status",
+    "response_format",
+    "frame_index",
+    "field",
+    "job_id",
+    "call_id",
+    "outbox_id",
+    "source_event",
+    "finish_reason",
+    "repair_available",
+    "previous_context_retained",
+    "message_id",
+    "attachment_id",
+)
 
 
 def scope_for(kind):
@@ -500,9 +538,7 @@ class OperationalConsole(logging.Handler):
         if len(encoded) > 12000:
             event["data"] = {
                 **{
-                    k: event["data"][k]
-                    for k in ("provider_id", "error", "status", "name")
-                    if k in event["data"]
+                    k: event["data"][k] for k in set(INCIDENT_FIELDS + ("provider_id",)) if k in event["data"]
                 },
                 "detail_preview": encoded[:4000],
                 "truncated": "Full detail remains in the event ledger",
@@ -542,6 +578,16 @@ class OperationalConsole(logging.Handler):
                         "path": path,
                         "status_code": status,
                     }
+                    if int(status) == 502:
+                        data["reason"] = (
+                            "Hortator API failed; inspect the matching operation error for upstream status/cause"
+                        )
+                    elif int(status) == 401:
+                        data["reason"] = (
+                            "Dashboard authentication required; session may be missing or expired"
+                        )
+                    elif int(status) == 422:
+                        data["reason"] = "Request validation failed; response contains field errors"
                     level = "error" if int(status) >= 500 else "warning" if int(status) >= 400 else "debug"
                     kind = "http.access"
                 else:
@@ -585,6 +631,10 @@ class OperationalConsole(logging.Handler):
                 data.get("provider_id"),
                 data.get("job_id"),
                 data.get("call_id"),
+                data.get("channel_id"),
+                data.get("operation"),
+                data.get("phase"),
+                data.get("site"),
                 data.get("error") or data.get("reason") or data.get("message"),
             )
             if key in self.repeats:
@@ -947,14 +997,21 @@ class OperationalConsole(logging.Handler):
             for label, value in (("bot", event.get("bot_id")), ("provider", data.get("provider_id")))
             if value
         )
+        incident = level in {"warning", "error"}
+        keys = tuple(dict.fromkeys(INCIDENT_FIELDS + SUMMARY_FIELDS)) if incident else SUMMARY_FIELDS
         fields = [
-            f"{key}={plain(data[key])}" if key not in {"error", "message", "reason"} else plain(data[key])
-            for key in SUMMARY_FIELDS
-            if data.get(key) is not None
+            f"{key}={plain(data[key])}"
+            if key not in {"error", "message", "reason", "notice", "note"}
+            else plain(data[key])
+            for key in keys
+            if data.get(key) is not None and data[key] != ""
         ]
         summary = " · ".join(fields)
-        if len(summary) > 320:
-            summary = summary[:317] + "…"
+        if incident and not summary:
+            summary = "No diagnostic summary recorded; press f to inspect event fields"
+        limit = 640 if incident else 320
+        if len(summary) > limit:
+            summary = summary[: limit - 3] + "…"
         reference = f" #{event['seq']}" if event.get("seq") else ""
         scope_color = SCOPE_COLORS.get(event["scope"], "97")
         summary = (

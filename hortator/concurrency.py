@@ -10,7 +10,16 @@ import traceback
 def error_text(error):
     if isinstance(error, BaseExceptionGroup):
         return "; ".join(error_text(child) for child in error.exceptions)
-    return f"{type(error).__name__}: {error}"
+    message = str(error)
+    if not message:
+        message = (
+            "Operation timed out; no additional timeout detail supplied"
+            if isinstance(error, TimeoutError)
+            else "Operation cancelled by its owner"
+            if isinstance(error, asyncio.CancelledError)
+            else "No exception message supplied"
+        )
+    return f"{type(error).__name__}: {message}"
 
 
 @asynccontextmanager
@@ -106,6 +115,7 @@ class BackgroundTasks:
                     {
                         "task": name,
                         "error": detail,
+                        "reason": "Background task stopped; unrelated tasks are not cancelled",
                         "traceback": self.store.redact("".join(traceback.format_exception(error)))[-12000:],
                     },
                     bot_id=bot_id,

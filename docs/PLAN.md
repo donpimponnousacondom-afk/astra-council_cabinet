@@ -2,6 +2,12 @@
 
 This implementation lives at `/home/codexy/codex/astra-council_cabinet`. [AGENTS.md](../AGENTS.md) records standing agent rules; [OPERATIONS.md](OPERATIONS.md) covers the shared GNU Screen runtime, storage and branch workflow. The design below remains the accepted foundation.
 
+## Actionable warning/error diagnostics (2026-09-09)
+
+The owner requested a review of warnings and errors after Dirac's compaction reached the application's existing 120-second deadline while Ollama was still producing output. A local total deadline now reports its exact configured duration, operation and request phase as `local_deadline`; it does not increment shared provider failures or open the circuit. HTTP connect/read/write timeouts retain transport attribution, while waiting for a local HTTP connection slot is a local-client capacity failure. Existing settings, partial-output withholding, private reasoning evidence, cancellation and retry scheduling remain authoritative.
+
+Warnings/errors explain their known effect: compaction retains the checkpoint; typing failures do not stop the turn; shell infrastructure errors differ from command exit codes; publication failures retain retry timing without claiming delivery. Discord callback failures include exception identity and redacted traceback. Folded incidents show operation/channel/cause before secondary metrics, keep notices visible, and separate repeated failures from different channels/sites. This is additive observability, not an automatic configuration change or replay mechanism. See [OPERATIONS.md](OPERATIONS.md#warning-and-error-diagnosis).
+
 ## Retained summary budgets independent of reasoning (2026-09-09)
 
 The owner explicitly removed the combined reasoning/output cap from compaction. `summary_tokens` now limits only the finished summary retained for the next context; it is not a provider generation cap. Remove the fixed 32,000 schema ceiling while preserving context-relative validation. Compaction omits standard total-output caps inherited from generation or supplied in compaction JSON without rewriting those saved objects. Native reasoning configuration and normal conversation limits remain intact.

@@ -439,7 +439,11 @@ class PublishingWorker:
                 raise
             except Exception as exc:
                 self.last_error = self.vault.redact(error_text(exc))[:2000]
-                self.store.emit("publishing.worker_failed", {"error": self.last_error}, level="error")
+                self.store.emit(
+                    "publishing.worker_failed",
+                    {"error": self.last_error, "reason": "Worker tick failed; next check in 2 seconds"},
+                    level="error",
+                )
             await asyncio.sleep(2)
 
     async def tick(self):
@@ -594,7 +598,14 @@ class PublishingWorker:
             self.last_error = error
             self.store.emit(
                 "publishing.failed",
-                {"site": job["slug"], "revision": job["revision"], "error": error, "retry_in_seconds": delay},
+                {
+                    "job_id": job["id"],
+                    "site": job["slug"],
+                    "revision": job["revision"],
+                    "error": error,
+                    "retry_in_seconds": delay,
+                    "reason": "Sync remains queued for retry; remote delivery is not confirmed",
+                },
                 bot_id=job["bot_id"],
                 level="error",
             )

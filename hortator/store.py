@@ -271,7 +271,15 @@ class Store:
             )
             self.emit(
                 "delivery." + status,
-                {"outbox_id": row["id"], "reason": "process_restart"},
+                {
+                    "outbox_id": row["id"],
+                    "reason": "process_restart",
+                    "message": (
+                        "Discord acceptance is unknown after restart; automatic resend withheld to avoid duplicates"
+                        if status == "unknown"
+                        else "Unsent draft suppressed after restart"
+                    ),
+                },
                 bot_id=row["bot_id"],
                 turn_id=row["turn_id"],
                 level="warning",

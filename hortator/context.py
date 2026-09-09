@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 import tiktoken
 
+from .concurrency import error_text
 from .models import ControlError, OWNER_ID
 from .store import dumps
 from .vision import ImageCache, IMAGE_TOKEN_RESERVE, image_count, image_limits_exceeded
@@ -476,17 +477,20 @@ class ContextBuilder:
                 rows = recent
                 context = self.store.context(bot["id"], channel_id)
             except BaseException as exc:
+                cancelled = isinstance(exc, asyncio.CancelledError)
                 self.store.emit(
-                    "compaction.failed",
+                    "compaction.cancelled" if cancelled else "compaction.failed",
                     {
                         "compaction_id": compaction_id,
-                        "error": str(exc) or "Cancelled",
+                        "error": error_text(exc),
+                        "channel_id": channel_id,
+                        "reason": "Previous context retained; checkpoint was not advanced",
                         "previous_context_retained": True,
                     },
                     bot_id=bot["id"],
                     turn_id=turn_id,
-                    request_id=last_request_id,
-                    level="error",
+                    request_id=getattr(exc, "request_id", None) or last_request_id,
+                    level="warning" if cancelled else "error",
                 )
                 raise
         if meta["estimated_tokens"] * factor + profile["response_tokens"] >= profile["context_window"]:
