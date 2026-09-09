@@ -21,6 +21,8 @@ import sysconfig
 import tempfile
 import time
 
+from .concurrency import join_tasks, task_group, error_text
+
 from .models import ControlError
 
 
@@ -695,7 +697,6 @@ class ShellRunner:
         total_files, total_bytes = 0, 0
         completed = False
         diagnostic = bytearray()
-        pump = None
         process = None
         try:
             info_fd = os.open(active.info_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -722,75 +723,82 @@ class ShellRunner:
                 while data := await process.stderr.read(4096):
                     diagnostic.extend(data[: max(0, 4096 - len(diagnostic))])
 
-            pump = asyncio.create_task(stderr())
             async with asyncio.timeout(config["timeout_seconds"] + 10):
-                while line := await process.stdout.readline():
-                    record = json.loads(line)
-                    kind = record["type"]
-                    if kind in logs:
-                        data = base64.b64decode(record["data"], validate=True)
-                        total_output += len(data)
-                        if total_output > config["output_bytes"]:
-                            raise ControlError("Sandbox output exceeded transport quota")
-                        logs[kind].write(data)
-                        logs[kind].flush()
-                    elif kind == "started":
-                        metadata["pid_namespace"] = record["pid_namespace"]
-                        self._capture_init(active)
-                        self._event(metadata, "job.progress", phase="sandbox_ready")
-                    elif kind == "result":
-                        if record["status"] not in FINAL_STATES:
-                            raise ControlError("Invalid worker status")
-                        metadata.update(
-                            {name: record[name] for name in ("status", "exit_code", "elapsed_seconds", "cwd")}
-                        )
-                    elif kind in ("file", "directory"):
-                        if output_file is not None or metadata.get("status") not in ("succeeded", "failed"):
-                            raise ControlError("Invalid workspace export sequence")
-                        path = relative(record["path"])
-                        target = staged / path
-                        total_files += 1
-                        if total_files > config["max_files"]:
-                            raise ControlError("Workspace export exceeded file quota")
-                        if kind == "directory":
-                            target.mkdir(mode=0o700, parents=True, exist_ok=True)
-                        else:
-                            size = record["size"]
-                            if type(size) is not int or not 0 <= size <= config["max_file_bytes"]:
-                                raise ControlError("Workspace export exceeded per-file quota")
-                            total_bytes += size
-                            if total_bytes > config["quota_bytes"]:
-                                raise ControlError("Workspace export exceeded byte quota")
-                            target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-                            output_file = os.fdopen(
-                                os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb"
+                async with task_group() as group:
+                    errors = group.create_task(stderr(), name="sandbox-stderr")
+                    while line := await process.stdout.readline():
+                        record = json.loads(line)
+                        kind = record["type"]
+                        if kind in logs:
+                            data = base64.b64decode(record["data"], validate=True)
+                            total_output += len(data)
+                            if total_output > config["output_bytes"]:
+                                raise ControlError("Sandbox output exceeded transport quota")
+                            logs[kind].write(data)
+                            logs[kind].flush()
+                        elif kind == "started":
+                            metadata["pid_namespace"] = record["pid_namespace"]
+                            self._capture_init(active)
+                            self._event(metadata, "job.progress", phase="sandbox_ready")
+                        elif kind == "result":
+                            if record["status"] not in FINAL_STATES:
+                                raise ControlError("Invalid worker status")
+                            metadata.update(
+                                {
+                                    name: record[name]
+                                    for name in ("status", "exit_code", "elapsed_seconds", "cwd")
+                                }
                             )
-                            output_remaining = size
-                    elif kind == "data":
-                        data = base64.b64decode(record["data"], validate=True)
-                        if output_file is None or len(data) > output_remaining:
-                            raise ControlError("Invalid workspace file chunk")
-                        output_file.write(data)
-                        output_remaining -= len(data)
-                    elif kind == "endfile":
-                        if output_file is None or output_remaining:
-                            raise ControlError("Incomplete workspace file")
-                        output_file.close()
-                        output_file = None
-                    elif kind == "complete":
-                        if output_file is not None:
-                            raise ControlError("Incomplete workspace export")
-                        completed = True
-                    elif kind == "error":
-                        raise ControlError(record["error"])
-                    else:
-                        raise ControlError("Unknown sandbox transport frame")
-                await process.wait()
-                await pump
-                if not completed or process.returncode:
-                    raise ControlError(
-                        diagnostic.decode(errors="replace") or "Sandbox ended without complete output"
-                    )
+                        elif kind in ("file", "directory"):
+                            if output_file is not None or metadata.get("status") not in (
+                                "succeeded",
+                                "failed",
+                            ):
+                                raise ControlError("Invalid workspace export sequence")
+                            path = relative(record["path"])
+                            target = staged / path
+                            total_files += 1
+                            if total_files > config["max_files"]:
+                                raise ControlError("Workspace export exceeded file quota")
+                            if kind == "directory":
+                                target.mkdir(mode=0o700, parents=True, exist_ok=True)
+                            else:
+                                size = record["size"]
+                                if type(size) is not int or not 0 <= size <= config["max_file_bytes"]:
+                                    raise ControlError("Workspace export exceeded per-file quota")
+                                total_bytes += size
+                                if total_bytes > config["quota_bytes"]:
+                                    raise ControlError("Workspace export exceeded byte quota")
+                                target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                                output_file = os.fdopen(
+                                    os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb"
+                                )
+                                output_remaining = size
+                        elif kind == "data":
+                            data = base64.b64decode(record["data"], validate=True)
+                            if output_file is None or len(data) > output_remaining:
+                                raise ControlError("Invalid workspace file chunk")
+                            output_file.write(data)
+                            output_remaining -= len(data)
+                        elif kind == "endfile":
+                            if output_file is None or output_remaining:
+                                raise ControlError("Incomplete workspace file")
+                            output_file.close()
+                            output_file = None
+                        elif kind == "complete":
+                            if output_file is not None:
+                                raise ControlError("Incomplete workspace export")
+                            completed = True
+                        elif kind == "error":
+                            raise ControlError(record["error"])
+                        else:
+                            raise ControlError("Unknown sandbox transport frame")
+                    await process.wait()
+                    await errors
+                    if not completed or process.returncode:
+                        raise ControlError(
+                            diagnostic.decode(errors="replace") or "Sandbox ended without complete output"
+                        )
         except asyncio.CancelledError:
             metadata.update(status="cancelled", error="Job cancelled; sandbox workspace changes discarded")
             raise
@@ -799,12 +807,10 @@ class ShellRunner:
                 status="timed_out", error="Job execution/export deadline exceeded; changes discarded"
             )
         except Exception as error:
-            metadata.update(status="failed", error=str(error)[:1200])
+            metadata.update(status="failed", error=error_text(error)[:1200])
         finally:
             if process is not None and process.returncode is None:
                 await self._terminate(active)
-            if pump is not None:
-                await pump
             if output_file is not None:
                 output_file.close()
             for output in logs.values():
@@ -982,4 +988,4 @@ class ShellRunner:
             if active.process is not None and active.process.returncode is None:
                 await self._terminate(active)
             if active.task is not None and active.task is not asyncio.current_task():
-                await asyncio.gather(active.task, return_exceptions=True)
+                await join_tasks(active.task)

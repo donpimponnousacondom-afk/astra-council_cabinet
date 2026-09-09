@@ -14,6 +14,8 @@ import signal
 import subprocess
 import time
 
+from .concurrency import cancel_and_wait, task_group, error_text
+
 from .documents import public_base, safe_path, safe_site
 from .models import ControlError, ID_PATTERN
 from .store import dumps
@@ -190,7 +192,6 @@ class SSHDelivery:
             raise ControlError("Verified publishing SSH host pins are missing")
         fd = os.memfd_create("hortator-publishing-identity", os.MFD_CLOEXEC)
         process = None
-        io_tasks = []
         try:
             os.fchmod(fd, 0o600)
             os.write(fd, private.encode())
@@ -253,30 +254,24 @@ class SSHDelivery:
                 except BrokenPipeError, ConnectionResetError:
                     pass  # Preserve the actual SSH/receiver diagnostic below.
 
-            io_tasks = [
-                asyncio.create_task(send()),
-                asyncio.create_task(collect(process.stdout, 1_000_000)),
-                asyncio.create_task(collect(process.stderr, 100_000)),
-                asyncio.create_task(process.wait()),
-            ]
             async with asyncio.timeout(timeout):
-                _, out, err, _ = await asyncio.gather(*io_tasks)
+                async with task_group() as group:
+                    group.create_task(send(), name="publishing-stdin")
+                    output = group.create_task(collect(process.stdout, 1_000_000), name="publishing-stdout")
+                    errors = group.create_task(collect(process.stderr, 100_000), name="publishing-stderr")
+                    group.create_task(process.wait(), name="publishing-process")
+                out, err = output.result(), errors.result()
             if process.returncode:
                 detail = self.vault.redact((err or out).decode(errors="replace"))[:2000]
                 raise ControlError("Remote publishing failed: " + detail)
             return out
         finally:
             try:
-                for task in io_tasks:
-                    if not task.done():
-                        task.cancel()
                 if process and process.returncode is None:
                     try:
                         os.killpg(process.pid, signal.SIGKILL)
                     except ProcessLookupError:
                         pass
-                if io_tasks:
-                    await asyncio.gather(*io_tasks, return_exceptions=True)
                 if process:
                     # A killed child can leave a full pipe paused by StreamReader
                     # flow control. Reaping before draining it can wait forever
@@ -287,7 +282,9 @@ class SSHDelivery:
                         while await stream.read(65536):
                             pass
 
-                    await asyncio.gather(discard(process.stdout), discard(process.stderr))
+                    async with task_group() as group:
+                        group.create_task(discard(process.stdout), name="publishing-drain-stdout")
+                        group.create_task(discard(process.stderr), name="publishing-drain-stderr")
                     await process.wait()
             finally:
                 os.close(fd)
@@ -428,12 +425,11 @@ class PublishingWorker:
         self.store.execute(
             "UPDATE document_sync_queue SET status='queued',retry_at=0,last_error='Delivery interrupted; verifying the same immutable job on retry' WHERE status='syncing'"
         )
-        self.task = asyncio.create_task(self.run())
+        self.task = self.background.spawn(self.run(), name="publishing-worker")
 
     async def close(self):
         if self.task:
-            self.task.cancel()
-            await asyncio.gather(self.task, return_exceptions=True)
+            await cancel_and_wait(self.task)
 
     async def run(self):
         while True:
@@ -442,7 +438,7 @@ class PublishingWorker:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self.last_error = self.vault.redact(str(exc))[:2000]
+                self.last_error = self.vault.redact(error_text(exc))[:2000]
                 self.store.emit("publishing.worker_failed", {"error": self.last_error}, level="error")
             await asyncio.sleep(2)
 
@@ -510,19 +506,19 @@ class PublishingWorker:
             if not self.allowed(job) or self.config()[1] != config:
                 raise ControlError("Publication grant or destination changed before transfer")
             transport = self.delivery_factory(self.directory, self.vault, remote)
-            active = asyncio.create_task(transport.deliver(payload))
-            try:
-                while not active.done():
-                    await asyncio.wait({active}, timeout=0.5)
-                    if not self.allowed(job) or self.config()[1] != config:
-                        raise ControlError(
-                            "Publication interrupted by grant or destination change; retry will verify remote state"
-                        )
-                receipt = active.result()
-            finally:
-                if not active.done():
-                    active.cancel()
-                    await asyncio.gather(active, return_exceptions=True)
+            async with task_group() as group:
+                active = group.create_task(transport.deliver(payload), name="site-delivery:" + job["id"])
+                try:
+                    while not active.done():
+                        await asyncio.wait({active}, timeout=0.5)
+                        if not self.allowed(job) or self.config()[1] != config:
+                            raise ControlError(
+                                "Publication interrupted by grant or destination change; retry will verify remote state"
+                            )
+                finally:
+                    if not active.done():
+                        active.cancel()
+            receipt = active.result()
             expected_hash = hashlib.sha256(
                 json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
             ).hexdigest()
@@ -589,7 +585,7 @@ class PublishingWorker:
             )
             raise
         except Exception as exc:
-            error = self.vault.redact(str(exc))[:2000]
+            error = self.vault.redact(error_text(exc))[:2000]
             delay = min(300, 5 * 2 ** min(job["attempts"], 6))
             self.store.execute(
                 "UPDATE document_sync_queue SET status='failed',last_error=?,retry_at=?,updated_at=? WHERE id=?",

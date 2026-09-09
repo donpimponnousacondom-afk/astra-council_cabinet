@@ -185,7 +185,9 @@ async def test_working_set_accounts_for_large_existing_summary_before_calling_pr
             "context_window": 14000,
             "response_tokens": 1500,
             "summary_tokens": 1000,
-            "compact_threshold": 0.7,
+            # Keep this test focused on fitting tool results beside an existing
+            # summary, independent of small additions to runtime instructions.
+            "compact_threshold": 0.85,
         },
     )
     kernel.store.execute("UPDATE contexts SET summary=?", ("Remember this conversation fact. " * 1200,))

@@ -128,7 +128,11 @@ async def test_version_inspection_requires_trusted_hortator_context(kernel):
         ToolContext(bot, "channel", "turn", owner_verified=True),
         "version-call",
     )
-    assert {key: value for key, value in result.items() if key != "result_id"} == kernel.service.version()
+    from hortator.timekeeping import present_times
+
+    assert {key: value for key, value in result.items() if key != "result_id"} == present_times(
+        kernel.service.version(), "Europe/Madrid"
+    )
     assert kernel.store.one("SELECT id FROM tool_result_evidence WHERE id=?", (result["result_id"],))
     assert not kernel.store.rows("SELECT * FROM requests")
     denied = await kernel.registry.call(

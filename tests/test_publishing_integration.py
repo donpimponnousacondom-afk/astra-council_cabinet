@@ -134,8 +134,9 @@ async def restart(rig, directory=None):
     rig.kernel.publishing.delivery_factory = rig.transport.factory
     # Exercise startup's recovery of an interrupted syncing row without
     # starting Discord or provider/scheduler tasks in this test environment.
-    rig.kernel.publishing.start()
-    await rig.kernel.publishing.close()
+    async with rig.kernel.background.lifetime():
+        rig.kernel.publishing.start()
+        await rig.kernel.publishing.close()
 
 
 class QuietHandler(SimpleHTTPRequestHandler):

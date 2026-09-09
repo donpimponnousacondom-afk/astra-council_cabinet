@@ -142,7 +142,7 @@ async def test_every_bot_sends_pixels_and_ledger_keeps_only_references(kernel, b
     rows = kernel.store.transcript(channel)
     profile = kernel.store.get("profiles", bot["model_profile_id"])
     profile["stream"] = False
-    messages, meta = kernel.engine.contexts.assemble(bot, profile, channel, rows, "")
+    messages, meta = await kernel.engine.contexts.assemble(bot, profile, channel, rows, "")
     assert meta["image_count"] == 1
     assert "4096 reserve/image" in meta["estimator"]
     seen = []
@@ -189,7 +189,7 @@ async def test_compaction_receives_pixels_and_deleted_images_are_omitted(kernel)
     assert "base64," not in json.dumps(received)
     kernel.store.execute("UPDATE messages SET deleted=1 WHERE channel_id=?", (channel,))
     rows = kernel.store.transcript(channel)
-    messages, _ = kernel.engine.contexts.assemble(bot, profile, channel, rows, "")
+    messages, _ = await kernel.engine.contexts.assemble(bot, profile, channel, rows, "")
     assert image_count(messages) == 0
     assert "sha256" not in json.dumps(messages)
 
@@ -299,7 +299,7 @@ async def test_many_images_compact_in_bounded_batches_instead_of_dropping_pixels
 
     kernel.pool.complete = complete
     rows, summary, _, _ = await kernel.engine.contexts.prepare(bot, profile, channel, "many-images", [])
-    messages, _ = kernel.engine.contexts.assemble(bot, profile, channel, rows, summary)
+    messages, _ = await kernel.engine.contexts.assemble(bot, profile, channel, rows, summary)
     assert received and all(image_count(request["messages"]) <= MAX_IMAGES for request in received)
     assert image_count(messages) <= MAX_IMAGES
     assert sum(image_count(request["messages"]) for request in received) + image_count(messages) == 9
@@ -323,7 +323,7 @@ async def test_attachment_removal_edit_removes_pixels_but_embed_edit_keeps_them(
         )
         rows = kernel.store.transcript(channel)
         assert rows[0]["attachments"] == []
-        messages, _ = kernel.engine.contexts.assemble(
+        messages, _ = await kernel.engine.contexts.assemble(
             bot, kernel.store.get("profiles", bot["model_profile_id"]), channel, rows, ""
         )
         assert image_count(messages) == 0

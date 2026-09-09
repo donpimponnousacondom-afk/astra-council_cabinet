@@ -492,6 +492,7 @@ class Service:
 
     def status(self):
         return {
+            "background_tasks": self.background.status() if hasattr(self, "background") else {},
             "version": self.version(),
             "owner_id": OWNER_ID,
             "now": time.time(),

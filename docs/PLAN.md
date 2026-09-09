@@ -2,6 +2,14 @@
 
 This implementation lives at `/home/codexy/codex/astra-council_cabinet`. [AGENTS.md](../AGENTS.md) records standing agent rules; [OPERATIONS.md](OPERATIONS.md) covers the shared GNU Screen runtime, storage and branch workflow. The design below remains the accepted foundation.
 
+## Structured tasks, responsive compaction and council-local time (2026-09-09)
+
+The owner requires TaskGroup ownership, immediate failure evidence and isolation between independent bots. Application background work now belongs to `Kernel.lifetime()`; related typing, shell, search and SSH work uses scoped groups. Cancellation joins cleanup; unexpected background exceptions retain task identity/redacted traceback and multiple child failures remain visible. [CONCURRENCY.md](CONCURRENCY.md) records the durable ownership and failure policy.
+
+The reported Ada incidents had two causes. One compaction returned `length`, no visible content and 1,024 output tokens all reported as reasoning against a 1,024-token summary limit. A later Kimi request succeeded. Separately, the pre-request path repeatedly tokenized every growing prefix synchronously. An offline replay of the saved 767-message request reproduced a 21-second stall. Worker-thread tokenization and full-prefix/bisection preparation remove that repeated event-loop work; loop-delay and batch-preparation events expose future stalls. Existing raised tool/time limits and model reasoning settings are preserved.
+
+The dynamic clock already used Europe/Madrid while transcripts explicitly used UTC. Presentation now follows the council timezone across transcript, clock, tool metadata, console and dashboard, with explicit offsets. Compaction guidance preserves instants when normalizing historical dates. Stored epochs, UTC build metadata and raw evidence remain unchanged; old notes are not rewritten. Seasonal offsets follow the IANA zone. No bot context or memory reset is implied.
+
 ## Search recovery and model tool guidance (2026-09-09)
 
 The owner requested DuckDuckGo alongside Brave, model-selectable engines, automatic fallback and combined results that survive one engine's failure. The existing `web_search` plugin now defaults to Auto (Brave first, DuckDuckGo after failure or empty results); Both requests five per engine by default, interleaves and deduplicates URLs, and retains per-engine provenance/status. The dashboard exposes engine/count and explains the separate Brave credential step. DuckDuckGo uses bounded HTML search without a key; challenges and changed formats remain failures. Grants, stored keys and custom Brave endpoints are preserved. See [WEB_SEARCH.md](WEB_SEARCH.md).

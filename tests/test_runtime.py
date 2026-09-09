@@ -11,6 +11,7 @@ from test_provider import install_client
 from hortator.models import ControlError
 from hortator.plugins import ToolContext
 from hortator.runtime import DeliveryError
+from hortator.concurrency import join_tasks
 
 
 def completion(content="Hello", silence=False):
@@ -41,7 +42,9 @@ def completion(content="Hello", silence=False):
 
 
 async def settle(k):
-    await asyncio.gather(*list(k.engine.tasks.values()))
+    # Superseded turns are intentionally cancelled; join their finalizers while
+    # still propagating unexpected exceptions from every task.
+    await join_tasks(*list(k.engine.tasks.values()))
     await asyncio.sleep(0)
 
 

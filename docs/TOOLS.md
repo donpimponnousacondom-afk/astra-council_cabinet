@@ -2,6 +2,8 @@
 
 This is a deliberate model compatibility contract for **every built-in and future plugin**, including `council_silence` and optional `discord_attach`. Keep it when changing validators or tool schemas. Small models should receive enough information to repair a call in one attempt instead of spending successive rounds discovering one missing field at a time.
 
+Built-in memory, inspection, fetched-document, workspace, shell and document-site results present known timestamp metadata in the council's configured timezone, with explicit offsets. Raw content, commands, schemas, old notes and embedded request/response evidence remain original. Model clock and compaction instructions explain how to normalize old UTC references without changing their instant. [CONCURRENCY.md](CONCURRENCY.md) also defines required TaskGroup ownership and cancellation for tool implementations.
+
 ## Discovery without side effects
 
 Calling an available tool with `{}` returns `usage_only: true`, `executed: false`, the complete parameter schema, named-field convention and a concrete example. It does not invoke the handler, resolve its credential or perform its action. Authorization still applies: discovery cannot expose a disabled or ungranted tool. Empty calls consume the ordinary round/call budget so discovery cannot create an unbounded loop.
