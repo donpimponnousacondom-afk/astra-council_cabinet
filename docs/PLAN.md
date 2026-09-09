@@ -2,6 +2,12 @@
 
 This implementation lives at `/home/codexy/codex/astra-council_cabinet`. [AGENTS.md](../AGENTS.md) records standing agent rules; [OPERATIONS.md](OPERATIONS.md) covers the shared GNU Screen runtime, storage and branch workflow. The design below remains the accepted foundation.
 
+## Dense desktop dashboard and frozen fallback (2026-09-09)
+
+The owner requested a replacement dashboard after six-bot/provider inventories made the previous cards and narrow modals costly to navigate. The active frontend at `/` now uses a Dark+ inspired workbench, compact sortable lists only, monospace data, narrow status/build chrome, searchable navigation and docked editors that can maximize. It retains the existing configuration, credential, context, tool, publication, Trajectory and Analytics workflows through the unchanged HTTP API. Draft protection covers navigating away from edited configuration, invalid JSON, pending credentials and notes; old asynchronous completions must not replace a newly selected editor.
+
+The prior frontend is independently bundled at `/legacy/` from `web/src/legacy/` and `web/legacy/index.html`. Freeze its functionality and do no new feature work there. Active code must not import legacy modules or styles. The fallback stays available until the owner accepts the workbench in daily use; automated checks are evidence, not that acceptance. Its later removal deletes those legacy directories, `web/tests/legacy/`, its Vite input and fallback links, without changing the API, Python runtime, database or credentials. Historical mobile acceptance applies to the frozen frontend; the active workbench is desktop-only while retaining accessible labels, keyboard control and readable focus. See [DASHBOARD.md](DASHBOARD.md) for the detailed parity/removal contract and [OPERATIONS.md](OPERATIONS.md#dashboard-workbench) for controls.
+
 ## Actionable warning/error diagnostics (2026-09-09)
 
 The owner requested a review of warnings and errors after Dirac's compaction reached the application's existing 120-second deadline while Ollama was still producing output. A local total deadline now reports its exact configured duration, operation and request phase as `local_deadline`; it does not increment shared provider failures or open the circuit. HTTP connect/read/write timeouts retain transport attribution, while waiting for a local HTTP connection slot is a local-client capacity failure. Existing settings, partial-output withholding, private reasoning evidence, cancellation and retry scheduling remain authoritative.

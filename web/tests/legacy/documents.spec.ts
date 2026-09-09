@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test("document settings, per-bot budgets and private draft inspection are visible and persist", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy/");
   await page
     .getByLabel("Dashboard password")
     .fill("test-only-password-never-use-in-production");
@@ -162,7 +162,7 @@ test("publication status distinguishes queued work from confirmed remote revisio
       },
     });
   });
-  await page.goto("/");
+  await page.goto("/legacy/");
   await page
     .getByLabel("Dashboard password")
     .fill("test-only-password-never-use-in-production");

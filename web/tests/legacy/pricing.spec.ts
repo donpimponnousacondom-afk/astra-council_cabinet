@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test("profile cache pricing persists separate rates and warns about incomplete estimates", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/legacy/");
   await page
     .getByLabel("Dashboard password")
     .fill("test-only-password-never-use-in-production");

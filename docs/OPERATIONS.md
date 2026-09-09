@@ -2,6 +2,24 @@
 
 All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The user handles PRs with GitHub **Squash and merge**; after a merge, update main with a fast-forward pull and create a fresh task branch. Never push to main or push any branch without an explicit request.
 
+## Dashboard workbench
+
+Open **`http://127.0.0.1:8000/`** for the active desktop workbench. Inventories are compact lists; click column headings to sort, a record name to edit, or a bot's model/provider/context link to inspect the related record. Editors dock beside the inventory and have a **Maximize editor** control for long JSON, prompts and evidence. Settings still save through the existing API with revision checks; credential fields have their own write-only save buttons.
+
+| Key | Workbench action |
+| --- | --- |
+| `Ctrl-K` | Search and open a page or configuration record |
+| `Ctrl-B` | Collapse/expand the navigation sidebar |
+| `Ctrl-S` | Save the active configuration editor |
+| `/` | Focus the inventory filter when not typing in another field |
+| `Escape` | Close Quick Open, or close the focused editor with draft protection |
+
+Navigation protects unsaved configuration, invalid JSON, note edits and pending credentials. Confirming discard does not undo a request already submitted to the API. Polling does not overwrite the open draft, and an older save completion must not close a newer editor. The source/commit/build details remain visible independently of whether the selected record is being edited. Trajectory and Analytics retain their existing diagnostic workflows in the active frontend.
+
+Use the **Legacy dashboard** link or **`http://127.0.0.1:8000/legacy/`** for the frozen previous UI while comparing workflows. Both entry points use the same session, API and live configuration; switching dashboards is not a data restore and opening both does not start a second council process. Owner acceptance of the replacement is pending. No new functionality is maintained in the legacy frontend.
+
+The existing **`npm run build --prefix web`** builds both entry points into `web/dist`; the installed refresh/deployment workflow needs no additional build command. Commit before the final build/restart so both dashboard stamps match the intended server commit. The fallback's source, tests and build input are isolated and can later be removed without backend or database work; see [DASHBOARD.md](DASHBOARD.md#ownership-and-removal-boundary). Actual test and deployment evidence belongs in [VERIFICATION.md](VERIFICATION.md).
+
 ## Process and storage
 
 Use **one Uvicorn worker per data directory**. A file lock prevents two council runtimes from claiming the same database. Do not start a second bot runner, use `--reload` in production, or put multiple replicas in front of one SQLite file. Every Discord application has its own supervised client task within the one Python event loop. A failing client's connection does not take down the others.
