@@ -116,7 +116,11 @@ class Profile(Entity):
     context_window: int = Field(default=131072, ge=1024, le=10000000)
     compact_threshold: float = Field(default=0.7, ge=0.1, le=0.95)
     response_tokens: int = Field(default=4096, ge=128, le=1000000)
-    summary_tokens: int = Field(default=1024, ge=128, le=32000)
+    summary_tokens: int = Field(
+        default=1024,
+        ge=128,
+        description="Maximum retained summary text tokens (cl100k_base); excludes private reasoning and is not sent as a provider output cap",
+    )
     keep_recent_messages: int = Field(default=12, ge=1, le=1000)
     request_json: dict[str, Any] = Field(default_factory=lambda: {"temperature": 0.8, "max_tokens": 2048})
     compaction_request_json: dict[str, Any] = Field(default_factory=dict)
@@ -140,7 +144,9 @@ class Profile(Entity):
     @model_validator(mode="after")
     def fits(self):
         if max(self.response_tokens, self.summary_tokens) >= self.context_window * 0.6:
-            raise ValueError("Output reserves must be less than 60% of the context window")
+            raise ValueError(
+                "Response reserve and retained summary limit must be less than 60% of the context window"
+            )
         for key in ("max_tokens", "max_completion_tokens"):
             if key in self.request_json:
                 n = self.request_json[key]

@@ -14,6 +14,7 @@ from conftest import configured
 from test_provider import install_client
 from test_typing import prepare_bot
 from hortator.models import OWNER_ID, ControlError
+from hortator.provider import Completion
 from hortator.vision import (
     ImageCache,
     MAX_IMAGE_BYTES,
@@ -180,7 +181,9 @@ async def test_compaction_receives_pixels_and_deleted_images_are_omitted(kernel)
 
     async def complete(**kwargs):
         received.append(kwargs)
-        return SimpleNamespace(content="An image of red pixels was posted.", finish_reason="stop")
+        return Completion(
+            request_id="compact-image", content="An image of red pixels was posted.", finish_reason="stop"
+        )
 
     kernel.pool.complete = complete
     await kernel.engine.contexts.prepare(bot, profile, channel, "compact-image", [], force=True)
@@ -295,7 +298,11 @@ async def test_many_images_compact_in_bounded_batches_instead_of_dropping_pixels
 
     async def complete(**kwargs):
         received.append(kwargs)
-        return SimpleNamespace(content="Red pixels were posted repeatedly.", finish_reason="stop")
+        return Completion(
+            request_id=f"compact-images-{len(received)}",
+            content="Red pixels were posted repeatedly.",
+            finish_reason="stop",
+        )
 
     kernel.pool.complete = complete
     rows, summary, _, _ = await kernel.engine.contexts.prepare(bot, profile, channel, "many-images", [])
