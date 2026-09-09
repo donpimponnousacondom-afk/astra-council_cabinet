@@ -68,6 +68,8 @@ QUIET_EVENTS = {
     "discord.history_imported",
 }
 SUMMARY_FIELDS = (
+    "summary_tokens",
+    "retained_summary_token_limit",
     "task",
     "delay_ms",
     "tokenization_probes",

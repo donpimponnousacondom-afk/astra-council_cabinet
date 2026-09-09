@@ -1412,7 +1412,15 @@ function Catalog({
                     <dd>{num(item.response_tokens)}</dd>
                   </div>
                   <div>
-                    <dt>Output limit sent</dt>
+                    <dt>Retained summary limit</dt>
+                    <dd>{num(item.summary_tokens)} text tokens</dd>
+                  </div>
+                  <div>
+                    <dt>Compaction total-output cap</dt>
+                    <dd>Not sent · provider default</dd>
+                  </div>
+                  <div>
+                    <dt>Generation output cap</dt>
                     <dd className="mono">
                       {["max_tokens", "max_completion_tokens"]
                         .filter((key) => Object.hasOwn(item.request_json, key))

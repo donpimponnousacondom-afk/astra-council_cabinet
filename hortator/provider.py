@@ -324,9 +324,7 @@ class ProviderPool:
             level="error",
         )
 
-    async def complete(
-        self, *, bot, profile, messages, tools, turn_id, context, purpose="generation", output_limit=None
-    ):
+    async def complete(self, *, bot, profile, messages, tools, turn_id, context, purpose="generation"):
         provider = self.store.get("providers", profile["provider_id"])
         if not provider:
             raise ProviderError("Provider no longer exists", provider_fault=False)
@@ -346,14 +344,19 @@ class ProviderPool:
                     )
             headers = self.headers(provider, bot["id"])
             body = copy.deepcopy(profile["request_json"])
+            omitted_caps = []
             if purpose == "compaction":
                 body.update(copy.deepcopy(profile.get("compaction_request_json", {})))
+                # Compaction budgets only the retained summary. These wire caps
+                # combine thinking and final text, so neither generation JSON
+                # nor compaction overrides may impose them on summarization.
+                for key in ("max_tokens", "max_completion_tokens", "max_output_tokens"):
+                    if key in body:
+                        omitted_caps.append(key)
+                        body.pop(key)
             body.update(model=profile["model"], messages=messages, stream=profile["stream"])
             if not profile["stream"]:
                 body.pop("stream_options", None)
-            if output_limit:
-                cap_key = "max_completion_tokens" if "max_completion_tokens" in body else "max_tokens"
-                body[cap_key] = output_limit
             if tools:
                 body["tools"] = tools
                 body["tool_choice"] = "auto"
@@ -368,6 +371,13 @@ class ProviderPool:
                 "provider_revision": provider["revision"],
                 "endpoint": provider["base_url"] + "/chat/completions",
             }
+            if purpose == "compaction":
+                meta.update(
+                    compaction_output_policy="provider_default",
+                    omitted_output_cap_fields=omitted_caps,
+                    retained_summary_token_limit=profile["summary_tokens"],
+                    summary_tokenizer="cl100k_base",
+                )
             self.store.execute(
                 """INSERT INTO requests(id,turn_id,bot_id,provider_id,profile_id,model,purpose,
               started_at,status,body,context) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",

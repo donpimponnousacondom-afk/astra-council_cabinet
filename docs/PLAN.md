@@ -2,6 +2,14 @@
 
 This implementation lives at `/home/codexy/codex/astra-council_cabinet`. [AGENTS.md](../AGENTS.md) records standing agent rules; [OPERATIONS.md](OPERATIONS.md) covers the shared GNU Screen runtime, storage and branch workflow. The design below remains the accepted foundation.
 
+## Retained summary budgets independent of reasoning (2026-09-09)
+
+The owner explicitly removed the combined reasoning/output cap from compaction. `summary_tokens` now limits only the finished summary retained for the next context; it is not a provider generation cap. Remove the fixed 32,000 schema ceiling while preserving context-relative validation. Compaction omits standard total-output caps inherited from generation or supplied in compaction JSON without rewriting those saved objects. Native reasoning configuration and normal conversation limits remain intact.
+
+Prompt guidance permits private reasoning and preserves attributed perspectives, disagreements and interpretations alongside facts. The finished summary is counted locally with cl100k_base, excluding all separately captured reasoning. It must fit the configured retained limit and rebuilt context. Oversized or incomplete candidates are retained in request evidence; previous context/checkpoints remain unchanged. No silent truncation, automatic adoption of partial summaries, hidden output cap or unlimited retry loop. Provider defaults/model context limits and existing deadlines still apply; omitting a cap is not a guarantee of unlimited generation.
+
+This policy supersedes the earlier compaction output-cap design below. The owner also described future separate-model/background batch summarization while bots continue working. That scheduling/model-selection feature is not part of this implementation; current compaction still runs within its bot turn and commits only after every batch succeeds. Preserve this distinction in follow-up work. See [OPERATIONS.md](OPERATIONS.md#context-and-compaction).
+
 ## Structured tasks, responsive compaction and council-local time (2026-09-09)
 
 The owner requires TaskGroup ownership, immediate failure evidence and isolation between independent bots. Application background work now belongs to `Kernel.lifetime()`; related typing, shell, search and SSH work uses scoped groups. Cancellation joins cleanup; unexpected background exceptions retain task identity/redacted traceback and multiple child failures remain visible. [CONCURRENCY.md](CONCURRENCY.md) records the durable ownership and failure policy.

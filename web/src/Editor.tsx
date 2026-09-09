@@ -772,7 +772,11 @@ export function Editor({
                   "Response token reserve",
                   "Space reserved in context planning. Set max_tokens or max_completion_tokens in Model parameters to send an output limit to the provider.",
                 )}
-                {numeric("summary_tokens", "Compaction output limit")}
+                {numeric(
+                  "summary_tokens",
+                  "Retained summary limit (tokens)",
+                  "Hard limit on the finished summary text using cl100k_base, excluding private reasoning. No combined output cap is sent to the provider. Must stay below 60% of the context window.",
+                )}
                 {numeric(
                   "keep_recent_messages",
                   "Recent messages to retain",
@@ -824,7 +828,8 @@ export function Editor({
                   <code>tools</code>, <code>tool_choice</code>,{" "}
                   <code>stream</code>, and single-choice generation. If you set{" "}
                   <code>max_tokens</code> or <code>max_completion_tokens</code>,
-                  keep it within the response reserve.
+                  keep it within the response reserve. These generation caps are
+                  omitted from compaction requests.
                 </Notice>
               </details>
               <details className="advanced">
@@ -833,11 +838,16 @@ export function Editor({
                   label="Compaction parameters"
                   value={draft.compaction_request_json || {}}
                   onChange={(v) => set("compaction_request_json", v)}
-                  hint="Optional overrides for summarization calls, such as a lower reasoning effort. The summary token limit still applies."
+                  hint="Native reasoning and other overrides for summarization. max_tokens, max_completion_tokens and max_output_tokens are omitted from compaction requests, even if configured here."
                 />
                 <p className="muted small-text">
                   Compaction starts with Model parameters and replaces any
                   top-level fields set here, including whole nested objects.
+                  Compaction sends no total-output cap: provider defaults and
+                  context limits still apply. Only the finished summary counts
+                  against the retained summary limit. An oversized or incomplete
+                  candidate is saved for inspection and leaves previous context
+                  intact.
                 </p>
                 <Code
                   value={reasoningFields({
