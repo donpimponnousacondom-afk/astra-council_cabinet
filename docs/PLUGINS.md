@@ -2,6 +2,8 @@
 
 Plugins are ordinary installed Python packages with an `hortator.plugins` entry point. The runtime loads these trusted local packages at startup; it never installs or executes code named by a model or Discord message.
 
+Async plugin work must follow [CONCURRENCY.md](CONCURRENCY.md): related children belong to a scoped TaskGroup, cancellation propagates after cleanup, and errors are never abandoned. Move expensive pure preparation off the event loop using detached values; keep SQLite/vault access on its owner thread. Built-in model-facing timestamp metadata uses the configured council zone, with raw content/evidence preserved. Future plugins should follow the same presentation convention.
+
 Engine terminal/file-preparation tools remain reserved IDs rather than ordinary registry plugins. The per-bot **Capabilities → Allow intentional silence** checkbox controls `council_silence` through `bots.allow_silence` (default true). It needs no credential/global switch; false removes its schema and prevents a successful silence decision. The ordinary engine budget, complete argument feedback and active-turn cancellation still apply. Do not register a second silence plugin or silently re-enable it from an extension.
 
 The built-in owner-only `council_inspect` accepts `resource: "version"` to read the same startup-captured source metadata as `!version` and `/api/version`. It requires Hortator's enabled grant and a runtime-verified owner context. The tool performs no Git mutation, configuration write or provider call. Source identity remains fixed for the running server.
@@ -18,23 +20,27 @@ local_clock = "my_clock:register"
 Example `my_clock.py`:
 
 ```python
-from datetime import datetime, timezone
+import time
 from hortator.plugins import PluginSpec, schema
+from hortator.timekeeping import council_timezone, local_timestamp
 
-async def clock(arguments, context, configuration, api_key):
-    # context has bot, channel_id, turn_id, and a runtime-verified owner flag.
-    # API keys are resolved by the registry; never put them in tool results.
-    return {"utc": datetime.now(timezone.utc).isoformat()}
 
 def register(registry):
-    registry.register(PluginSpec(
-        id="clock",
-        name="Clock",
-        description="Read the current UTC time.",
-        parameters=schema({}),
-        handler=clock,
-        defaults={},
-    ))
+    async def clock(arguments, context, configuration, api_key):
+        # context has bot, channel_id, turn_id, and a verified owner flag.
+        # API keys are registry-owned; never put them in tool results.
+        return {"now": local_timestamp(time.time(), council_timezone(registry.store))}
+
+    registry.register(
+        PluginSpec(
+            id="clock",
+            name="Clock",
+            description="Read the current council-local time with its UTC offset.",
+            parameters=schema({}),
+            handler=clock,
+            defaults={},
+        )
+    )
 ```
 
 Install the package in the same environment, restart the runtime, enable it in **Plugins**, and grant `clock` to the desired bots. New registry entries are seeded disabled unless they are the explicitly chosen built-ins. Duplicate/reserved IDs are rejected. Tool schemas use the standard OpenAI function-call envelope.

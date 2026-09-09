@@ -8,7 +8,7 @@ import {
   Layers3,
   Zap,
 } from "lucide-react";
-import { api, duration, money, num } from "./api";
+import { api, duration, money, num, dateLabel, timeLabel } from "./api";
 import type { Dashboard, RecordData } from "./api";
 import { Empty, Metric, Notice } from "./components";
 
@@ -56,7 +56,7 @@ export function UsageChart({
             className="chart-bar-slot"
             tabIndex={hasData ? 0 : -1}
             role="img"
-            aria-label={`${new Date(d.at * 1000).toLocaleString()}: ${d.input_tokens} input and ${d.output_tokens} output tokens`}
+            aria-label={`${dateLabel(d.at)}: ${d.input_tokens} input and ${d.output_tokens} output tokens`}
             onMouseEnter={() => setHover(d)}
             onFocus={() => setHover(d)}
           >
@@ -70,12 +70,7 @@ export function UsageChart({
               <i className="bar-input" style={{ flexGrow: d.input_tokens }} />
             </div>
             {i % Math.ceil(buckets / 6) === 0 && (
-              <span className="bar-time">
-                {new Date(d.at * 1000).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
+              <span className="bar-time">{timeLabel(d.at).slice(0, 5)}</span>
             )}
           </div>
         ))}
@@ -91,7 +86,7 @@ export function UsageChart({
       )}
       {hover && hasData && (
         <div className="chart-tooltip">
-          <strong>{new Date(hover.at * 1000).toLocaleString()}</strong>
+          <strong>{dateLabel(hover.at)}</strong>
           <span>
             {num(hover.input_tokens)} input · {num(hover.output_tokens)} output
           </span>

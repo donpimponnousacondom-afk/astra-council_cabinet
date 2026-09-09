@@ -1,3 +1,5 @@
+import { dateLabel } from "./api";
+
 export type SourceVersion = {
   commit: string | null;
   short_commit: string | null;
@@ -25,7 +27,9 @@ export function Version({ version }: { version?: RuntimeVersion }) {
         <strong>Running server</strong>
         <code>{version?.short_commit || "Commit unavailable"}</code>
         {version?.committed_at && (
-          <time dateTime={version.committed_at}>{version.committed_at}</time>
+          <time dateTime={version.committed_at}>
+            {dateLabel(version.committed_at)}
+          </time>
         )}
         {version?.dirty && (
           <span className="build-state">Uncommitted changes at startup</span>
@@ -46,7 +50,7 @@ export function Version({ version }: { version?: RuntimeVersion }) {
         <dl>
           <div>
             <dt>Server started</dt>
-            <dd>{version?.started_at || "Unavailable"}</dd>
+            <dd>{dateLabel(version?.started_at)}</dd>
           </div>
           <div>
             <dt>Server commit</dt>
@@ -62,7 +66,7 @@ export function Version({ version }: { version?: RuntimeVersion }) {
           </div>
           <div>
             <dt>Dashboard built</dt>
-            <dd>{dashboardBuild.built_at}</dd>
+            <dd>{dateLabel(dashboardBuild.built_at)}</dd>
           </div>
           <div>
             <dt>Dashboard commit</dt>
@@ -70,7 +74,7 @@ export function Version({ version }: { version?: RuntimeVersion }) {
           </div>
           <div>
             <dt>Dashboard commit date</dt>
-            <dd>{dashboardBuild.committed_at || "Unavailable"}</dd>
+            <dd>{dateLabel(dashboardBuild.committed_at)}</dd>
           </div>
           <div>
             <dt>Dashboard commit title</dt>
@@ -88,9 +92,10 @@ export function Version({ version }: { version?: RuntimeVersion }) {
           </div>
         </dl>
         <p>
-          Dates use ISO 8601 UTC. Server identity is captured at startup;
-          dashboard identity is embedded at build time. Uncommitted builds can
-          differ even when their commits match.
+          Dates use the council timezone with explicit UTC offsets. Server
+          identity is captured at startup; dashboard identity is embedded at
+          build time. Uncommitted builds can differ even when their commits
+          match.
         </p>
       </details>
     </section>

@@ -93,16 +93,38 @@ export const duration = (value: number | null | undefined) =>
     : value < 1000
       ? `${Math.round(value)} ms`
       : `${(value / 1000).toFixed(2)} s`;
+let councilTimezone = "Europe/Madrid";
+export function setCouncilTimezone(value: string) {
+  // The server validates IANA identifiers; also fail safely during initial loading.
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value }).format();
+    councilTimezone = value;
+  } catch {
+    councilTimezone = "Europe/Madrid";
+  }
+}
+export function dateLabel(value: number | string | null | undefined): string {
+  if (value == null) return "—";
+  const date = new Date(typeof value === "number" ? value * 1000 : value);
+  if (Number.isNaN(date.valueOf())) return "—";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: councilTimezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    timeZoneName: "longOffset",
+  }).formatToParts(date);
+  const p = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  const offset =
+    p.timeZoneName === "GMT" ? "+00:00" : p.timeZoneName.replace("GMT", "");
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}${offset}`;
+}
 export const timeLabel = (value: number | null | undefined) =>
-  value
-    ? new Date(value * 1000).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      })
-    : "—";
-export const dateLabel = (value: number) =>
-  new Date(value * 1000).toLocaleString();
+  value ? dateLabel(value).split("T")[1] : "—";
 export const kindLabel: Record<Kind, string> = {
   bots: "Bot",
   providers: "Provider",

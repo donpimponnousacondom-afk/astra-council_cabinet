@@ -2,6 +2,10 @@
 
 All endpoints except `/api/health` and login require the dashboard session. Log in at `POST /api/auth/login` with `{"password":"..."}`; retain the HttpOnly cookie and returned `csrf`. Send `X-CSRF-Token` for POST/PUT operations. There is no API key in a URL and no unauthenticated public control endpoint.
 
+`GET /api/status` includes `background_tasks: {running: [task_name, ...], failed: {task_name: redacted_error, ...}}`. The failure inventory retains up to 50 unexpected task exits for the current process; ordinary provider/turn failures remain in their existing ledgers. `runtime.task_failed` supplies the bounded redacted traceback. See [CONCURRENCY.md](CONCURRENCY.md).
+
+Raw API timestamps keep their existing epoch or canonical UTC representation. Dashboard date labels and Discord `!version` render these instants in `settings.timezone` with an offset. Model-facing built-in tool metadata uses that same local ISO convention, including inspector version dates; raw embedded requests/responses, quoted content and old notes are excluded. No source identity or stored instant is rewritten.
+
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/auth/session`, `POST /api/auth/logout` | Session state/revocation |

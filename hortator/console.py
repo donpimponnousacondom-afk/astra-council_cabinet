@@ -14,8 +14,9 @@ import termios
 import textwrap
 import time
 from collections import OrderedDict, deque
-from datetime import datetime
 from urllib.parse import urlsplit, urlunsplit
+
+from .timekeeping import DEFAULT_TIMEZONE, council_timezone, local_timestamp
 
 from .models import SECRET_FIELDS
 from .provider import strip_reasoning
@@ -67,6 +68,10 @@ QUIET_EVENTS = {
     "discord.history_imported",
 }
 SUMMARY_FIELDS = (
+    "task",
+    "delay_ms",
+    "tokenization_probes",
+    "message_count",
     "engine",
     "category",
     "error_origin",
@@ -241,6 +246,7 @@ class OperationalConsole(logging.Handler):
         self.error_history = deque(maxlen=50)
         self.repeats = OrderedDict()
         self.store = None
+        self.timezone = DEFAULT_TIMEZONE
         self.redact = lambda value: value
         self.loop = self.timer = self.tty_state = self.input_fd = None
         self.saved_loggers = []
@@ -287,6 +293,7 @@ class OperationalConsole(logging.Handler):
     def bind(self, kernel):
         self.redact = kernel.vault.redact
         self.store = kernel.store
+        self.timezone = council_timezone(kernel.store)
         self.runner = getattr(getattr(getattr(kernel, "registry", None), "agentic", None), "runner", None)
         # Make recent persisted incidents inspectable immediately after a restart, without replay spam.
         known = {e.get("seq") for e in self.history if e.get("seq")}
@@ -449,7 +456,7 @@ class OperationalConsole(logging.Handler):
             self.output_failed = True  # A broken log sink must never fail a model turn.
 
     def notice(self, text):
-        stamp = datetime.now().astimezone().isoformat(timespec="seconds")
+        stamp = local_timestamp(time.time(), self.timezone)
         self.write(
             f"{self.paint(stamp, '90')} {self.paint('CONSOLE', '1;96')} {self.highlight(plain(safe_text(self.redact(text))))}"
         )
@@ -480,6 +487,8 @@ class OperationalConsole(logging.Handler):
         )
 
     def event(self, event):
+        if event["kind"] == "config.updated" and self.store is not None:
+            self.timezone = council_timezone(self.store)
         event = safe_value(self.redact(event))
         kind = event["kind"]
         level = event.get("level", "info")
@@ -929,7 +938,7 @@ class OperationalConsole(logging.Handler):
         if event["kind"].startswith("job.") and data.get("status") == "failed":
             data = {**data, "outcome": job_outcome(data)}
             event = {**event, "data": data}
-        stamp = datetime.fromtimestamp(event["at"]).astimezone().isoformat(timespec="milliseconds")
+        stamp = local_timestamp(event["at"], self.timezone, timespec="milliseconds")
         level = event["level"]
         identity = " ".join(
             f"{label}={plain(value)}"

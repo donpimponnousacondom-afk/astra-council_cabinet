@@ -11,11 +11,13 @@ from types import SimpleNamespace
 import discord
 import httpx
 
+from .concurrency import cancel_and_wait, error_text
 from .models import ControlError, OWNER_ID
 from .runtime import DeliveryError
 from .security import Actor
 from .discord_text import CodeBlock, code_pages, model_message, preview, with_footer
 from .footer import footer_settings, render_footer
+from .timekeeping import council_timezone, present_times
 from .version import version_text
 from .vision import ImageCache, image_candidate, MAX_IMAGES
 from .store import dumps
@@ -74,10 +76,12 @@ class CouncilClient(discord.Client):
         self.stopping = False
 
     async def on_ready(self):
+        if self.stopping or self.manager.closed:
+            return
         self.manager.gateway(self.bot_id, "online", source="ready")
         if not self.backfill_task or self.backfill_task.done():
-            self.backfill_task = asyncio.create_task(
-                self.manager.backfill(self), name=f"backfill:{self.bot_id}"
+            self.backfill_task = self.manager.background.spawn(
+                self.manager.backfill(self), name=f"backfill:{self.bot_id}", bot_id=self.bot_id
             )
 
     async def on_disconnect(self):
@@ -173,8 +177,7 @@ class CouncilClient(discord.Client):
     async def close(self):
         self.stopping = True
         if self.backfill_task and self.backfill_task is not asyncio.current_task():
-            self.backfill_task.cancel()
-            await asyncio.gather(self.backfill_task, return_exceptions=True)
+            await cancel_and_wait(self.backfill_task)
         await super().close()
 
 
@@ -242,7 +245,7 @@ class DiscordManager:
             )
 
     def start(self):
-        self.task = asyncio.create_task(self.supervise(), name="discord-supervisor")
+        self.task = self.background.spawn(self.supervise(), name="discord-supervisor")
 
     async def run_client(self, bot, token):
         delay = 5
@@ -269,7 +272,7 @@ class DiscordManager:
                 )
                 return
             except asyncio.CancelledError:
-                break
+                raise
             except Exception as exc:
                 self.gateway(bot["id"], "failed", f"{type(exc).__name__}: {exc}")
             finally:
@@ -293,19 +296,19 @@ class DiscordManager:
                         desired[bot["id"]] = fingerprint
                         existing = self.runners.get(bot["id"])
                         if existing and existing[0] != fingerprint:
-                            existing[1].cancel()
-                            await asyncio.gather(existing[1], return_exceptions=True)
+                            await cancel_and_wait(existing[1])
                             self.runners.pop(bot["id"], None)
                         if bot["id"] not in self.runners:
                             self.runners[bot["id"]] = (
                                 fingerprint,
-                                asyncio.create_task(self.run_client(bot, token), name=f"discord:{bot['id']}"),
+                                self.background.spawn(
+                                    self.run_client(bot, token), name=f"discord:{bot['id']}", bot_id=bot["id"]
+                                ),
                             )
                 for bot_id in list(self.runners):
                     if bot_id not in desired:
                         _, task = self.runners.pop(bot_id)
-                        task.cancel()
-                        await asyncio.gather(task, return_exceptions=True)
+                        await cancel_and_wait(task)
                         self.gateway(bot_id, "offline")
                 if time.time() - self.last_health_check > 15:
                     self.last_health_check = time.time()
@@ -333,9 +336,9 @@ class DiscordManager:
                             self.unhealthy[bot_id] = 0
                 await self.notifications()
             except asyncio.CancelledError:
-                break
+                raise
             except Exception as exc:
-                self.store.emit("discord.supervisor_error", {"error": str(exc)}, level="error")
+                self.store.emit("discord.supervisor_error", {"error": error_text(exc)}, level="error")
             await asyncio.sleep(2)
 
     def scope(self, bot, message):
@@ -439,8 +442,7 @@ class DiscordManager:
     async def restart(self, bot_id):
         entry = self.runners.pop(bot_id, None)
         if entry:
-            entry[1].cancel()
-            await asyncio.gather(entry[1], return_exceptions=True)
+            await cancel_and_wait(entry[1])
         self.gateway(bot_id, "offline")
 
     def reconcile(self, message):
@@ -824,7 +826,9 @@ class DiscordManager:
             if name == "help":
                 result = CodeBlock("\n".join(f"{cmd} — {desc}" for cmd, desc in COMMANDS))
             elif name == "version":
-                result = CodeBlock(version_text(self.service.version()))
+                result = CodeBlock(
+                    version_text(present_times(self.service.version(), council_timezone(self.store)))
+                )
             elif name == "footer":
                 result = await self.footer_command(actor, bot, rest)
             elif name == "status":
@@ -1243,11 +1247,8 @@ class DiscordManager:
     async def close(self):
         self.closed = True
         if self.task:
-            self.task.cancel()
-            await asyncio.gather(self.task, return_exceptions=True)
+            await cancel_and_wait(self.task)
         tasks = [entry[1] for entry in self.runners.values()]
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        await cancel_and_wait(*tasks)
         self.runners.clear()
         self.clients.clear()

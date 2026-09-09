@@ -91,7 +91,7 @@ async def main(directory):
     await k.pool.client.aclose()
     k.pool.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     k.engine.transport = SyntheticDiscord()
-    try:
+    async with k.lifetime():
         k.store.emit(
             "verification.fixture", {"note": "Synthetic provider/Discord data, isolated from production."}
         )
@@ -109,8 +109,6 @@ async def main(directory):
         current.pop("revision")
         current["enabled"] = False
         k.store.put("bots", current)
-    finally:
-        await k.close()
 
 
 if __name__ == "__main__":

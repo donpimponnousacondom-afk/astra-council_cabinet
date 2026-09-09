@@ -8,8 +8,8 @@ from hortator.models import OWNER_ID
 @pytest.fixture
 async def kernel(tmp_path):
     k = Kernel(tmp_path)
-    yield k
-    await k.close()
+    async with k.lifetime():
+        yield k
 
 
 @pytest.fixture

@@ -46,6 +46,7 @@ import {
   money,
   num,
   setCsrf,
+  setCouncilTimezone,
   timeLabel,
 } from "./api";
 import type { Dashboard, Kind, Page, RecordData } from "./api";
@@ -210,6 +211,7 @@ export default function App() {
         api("/api/stats"),
         api("/api/events?limit=15"),
       ]);
+      setCouncilTimezone(data.settings.timezone);
       setDashboard(data);
       setStats(metrics);
       setEvents(ledger);

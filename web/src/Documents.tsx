@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./Documents.css";
 import { Download, ExternalLink, RefreshCw } from "lucide-react";
-import { api, type RecordData } from "./api";
+import { api, dateLabel, type RecordData } from "./api";
 import { Badge, Empty, Field, Notice, Switch } from "./components";
 
 export function DocumentPluginSettings({
@@ -247,7 +247,7 @@ function publicLink(site: Site) {
 
 function isoTime(value: number) {
   const date = new Date(value * 1000);
-  return Number.isNaN(date.valueOf()) ? "Unknown time" : date.toISOString();
+  return Number.isNaN(date.valueOf()) ? "Unknown time" : dateLabel(value);
 }
 
 export function DocumentSitesPanel({ botId }: { botId?: string }) {

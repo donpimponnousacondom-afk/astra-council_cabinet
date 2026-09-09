@@ -25,6 +25,8 @@ from .fetched_documents import (
 from .store import dumps, uid
 from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage, with_usage
 from .working_set import ToolEvidence
+from .concurrency import error_text
+from .timekeeping import council_timezone, present_times
 from .web_search import (
     DEFAULTS as SEARCH_DEFAULTS,
     DESCRIPTION as SEARCH_DESCRIPTION,
@@ -432,6 +434,8 @@ class Registry:
                     result = self.evidence.read(args, context, self.allowed)
                 else:
                     result = self.vault.redact(await spec.handler(args, context, config, key))
+            if name in {"memory", "council_inspect", "web_fetch", "workspace", "shell", "document_site"}:
+                result = present_times(result, council_timezone(self.store))
             search_failed = name == "web_search" and result.get("ok") is False
             if search_failed:
                 result["usage"] = usage(name, spec.parameters, spec.description, args)
@@ -470,7 +474,7 @@ class Registry:
             )
             raise
         except Exception as exc:
-            error = self.vault.redact(f"{type(exc).__name__}: {exc}")[:2000]
+            error = self.vault.redact(error_text(exc))[:2000]
             result = {"ok": False, "error": error}
             if spec:
                 result["usage"] = self.vault.redact(usage(name, spec.parameters, spec.description, args))

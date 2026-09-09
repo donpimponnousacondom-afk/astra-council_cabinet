@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .concurrency import BackgroundTasks
 from . import __version__
 from .discord_gateway import COMMANDS, DiscordManager
 from .models import ControlError, OWNER_ID, SCHEMAS
@@ -31,6 +32,7 @@ from .store import Store
 class Kernel:
     def __init__(self, directory):
         self.started = False
+        self.closed = False
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.store = Store(self.directory / "council.sqlite3")
@@ -51,26 +53,87 @@ class Kernel:
 
         self.registry.discord_dispatch = DiscordDispatch(self.service)
         self.publishing = PublishingWorker(self.store, self.vault, self.directory, self.registry.documents)
+        self.background = BackgroundTasks(self.store)
+        self.service.background = self.background
+        for component in (self.connector, self.engine, self.publishing):
+            component.background = self.background
 
     def start(self):
+        if self.background.group is None or self.background.closing or self.closed:
+            raise RuntimeError("Open Kernel.lifetime() before starting runtime services")
         self.started = True
         self.store.recover()
         self.connector.start()
         self.engine.start()
         self.publishing.start()
+        self.background.spawn(self.watch_loop(), name="event-loop-monitor")
         self.store.emit(
             "runtime.started", {"version": __version__, "build": self.service.version(), "pid": os.getpid()}
         )
 
+    @asynccontextmanager
+    async def lifetime(self):
+        # The group drains before database/client resources are closed, even
+        # when startup, a caller, or cleanup raises.
+        try:
+            async with self.background.lifetime():
+                try:
+                    yield self
+                finally:
+                    await self.stop()
+        finally:
+            await self.close_resources()
+
+    async def watch_loop(self):
+        loop = asyncio.get_running_loop()
+        while True:
+            expected = loop.time() + 1
+            await asyncio.sleep(1)
+            delay = loop.time() - expected
+            if delay > 1:
+                self.store.emit(
+                    "runtime.loop_delayed",
+                    {
+                        "delay_ms": round(delay * 1000),
+                        "active_bots": sorted(self.engine.tasks),
+                        "note": "Event loop was delayed; active bots are correlation, not attribution",
+                    },
+                    level="warning",
+                )
+
+    async def stop(self):
+        if self.closed:
+            return
+        errors = []
+        for component in (self.publishing, self.engine, self.registry.agentic, self.connector):
+            try:
+                await component.close()
+            except Exception as error:
+                errors.append(error)
+        if errors:
+            raise ExceptionGroup("Runtime shutdown failures", errors)
+
+    async def close_resources(self):
+        if self.closed:
+            return
+        self.closed = True
+        try:
+            await self.pool.close()
+            if self.started:
+                self.store.emit("runtime.stopped")
+        finally:
+            self.store.close()
+
     async def close(self):
-        await self.publishing.close()
-        await self.engine.close()
-        await self.registry.agentic.close()
-        await self.connector.close()
-        await self.pool.close()
-        if self.started:
-            self.store.emit("runtime.stopped")
-        self.store.close()
+        from .concurrency import cancel_and_wait
+
+        try:
+            await self.stop()
+        finally:
+            try:
+                await cancel_and_wait(*self.background.pending)
+            finally:
+                await self.close_resources()
 
 
 class LoginBody(BaseModel):
@@ -107,11 +170,12 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
         try:
             kernel = Kernel(directory)
             app.state.kernel = kernel
-            if console:
-                console.bind(kernel)
-            if start_runtime:
-                kernel.start()
-            yield
+            async with kernel.lifetime():
+                if console:
+                    console.bind(kernel)
+                if start_runtime:
+                    kernel.start()
+                yield
         finally:
             if console:
                 console.stop_keys()

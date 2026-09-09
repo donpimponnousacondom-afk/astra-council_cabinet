@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { dateLabel, setCouncilTimezone } from "../src/api";
 
 test("intentional silence is a persistent per-bot capability with a usable checkbox", async ({
   page,
@@ -234,16 +235,24 @@ test("running version shows real server and dashboard identities with ISO dates"
   page,
 }) => {
   const version = await (await page.request.get("/api/version")).json();
+  const status = await (await page.request.get("/api/status")).json();
+  setCouncilTimezone(status.settings.timezone);
   const build = await (await page.request.get("/build-info.json")).json();
   const banner = page.getByRole("region", { name: "Running version" });
   await expect(banner).toContainText(version.short_commit);
   await expect(banner).toContainText(version.commit_title);
-  await expect(banner.locator("time")).toHaveText(version.committed_at);
+  await expect(banner.locator("time")).toHaveText(
+    dateLabel(version.committed_at),
+  );
+  await expect(banner.locator("time")).toHaveAttribute(
+    "datetime",
+    version.committed_at,
+  );
   expect(version.committed_at).toMatch(
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
   );
   await banner.getByText("Build details", { exact: true }).click();
-  await expect(banner).toContainText(version.started_at);
+  await expect(banner).toContainText(dateLabel(version.started_at));
   const row = (name: string) =>
     banner
       .locator("dl > div")
@@ -252,7 +261,7 @@ test("running version shows real server and dashboard identities with ISO dates"
   await expect(row("Server commit")).toHaveText(version.commit);
   await expect(row("Dashboard commit")).toHaveText(build.commit);
   await expect(row("Dashboard commit title")).toHaveText(build.commit_title);
-  await expect(row("Dashboard built")).toHaveText(build.built_at);
+  await expect(row("Dashboard built")).toHaveText(dateLabel(build.built_at));
   await page.screenshot({
     path: "test-results/running-version-desktop.png",
     animations: "disabled",

@@ -59,7 +59,7 @@ async def test_phoenix_components_reach_model_context_as_external_app_not_human(
     assert row["addressing"]["webhook_id"] == PHOENIX
     assert not kernel.engine.attention(bot)
     profile = kernel.store.get("profiles", bot["model_profile_id"])
-    messages, _ = kernel.engine.contexts.assemble(bot, profile, CHANNEL, [row], "")
+    messages, _ = await kernel.engine.contexts.assemble(bot, profile, CHANNEL, [row], "")
     assert "Hello! This is just a test." in str(messages)
     transcript = kernel.engine.contexts.conversation([row], bot)[0]
     assert transcript["is_boss"] is False

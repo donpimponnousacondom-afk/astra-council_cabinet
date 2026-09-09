@@ -46,8 +46,10 @@ async def test_version_aliases_are_immediate_fenced_and_redacted(kernel, command
     output = channel.send.await_args.kwargs["content"]
     assert output.startswith("```\nHortator · running server")
     assert kernel.service.version()["short_commit"] in output
-    assert kernel.service.version()["committed_at"] in output
-    assert kernel.service.version()["started_at"] in output
+    from hortator.timekeeping import local_timestamp
+
+    assert local_timestamp(kernel.service.version()["committed_at"]) in output
+    assert local_timestamp(kernel.service.version()["started_at"]) in output
     assert "fake-version-test-secret" not in output
     assert "[REDACTED]" in output
     assert not kernel.store.rows("SELECT * FROM requests")

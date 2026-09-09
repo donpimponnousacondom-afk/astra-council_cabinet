@@ -7,6 +7,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 
+from .concurrency import cancel_and_wait, task_group, error_text
 from .context import ContextBuilder
 from .addressing import human_directed_elsewhere
 from .footer import render_footer
@@ -67,7 +68,7 @@ class Engine:
         self.human_superseded = set()
 
     def start(self):
-        self.task = asyncio.create_task(self.loop(), name="council-scheduler")
+        self.task = self.background.spawn(self.loop(), name="council-scheduler")
 
     def configuration(self, bot):
         profile = self.store.get("profiles", bot["model_profile_id"])
@@ -281,9 +282,9 @@ class Engine:
             try:
                 await self.tick()
             except asyncio.CancelledError:
-                break
+                raise
             except Exception as exc:
-                self.store.emit("runtime.scheduler_error", {"error": str(exc)}, level="error")
+                self.store.emit("runtime.scheduler_error", {"error": error_text(exc)}, level="error")
             await asyncio.sleep(0.5)
 
     def launch(self, bot, channel_id, *, compact_only=False, human_directed=False):
@@ -334,9 +335,11 @@ class Engine:
             bot_id=bot["id"],
             turn_id=turn_id,
         )
-        task = asyncio.create_task(
+        task = self.background.spawn(
             self.run(bot, profile, provider, channel_id, turn_id, compact_only),
             name=f"bot:{bot['id']}:{turn_id}",
+            bot_id=bot["id"],
+            turn_id=turn_id,
         )
         self.tasks[bot["id"]] = task
         task.add_done_callback(
@@ -362,13 +365,17 @@ class Engine:
             )
 
     async def run(self, bot, profile, provider, channel_id, turn_id, compact_only):
+        async with task_group() as group:
+            await self.run_turn(bot, profile, provider, channel_id, turn_id, compact_only, group)
+
+    async def run_turn(self, bot, profile, provider, channel_id, turn_id, compact_only, group):
         status, decision, error = "failed", None, None
         retry_delay = 0
         typing_task = None
         context = ToolContext(bot, channel_id, turn_id, owner_verified=bot["role"] == "hortator")
         try:
             if getattr(self.transport, "typing", None):
-                typing_task = asyncio.create_task(
+                typing_task = group.create_task(
                     self.show_typing(bot, channel_id, turn_id), name=f"typing:{bot['id']}:{turn_id}"
                 )
                 # Start presence before context preparation, including compaction and provider queues.
@@ -445,7 +452,7 @@ class Engine:
                     }
                 # Only future prompt copies are minimized. Historical requests and
                 # the immutable result store continue to hold the actual evidence.
-                _, base_meta = self.contexts.assemble(
+                _, base_meta = await self.contexts.assemble(
                     budget_bot, profile, channel_id, rows, summary, round_index, [], available_tools
                 )
                 headroom = (
@@ -460,8 +467,10 @@ class Engine:
                     bot.get("tool_working_set_tokens", 6000),
                     max(64, headroom),
                 )
-                extras, working_meta = bound_exchanges(extras, self.contexts.estimate, working_limit)
-                messages, meta = self.contexts.assemble(
+                extras, working_meta = await asyncio.to_thread(
+                    bound_exchanges, extras, self.contexts.estimate, working_limit
+                )
+                messages, meta = await self.contexts.assemble(
                     budget_bot,
                     profile,
                     channel_id,
@@ -813,8 +822,9 @@ class Engine:
                 if turn_id in self.human_superseded
                 else "Stopped by operator, configuration change, or shutdown",
             )
+            raise
         except Exception as exc:
-            status, error = "failed", self.vault.redact(f"{type(exc).__name__}: {exc}")[:3000]
+            status, error = "failed", self.vault.redact(error_text(exc))[:3000]
             retry_delay = getattr(exc, "retry_after", 0)
             self.store.execute("UPDATE bot_runtime SET error=? WHERE bot_id=?", (error, bot["id"]))
             self.store.emit(
@@ -827,8 +837,7 @@ class Engine:
         finally:
             self.human_superseded.discard(turn_id)
             if typing_task:
-                typing_task.cancel()
-                await asyncio.gather(typing_task, return_exceptions=True)
+                await cancel_and_wait(typing_task)
             self.store.execute(
                 "UPDATE turns SET status=?,decision=?,error=?,ended_at=? WHERE id=?",
                 (status, decision, error, time.time(), turn_id),
@@ -1098,11 +1107,10 @@ class Engine:
                 (reason, bot_id),
             )
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            await cancel_and_wait(*tasks)
 
     async def close(self):
         self.closed = True
         if self.task:
-            self.task.cancel()
-            await asyncio.gather(self.task, return_exceptions=True)
+            await cancel_and_wait(self.task)
         await self.cancel(list(self.tasks), "Shutdown")

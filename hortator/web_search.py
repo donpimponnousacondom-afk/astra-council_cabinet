@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
 
 import httpx
 
+from .concurrency import task_group
 from .models import ControlError
 from .tool_feedback import errors_for
 
@@ -330,7 +331,10 @@ async def search(args, context, config, key, store):
 
     async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as client:
         if mode == "both":
-            responses = await asyncio.gather(engine(client, "brave"), engine(client, "duckduckgo"))
+            async with task_group() as group:
+                brave = group.create_task(engine(client, "brave"), name="search-brave")
+                duck = group.create_task(engine(client, "duckduckgo"), name="search-duckduckgo")
+            responses = [brave.result(), duck.result()]
         elif mode == "auto":
             responses = [await engine(client, "brave")]
             if not responses[0][1]:
