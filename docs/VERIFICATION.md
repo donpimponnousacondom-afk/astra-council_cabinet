@@ -2,6 +2,10 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
 
+## Shared Screen recovery shortcut (2026-09-10)
+
+The owner reported accidentally closing Screen. Inspection found no `hortator` session and no listener on port 8000; the other named Screen sessions were left alone. Added the local `hortator-start` fast action, using the existing verified process/shell inspection helpers, user Screen configuration, login Bash and external runtime launcher. It does not initialize data, switch branches or restart an already running server. Ruff formatting/lint, Bash syntax and whitespace checks passed. Recovery and repeated-invocation PID/health checks are recorded after execution in the external `logs/screen-start-verification.json` receipt; no live Discord test messages or configuration mutations are involved.
+
 ## Dense desktop workbench and frozen legacy dashboard (2026-09-09)
 
 Continued the clean `feat/next_feature` checkout from squash commit `7937e8842181`. The active frontend now uses compact Dark+ inventories and docked/maximizable editors. All 16 files copied into `web/src/legacy/` were compared byte-for-byte against that baseline and match; the active frontend imports no legacy UI modules. Both HTML entries build through Vite and use the unchanged Python API, authentication and external data. No backend code, migrations, provider settings, bot activation or private memories were changed by this task.

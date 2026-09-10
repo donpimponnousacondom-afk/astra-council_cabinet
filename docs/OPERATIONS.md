@@ -127,6 +127,8 @@ This argument is non-secret source metadata (commit, commit title, timestamp, br
 
 The workspace runtime runs in the named GNU Screen session **`hortator`**, window **`dashboard`**, under the `codexy` account. Use this session for runtime commands so the operator and agent share the same terminal and output. The shell remains available after stopping the server. Screen survives terminal disconnection; it does not restart the machine or automatically restart a crashed application.
 
+For a repeatable harness fast action, run **`/home/codexy/.local/bin/hortator-start`**. Install that command as a symlink to `scripts/hortator-start`. It loads the existing runtime environment, creates a missing Screen using the user's `.screenrc` and login/interactive Bash, or starts the server in the existing idle repository shell. An already-running shared server is left alone. It refuses unrelated foreground work or an occupied port outside that session, preserves attachments and checks API health. It does not switch branches, rebuild, restart a running server or attach the caller. After changing code, use the existing build/refresh workflow instead. To start and then join from an interactive terminal, use `hortator-start && screen -x hortator`.
+
 Attach, including when another terminal is already attached:
 
 ```bash
