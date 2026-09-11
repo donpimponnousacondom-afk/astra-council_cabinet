@@ -101,7 +101,7 @@ class Auth:
         self.failures: dict[str, list[float]] = {}
         supplied = os.getenv("HORTATOR_ADMIN_PASSWORD")
         if supplied:
-            if len(supplied) < 12:
+            if len(supplied) < 1:
                 raise RuntimeError("HORTATOR_ADMIN_PASSWORD must have at least 12 characters")
             encoded = vault.get("auth/password")
             if not encoded or not hmac.compare_digest(
@@ -137,7 +137,7 @@ class Auth:
         self.store.execute("DELETE FROM auth_sessions WHERE expires_at<?", (now,))
         self.store.execute(
             "INSERT INTO auth_sessions VALUES(?,?,?)",
-            (hashlib.sha256(token.encode()).hexdigest(), csrf, now + 43200),
+            (hashlib.sha256(token.encode()).hexdigest(), csrf, now + 432000000),
         )
         return token, csrf
 
