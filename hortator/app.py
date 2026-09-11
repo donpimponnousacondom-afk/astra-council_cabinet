@@ -301,7 +301,7 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
             httponly=True,
             samesite="strict",
             secure=os.getenv("HORTATOR_SECURE_COOKIES") == "1",
-            max_age=43200,
+            max_age=432000000,
             path="/",
         )
         return response
