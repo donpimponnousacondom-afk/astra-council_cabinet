@@ -11,9 +11,9 @@ from dataclasses import dataclass
 
 from .diagnostics import text_content
 
-" Ultra fast patch to solve issues with SSE stream cuts offs
-" It was 8MB (it blows apart with SSE streams of ~94KB chars which is SAD)
-"""
+""" Ultra fast patch to solve issues with SSE stream cuts offs
+ It was 8MB (it blows apart with SSE streams of ~94KB chars which is SAD)
+
 Astra comment to the future agent or human:
 So roughly **95 KB of reasoning arrived inside an 8 MB stream**. Thousands of small chunks, each wrapped in repeated metadata, exhausted our transport-size allowance before the model produced the summary.
 
