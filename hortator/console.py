@@ -91,6 +91,8 @@ SUMMARY_FIELDS = (
     "decision",
     "model",
     "purpose",
+    "reasoning",
+    "profile_revision",
     "name",
     "command",
     "action",

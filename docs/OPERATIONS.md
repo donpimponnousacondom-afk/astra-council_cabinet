@@ -587,3 +587,15 @@ The application now requires Python 3.14 (`.python-version` and `requires-python
 Install the OS tools and pinned micromamba bootstrap described in [SHELL_RUNNER.md](SHELL_RUNNER.md#operator-requirements-and-readiness). Keep uv and micromamba discoverable in the service PATH, then refresh runner readiness. Missing tools or another application Python version fail closed. Never use readiness as evidence that every package fits the finite limits. A public package smoke check is opt-in: `HORTATOR_REQUIRE_SANDBOX=1 HORTATOR_TEST_PACKAGE_NETWORK=1 uv run pytest -q tests/test_shell_runner.py`. It downloads a small Python package and zstd inside disposable namespaces, not into host applications.
 
 New package storage defaults are 2 GiB/50,000 entries per job; shell address space is 2 GiB per process, with 16 processes/threads. Existing explicit global or per-bot values remain authoritative and may need deliberate operator adjustment for a package workload. All installs/caches in `/packages` disappear at job completion. Backups continue to include persistent workspaces/jobs; package scratch needs no archive. Host networking includes loopback reachability; bot filesystem credentials and the application environment remain unmounted.
+
+### Reasoning settings in request logs
+
+`turn.started` shows the captured generation profile's native reasoning controls and
+`profile_revision`. `request.started` and `request.completed` show the controls in
+that request's outgoing JSON, including compaction overrides. For example,
+`reasoning=reasoning_effort:"max"` records a requested setting, not confirmation
+that the provider honored it. `unspecified` means none of the recognized controls
+were supplied; it does not imply off or a known provider default. Native control
+paths are preserved to avoid inventing precedence between vendor fields.
+An already active turn retains its captured profile; profile edits apply to new
+turns. These summaries never contain provider-produced reasoning text or credentials.

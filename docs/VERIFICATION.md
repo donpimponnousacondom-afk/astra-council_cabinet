@@ -346,3 +346,16 @@ The application and real Bubblewrap jobs were verified on the operator's install
 - `uv build --wheel` succeeded; all five shell assets were present and the pip/pkg wrappers retained executable permissions. The `python:3.14-slim-trixie` Docker manifest was verified. Docker image build/runtime validation was unavailable because the account could not access the Docker daemon socket; the Docker recipe still requires a compatible outer namespace policy.
 
 The application migration does not replace distribution Python or change the separately managed publishing receiver's interpreter contract. Resource documentation distinguishes per-process address space, hard tmpfs byte ceilings, monitored entries and strict workspace export validation. These tests do not establish live Discord/provider generation or remote publication acceptance. Committed rollout uses the shared-Screen refresh workflow; its external `logs/next-feature.json` and startup-captured version provide deployment evidence without a rolling source-tree handover.
+
+### 2026-09-12 — Reasoning configuration in operational logs
+
+Added bounded, credential-redacted native reasoning setting summaries and profile
+revisions to turn start and provider request start/completion. Request summaries
+use the assembled payload after compaction overrides. Mock provider coverage
+checks an override from low to max, folded console visibility, revision identity,
+and separation of absent/disabled controls from private reasoning text.
+
+Validation: provider diagnostics plus console tests passed (38 tests); the 18
+provider diagnostics tests passed again after ensuring credential masking occurs
+before field truncation. Ruff and diff whitespace checks passed. These are mocked
+request checks; they do not establish that an upstream model honors its controls.
