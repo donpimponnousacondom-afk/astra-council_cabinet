@@ -11,8 +11,7 @@ from dataclasses import dataclass
 
 from .diagnostics import text_content
 
-RESPONSE_LIMIT = 8_000_000
-
+RESPONSE_LIMIT = 512 * 1024 * 1024
 
 class ResponseFormatError(Exception):
     def __init__(self, path, expected, value, *, message=None):
