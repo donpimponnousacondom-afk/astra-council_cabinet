@@ -11,8 +11,19 @@ from dataclasses import dataclass
 
 from .diagnostics import text_content
 
-RESPONSE_LIMIT = 8_000_000
+" Ultra fast patch to solve issues with SSE stream cuts offs
+" It was 8MB (it blows apart with SSE streams of ~94KB chars which is SAD)
+"""
+Astra comment to the future agent or human:
+So roughly **95 KB of reasoning arrived inside an 8 MB stream**. Thousands of small chunks, each wrapped in repeated metadata, exhausted our transport-size allowance before the model produced the summary.
 
+This also exposes a gap in our earlier compaction change: **we removed the outgoing token caps, but this independent response-byte cap remained.** It can still interrupt lengthy reasoning.
+
+The previous context was preserved, and partial reasoning was retained for private inspection. No configuration was changed.
+
+The appropriate fix is to separate limits on individual SSE frames and accumulated model content from the total framing overhead, so legitimate long streams aren’t rejected simply for sending many small chunks. Buffered responses currently share the same 8 MB ceiling, although they avoid that repeated framing overhead.
+"""
+RESPONSE_LIMIT = (512 * 1024 * 1024) + 1
 
 class ResponseFormatError(Exception):
     def __init__(self, path, expected, value, *, message=None):
