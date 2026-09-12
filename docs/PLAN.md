@@ -231,3 +231,11 @@ deadline still apply. See OPERATIONS for exact limits. Treat these failures as
 local limits, not malformed responses or provider downtime, and retain previous
 compaction checkpoints on failure. This replaces the temporary 512 MiB + 1-byte
 aggregate SSE patch without changing per-model reasoning/summary/token settings.
+
+## 2026-09-12 — Allow two-hour extended task lifetimes
+
+Raise the validation maximum for both document and workspace/web task deadlines
+from 3,600 to 7,200 seconds and match the modern workspace editor's HTML bound.
+The owner requested Hortator's two saved deadlines at 7,200. Preserve defaults,
+other bot values, per-request provider timeouts and once-per-turn extension
+semantics. This changes allowed duration, not retry/cancellation policy.

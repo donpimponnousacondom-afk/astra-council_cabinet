@@ -141,7 +141,7 @@ The existing authenticated plugin-save API accepts global `document_site.config`
 
 The `document_site` tool contract requires explicit `create`; `start`/`edit` resume existing sites. Its paged reads/history, optimistic file edits/restoration and public-only replication use the registry's complete schema/error feedback. Automatic saves commit local publication and queue metadata together. Transfers run independently of HTTP requests and model turns, preserving immutable jobs through retries and receipt reconciliation. See [DOCUMENTS.md](DOCUMENTS.md) for complete operations and limits.
 
-Bots expose `document_task_rounds` (default20,0–100 additional rounds), `document_task_calls_per_round` (default8,1–20) and `document_task_seconds` (default900,30–3600) through the existing bot-save API. Model profiles expose nullable nonnegative `cache_hit_input_price_per_million` and `cache_miss_input_price_per_million`. See [TOOLS.md](TOOLS.md), [DOCUMENTS.md](DOCUMENTS.md) and [PRICING.md](PRICING.md) for semantics.
+Bots expose `document_task_rounds` (default20,0–100 additional rounds), `document_task_calls_per_round` (default8,1–20) and `document_task_seconds` (default900,30–7200) through the existing bot-save API. Model profiles expose nullable nonnegative `cache_hit_input_price_per_million` and `cache_miss_input_price_per_million`. See [TOOLS.md](TOOLS.md), [DOCUMENTS.md](DOCUMENTS.md) and [PRICING.md](PRICING.md) for semantics.
 
 ## Private tool inspection
 
