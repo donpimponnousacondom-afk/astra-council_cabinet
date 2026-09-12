@@ -170,7 +170,7 @@ async def test_every_bot_sends_pixels_and_ledger_keeps_only_references(kernel, b
     assert "hortator_image" in recorded["body"]
 
 
-async def test_compaction_receives_pixels_and_deleted_images_are_omitted(kernel):
+async def test_compaction_is_text_only_and_preserves_new_pixels_for_generation(kernel):
     bot, channel = prepare_bot(kernel)
     _, item = await cached(kernel)
     kernel.store.execute(
@@ -186,13 +186,23 @@ async def test_compaction_receives_pixels_and_deleted_images_are_omitted(kernel)
         )
 
     kernel.pool.complete = complete
-    await kernel.engine.contexts.prepare(bot, profile, channel, "compact-image", [], force=True)
+    recent, summary, _, meta = await kernel.engine.contexts.prepare(
+        bot, profile, channel, "compact-image", [], force=True
+    )
     assert received[0]["purpose"] == "compaction"
-    assert image_count(received[0]["messages"]) == 1
+    assert image_count(received[0]["messages"]) == 0
+    assert "metadata only" in received[0]["messages"][0]["content"]
+    assert not recent  # Even a fresh image compacted out of the text remains available for this turn.
+    messages, _ = await kernel.engine.contexts.assemble(
+        bot, profile, channel, recent, summary, image_plan=meta["image_plan"]
+    )
+    assert image_count(messages) == 1
     assert "base64," not in json.dumps(received)
     kernel.store.execute("UPDATE messages SET deleted=1 WHERE channel_id=?", (channel,))
     rows = kernel.store.transcript(channel)
-    messages, _ = await kernel.engine.contexts.assemble(bot, profile, channel, rows, "")
+    messages, _ = await kernel.engine.contexts.assemble(
+        bot, profile, channel, rows, "", image_plan=meta["image_plan"]
+    )
     assert image_count(messages) == 0
     assert "sha256" not in json.dumps(messages)
 
@@ -275,66 +285,29 @@ async def test_legacy_capture_progress_is_persisted_before_cancellation(kernel):
     assert "vision" not in stored[1]
 
 
-@pytest.mark.parametrize("image_limit", [8, 256])
-async def test_many_images_compact_in_bounded_batches_instead_of_dropping_pixels(kernel, image_limit):
+@pytest.mark.parametrize("image_limit", [1, 8, 256])
+async def test_new_image_count_budget_does_not_force_conversation_compaction(kernel, image_limit):
     bot, channel = prepare_bot(kernel)
-    _, item = await cached(kernel)
+    cache, item = await cached(kernel)
+    # Multiple images on one message used to make a one-image compaction batch impossible.
     kernel.store.execute(
-        "UPDATE messages SET attachments=? WHERE channel_id=?", (json.dumps([item]), channel)
+        "UPDATE messages SET attachments=? WHERE channel_id=?",
+        (json.dumps([item, {**item, "id": "second"}]), channel),
     )
-    for index in range(8):
-        kernel.store.ingest(
-            discord_id=str(100 + index),
-            channel_id=channel,
-            room_id="council",
-            author_id=OWNER_ID,
-            author_name="The Boss",
-            content="Another image",
-            attachments=[item],
-        )
     profile = kernel.store.get("profiles", bot["model_profile_id"])
-    # Image count alone must trigger compaction even when token reserve fits a very large context.
-    profile.update(
-        context_window=1_000_000,
-        keep_recent_messages=20,
-        max_request_images=image_limit,
-        max_request_image_mib=512,
+    profile.update(context_window=1_000_000, max_request_images=image_limit, max_request_image_mib=512)
+    kernel.pool.complete = AsyncMock(side_effect=AssertionError("No compaction request expected"))
+    rows, summary, _, meta = await kernel.engine.contexts.prepare(bot, profile, channel, "new-images", [])
+    messages, _ = await kernel.engine.contexts.assemble(
+        bot, profile, channel, rows, summary, image_plan=meta["image_plan"]
     )
-    received = []
-
-    async def complete(**kwargs):
-        received.append(kwargs)
-        return Completion(
-            request_id=f"compact-images-{len(received)}",
-            content="Red pixels were posted repeatedly.",
-            finish_reason="stop",
-        )
-
-    kernel.pool.complete = complete
-    rows, summary, _, _ = await kernel.engine.contexts.prepare(bot, profile, channel, "many-images", [])
-    messages, _ = await kernel.engine.contexts.assemble(bot, profile, channel, rows, summary)
-    if image_limit == 256:
-        assert not received
-        assert image_count(messages) == 9
-        wire = ImageCache(kernel.store).wire_messages(messages, profile)
-        assert (
-            sum(
-                p.get("type") == "image_url"
-                for m in wire
-                if isinstance(m.get("content"), list)
-                for p in m["content"]
-            )
-            == 9
-        )
-        return
-    event = next(e for e in kernel.store.events() if e["kind"] == "compaction.started")
-    assert event["data"]["trigger"] == "image_count"
-    assert event["data"]["image_count"] == 9
-    assert event["data"]["image_limit"] == 8
-    assert event["data"]["calibrated_tokens"] < event["data"]["token_threshold"]
-    assert received and all(image_count(request["messages"]) <= image_limit for request in received)
-    assert image_count(messages) <= image_limit
-    assert sum(image_count(request["messages"]) for request in received) + image_count(messages) == 9
+    assert image_count(messages) == min(2, image_limit)
+    assert len(rows[0]["attachments"]) == 2
+    assert len(meta["image_plan"]["budget_omitted"]) == (1 if image_limit == 1 else 0)
+    if image_limit == 1:
+        assert "budget omitted" in json.dumps(messages)
+    assert not any(e["kind"] == "compaction.started" for e in kernel.store.events())
+    cache.wire_messages(messages, profile)
 
 
 async def test_attachment_removal_edit_removes_pixels_but_embed_edit_keeps_them(kernel):
@@ -532,7 +505,7 @@ async def test_custom_image_byte_budget_and_compaction_batch_share_profile(kerne
     )
     assert count == 11
     count, _, _, _ = ctx.compaction_batch([], rows, [], 1_000_000)
-    assert count == 10
+    assert count == 11  # Compaction has no image inputs, regardless of the request image budget.
     messages = [
         {"role": "user", "content": [{"type": "hortator_image", "image": {"size": 41 * 1024 * 1024}}]}
     ]
@@ -541,3 +514,133 @@ async def test_custom_image_byte_budget_and_compaction_batch_share_profile(kerne
     public = kernel.service.public("profiles", {"id": "old"})
     assert public["max_request_images"] == 10
     assert public["max_request_image_mib"] == 40
+
+
+async def test_old_multi_image_message_never_blocks_or_recaptures_after_handled_turn(kernel):
+    bot, channel = prepare_bot(kernel)
+    cache, item = await cached(kernel)
+    kernel.store.execute(
+        "UPDATE messages SET attachments=? WHERE channel_id=?",
+        (json.dumps([item, {**item, "id": "second"}]), channel),
+    )
+    row = kernel.store.transcript(channel)[0]
+    kernel.store.execute(
+        "UPDATE contexts SET last_seen=? WHERE bot_id=? AND channel_id=?",
+        (row["seq"], bot["id"], channel),
+    )
+    profile = kernel.store.get("profiles", bot["model_profile_id"])
+    profile.update(max_request_images=1, context_window=512000, summary_tokens=32768)
+    ctx = kernel.engine.contexts
+    ctx.images.capture = AsyncMock(side_effect=AssertionError("Old images must not be downloaded"))
+    kernel.pool.complete = AsyncMock(side_effect=AssertionError("Images must not trigger compaction"))
+    rows, summary, _, meta = await ctx.prepare(bot, profile, channel, "old-images", [])
+    messages, _ = await ctx.assemble(bot, profile, channel, rows, summary, image_plan=meta["image_plan"])
+    assert image_count(messages) == 0 and meta["image_plan"]["historical_images"] == 2
+    assert '"pixels_in_this_request":false' in json.dumps(messages).replace('\\"', '"')
+    assert kernel.store.context(bot["id"], channel)["checkpoint"] == 0
+    assert len(kernel.store.transcript(channel)[0]["attachments"]) == 2
+    assert cache.read(item["vision"]) == png()
+    ctx.images.capture.assert_not_awaited()
+    # Consumption belongs to the bot, not to the shared room/image cache.
+    other = {**bot, "id": "socrates"}
+    messages, _ = await ctx.assemble(other, profile, channel, rows, "")
+    assert image_count(messages) == 1
+    # A forced/text-triggered summary also passes the old two-image message as text.
+    kernel.pool.complete = AsyncMock(
+        return_value=Completion(
+            request_id="old-text-summary", content="Two images were discussed earlier.", finish_reason="stop"
+        )
+    )
+    await ctx.prepare(bot, profile, channel, "forced-old-images", [], force=True)
+    assert image_count(kernel.pool.complete.call_args.kwargs["messages"]) == 0
+    assert kernel.store.context(bot["id"], channel)["checkpoint"] == row["seq"]
+    assert cache.read(item["vision"]) == png()
+
+
+async def test_image_inputs_survive_tool_rounds_but_expire_after_completed_turn(kernel):
+    from conftest import ingest
+    from test_runtime import completion, settle
+
+    bot, channel = prepare_bot(kernel)
+    _, item = await cached(kernel)
+    kernel.store.execute(
+        "UPDATE messages SET attachments=? WHERE channel_id=?", (json.dumps([item]), channel)
+    )
+    captured = []
+
+    def response(request):
+        captured.append(json.loads(request.content))
+        if len(captured) == 1:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "tool_calls": [
+                                    {
+                                        "id": "help",
+                                        "type": "function",
+                                        "function": {"name": "council_silence", "arguments": "{}"},
+                                    }
+                                ]
+                            },
+                            "finish_reason": "tool_calls",
+                        }
+                    ]
+                },
+            )
+        return completion(silence=True)
+
+    await install_client(kernel, response)
+    kernel.engine.launch(bot, channel)
+    await settle(kernel)
+    assert len(captured) == 2
+    assert kernel.store.one("SELECT status FROM turns")["status"] == "silent"
+    ingest(kernel, content="New topic, no image", discord_id="777777777777777770")
+    kernel.engine.launch(bot, channel)
+    await settle(kernel)
+    counts = [
+        sum(
+            p.get("type") == "image_url"
+            for m in body["messages"]
+            if isinstance(m.get("content"), list)
+            for p in m["content"]
+        )
+        for body in captured
+    ]
+    assert counts == [1, 1, 0]
+    assert all(r["purpose"] == "generation" for r in kernel.store.rows("SELECT purpose FROM requests"))
+
+
+def test_newest_images_respect_count_and_byte_budget_without_mutating_sources():
+    from hortator.vision_turn import select_images
+    import copy
+
+    rows = [
+        {
+            "seq": i,
+            "discord_id": str(i),
+            "attachments": [
+                attachment(vision={"status": "ready", "sha256": str(i), "size": 15 * 1024 * 1024})
+            ],
+        }
+        for i in range(1, 4)
+    ]
+    original = copy.deepcopy(rows)
+    plan = select_images(rows, 0, {"max_request_images": 10, "max_request_image_mib": 20})
+    assert [p["message_id"] for p in plan["inputs"]] == ["3"]
+    assert len(plan["budget_omitted"]) == 2 and rows == original
+
+
+async def test_compaction_token_error_names_actual_required_and_allowed_counts(kernel):
+    bot, channel = prepare_bot(kernel)
+    kernel.store.execute("UPDATE messages SET content=?", ("huge message " * 10000,))
+    profile = kernel.store.get("profiles", bot["model_profile_id"])
+    profile.update(context_window=5000, summary_tokens=1000, response_tokens=1000)
+    kernel.pool.complete = AsyncMock(side_effect=AssertionError("Impossible input must fail locally"))
+    with pytest.raises(
+        ControlError, match=r"\d+ estimated input tokens required, \d+ allowed.*no image pixels"
+    ):
+        await kernel.engine.contexts.prepare(bot, profile, channel, "large-text", [], force=True)
+    assert kernel.store.context(bot["id"], channel)["checkpoint"] == 0

@@ -471,3 +471,45 @@ A complete stopped-runtime backup was taken before the configuration update at
 `$HORTATOR_DATA_DIR/logs/ten-image-profiles.json` record old/new revisions and
 image budgets. Deployment uses the existing shared-Screen refresh workflow;
 `logs/next-feature.json` records the resulting startup/build verification.
+
+### 2026-09-12 — Expire handled image inputs instead of repeatedly compacting them
+
+Investigated V's turn `turn_70d1b0e0becd40d583a1` and events #25228–25243.
+Compaction was triggered solely by four retained images against a one-image
+profile budget, at 109,872 estimated tokens versus a 460,800-token threshold.
+The first 23-message batch produced an accepted 19,131-token summary (limit
+32,768). The next pending message, `1548172836420718693` (seq 15959), contains two
+ready images totaling 2,398,504 bytes; the previous implementation could never
+fit that indivisible message into a one-image batch. Its old error's 407,347
+figure was the allowed token budget, not observed input size. All batches had to
+succeed before a checkpoint commit, so retrying repeated the earlier paid batch.
+
+Implemented current-turn selection using each bot/channel's existing last_seen,
+metadata-only old/excess attachments, fixed image inputs through tool rounds,
+text-only compaction, and source removal/deletion checks on subsequent requests.
+Preserved current-generation pixels when text compaction advances their source
+checkpoint. Failed/cancelled turns do not acknowledge input. No operator profile,
+image bytes, memories or existing summaries were rewritten by the deployment.
+New omission warnings include both count and byte limits plus the binding cause.
+Compaction token errors now name actual required and allowed estimates separately.
+
+107 vision/compaction/responsiveness/runtime/feedback/error tests passed, followed
+by 185 addressing/concurrency/typing/intake/footer/provider/streaming/diagnostics
+tests: 292 distinct tests, with two existing dependency deprecation warnings.
+Coverage includes two old images under a one-image profile, text-only forced
+compaction, new-image overflow without compaction, independent bot boundaries,
+retained pixels through tool rounds followed by expiry, original cache retention,
+source deletion and explicit token-budget diagnostics. Ruff/diff checks passed.
+
+An offline replay copied only the relevant current conversation/configuration
+into temporary private storage and prohibited provider calls. V's unmodified
+shared profile was revision 11 / count 3 (the owner edited it during diagnosis).
+The new preparation produced 0 image inputs, 4 historical metadata-only images,
+93,920 estimated tokens versus the 460,800-token threshold, and no compaction or
+provider call. The live database was not modified by this replay. This validates
+input preparation, not the quality of a newly generated model answer.
+
+The deployment procedure uses a stopped-runtime complete backup at
+`/home/codexy/.local/share/hortator-backups/20260912-turn-scoped-images`, then the
+shared-Screen refresh workflow. Its external `logs/next-feature.json` receipt
+records actual startup/dashboard matching; no source branch is pushed.

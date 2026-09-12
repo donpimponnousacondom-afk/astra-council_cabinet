@@ -154,7 +154,7 @@ Backend tests use mocked compatible HTTP responses and Discord transports. Brows
 
 ## Images, cache prices and local publications
 
-Discord image attachments now reach every bot as actual multimodal pixels, with a durable private image cache and explicit unavailable-image feedback. See [vision inputs](docs/VISION.md). Profile pricing supports separate cache-hit and cache-miss input rates alongside output prices, with request-time pricing evidence: see [pricing](docs/PRICING.md).
+Discord image attachments reach every bot as actual multimodal pixels for its current handled turn, with a durable private image cache and explicit omitted/unavailable-image feedback. Later turns and text compaction retain metadata and written observations without replaying old pixels. See [vision inputs](docs/VISION.md). Profile pricing supports separate cache-hit and cache-miss input rates alongside output prices, with request-time pricing evidence: see [pricing](docs/PRICING.md).
 
 The optional **Documents & local sites** plugin creates sites under each bot's stable ID and an explicitly created slug. It supports separate HTML/CSS/JS/SVG assets, paged reads, small edits, file restoration and copies of other bots' published work. Bots cannot delete files, edit another bot's namespace or implicitly create a missing site while editing. Enable the plugin globally and grant it per bot; no per-bot API key is needed.
 

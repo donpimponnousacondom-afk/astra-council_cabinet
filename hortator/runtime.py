@@ -467,7 +467,15 @@ class Engine:
                 # Only future prompt copies are minimized. Historical requests and
                 # the immutable result store continue to hold the actual evidence.
                 _, base_meta = await self.contexts.assemble(
-                    budget_bot, profile, channel_id, rows, summary, round_index, [], available_tools
+                    budget_bot,
+                    profile,
+                    channel_id,
+                    rows,
+                    summary,
+                    round_index,
+                    [],
+                    available_tools,
+                    image_plan=original_meta["image_plan"],
                 )
                 headroom = (
                     int(
@@ -493,6 +501,7 @@ class Engine:
                     round_index,
                     prompt_exchanges(extras),
                     available_tools,
+                    image_plan=original_meta["image_plan"],
                 )
                 meta.update(
                     checkpoint=original_meta["checkpoint"],
