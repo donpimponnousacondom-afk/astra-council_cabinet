@@ -366,14 +366,87 @@ async def test_keepalives_cannot_extend_total_request_deadline(kernel):
     assert diagnostic["reasoning_status"] == "none_received"
 
 
-async def test_sse_byte_limit_includes_non_content_frames(kernel, monkeypatch):
+async def test_sse_event_limit_reports_local_bound_without_provider_failure(kernel, monkeypatch):
     bot = configured(kernel)
-    monkeypatch.setattr("hortator.chat_response.RESPONSE_LIMIT", 30)
-    await respond(kernel, b": keepalive\n\n" * 10)
-    with pytest.raises(ProviderError, match="response limit") as error:
+    monkeypatch.setattr("hortator.chat_response.SSE_EVENT_LIMIT", 30)
+    await respond(kernel, b": " + b"x" * 40)
+    with pytest.raises(ProviderError, match="Local SSE event limit exceeded") as error:
         await kernel.pool.complete(**call_args(kernel, bot))
-    assert error.value.details["origin"] == "response_format"
+    assert error.value.details["origin"] == "local_client"
+    assert error.value.details["limit_bytes"] == 30
+    assert error.value.details["observed_bytes"] > 30
     assert error.value.provider_fault is False
+    assert not any(e["kind"] == "provider.failure" for e in kernel.store.events())
+
+
+async def test_long_sse_envelopes_do_not_consume_generated_content_budget(kernel, monkeypatch):
+    bot = configured(kernel)
+    # More than the original 8 MB, resembling the reported 25,499 small deltas.
+    chunk = wire({**packet({"reasoning_content": "abc"}), "id": "metadata" * 35}, done=False)
+    raw = chunk * 26_000 + wire(packet({"content": "Answer"}, "stop"))
+    assert len(raw) > 8_000_000
+    monkeypatch.setattr("hortator.chat_response.GENERATED_CONTENT_LIMIT", 100_000)
+    monkeypatch.setattr("hortator.chat_response.RESPONSE_LIMIT", 100_000)
+    monkeypatch.setattr("hortator.provider.RESPONSE_LIMIT", 100_000)
+
+    class Stream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            for start in range(0, len(raw), 65536):
+                yield raw[start : start + 65536]
+                await asyncio.sleep(0)
+
+    await install_client(
+        kernel, lambda r: httpx.Response(200, headers={"content-type": "text/event-stream"}, stream=Stream())
+    )
+    result = await kernel.pool.complete(**call_args(kernel, bot))
+    assert result.content == "Answer"
+    assert result.reasoning_content == "abc" * 26_000
+    assert result.response_diagnostics["response_bytes"] == len(raw)
+    assert result.response_diagnostics["generated_content_bytes"] == 78_006
+
+
+@pytest.mark.parametrize("field", ["content", "reasoning_content", "thinking"])
+async def test_accumulated_content_limit_keeps_partial_diagnostics(kernel, monkeypatch, field):
+    bot = configured(kernel)
+    monkeypatch.setattr("hortator.chat_response.GENERATED_CONTENT_LIMIT", 6)
+    await respond(kernel, wire(packet({field: "猫"}), packet({field: "猫猫"})))
+    with pytest.raises(
+        ProviderError, match="Local generated content limit exceeded: 9 bytes > 6 bytes"
+    ) as error:
+        await kernel.pool.complete(**call_args(kernel, bot))
+    assert error.value.details["origin"] == "local_client"
+    row, diagnostic = stored(kernel)
+    assert row["status"] == "failed"
+    assert diagnostic["response"]["generated_content_bytes"] == 3
+    if field != "content":
+        assert diagnostic["reasoning_content"] == "猫"
+        assert "猫" not in str(kernel.store.events())
+
+
+async def test_buffered_response_limit_uses_actual_limit_and_local_classification(kernel, monkeypatch):
+    bot = configured(kernel)
+    monkeypatch.setattr("hortator.provider.RESPONSE_LIMIT", 30)
+    await install_client(
+        kernel,
+        lambda r: httpx.Response(
+            200, json={"choices": [{"message": {"content": "text"}, "finish_reason": "stop"}]}
+        ),
+    )
+    with pytest.raises(ProviderError, match="Local buffered JSON response limit exceeded") as error:
+        await kernel.pool.complete(**call_args(kernel, bot))
+    assert error.value.details["limit_bytes"] == 30
+    assert error.value.details["origin"] == "local_client"
+    assert not error.value.provider_fault
+
+
+@pytest.mark.parametrize("body", [b"data: " + b"x" * 50, b"data: x\n" * 10, b": " + b"x" * 50])
+async def test_event_limit_covers_split_lines_multiline_data_and_comments(monkeypatch, body):
+    from hortator.chat_response import ResponseLimitError
+
+    monkeypatch.setattr("hortator.chat_response.SSE_EVENT_LIMIT", 40)
+    with pytest.raises(ResponseLimitError):
+        async for _ in SSEReader({}).frames(httpx.Response(200, stream=Fragments(body))):
+            pass
 
 
 @pytest.mark.parametrize("capture_enabled", [False, True])
@@ -411,3 +484,43 @@ async def test_buffered_no_reasoning_distinguishes_reported_tokens_from_returned
     assert diagnostic["reasoning_status"] == "not_returned"
     assert "5 reasoning tokens" in diagnostic["note"]
     assert diagnostic["capture"] == "recorded"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"reasoning_details": [{"text": "x" * 30}]},
+        {
+            "tool_calls": [
+                {
+                    "index": 0,
+                    "id": "call",
+                    "type": "function",
+                    "function": {"name": "fetch", "arguments": "x" * 30},
+                }
+            ]
+        },
+    ],
+)
+def test_retained_reasoning_details_and_tool_arguments_are_bounded(monkeypatch, message):
+    from hortator.chat_response import ResponseLimitError
+    from hortator.provider import Completion
+
+    monkeypatch.setattr("hortator.chat_response.GENERATED_CONTENT_LIMIT", 20)
+    parser = ChatResponse(Completion(request_id="test"))
+    with pytest.raises(ResponseLimitError, match="generated content"):
+        parser.packet(packet(message), streamed=True)
+
+
+def test_growing_metadata_keys_are_bounded_and_previous_snapshot_preserved(monkeypatch):
+    from hortator.chat_response import ResponseLimitError
+    from hortator.provider import Completion
+
+    monkeypatch.setattr("hortator.chat_response.METADATA_LIMIT", 80)
+    result = Completion(request_id="test")
+    parser = ChatResponse(result)
+    parser.packet({"usage": {"input_tokens": 1}}, streamed=True)
+    with pytest.raises(ResponseLimitError, match="response metadata"):
+        parser.packet({"id": "x" * 100, "usage": {"extra": "x" * 100}}, streamed=True)
+    assert result.metadata == {}
+    assert result.usage == {"input_tokens": 1}

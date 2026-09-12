@@ -68,6 +68,15 @@ QUIET_EVENTS = {
     "discord.history_imported",
 }
 SUMMARY_FIELDS = (
+    "trigger",
+    "calibrated_tokens",
+    "token_threshold",
+    "image_count",
+    "image_limit",
+    "image_bytes",
+    "image_byte_limit",
+    "observed_bytes",
+    "limit_bytes",
     "summary_tokens",
     "retained_summary_token_limit",
     "task",

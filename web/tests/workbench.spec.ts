@@ -214,6 +214,10 @@ test("model table changes SSE immediately while preserving native vendor and com
   await dialog
     .getByLabel("Exact model identifier", { exact: true })
     .fill("fixture/model");
+  await dialog.getByLabel("Images per request", { exact: true }).fill("256");
+  await dialog
+    .getByLabel("Combined image budget (MiB)", { exact: true })
+    .fill("512");
   const parameters = {
     temperature: 0.41,
     thinking: { type: "enabled" },
@@ -250,6 +254,8 @@ test("model table changes SSE immediately while preserving native vendor and com
   expect(after.compaction_request_json).toEqual(compaction);
   expect(after.provider_id).toBe(before.provider_id);
   expect(after.include_usage).toBe(before.include_usage);
+  expect(after.max_request_images).toBe(256);
+  expect(after.max_request_image_mib).toBe(512);
   await page
     .getByRole("button", { name: "Edit Workbench SSE fixture", exact: true })
     .click();

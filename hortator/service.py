@@ -126,6 +126,9 @@ class Service:
 
     def public(self, kind, entity):
         value = dict(entity)
+        if kind == "profiles":
+            for field in ("max_request_images", "max_request_image_mib"):
+                value.setdefault(field, SCHEMAS["profiles"].model_fields[field].default)
         if kind == "providers":
             value["key_configured"] = bool(self.vault.get(f"provider/{value['id']}/api_key"))
             value["health"] = self.store.health(value["id"])
