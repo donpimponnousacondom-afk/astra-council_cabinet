@@ -637,7 +637,11 @@ class Engine:
                         else None
                     )
                     if batch_error:
-                        spec = self.registry.specs.get(name) if self.registry.allowed(name, context) else None
+                        spec = (
+                            self.registry.spec_for(name, context)
+                            if self.registry.allowed(name, context)
+                            else None
+                        )
                         parameters = (
                             definition["function"]["parameters"]
                             if definition
@@ -653,13 +657,16 @@ class Engine:
                             else "Tool is not enabled for this bot and trusted request",
                         }
                         if definition or spec:
+                            description = (
+                                definition["function"]["description"] if definition else spec.description
+                            )
                             try:
                                 batch_args = parse_arguments(call["function"]["arguments"])
                             except (ValueError, TypeError) as exc:
-                                argument_report = syntax_feedback(name, exc, parameters)
+                                argument_report = syntax_feedback(name, exc, parameters, description)
                             else:
-                                argument_report = feedback(name, batch_args, parameters) or {
-                                    "usage": usage(name, parameters, arguments=batch_args)
+                                argument_report = feedback(name, batch_args, parameters, description) or {
+                                    "usage": usage(name, parameters, description, arguments=batch_args)
                                 }
                             result_value.update(
                                 usage=argument_report["usage"],

@@ -371,7 +371,7 @@ test("provider headers round-trip and a mocked upstream 401 through API 502 keep
   ).toBeVisible();
 });
 
-test("bot silence and footer controls persist in a docked editor without changing other behavior", async ({
+test("bot memory budget, silence and footer controls persist in a docked editor without changing other behavior", async ({
   page,
 }, testInfo) => {
   await navigate(page, "Bots");
@@ -398,6 +398,29 @@ test("bot silence and footer controls persist in a docked editor without changin
   await dialog
     .getByRole("button", { name: "Capabilities", exact: true })
     .click();
+  const memoryBudget = dialog.getByLabel(
+    "Private memory budget (characters per channel)",
+    { exact: true },
+  );
+  const otherBot = await record(page, "bots", "hortator");
+  await expect(memoryBudget).toHaveValue("48000");
+  await expect(memoryBudget).toHaveAttribute("min", "1");
+  await expect(memoryBudget).toHaveAttribute("max", "48000");
+  for (const invalid of ["0", "-1", "48001", ""]) {
+    await memoryBudget.fill(invalid);
+    await dialog
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    expect(
+      await memoryBudget.evaluate((input: HTMLInputElement) =>
+        input.checkValidity(),
+      ),
+    ).toBe(false);
+    expect((await record(page, "bots", "wb-bot-fixture")).revision).toBe(
+      before.revision,
+    );
+  }
+  await memoryBudget.fill("1200");
   const silence = dialog.getByRole("checkbox", {
     name: "Allow intentional silence",
     exact: true,
@@ -428,6 +451,8 @@ test("bot silence and footer controls persist in a docked editor without changin
     .click();
   await expect(dialog).toHaveCount(0);
   const after = await record(page, "bots", "wb-bot-fixture");
+  expect(after.memory_char_limit).toBe(1200);
+  expect(await record(page, "bots", "hortator")).toEqual(otherBot);
   expect(after.allow_silence).toBe(false);
   expect(after.footer_enabled).toBe(true);
   expect(after.footer_template).toBe(template);
@@ -447,6 +472,7 @@ test("bot silence and footer controls persist in a docked editor without changin
     .getByRole("button", { name: "Capabilities", exact: true })
     .click();
   await expect(silence).not.toBeChecked();
+  await expect(memoryBudget).toHaveValue("1200");
   await dialog
     .getByRole("button", { name: "Message footer", exact: true })
     .click();

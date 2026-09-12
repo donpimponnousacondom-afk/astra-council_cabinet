@@ -290,3 +290,27 @@ Normal failure retries remain unchanged; failure/cancellation does not mark
 input handled. This task does not clear repetitive historical notes or summarize
 images with extra paid model calls. Token-only compaction errors must distinguish
 actual required input tokens from the available budget.
+
+## 2026-09-12 — Per-bot private memory budgets and consolidation allowance
+
+The owner requested 48,000 characters instead of 24,000, then specified per-bot
+control for smaller/no-memory bots. Implement `memory_char_limit` in the modern
+Capabilities editor and API: strict integer 1–48,000, default 48,000, no zero or
+negative sentinel. Disable the plugin to disable both tools and automatic note
+injection, while retaining notes for owner inspection and later re-enabling.
+Leave the legacy frontend frozen.
+
+To avoid character-count near misses, accept up to 5% temporary aggregate
+headroom (50,400 at the default). Report accepted overshoots as warnings with
+exact usage; while over budget permit only deletes and writes that reduce the
+total until back within budget. This may take multiple edits. New turns do not
+renew the allowance, and there is no automatic compaction, paid repair or silent
+truncation. Model descriptions, usage/errors, operation results and per-round
+prompt guidance expose current counts and consolidation instructions.
+
+Preserve the 8,000-character per-note bound, per-bot/channel ownership, shared
+model/owner enforcement, existing-key replacement and original notes. Reject
+configuration reductions when existing channel usage exceeds the new budget
+including its headroom. Saved bot settings use the existing revision/cancellation
+path; old records receive defaults without a data migration. Context/token
+budgets remain independent.

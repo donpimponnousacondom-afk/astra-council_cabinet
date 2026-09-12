@@ -10,6 +10,30 @@ Calling an available tool with `{}` returns `usage_only: true`, `executed: false
 
 The model receives this instruction in its shared runtime prompt and each advertised tool explicitly permits the empty help call. A plugin supplies its real action schema to the registry; the common wrapper adds discovery. Do not make each plugin implement a conflicting help convention.
 
+## Private memory allowance and repair
+
+The built-in `memory` tool receives the bot's `memory_char_limit` (1–48,000,
+default 48,000) per channel. Tool descriptions and refreshed prompt guidance show
+actual used/remaining characters. `read`, `write` and `delete` results contain a
+`budget` object with `limit_chars`, `used_chars`, `remaining_chars`, `grace_chars`,
+`hard_limit_chars`, `over_budget_chars`, `must_consolidate` and `note_limit_chars`.
+Empty-call and argument-error usage includes the same current guidance.
+
+Small overshoots may use a 5% allowance, rounded down. At 48,128/48,000, the
+write is saved and returns `warning`; it is not a tool failure. While over
+budget, only deletion or a replacement that reduces total usage succeeds.
+Consolidation may proceed across multiple keys. At the default, a new write
+above 50,400 is rejected without mutation. No turn/time reset renews headroom.
+The next prompt keeps the warning visible even if an earlier tool exchange is
+omitted from the working set. Individual notes still allow at most 8,000
+characters; this feature does not add a per-note overshoot or token allowance.
+
+Do not remove this guidance to shorten schemas without an equivalent means for
+the model to see current usage. Models cannot reliably count output characters;
+the allowance and explicit feedback avoid needless failed rounds. Zero and
+negative budgets are invalid. Disable the memory plugin to stop its tool and
+automatic note injection; existing notes remain owner-inspectable.
+
 ## Complete validation feedback
 
 For parseable JSON, validation collects all detectable schema errors: missing required fields, wrong types, unknown fields, bounds and conditional operation requirements. The response contains all error paths/rules/messages and full usage with an example for the requested valid operation. Named JSON fields have **no positional order**. Strings are not silently converted into numbers, and a malformed call never partially invokes the handler.

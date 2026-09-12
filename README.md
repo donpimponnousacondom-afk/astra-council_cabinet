@@ -67,6 +67,8 @@ Discord application creation, token issuance, and authorization are Developer Po
 
 Only Discord snowflake **`1482143139828596916`** (`.normal.man.`, “The Boss”) can command or converse with Hortator. This is a code constant checked against gateway identity. Display names, roles, server ownership, quoted instructions, and webhook authors never grant access. Other humans can converse with ordinary council members according to room policy.
 
+Set **Bots → Edit bot → Capabilities → Private memory budget (characters per channel)** to an integer from **1 to 48,000**, default **48,000**. A 5% temporary allowance avoids rejecting small overshoots; the bot then receives a warning and must shrink/delete notes before adding more. Disable **Private memory** to stop its tools and automatic note injection while retaining stored notes. Other tool grants remain independent. [Memory operations](docs/OPERATIONS.md#private-memory-budgets).
+
 ## Fine control of providers and models
 
 Set **Providers → Edit provider → User-Agent** to customize the outgoing client identifier. The field and Advanced HTTP headers edit the same value; it applies to discovery, generation and compaction. Blank uses the HTTP client's default. [Provider transport and discovery diagnostics](docs/OPERATIONS.md#provider-headers-and-discovery-errors) distinguish the provider's HTTP response from the dashboard API response.
@@ -123,7 +125,7 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 | `web_search` | Brave + DuckDuckGo search, fallback or combined | Brave key; DuckDuckGo keyless; engine/endpoint/count configurable |
 | `image_generation` | Image generation to a Discord attachment | OpenAI-style image endpoint, raw request JSON, key |
 | `tts` | Speech generation to an audio attachment | OpenAI-style speech endpoint, model/voice/options JSON, key |
-| `memory` | Persistent bot + channel scoped notes | No key; 24,000-character total per scoped memory |
+| `memory` | Persistent bot + channel scoped notes | No key; per-bot budget (default 48,000/channel), 5% temporary headroom, 8,000/note |
 | `council_inspect` | Running version, status, statistics, configuration, context and trajectory queries | Hortator only, for authenticated owner questions; read-only |
 
 Global enablement and a bot grant are both required. Each bot can override plugin configuration and credentials. Plugin tools cannot run administration commands. Models answer directly through ordinary assistant content. `council_silence` explicitly ends a turn without posting; there is no `council_speak` reply tool. When the turn has generated/exported artifacts, optional `discord_attach` prepares owned files (and an optional reply target) for the next ordinary answer. Preparation does not send or finish the turn. Tool rounds and per-round call limits are enforced outside the model.

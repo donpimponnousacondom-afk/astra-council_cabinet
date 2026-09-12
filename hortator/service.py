@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from .diagnostics import read_diagnostics
 from .footer import footer_settings
+from .memory_budget import hard_limit, largest_channel_usage
 from .models import ControlError, KINDS, OWNER_ID, SCHEMAS
 from .store import uid
 from .version import runtime_version
@@ -139,6 +140,7 @@ class Service:
         elif kind == "bots":
             value.update(footer_settings(value))
             value.setdefault("allow_silence", True)
+            value.setdefault("memory_char_limit", SCHEMAS["bots"].model_fields["memory_char_limit"].default)
             for field in ("document_task_rounds", "document_task_calls_per_round", "document_task_seconds"):
                 value.setdefault(field, SCHEMAS["bots"].model_fields[field].default)
             for field in (
@@ -234,6 +236,12 @@ class Service:
             exists("providers", entity["provider_id"])
         if kind == "bots":
             exists("profiles", entity["model_profile_id"])
+            largest = largest_channel_usage(self.store, entity["id"])
+            if largest and largest["used"] > hard_limit(entity["memory_char_limit"]):
+                raise ControlError(
+                    f"Private memory in channel {largest['channel_id']} already uses {largest['used']:,} characters; "
+                    f"the proposed budget is {entity['memory_char_limit']:,} ({hard_limit(entity['memory_char_limit']):,} with 5% headroom). Consolidate notes before lowering the budget; no notes were changed."
+                )
             for k, field in (
                 ("rooms", "room_ids"),
                 ("prompts", "prompt_ids"),
