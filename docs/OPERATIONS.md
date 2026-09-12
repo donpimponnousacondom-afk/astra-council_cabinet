@@ -601,3 +601,26 @@ An already active turn retains its captured profile; profile edits apply to new
 turns. These summaries never contain provider-produced reasoning text or credentials.
 
 `compaction.started` now names all applicable triggers (`manual`, `token_threshold`, `image_count`, `image_bytes`) and records calibrated tokens/threshold, image count/limit, original image bytes/limit, profile revision and channel. A small `before_tokens` alone does not explain why compaction ran. No images or history are silently dropped when a budget is exceeded.
+
+### Provider response bounds
+
+SSE response overhead no longer shares the buffered response allowance. Total
+received bytes remain visible in private response diagnostics (`response_bytes`),
+but repeated JSON envelopes/keepalives do not exhaust a cumulative wire-byte cap.
+The provider's configured total request deadline still bounds the entire stream.
+The independent code bounds in `hortator/chat_response.py` are:
+
+- One decoded SSE event: 8 MiB, checked incrementally even across split lines;
+  CR, LF and CRLF separators count as one byte for this bound.
+- Accumulated retained model output: 512 MiB of UTF-8 text, private reasoning,
+  serialized reasoning details and tool names/IDs/arguments. Repeated transport
+  metadata does not count toward this amount.
+- Current retained usage/provider metadata: 8 MiB (replacement fields are not
+  charged repeatedly).
+- Buffered JSON body: 512 MiB.
+
+Crossing these is reported as a local response limit (`error_origin=local_client`)
+with `field`, `observed_bytes` and `limit_bytes`; it does not mark the provider
+unhealthy. Partial private diagnostics remain inspectable and an incomplete
+summary never advances the checkpoint. These byte bounds are separate from model
+context windows, per-profile image budgets and retained-summary token limits.

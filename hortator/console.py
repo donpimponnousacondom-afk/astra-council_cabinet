@@ -75,6 +75,8 @@ SUMMARY_FIELDS = (
     "image_limit",
     "image_bytes",
     "image_byte_limit",
+    "observed_bytes",
+    "limit_bytes",
     "summary_tokens",
     "retained_summary_token_limit",
     "task",

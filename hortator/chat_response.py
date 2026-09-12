@@ -11,25 +11,27 @@ from dataclasses import dataclass
 
 from .diagnostics import text_content
 
-""" Ultra fast patch to solve issues with SSE stream cuts offs
- It was 8MB (it blows apart with SSE streams of ~94KB chars which is SAD)
+# Independent local bounds: SSE framing overhead is counted for diagnostics only.
+RESPONSE_LIMIT = 512 * 1024 * 1024  # Buffered JSON body.
+GENERATED_CONTENT_LIMIT = 512 * 1024 * 1024  # Text, private reasoning and tool payloads.
+SSE_EVENT_LIMIT = 8 * 1024 * 1024  # One decoded event, including partial lines.
+METADATA_LIMIT = 8 * 1024 * 1024  # Current usage and provider metadata.
 
-Astra comment to the future agent or human:
-So roughly **95 KB of reasoning arrived inside an 8 MB stream**. Thousands of small chunks, each wrapped in repeated metadata, exhausted our transport-size allowance before the model produced the summary.
-
-This also exposes a gap in our earlier compaction change: **we removed the outgoing token caps, but this independent response-byte cap remained.** It can still interrupt lengthy reasoning.
-
-The previous context was preserved, and partial reasoning was retained for private inspection. No configuration was changed.
-
-The appropriate fix is to separate limits on individual SSE frames and accumulated model content from the total framing overhead, so legitimate long streams aren’t rejected simply for sending many small chunks. Buffered responses currently share the same 8 MB ceiling, although they avoid that repeated framing overhead.
-"""
-RESPONSE_LIMIT = (512 * 1024 * 1024) + 1
 
 class ResponseFormatError(Exception):
     def __init__(self, path, expected, value, *, message=None):
         actual = "null" if value is None else type(value).__name__
         super().__init__(message or f"Invalid response at {path}: expected {expected}, received {actual}")
         self.details = {"field": path, "expected": expected, "received_type": actual}
+
+
+class ResponseLimitError(Exception):
+    def __init__(self, field, observed, limit):
+        super().__init__(
+            f"Local {field} limit exceeded: {observed:,} bytes > {limit:,} bytes. "
+            "Partial output withheld; this is a local response bound, not an upstream rejection."
+        )
+        self.details = {"field": field, "observed_bytes": observed, "limit_bytes": limit}
 
 
 class UpstreamResponseError(Exception):
@@ -58,6 +60,7 @@ class SSEReader:
         self.event, self.event_id = "", ""
         self.previous_cr = False
         self.index, self.size = 0, 0
+        self.event_bytes = 0
         self.current = None
 
     def note(self, key):
@@ -66,6 +69,7 @@ class SSEReader:
 
     def line(self, line):
         if not line:
+            self.event_bytes = 0
             if not self.data and not self.event:
                 return None
             self.index += 1
@@ -89,6 +93,16 @@ class SSEReader:
         # retry/unknown fields do not reconnect or affect model content.
         return None
 
+    def account_event(self, text, newline=False):
+        # Count UTF-8 bytes incrementally; normalize CR/LF/CRLF to one separator.
+        # A split unterminated line must not bypass the per-event bound.
+        self.event_bytes += len(text.encode("utf-8")) + int(newline)
+        self.diagnostics["largest_event_bytes"] = max(
+            self.event_bytes, self.diagnostics.get("largest_event_bytes", 0)
+        )
+        if self.event_bytes > SSE_EVENT_LIMIT:
+            raise ResponseLimitError("SSE event", self.event_bytes, SSE_EVENT_LIMIT)
+
     def feed(self, text):
         if not text:
             return
@@ -97,6 +111,7 @@ class SSEReader:
         self.previous_cr = text.endswith("\r")
         start = 0
         for separator in re.finditer(r"\r\n|\r|\n", text):
+            self.account_event(text[start : separator.start()], newline=True)
             self.parts.append(text[start : separator.start()])
             frame = self.line("".join(self.parts))
             self.parts = []
@@ -104,6 +119,7 @@ class SSEReader:
             if frame is not None:
                 yield frame
         if start < len(text):
+            self.account_event(text[start:])
             self.parts.append(text[start:])
 
     async def frames(self, response):
@@ -112,13 +128,6 @@ class SSEReader:
             async for chunk in response.aiter_bytes():
                 self.size += len(chunk)
                 self.diagnostics["response_bytes"] = self.size
-                if self.size > RESPONSE_LIMIT:
-                    raise ResponseFormatError(
-                        "SSE body",
-                        "at most 8 MB",
-                        "oversize",
-                        message="Provider stream exceeded the 8 MB response limit",
-                    )
                 for frame in self.feed(decoder.decode(chunk)):
                     yield frame
             for frame in self.feed(decoder.decode(b"", final=True)):
@@ -173,6 +182,7 @@ class ChatResponse:
         self.trace = result.response_diagnostics
         self.current = None
         self.choices_seen = False
+        self.generated_bytes = 0
 
     def note(self, key):
         counts = self.trace.setdefault("compatibility", {})
@@ -202,15 +212,24 @@ class ChatResponse:
             if isinstance(packet.get("usage"), dict):
                 self.result.usage.update(packet["usage"])
             raise UpstreamResponseError(packet.get("error") or packet)
-        self.result.metadata.update(
-            {
+        next_metadata = {
+            **self.result.metadata,
+            **{
                 k: packet[k]
                 for k in ("id", "model", "created", "system_fingerprint", "provider", "service_tier")
                 if k in packet
-            }
-        )
+            },
+        }
         usage = object_value(packet.get("usage"), "usage", nullable=True)
-        self.result.usage.update(usage)
+        # Bound retained metadata as a current snapshot: repeating the same keys
+        # in 25,000 frames must not consume an accumulated payload allowance.
+        next_usage = {**self.result.usage, **usage}
+        metadata_size = len(json.dumps([next_metadata, next_usage], ensure_ascii=False).encode("utf-8"))
+        if metadata_size > METADATA_LIMIT:
+            raise ResponseLimitError("response metadata", metadata_size, METADATA_LIMIT)
+        self.result.metadata = next_metadata
+        self.result.usage = next_usage
+        self.trace["metadata_bytes"] = metadata_size
         choices = array_value(packet.get("choices"), "choices")
         if not choices:
             if streamed and (
@@ -254,18 +273,31 @@ class ChatResponse:
                     )
                 self.result.finish_reason = finish
 
+    def retain(self, value):
+        """Charge only newly retained model output, not repeated SSE envelopes."""
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        size = len(text.encode("utf-8"))
+        observed = self.generated_bytes + size
+        if observed > GENERATED_CONTENT_LIMIT:
+            raise ResponseLimitError("generated content", observed, GENERATED_CONTENT_LIMIT)
+        self.generated_bytes = observed
+        self.trace["generated_content_bytes"] = observed
+        return value
+
     def message(self, msg, path, *, streamed):
-        self.result.content += assistant_text(msg.get("content"), path + ".content")
+        self.result.content += self.retain(assistant_text(msg.get("content"), path + ".content"))
         reasoning_added = False
         for name in ("reasoning_content", "reasoning", "thinking"):
             reasoning = assistant_text(msg.get(name), path + "." + name)
             if reasoning and not reasoning_added:
-                self.result.reasoning_content += reasoning
+                self.result.reasoning_content += self.retain(reasoning)
                 reasoning_added = True
         details = array_value(msg.get("reasoning_details"), path + ".reasoning_details")
         for detail in details:
             if detail is not None:
-                self.result.reasoning_details.append(object_value(detail, path + ".reasoning_details[]"))
+                self.result.reasoning_details.append(
+                    self.retain(object_value(detail, path + ".reasoning_details[]"))
+                )
         tools = array_value(msg.get("tool_calls"), path + ".tool_calls")
         if len(tools) > 100:
             raise ResponseFormatError(path + ".tool_calls", "at most 100 tool calls", tools)
@@ -298,11 +330,15 @@ class ChatResponse:
             if call_id:
                 if entry["id"] and entry["id"] != call_id:
                     raise ResponseFormatError(call_path + ".id", "consistent tool identity", call_id)
+                if not entry["id"]:
+                    self.retain(call_id)
                 entry["id"] = call_id
             fn = object_value(call.get("function"), call_path + ".function", nullable=True)
-            entry["function"]["name"] += string_value(fn.get("name"), call_path + ".function.name")
-            entry["function"]["arguments"] += string_value(
-                fn.get("arguments"), call_path + ".function.arguments"
+            entry["function"]["name"] += self.retain(
+                string_value(fn.get("name"), call_path + ".function.name")
+            )
+            entry["function"]["arguments"] += self.retain(
+                string_value(fn.get("arguments"), call_path + ".function.arguments")
             )
         self.result.tool_calls = [self.calls[k] for k in sorted(self.calls)]
 

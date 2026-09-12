@@ -384,3 +384,28 @@ Deployment/configuration backup receipts belong outside source Git under the
 runtime logs and external backup directories.
 All 15 compaction-limit tests also passed, preserving complete-summary and
 retained-text-cap behavior independently of the new image budgets.
+
+### 2026-09-12 — Finish SSE limit separation and remove temporary patch note
+
+Confirmed saved image budgets on both DeepSeek profiles: 256 images/512 MiB;
+Hortator remains max reasoning, 512,000-token window, 87% threshold; council
+profile remains low reasoning, 262,000-token window, 78% threshold. Both retain
+32,768-token summary caps. Curie remains disabled. At the initial read-only check,
+no compaction/provider failures had been recorded since startup event #18767.
+
+Removed the pasted temporary comment only after completing its separate SSE
+recommendation. A regression streams 26,000 metadata-heavy chunks totaling more
+than 8,000,000 response bytes, with just 78,006 bytes of reasoning plus final text;
+it completes even with a 100,000-byte synthetic buffered-body/output allowance.
+Additional tests cover split unterminated lines, multiline events, comments,
+UTF-8 accounting, private partial reasoning, tool/detail payload limits, current
+metadata bounds and buffered JSON failures with actual observed/allowed bytes.
+Local bounds do not trip provider health. Genuine protocol validation and existing
+compaction retention requirements are preserved.
+
+Validation: streaming/diagnostics/compaction suite passed (90 tests), then final
+streaming/provider/console suite passed (91 tests) after adding metadata/tool
+boundary coverage. Ruff and diff checks passed. These are mock/synthetic tests,
+not paid model or Discord validation. Runtime rollout uses the shared Screen
+refresh command and its external startup/build receipt; no configuration changes
+are needed for this parser fix.

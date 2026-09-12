@@ -218,3 +218,16 @@ Dependency installation uses per-job bounded `/packages` storage, separate from 
 ## 2026-09-12 — Per-model image budgets and explicit compaction triggers
 
 Supersedes the fixed per-request eight-image/40 MiB policy above. Long vision conversations were compacting below the token threshold because retained images exceeded eight. Keep those values as compatibility defaults, but expose per-profile image count (1–1024) and combined original bytes (20–1024 MiB). Planning, summary batching and wire validation use the same captured profile budgets; intake remains 20 MiB/20 megapixels per file. For the observed 9–12 images/~25 MB baseline, the owner requested substantial headroom: configure the affected DeepSeek profiles to 256 images/512 MiB without altering context windows, reasoning, summary caps or credentials. Log every applicable trigger with its measured value and limit. Profile budgets are local limits, not a promise of upstream acceptance; token planning and provider restrictions remain independent.
+
+## 2026-09-12 — Finish separation of SSE framing and retained-output budgets
+
+The image-budget fix did not itself implement the SSE recommendation left in a
+pasted comment in `chat_response.py`. That follow-up is now implemented and the
+comment removed: use separate event, accumulated generated-output, current
+metadata and buffered-body bounds; count total SSE bytes only for diagnostics.
+This prevents repeated envelope overhead from exhausting a long reasoning
+request, while bounded event buffers, retained output and the configured total
+deadline still apply. See OPERATIONS for exact limits. Treat these failures as
+local limits, not malformed responses or provider downtime, and retain previous
+compaction checkpoints on failure. This replaces the temporary 512 MiB + 1-byte
+aggregate SSE patch without changing per-model reasoning/summary/token settings.

@@ -21,6 +21,7 @@ from .chat_response import (
     SSEReader,
     UpstreamResponseError,
     RESPONSE_LIMIT,
+    ResponseLimitError,
 )
 from .store import dumps, uid
 from .vision import ImageCache
@@ -552,12 +553,10 @@ class ProviderPool:
                             chunks = []
                             async for chunk in response.aiter_bytes():
                                 total_bytes += len(chunk)
+                                result.response_diagnostics["response_bytes"] = total_bytes
                                 if total_bytes > RESPONSE_LIMIT:
-                                    raise ResponseFormatError(
-                                        "body",
-                                        "at most 8 MB",
-                                        "oversize",
-                                        message="Provider response exceeded the 8 MB limit",
+                                    raise ResponseLimitError(
+                                        "buffered JSON response", total_bytes, RESPONSE_LIMIT
                                     )
                                 chunks.append(chunk)
                             raw = b"".join(chunks).decode("utf-8-sig", errors="strict")
@@ -625,6 +624,15 @@ class ProviderPool:
                         error_data, private_key=bool(self.vault.get(f"bot/{bot['id']}/provider_key"))
                     )
                     exc.details["origin"] = "upstream_error"
+                elif isinstance(error, ResponseLimitError):
+                    exc = ProviderError(
+                        str(error),
+                        provider_fault=False,
+                        details={"origin": "local_client", "reason": "response_limit", **error.details},
+                    )
+                    result.response_diagnostics["last_frame"] = response_state.failure_evidence(
+                        self.vault.redact
+                    )
                 elif isinstance(error, (ResponseFormatError, UnicodeError, httpx.DecodingError)):
                     exc = ProviderError(
                         f"Response format error: {error}",
@@ -686,7 +694,11 @@ class ProviderPool:
                     "model": profile["model"],
                     "phase": phase,
                     "duration_ms": (time.perf_counter() - clock) * 1000,
-                    **{k: exc.details[k] for k in ("timeout_kind", "timeout_seconds") if k in exc.details},
+                    **{
+                        k: exc.details[k]
+                        for k in ("timeout_kind", "timeout_seconds", "observed_bytes", "limit_bytes")
+                        if k in exc.details
+                    },
                 }
                 message = self.vault.redact(str(exc))[:3000]
                 record_diagnostics(
