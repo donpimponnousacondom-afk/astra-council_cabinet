@@ -115,7 +115,7 @@ class Profile(Entity):
     model: str = Field(min_length=1, max_length=300)
     context_window: int = Field(default=131072, ge=1024, le=10000000)
     compact_threshold: float = Field(default=0.7, ge=0.1, le=0.95)
-    max_request_images: int = Field(default=8, ge=1, le=1024)
+    max_request_images: int = Field(default=10, ge=1)
     max_request_image_mib: int = Field(default=40, ge=20, le=1024)
     response_tokens: int = Field(default=4096, ge=128, le=1000000)
     summary_tokens: int = Field(

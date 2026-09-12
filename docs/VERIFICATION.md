@@ -426,3 +426,48 @@ semantics are tested with short synthetic timeouts; no two-hour live run claimed
 The owner's requested live change sets only Hortator's two task deadlines to
 7,200 via the revision-aware service, recorded in normal config events and an
 external deployment receipt.
+
+### 2026-09-12 — HTTP 413 request-size evidence
+
+Event #22861 (`req_6da59775d59144b1a85e`, bot v) has 18 inline images totaling
+38,333,287 original bytes / 51,111,068 base64 bytes. Reconstruction from the stored
+request gives 51,489,386 JSON bytes (49.1041 MiB), exceeding DeepSeek's documented
+48 MiB / 50,331,648-byte limit by 1,157,738 bytes. No private reasoning replay
+entries were present. Historical body size is reconstructed, not a captured
+Content-Length. Its preceding successful 17-image request reconstructed to
+48,028,506 bytes (45.8036 MiB). The 413 response itself contains no numeric limit.
+Source verified: https://api-docs.deepseek.com/guides/vision/#limits.
+
+Implemented exact single-serialization request-size capture for future calls,
+before transmission, with numeric-only size evidence and documented-limit
+provenance. The detached encoder preserves native JSON/UTF-8 and provider headers.
+Tests verify HTTPX Content-Length matches recorded body bytes, image/base64 counts,
+folded console visibility, private diagnostics and HTTP 413 classification without
+provider-health failures. Noncanonical endpoints/proxies retain unknown limits.
+151 provider/streaming/diagnostics/vision/console tests passed; Ruff/diff checks
+passed. No paid diagnostic request was sent and no vision policy was changed.
+
+### 2026-09-12 — Ten-image profiles and request budgets
+
+All 16 saved model profiles now explicitly use `max_request_images=10`, including
+Hortator's separate reasoning profile. The revision-aware owner service applied
+this as one offline transaction; normalized profile comparisons confirmed that
+only the image count changed, and all non-profile records were preserved.
+The two DeepSeek byte budgets remain 512 MiB; other profiles retain 40 MiB.
+
+New profiles and records without an explicit count default to ten. The schema
+has no fixed count maximum; direct validation accepted 100,000 while retaining
+positive-count validation. Discord create/edit capture now admits ten per
+message independently. Existing vision tests cover all ten authorized downloads,
+refusal beyond the request count, explicit smaller/larger profile budgets and
+bounded compaction batches. Combined provider/streaming/diagnostics/vision/console/
+Discord-intake/compaction validation: **186 passed**, with two existing dependency
+deprecation warnings. Ruff format/check and diff checks passed. No paid test
+request or live ten-attachment Discord test was sent.
+
+A complete stopped-runtime backup was taken before the configuration update at
+`/home/codexy/.local/share/hortator-backups/20260912-ten-image-profiles`; SQLite
+`quick_check` returned `ok`. Normal config events and the private numeric receipt
+`$HORTATOR_DATA_DIR/logs/ten-image-profiles.json` record old/new revisions and
+image budgets. Deployment uses the existing shared-Screen refresh workflow;
+`logs/next-feature.json` records the resulting startup/build verification.

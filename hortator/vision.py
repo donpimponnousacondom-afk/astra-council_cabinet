@@ -21,7 +21,8 @@ from .store import dumps
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_REQUEST_BYTES = 2 * MAX_IMAGE_BYTES
-MAX_IMAGES = 8
+MAX_IMAGES = 10  # Default per-request budget; profiles can override it.
+MAX_CAPTURE_IMAGES = 10  # Intake bound per Discord message, independent of the profile.
 MAX_PIXELS = 20_000_000
 IMAGE_TOKEN_RESERVE = 4096  # Deliberately approximate: providers tokenize pixels differently.
 FORMATS = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp", "GIF": "image/gif"}

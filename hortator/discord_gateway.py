@@ -21,7 +21,7 @@ from .discord_text import CodeBlock, code_pages, model_message, preview, with_fo
 from .footer import footer_settings, render_footer
 from .timekeeping import council_timezone, present_times
 from .version import version_text
-from .vision import ImageCache, image_candidate, MAX_IMAGES
+from .vision import ImageCache, image_candidate, MAX_CAPTURE_IMAGES
 from .store import dumps
 from .discord_content import compose, from_message, saved_parts, embed_text, component_text
 
@@ -159,12 +159,12 @@ class CouncilClient(discord.Client):
                     item["vision"] = prior[item["id"]]["vision"]
                 if image_candidate(item):
                     image_index += 1
-                    if image_index <= MAX_IMAGES:
+                    if image_index <= MAX_CAPTURE_IMAGES:
                         item = await self.manager.images.capture(item)
                     else:
                         item["vision"] = {
                             "status": "unavailable",
-                            "error": "Message exceeds the 8-image capture limit",
+                            "error": f"Message exceeds the {MAX_CAPTURE_IMAGES}-image capture limit",
                         }
                 attachments.append(item)
             self.manager.store.execute(
@@ -562,12 +562,12 @@ class DiscordManager:
                 attachment["vision"] = prior[str(a.id)]["vision"]
             if image_candidate(attachment):
                 image_index += 1
-                if image_index <= MAX_IMAGES:
+                if image_index <= MAX_CAPTURE_IMAGES:
                     attachment = await self.images.capture(attachment)
                 else:
                     attachment["vision"] = {
                         "status": "unavailable",
-                        "error": "Message exceeds the 8-image capture limit",
+                        "error": f"Message exceeds the {MAX_CAPTURE_IMAGES}-image capture limit",
                     }
                 if attachment.get("vision", {}).get("status") == "unavailable":
                     self.store.emit(

@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from .models import ControlError
+from .request_payload import encode_request
 from .diagnostics import record_diagnostics, reasoning_settings
 from .chat_response import (
     ChatResponse,
@@ -456,6 +457,7 @@ class ProviderPool:
             response_state = ChatResponse(result)
             result.response_diagnostics["requested_stream"] = profile["stream"]
             total_bytes = 0
+            request_size = {}
             status_code = None
             error_data = None
             diagnostic_at = clock
@@ -469,12 +471,25 @@ class ProviderPool:
                     raise ProviderError(str(exc), provider_fault=False) from exc
                 # Total deadline covers streamed bodies as well as the connection, not just inactivity.
                 async with deadline:
+                    phase = "serialize_request"
+                    endpoint = provider["base_url"] + "/chat/completions"
+                    request_payload, request_size = await asyncio.to_thread(encode_request, body, endpoint)
+                    meta.update(request_size)
+                    result.response_diagnostics["request_size"] = request_size
+                    self.store.execute(
+                        "UPDATE requests SET context=? WHERE id=?",
+                        (dumps(self.vault.redact(meta)), request_id),
+                    )
+                    wire_headers = httpx.Headers(
+                        {"Content-Type": self.client.headers.get("Content-Type", "application/json")}
+                    )
+                    wire_headers.update(headers)
                     phase = "await_response_headers"
                     async with self.client.stream(
                         "POST",
-                        provider["base_url"] + "/chat/completions",
-                        headers=headers,
-                        json=body,
+                        endpoint,
+                        headers=wire_headers,
+                        content=request_payload,
                         timeout=provider["timeout_seconds"],
                     ) as response:
                         status_code = response.status_code
@@ -601,6 +616,7 @@ class ProviderPool:
                     "request.completed",
                     {
                         **request_settings,
+                        "request_body_bytes": request_size.get("request_body_bytes"),
                         "provider_id": provider["id"],
                         "profile_id": profile["id"],
                         "model": profile["model"],
@@ -690,6 +706,7 @@ class ProviderPool:
                 if cancelled:
                     error.request_id = request_id
                 failure_context = {
+                    **request_size,
                     "purpose": purpose,
                     "model": profile["model"],
                     "phase": phase,

@@ -239,3 +239,31 @@ from 3,600 to 7,200 seconds and match the modern workspace editor's HTML bound.
 The owner requested Hortator's two saved deadlines at 7,200. Preserve defaults,
 other bot values, per-request provider timeouts and once-per-turn extension
 semantics. This changes allowed duration, not retry/cancellation policy.
+
+## 2026-09-12 — Explain upstream body-size rejections
+
+The owner's 256-image/512 MiB local budgets exposed the independent DeepSeek HTTP
+body ceiling. Official vision docs specify 48 MiB for inline image requests.
+Capture exact serialized body bytes, inline image count, original/base64 byte
+counts, and provenance for known documented upstream limits. Match canonical
+endpoints only; do not assume that a model name or provider ID identifies a proxy's
+limits. Preserve HTTP 413 classification and raw redacted server error; never
+mislabel an upstream bound as a local one or infer a token limit from byte size.
+
+The owner highlighted that resending all historical images was not the intended
+workflow. Current behavior still retains image pixels until transcript compaction.
+A separate image-retention design (new/explicitly referenced pixels, older image
+metadata/descriptions with on-demand retrieval) needs its own implementation;
+lowering the count ceiling alone reinstates premature whole-context compaction.
+No age-based retention policy is implemented by these diagnostics.
+
+## 2026-09-12 — Ten images per request across model profiles
+
+The owner reduced all saved profiles to `max_request_images=10`, including
+Hortator, after the HTTP 413 diagnosis. Ten is also the new-profile default.
+Remove the fixed count-field schema maximum to permit deliberate future
+background workloads; retain positive validation and independent byte budgets.
+Align Discord capture with ten images per message, separately from a profile's
+request limit. This supersedes the temporary 256-image live configuration above.
+Existing compaction handles over-budget history; do not silently delete pixels,
+truncate the transcript or change its retention policy.
