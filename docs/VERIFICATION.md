@@ -513,3 +513,38 @@ The deployment procedure uses a stopped-runtime complete backup at
 `/home/codexy/.local/share/hortator-backups/20260912-turn-scoped-images`, then the
 shared-Screen refresh workflow. Its external `logs/next-feature.json` receipt
 records actual startup/dashboard matching; no source branch is pushed.
+
+### 2026-09-12 — Per-bot memory budgets and 5% consolidation headroom
+
+Implemented the final owner preference: `bots.memory_char_limit` is a strict
+integer from 1 to 48,000, default 48,000, exposed only in the modern Capabilities
+editor. Zero/negative/unlimited sentinels are rejected. Bot/global memory plugin
+grants control both tool access and automatic note injection without deleting
+notes. Existing records receive defaults without being rewritten.
+
+166 backend tests passed across `test_memory_budget`, `test_plugins`,
+`test_tool_feedback`, `test_runtime`, `test_runtime_feedback`,
+`test_silence_policy`, `test_security`, `test_context_responsiveness` and
+`test_compaction_limits`. The 18 new memory checks cover schema/API bounds,
+per-bot persistence, scope, Unicode/NUL character accounting, the 8,000-note
+bound, 50,400 default hard ceiling, accepted overshoot warnings, sequential
+consolidation, lowered limits in captured contexts, owner/tool parity and
+plugin disable/re-enable with retained notes. A mocked three-request model turn
+writes 104/100 characters, receives the warning in the next prompt/result,
+reduces to 90, then answers successfully. No public provider was called.
+
+The targeted modern `workbench.spec.ts` browser test passed against the isolated
+port-18000 fixture with a separate `/tmp/hortator-memory-budget-web` build. It
+checks 48,000 default, native 1–48,000 bounds, rejection of zero/negative/blank/
+above-maximum input without saving, per-bot 1,200 persistence/reopen and another
+bot remaining unchanged. Existing silence/footer controls continue to work.
+TypeScript/Vite build, Ruff check/format, targeted Prettier and diff checks pass.
+The test suite reports two existing Starlette/TestClient deprecation warnings.
+Legacy source was not edited. These are fixture tests, not live-model acceptance.
+
+Read-only inspection found all six current bots omit the new field and retain
+their memory grant, so they receive the effective 48,000 default after upgrade.
+No live notes, credentials, provider/model settings or source branches were
+rewritten for testing. Deployment uses the existing shared-Screen `--refresh`
+workflow after the source commit; its external `logs/next-feature.json` receipt
+records the actual matching dashboard/server identities. No push is performed.

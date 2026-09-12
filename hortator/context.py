@@ -10,6 +10,7 @@ import tiktoken
 
 from .concurrency import error_text
 from .models import ControlError, OWNER_ID
+from .memory_budget import budget_for, describe_budget
 from .store import dumps
 from .vision import (
     ImageCache,
@@ -140,9 +141,24 @@ class ContextBuilder:
                 )
         layers.append({"id": "persona", "content": bot["persona"]})
         layers.append({"id": "silence_policy", "content": self.silence_policy(bot)})
-        notes = self.store.rows(
-            "SELECT key,value FROM memories WHERE bot_id=? AND channel_id=? ORDER BY key",
-            (bot["id"], channel_id),
+        memory_plugin = self.store.get("plugins", "memory") or {}
+        current_bot = self.store.get("bots", bot["id"]) or {}
+        memory_enabled = (
+            memory_plugin.get("enabled", False)
+            and "memory" in bot["enabled_plugins"]
+            and "memory" in current_bot.get("enabled_plugins", [])
+        )
+        if memory_enabled:
+            layers.append(
+                {"id": "memory_budget", "content": describe_budget(budget_for(self.store, bot, channel_id))}
+            )
+        notes = (
+            self.store.rows(
+                "SELECT key,value FROM memories WHERE bot_id=? AND channel_id=? ORDER BY key",
+                (bot["id"], channel_id),
+            )
+            if memory_enabled
+            else []
         )
         if notes:
             layers.append(

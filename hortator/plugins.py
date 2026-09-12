@@ -7,7 +7,7 @@ import ipaddress
 import json
 import socket
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from html.parser import HTMLParser
 from typing import Any, Awaitable, Callable
 from urllib.parse import urljoin, urlparse
@@ -17,6 +17,7 @@ import httpx
 from jsonschema import Draft202012Validator
 
 from .models import ControlError
+from .memory_budget import DEFAULT_MEMORY_CHAR_LIMIT, NOTE_CHAR_LIMIT, budget_for, describe_budget
 from .fetched_documents import (
     DEFAULTS as FETCH_DEFAULTS,
     DESCRIPTION as FETCH_DESCRIPTION,
@@ -44,6 +45,12 @@ def schema(properties, required=()):
 
 
 STR = {"type": "string"}
+MEMORY_DESCRIPTION = (
+    'Always include operation. Write: {"operation":"write","key":"topic","value":"Concise note"}. '
+    'Read all notes: {"operation":"read"}. Delete: {"operation":"delete","key":"topic"}. '
+    "Sending only key/value is invalid; never omit operation. {} returns usage, not notes. "
+    "Notes belong only to this bot and channel; other bots/channels are inaccessible. Writes replace that key's value. "
+)
 
 
 def function(name, description, parameters):
@@ -260,10 +267,8 @@ class Registry:
             PluginSpec(
                 "memory",
                 "Private memory",
-                'Always include operation. Write: {"operation":"write","key":"topic","value":"Concise note"}. '
-                'Read all notes: {"operation":"read"}. Delete: {"operation":"delete","key":"topic"}. '
-                "Sending only key/value is invalid; never omit operation. {} returns usage, not notes. "
-                "Notes belong only to this bot and channel; other bots/channels are inaccessible. Writes replace that key's value.",
+                MEMORY_DESCRIPTION
+                + f"Each bot has a 1–{DEFAULT_MEMORY_CHAR_LIMIT:,} character budget per channel (default {DEFAULT_MEMORY_CHAR_LIMIT:,}), with 5% temporary headroom and at most {NOTE_CHAR_LIMIT:,} per note. Over budget, shrink/delete notes before adding more. Disable the plugin to stop memory tools and automatic note injection; stored notes are preserved.",
                 schema(
                     {
                         "operation": {
@@ -272,7 +277,7 @@ class Registry:
                             "description": "REQUIRED on every real call. Use write when saving key/value; read lists notes; delete removes one key. No default is inferred.",
                         },
                         "key": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": r"\S"},
-                        "value": {"type": "string", "maxLength": 8000},
+                        "value": {"type": "string", "maxLength": NOTE_CHAR_LIMIT},
                     },
                     ("operation",),
                 )
@@ -389,11 +394,22 @@ class Registry:
             and (not spec.owner_only or (context.bot["role"] == "hortator" and context.owner_verified))
         )
 
+    def spec_for(self, name, context):
+        spec = self.specs[name]
+        if name == "memory":
+            return replace(
+                spec,
+                description=MEMORY_DESCRIPTION
+                + describe_budget(budget_for(self.store, context.bot, context.channel_id)),
+            )
+        return spec
+
     def schemas(self, context):
         return [
             function(name, spec.description, spec.parameters)
-            for name, spec in self.specs.items()
+            for name in self.specs
             if self.allowed(name, context)
+            for spec in (self.spec_for(name, context),)
         ]
 
     async def call(self, name, args, context, call_id):
@@ -408,7 +424,7 @@ class Registry:
         try:
             if not self.allowed(name, context):
                 raise ControlError("Tool is not enabled for this bot and trusted request")
-            spec = self.specs[name]
+            spec = self.spec_for(name, context)
             report = feedback(name, args, spec.parameters, spec.description)
             if report is not None:
                 report = self.vault.redact(report)
@@ -440,7 +456,15 @@ class Registry:
             if search_failed:
                 result["usage"] = usage(name, spec.parameters, spec.description, args)
             if len(dumps(result)) > 60000:
-                result = {"truncated": True, "text": dumps(result)[:50000]}
+                result = {
+                    "truncated": True,
+                    "text": dumps(result)[:50000],
+                    **(
+                        {key: result[key] for key in ("budget", "warning") if key in result}
+                        if name == "memory"
+                        else {}
+                    ),
+                }
             result = self.evidence.record(
                 context,
                 name,
@@ -503,7 +527,7 @@ class Registry:
         try:
             args = parse_arguments(raw)
         except (ValueError, TypeError) as exc:
-            spec = self.specs[name]
+            spec = self.spec_for(name, context)
             result = self.vault.redact(syntax_feedback(name, exc, spec.parameters, spec.description))
             result = self.evidence.record(context, name, call_id, result)
             self.store.emit(
@@ -587,12 +611,15 @@ class Registry:
 
     async def memory(self, args, context, config, key):
         scope = (context.bot["id"], context.channel_id)
+        budget = budget_for(self.store, context.bot, context.channel_id)
         if args["operation"] == "read":
             return {
                 "notes": self.store.rows(
                     "SELECT key,value,updated_at FROM memories WHERE bot_id=? AND channel_id=? ORDER BY key",
                     scope,
-                )
+                ),
+                "budget": budget,
+                **({"warning": describe_budget(budget)} if budget["must_consolidate"] else {}),
             }
         name = args.get("key", "").strip()
         if not name:
@@ -602,18 +629,44 @@ class Registry:
                 "DELETE FROM memories WHERE bot_id=? AND channel_id=? AND key=?", (*scope, name)
             )
         else:
-            value = args.get("value", "")
-            size = self.store.one(
-                "SELECT coalesce(sum(length(value)),0) AS n FROM memories WHERE bot_id=? AND channel_id=? AND key<>?",
+            value = self.vault.redact(args.get("value", ""))
+            if len(value) > NOTE_CHAR_LIMIT:
+                raise ControlError(f"Each memory note allows at most {NOTE_CHAR_LIMIT:,} characters")
+            previous = self.store.one(
+                "SELECT value FROM memories WHERE bot_id=? AND channel_id=? AND key=?",
                 (*scope, name),
-            )["n"]
-            if size + len(value) > 24000:
-                raise ControlError("Channel memory limit is 24,000 characters; consolidate notes first")
+            )
+            attempted = budget["used_chars"] - (len(previous["value"]) if previous else 0) + len(value)
+            shrinking = attempted < budget["used_chars"]
+            if (attempted > budget["hard_limit_chars"] and not shrinking) or (
+                budget["must_consolidate"] and not shrinking
+            ):
+                raise ControlError(
+                    f"Memory write not saved: it would use {attempted:,} characters. "
+                    + describe_budget(budget)
+                )
             self.store.execute(
                 "INSERT INTO memories VALUES(?,?,?,?,?) ON CONFLICT(bot_id,channel_id,key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",
-                (*scope, name, self.vault.redact(value), time.time()),
+                (*scope, name, value, time.time()),
             )
-        return {"saved": True, "key": name}
+        budget = budget_for(self.store, context.bot, context.channel_id)
+        result = {"saved": True, "key": name, "budget": budget}
+        if budget["must_consolidate"]:
+            result["warning"] = describe_budget(budget)
+            self.store.emit(
+                "memory.budget_warning",
+                {
+                    "channel_id": context.channel_id,
+                    "key": name,
+                    "operation": args["operation"],
+                    "message": "Note change saved. " + result["warning"],
+                    **budget,
+                },
+                bot_id=context.bot["id"],
+                turn_id=context.turn_id,
+                level="warning",
+            )
+        return result
 
     async def council_inspect(self, args, context, config, key):
         return self.inspect(args["resource"], args.get("id"), args.get("channel_id"))

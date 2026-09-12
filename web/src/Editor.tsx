@@ -309,6 +309,7 @@ export function Editor({
         step={step}
         min={schemas[kind]?.properties?.[key]?.minimum}
         max={schemas[kind]?.properties?.[key]?.maximum}
+        required={key === "memory_char_limit"}
         value={draft[key] ?? ""}
         onChange={(e) =>
           set(key, e.target.value === "" ? null : Number(e.target.value))
@@ -687,6 +688,11 @@ export function Editor({
                       "enabled_plugins",
                       dashboard.plugins,
                       "Bot capabilities",
+                    )}
+                    {numeric(
+                      "memory_char_limit",
+                      "Private memory budget (characters per channel)",
+                      "1–48,000 characters per channel; default 48,000. Small overshoots get 5% headroom, then the bot must shrink or delete notes before adding more. Each note allows at most 8,000 characters. Zero and negative values are invalid. Uncheck Private memory to stop memory tools and automatic note injection; stored notes stay available for inspection.",
                     )}
                     <div className="form-grid">
                       {numeric(
