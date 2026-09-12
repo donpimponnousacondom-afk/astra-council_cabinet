@@ -13,6 +13,36 @@ from .store import dumps
 INLINE_REASONING = re.compile(r"<(think|thinking|analysis|reasoning)\b[^>]*>(.*?)(?:</\1\s*>|$)", re.S | re.I)
 
 
+def reasoning_settings(body, redact=lambda value: value):
+    """Summarize native controls, never provider-produced reasoning or inferred defaults."""
+    paths = (
+        "reasoning_effort",
+        "reasoning.effort",
+        "reasoning.enabled",
+        "reasoning.max_tokens",
+        "chat_template_kwargs.enable_thinking",
+        "chat_template_kwargs.thinking",
+        "chat_template_kwargs.do_reasoning",
+        "chat_template_kwargs.thinking_budget",
+        "chat_template_kwargs.preserve_thinking",
+        "chat_template_kwargs.clear_thinking",
+        "thinking.type",
+        "thinking.budget_tokens",
+        "thinking",
+    )
+    fields = []
+    for path in paths:
+        value = body
+        for part in path.split("."):
+            if not isinstance(value, dict) or part not in value:
+                break
+            value = value[part]
+        else:
+            if value is None or isinstance(value, (str, bool, int, float)):
+                fields.append(f"{path}:{json.dumps(redact(value), ensure_ascii=True)[:80]}")
+    return ",".join(fields) if fields else "unspecified"
+
+
 def text_content(value):
     """Compatible assistant text can be a string or an ordered list of text parts."""
     if value is None:

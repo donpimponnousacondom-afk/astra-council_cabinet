@@ -11,6 +11,7 @@ from .concurrency import cancel_and_wait, task_group, error_text
 from .context import ContextBuilder
 from .addressing import human_directed_elsewhere
 from .footer import render_footer
+from .diagnostics import reasoning_settings
 from .models import ControlError, OWNER_ID
 from .plugins import ATTACH, SILENCE, ToolContext
 from .provider import strip_reasoning
@@ -334,6 +335,8 @@ class Engine:
         self.store.emit(
             "turn.started",
             {
+                "reasoning": reasoning_settings(profile["request_json"], self.vault.redact),
+                "profile_revision": profile["revision"],
                 "channel_id": channel_id,
                 "profile_id": profile["id"],
                 "provider_id": provider["id"],

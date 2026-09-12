@@ -220,3 +220,52 @@ def test_trajectory_diagnostics_and_export_require_dashboard_authentication(tmp_
             client.portal.call(k.service.inspect, "turn", "turn-fixture")
         )
         assert client.portal.call(read_diagnostics, k.store, "missing")["capture"] == "unavailable"
+
+
+async def test_request_logs_effective_reasoning_override_and_revision(kernel):
+    bot = configured(kernel)
+    args = call_args(kernel, bot)
+    args["profile"]["request_json"] = {"reasoning_effort": "low"}
+    args["profile"]["compaction_request_json"] = {"reasoning_effort": "max"}
+    args["purpose"] = "compaction"
+
+    def handler(request):
+        assert json.loads(request.content)["reasoning_effort"] == "max"
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": "summary"}, "finish_reason": "stop"}]}
+        )
+
+    await install_client(kernel, handler)
+    with output() as console:
+        console.bind(kernel)
+        result = await kernel.pool.complete(**args)
+        assert "reasoning=reasoning_effort:" in console.stream.getvalue()
+        assert "max" in console.stream.getvalue()
+    events = kernel.store.rows(
+        "SELECT kind,data FROM events WHERE request_id=? AND kind IN ('request.started','request.completed')",
+        (result.request_id,),
+    )
+    assert len(events) == 2
+    for event in events:
+        data = json.loads(event["data"])
+        assert data["reasoning"] == 'reasoning_effort:"max"'
+        assert data["profile_revision"] == args["profile"]["revision"]
+
+
+def test_reasoning_settings_do_not_infer_defaults_or_include_private_text():
+    from hortator.diagnostics import reasoning_settings
+
+    assert reasoning_settings({}) == "unspecified"
+    assert (
+        reasoning_settings({"reasoning": {"enabled": False}, "thinking": None})
+        == "reasoning.enabled:false,thinking:null"
+    )
+    assert (
+        reasoning_settings(
+            {
+                "reasoning_content": "private",
+                "thinking": {"type": "enabled", "budget_tokens": 2048, "content": "private"},
+            }
+        )
+        == 'thinking.type:"enabled",thinking.budget_tokens:2048'
+    )

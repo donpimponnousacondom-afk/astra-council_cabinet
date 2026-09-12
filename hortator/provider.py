@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 
 from .models import ControlError
-from .diagnostics import record_diagnostics
+from .diagnostics import record_diagnostics, reasoning_settings
 from .chat_response import (
     ChatResponse,
     Frame,
@@ -432,6 +432,10 @@ class ProviderPool:
                     dumps(self.vault.redact(meta)),
                 ),
             )
+            request_settings = {
+                "reasoning": reasoning_settings(body, self.vault.redact),
+                "profile_revision": profile["revision"],
+            }
             self.store.emit(
                 "request.started",
                 {
@@ -440,6 +444,7 @@ class ProviderPool:
                     "profile_id": profile["id"],
                     "model": profile["model"],
                     "estimated_tokens": context.get("estimated_tokens"),
+                    **request_settings,
                 },
                 bot_id=bot["id"],
                 turn_id=turn_id,
@@ -596,6 +601,7 @@ class ProviderPool:
                 self.store.emit(
                     "request.completed",
                     {
+                        **request_settings,
                         "provider_id": provider["id"],
                         "profile_id": profile["id"],
                         "model": profile["model"],
