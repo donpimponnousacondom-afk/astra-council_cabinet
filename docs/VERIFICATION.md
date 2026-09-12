@@ -359,3 +359,28 @@ Validation: provider diagnostics plus console tests passed (38 tests); the 18
 provider diagnostics tests passed again after ensuring credential masking occurs
 before field truncation. Ruff and diff whitespace checks passed. These are mocked
 request checks; they do not establish that an upstream model honors its controls.
+
+### 2026-09-12 — Remove hidden fixed image budget from compaction
+
+Live baseline: Ada event #18517 had 93,478 estimated tokens and 12 images;
+Dirac's corresponding compaction had 74,797 tokens and 9 images. Their saved
+262,000-token/78% profile had a 204,360-token threshold; the fixed eight-image
+limit caused these compactions. Calibration did not raise either estimate.
+
+Implemented per-profile request image count and original-byte budgets, exposed
+in the modern editor and shared by planning, retained-tail selection, summary
+batching and final wire validation. Old profiles default to 8 images/40 MiB.
+The owner authorized 256 images/512 MiB for the two affected DeepSeek profiles;
+other configuration remains intact. Compaction events identify all triggers,
+measured counts, limits, channel and profile revision. No history is discarded.
+
+Validation: 110 focused vision/context-responsiveness/provider-streaming/console
+tests passed; all 37 vision tests passed after the final added budget/default
+coverage. The isolated modern browser test passed, saving 256/512 through the
+editor and confirming they survive another profile edit alongside native JSON.
+TypeScript/Vite build, Ruff and diff checks passed. Tests use synthetic images
+and mock providers; they do not claim live acceptance of 256 images by DeepSeek.
+Deployment/configuration backup receipts belong outside source Git under the
+runtime logs and external backup directories.
+All 15 compaction-limit tests also passed, preserving complete-summary and
+retained-text-cap behavior independently of the new image budgets.

@@ -249,7 +249,8 @@ class ImageCache:
                     )
         return parts if len(parts) > 1 else text
 
-    def wire_messages(self, messages):
+    def wire_messages(self, messages, profile=None):
+        max_images, max_bytes = image_limits(profile)
         result = copy.deepcopy(messages)
         count = total = 0
         for message in result:
@@ -259,9 +260,9 @@ class ImageCache:
                 if part.get("type") != "hortator_image":
                     continue
                 count += 1
-                if count > MAX_IMAGES:
+                if count > max_images:
                     raise ControlError(
-                        "Request exceeds 8 images; compact the conversation or use fewer attachments"
+                        f"Request exceeds model profile limit of {max_images} images; adjust Model profiles → Context & retained summary or compact the conversation"
                     )
                 try:
                     data = self.read(part["image"])
@@ -270,9 +271,9 @@ class ImageCache:
                         "A referenced image is unavailable in the local cache; reattach it before retrying"
                     ) from exc
                 total += len(data)
-                if total > MAX_REQUEST_BYTES:
+                if total > max_bytes:
                     raise ControlError(
-                        f"Request images exceed {MAX_REQUEST_BYTES // (1024 * 1024)} MiB; compact the conversation or use smaller attachments"
+                        f"Request images exceed model profile limit of {max_bytes // (1024 * 1024)} MiB; adjust Model profiles → Context & retained summary or compact the conversation"
                     )
                 mime = part["image"]["content_type"]
                 if mime not in FORMATS.values():
@@ -305,5 +306,13 @@ def image_bytes(messages):
     )
 
 
-def image_limits_exceeded(messages):
-    return image_count(messages) > MAX_IMAGES or image_bytes(messages) > MAX_REQUEST_BYTES
+def image_limits(profile=None):
+    profile = profile or {}
+    return profile.get("max_request_images", MAX_IMAGES), profile.get(
+        "max_request_image_mib", 40
+    ) * 1024 * 1024
+
+
+def image_limits_exceeded(messages, profile=None):
+    max_images, max_bytes = image_limits(profile)
+    return image_count(messages) > max_images or image_bytes(messages) > max_bytes

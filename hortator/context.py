@@ -11,7 +11,14 @@ import tiktoken
 from .concurrency import error_text
 from .models import ControlError, OWNER_ID
 from .store import dumps
-from .vision import ImageCache, IMAGE_TOKEN_RESERVE, image_count, image_limits_exceeded
+from .vision import (
+    ImageCache,
+    IMAGE_TOKEN_RESERVE,
+    image_count,
+    image_bytes,
+    image_limits,
+    image_limits_exceeded,
+)
 from .tool_feedback import TOOL_GUIDANCE
 from .addressing import for_viewer
 
@@ -56,7 +63,7 @@ class ContextBuilder:
         async with self.token_slots:
             return await asyncio.to_thread(self.count_summary_tokens, text)
 
-    def compaction_batch(self, prefix, rows, transcript, budget):
+    def compaction_batch(self, prefix, rows, transcript, budget, profile=None):
         # No database access. Probe the complete prefix first (the usual case),
         # then bisect instead of re-tokenizing each growing prefix O(n²) times.
         probes = 0
@@ -68,7 +75,7 @@ class ContextBuilder:
                 {"role": "user", "content": self.images.content(dumps(transcript[:count]), rows[:count])}
             ]
             estimate = self.estimate_request(payload, [])
-            return payload, estimate, estimate <= budget and not image_limits_exceeded(payload)
+            return payload, estimate, estimate <= budget and not image_limits_exceeded(payload, profile)
 
         high = len(rows)
         payload, estimate, fits = candidate(high)
@@ -301,7 +308,17 @@ class ContextBuilder:
             previous_estimate = json.loads(measured["context"]).get("estimated_tokens") or 1
             factor = max(1.0, measured["input_tokens"] / previous_estimate)
         meta["calibration_factor"] = factor
-        if force or meta["estimated_tokens"] * factor >= threshold or image_limits_exceeded(messages):
+        max_images, max_image_bytes = image_limits(profile)
+        triggers = []
+        if force:
+            triggers.append("manual")
+        if meta["estimated_tokens"] * factor >= threshold:
+            triggers.append("token_threshold")
+        if image_count(messages) > max_images:
+            triggers.append("image_count")
+        if image_bytes(messages) > max_image_bytes:
+            triggers.append("image_bytes")
+        if triggers:
             if not rows:
                 raise ControlError(
                     "No uncompacted messages to summarize; shorten the prompts or scoped memory"
@@ -315,7 +332,7 @@ class ContextBuilder:
                 )
                 if tail_meta["estimated_tokens"] * factor + profile[
                     "summary_tokens"
-                ] < threshold and not image_limits_exceeded(tail_messages):
+                ] < threshold and not image_limits_exceeded(tail_messages, profile):
                     break
                 keep //= 2
             old_rows, recent = (rows[:-keep], rows[-keep:]) if keep else (rows, [])
@@ -328,6 +345,17 @@ class ContextBuilder:
                 {
                     "compaction_id": compaction_id,
                     "before_tokens": original_estimate,
+                    "trigger": ",".join(triggers),
+                    "calibrated_tokens": int(original_estimate * factor),
+                    "token_threshold": threshold,
+                    "calibration_factor": factor,
+                    "image_count": image_count(messages),
+                    "image_limit": max_images,
+                    "image_bytes": image_bytes(messages),
+                    "image_byte_limit": max_image_bytes,
+                    "profile_id": profile["id"],
+                    "profile_revision": profile.get("revision"),
+                    "channel_id": channel_id,
                     "before_summary": summary,
                     "retained_summary_token_limit": profile["summary_tokens"],
                     "summary_tokenizer": "cl100k_base",
@@ -361,11 +389,11 @@ class ContextBuilder:
                     transcript = await self.conversation_async(pending, bot)
                     async with self.token_slots:
                         count, payload, estimated, probes = await asyncio.to_thread(
-                            self.compaction_batch, prefix, pending, transcript, budget
+                            self.compaction_batch, prefix, pending, transcript, budget, profile
                         )
                     if not count:
                         raise ControlError(
-                            "A message or summary cannot fit the compaction context. Increase the profile context or shorten its memory; nothing was dropped."
+                            f"A message or summary cannot fit the compaction token/image budgets ({budget} estimated tokens, {max_images} images, {max_image_bytes // (1024 * 1024)} MiB). Adjust Model profiles → Context & retained summary; nothing was dropped."
                         )
                     batch = pending[:count]
                     self.store.emit(

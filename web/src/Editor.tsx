@@ -1053,6 +1053,16 @@ export function Editor({
                   <div className="form-grid">
                     {numeric("context_window", "Context window (tokens)")}
                     {numeric(
+                      "max_request_images",
+                      "Images per request",
+                      "Separate compaction trigger and request limit. Includes images in retained history; increase for capable vision models.",
+                    )}
+                    {numeric(
+                      "max_request_image_mib",
+                      "Combined image budget (MiB)",
+                      "Separate compaction trigger and request limit, before base64 encoding. Per-file intake remains 20 MiB. These are local budgets, not detected provider limits.",
+                    )}
+                    {numeric(
                       "compact_threshold",
                       "Auto-compact threshold",
                       "Fraction of context, e.g. 0.70.",

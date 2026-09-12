@@ -275,7 +275,8 @@ async def test_legacy_capture_progress_is_persisted_before_cancellation(kernel):
     assert "vision" not in stored[1]
 
 
-async def test_many_images_compact_in_bounded_batches_instead_of_dropping_pixels(kernel):
+@pytest.mark.parametrize("image_limit", [8, 256])
+async def test_many_images_compact_in_bounded_batches_instead_of_dropping_pixels(kernel, image_limit):
     bot, channel = prepare_bot(kernel)
     _, item = await cached(kernel)
     kernel.store.execute(
@@ -293,7 +294,12 @@ async def test_many_images_compact_in_bounded_batches_instead_of_dropping_pixels
         )
     profile = kernel.store.get("profiles", bot["model_profile_id"])
     # Image count alone must trigger compaction even when token reserve fits a very large context.
-    profile.update(context_window=1_000_000, keep_recent_messages=20)
+    profile.update(
+        context_window=1_000_000,
+        keep_recent_messages=20,
+        max_request_images=image_limit,
+        max_request_image_mib=512,
+    )
     received = []
 
     async def complete(**kwargs):
@@ -307,6 +313,25 @@ async def test_many_images_compact_in_bounded_batches_instead_of_dropping_pixels
     kernel.pool.complete = complete
     rows, summary, _, _ = await kernel.engine.contexts.prepare(bot, profile, channel, "many-images", [])
     messages, _ = await kernel.engine.contexts.assemble(bot, profile, channel, rows, summary)
+    if image_limit == 256:
+        assert not received
+        assert image_count(messages) == 9
+        wire = ImageCache(kernel.store).wire_messages(messages, profile)
+        assert (
+            sum(
+                p.get("type") == "image_url"
+                for m in wire
+                if isinstance(m.get("content"), list)
+                for p in m["content"]
+            )
+            == 9
+        )
+        return
+    event = next(e for e in kernel.store.events() if e["kind"] == "compaction.started")
+    assert event["data"]["trigger"] == "image_count"
+    assert event["data"]["image_count"] == 9
+    assert event["data"]["image_limit"] == 8
+    assert event["data"]["calibrated_tokens"] < event["data"]["token_threshold"]
     assert received and all(image_count(request["messages"]) <= MAX_IMAGES for request in received)
     assert image_count(messages) <= MAX_IMAGES
     assert sum(image_count(request["messages"]) for request in received) + image_count(messages) == 9
@@ -496,3 +521,23 @@ async def test_current_rejections_and_deleted_images_are_not_retried(kernel):
     ]
     await cache.prepare_rows(rows)
     cache.capture.assert_not_awaited()
+
+
+async def test_custom_image_byte_budget_and_compaction_batch_share_profile(kernel):
+    cache, item = await cached(kernel)
+    rows = [{"discord_id": str(i), "attachments": [item]} for i in range(9)]
+    ctx = kernel.engine.contexts
+    count, _, _, _ = ctx.compaction_batch(
+        [], rows, [], 1_000_000, {"max_request_images": 256, "max_request_image_mib": 512}
+    )
+    assert count == 9
+    count, _, _, _ = ctx.compaction_batch([], rows, [], 1_000_000)
+    assert count == 8
+    messages = [
+        {"role": "user", "content": [{"type": "hortator_image", "image": {"size": 41 * 1024 * 1024}}]}
+    ]
+    assert image_limits_exceeded(messages)
+    assert not image_limits_exceeded(messages, {"max_request_images": 256, "max_request_image_mib": 512})
+    public = kernel.service.public("profiles", {"id": "old"})
+    assert public["max_request_images"] == 8
+    assert public["max_request_image_mib"] == 40

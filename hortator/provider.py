@@ -463,7 +463,7 @@ class ProviderPool:
             try:
                 record_diagnostics(self.store, self.vault, request_id, result, body, status="running")
                 try:
-                    body["messages"] = ImageCache(self.store).wire_messages(messages)
+                    body["messages"] = ImageCache(self.store).wire_messages(messages, profile)
                 except ControlError as exc:
                     raise ProviderError(str(exc), provider_fault=False) from exc
                 # Total deadline covers streamed bodies as well as the connection, not just inactivity.
