@@ -126,7 +126,7 @@ async def test_invalid_image_or_redirect_becomes_explicit_unavailable_metadata(k
 async def test_missing_corrupt_and_oversized_request_images_fail_without_silent_drop(kernel):
     cache, item = await cached(kernel)
     rows = [{"discord_id": "1", "attachments": [item] * (MAX_IMAGES + 1)}]
-    with pytest.raises(ControlError, match="8 images"):
+    with pytest.raises(ControlError, match=f"{MAX_IMAGES} images"):
         cache.wire_messages([{"role": "user", "content": cache.content("test", rows)}])
     cache.path(item["vision"]["sha256"]).write_bytes(b"corrupt")
     with pytest.raises(ControlError, match="unavailable"):
@@ -206,7 +206,7 @@ async def test_gateway_only_downloads_images_after_owner_authorization(kernel):
         channel=channel,
         guild=None,
         content="look",
-        attachments=[SimpleNamespace(**attachment())],
+        attachments=[SimpleNamespace(**attachment(id=str(i))) for i in range(10)],
         author=SimpleNamespace(id=1234, bot=False, display_name="outsider"),
         webhook_id=None,
         reference=None,
@@ -217,7 +217,7 @@ async def test_gateway_only_downloads_images_after_owner_authorization(kernel):
     kernel.connector.images.capture.assert_not_awaited()
     message.author.id = int(OWNER_ID)
     await kernel.connector.receive(bot["id"], message)
-    kernel.connector.images.capture.assert_awaited_once()
+    assert kernel.connector.images.capture.await_count == 10
 
 
 async def test_unsupported_upstream_vision_error_is_visible_not_retried_as_text(kernel):
@@ -332,8 +332,8 @@ async def test_many_images_compact_in_bounded_batches_instead_of_dropping_pixels
     assert event["data"]["image_count"] == 9
     assert event["data"]["image_limit"] == 8
     assert event["data"]["calibrated_tokens"] < event["data"]["token_threshold"]
-    assert received and all(image_count(request["messages"]) <= MAX_IMAGES for request in received)
-    assert image_count(messages) <= MAX_IMAGES
+    assert received and all(image_count(request["messages"]) <= image_limit for request in received)
+    assert image_count(messages) <= image_limit
     assert sum(image_count(request["messages"]) for request in received) + image_count(messages) == 9
 
 
@@ -525,19 +525,19 @@ async def test_current_rejections_and_deleted_images_are_not_retried(kernel):
 
 async def test_custom_image_byte_budget_and_compaction_batch_share_profile(kernel):
     cache, item = await cached(kernel)
-    rows = [{"discord_id": str(i), "attachments": [item]} for i in range(9)]
+    rows = [{"discord_id": str(i), "attachments": [item]} for i in range(11)]
     ctx = kernel.engine.contexts
     count, _, _, _ = ctx.compaction_batch(
         [], rows, [], 1_000_000, {"max_request_images": 256, "max_request_image_mib": 512}
     )
-    assert count == 9
+    assert count == 11
     count, _, _, _ = ctx.compaction_batch([], rows, [], 1_000_000)
-    assert count == 8
+    assert count == 10
     messages = [
         {"role": "user", "content": [{"type": "hortator_image", "image": {"size": 41 * 1024 * 1024}}]}
     ]
     assert image_limits_exceeded(messages)
     assert not image_limits_exceeded(messages, {"max_request_images": 256, "max_request_image_mib": 512})
     public = kernel.service.public("profiles", {"id": "old"})
-    assert public["max_request_images"] == 8
+    assert public["max_request_images"] == 10
     assert public["max_request_image_mib"] == 40

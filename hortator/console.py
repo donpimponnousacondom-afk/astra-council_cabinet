@@ -122,6 +122,12 @@ SUMMARY_FIELDS = (
     "after_tokens",
 )
 INCIDENT_FIELDS = (
+    "request_body_bytes",
+    "upstream_body_limit_bytes",
+    "body_limit_basis",
+    "inline_image_count",
+    "image_bytes",
+    "image_base64_bytes",
     "purpose",
     "operation",
     "handler",

@@ -357,7 +357,7 @@ Each **Model profiles** card has an **SSE streaming** switch; **Edit profile** e
 
 Off requests one buffered JSON response. Discord waits for the final answer in both modes. Returned usage, prices, tools and private reasoning are retained, while TTFT and streaming TPS display as unknown. The saved stream-usage preference is retained but disabled in the editor until SSE is re-enabled. The outgoing buffered body removes `stream_options`, including values in model/compaction JSON; it does not rewrite the saved JSON. The footer requires provider-reported output tokens and measured streaming timing, never a tokenizer fallback. A provider returning JSON despite an SSE request also has unknown timing; a provider returning SSE despite a buffered request is parsed safely but still gets no streaming timing claims.
 
-The bounded parser supports UTF-8/BOM, CR/LF/CRLF, comments, multiline data, named keepalives, null packets, metadata/usage-only events, nullable optional fields and fragmented native tool calls. Compatibility counters in private response evidence explain tolerated variants. EOF after a complete final choice is accepted; a final event without the usual blank separator is accepted as explicit compatibility. A stream ending before a completion boundary fails and withholds partial output. The existing total deadline and 8 MB response-body ceiling include keepalives (this is separate from the 20 MiB image-intake limit). There is no automatic reconnect/replay of a model POST.
+The bounded parser supports UTF-8/BOM, CR/LF/CRLF, comments, multiline data, named keepalives, null packets, metadata/usage-only events, nullable optional fields and fragmented native tool calls. Compatibility counters in private response evidence explain tolerated variants. EOF after a complete final choice is accepted; a final event without the usual blank separator is accepted as explicit compatibility. A stream ending before a completion boundary fails and withholds partial output. The total deadline includes keepalives; cumulative SSE framing bytes are diagnostic only. Individual events, retained output, metadata and buffered bodies have separate local bounds (see Provider response bounds below), independent of the 20 MiB image-intake limit. There is no automatic reconnect/replay of a model POST.
 
 Folded console failures now include `error_origin`, actual response format, frame index and field where available. Uppercase **P** still cycles JSON/evidence depth; `n`/`N` page and `[`/`]` select requests. The authenticated trajectory has the same private evidence. Interpret origins as follows:
 
@@ -555,7 +555,7 @@ See [VISION.md](VISION.md) for image capture limits and upstream failures, [PRIC
 
 Image and document bytes and the separate `site_history/` repository belong under external runtime storage and are included by `hortator backup`. Stop the foreground runtime for a consistent snapshot including files, history and queue metadata. Older code may not understand new profile/bot configuration fields or document tables: preserve the matching backup and use compatible code rather than clearing configuration. Published local sites are intentionally readable without dashboard login; manual-mode drafts require authentication. The sandboxed local preview permits scripts but denies dashboard origin privileges, external resources, and cross-site asset access. Persistent browser storage is unavailable in this opaque origin. Remote transport is implemented with explicit global configuration; inspect the document panel for actual readiness and delivery evidence, as described [above](#automatic-remote-publishing).
 
-Image intake currently accepts up to **20 MiB per image**, with 20 megapixels per image. **Model profiles → Context & retained summary** exposes **Images per request** (`max_request_images`, default 8) and **Combined image budget (MiB)** (`max_request_image_mib`, default 40). These are local operator budgets, shared by compaction planning/batching and final wire validation, not detected provider capabilities. They count images retained in history as well as new images. The owner requested 256 images / 512 MiB on the affected DeepSeek profiles for large-context testing; other profiles keep their defaults. These are separate from text-fetch, document-import and outbound-artifact limits. See [VISION.md](VISION.md) for the one-time retry of historical size rejections and unchanged pixel handling. Optional bot filesystem/Bash tools are described in [AGENTIC_TOOLS.md](AGENTIC_TOOLS.md). They preserve this image ceiling and require explicit plugin grants.
+Image intake currently accepts up to **20 MiB per image**, with 20 megapixels per image. **Model profiles → Context & retained summary** exposes **Images per request** (`max_request_images`, default 10) and **Combined image budget (MiB)** (`max_request_image_mib`, default 40). These are local operator budgets, shared by compaction planning/batching and final wire validation, not detected provider capabilities. They count images retained in history as well as new images. The owner subsequently requested 10 images on every saved profile, including Hortator, superseding the temporary 256-image setting. The count field has no fixed schema maximum; raise it explicitly for future workloads. Existing byte budgets remain unchanged (512 MiB on the affected DeepSeek profiles, 40 MiB elsewhere). Discord intake admits up to ten image captures per message independently. These are separate from text-fetch, document-import and outbound-artifact limits. See [VISION.md](VISION.md) for the one-time retry of historical size rejections and unchanged pixel handling. Optional bot filesystem/Bash tools are described in [AGENTIC_TOOLS.md](AGENTIC_TOOLS.md). They preserve this image ceiling and require explicit plugin grants.
 
 ## Private tools and isolated execution
 
@@ -641,3 +641,28 @@ task budget. The same change is available via:
 Saving cancels the bot's active turn. These remain total elapsed deadlines from
 the first successful task start, not idle timers or a fresh allowance per call.
 Provider per-request deadlines, tool round limits and other bots are unchanged.
+
+### Request-body size and HTTP 413 diagnostics
+
+Provider failures now record exact `request_body_bytes` from the serialized HTTP
+JSON, plus `inline_image_count`, original `image_bytes` and `image_base64_bytes`.
+Serialization runs on a detached worker and the measured bytes are the bytes
+submitted to HTTPX. Numeric facts are persisted in request context and private
+diagnostics before sending, so they survive a network failure without storing
+base64 payloads in the ledger. Headers and provider credentials are excluded.
+
+For HTTPS Chat Completions at the exact `api.deepseek.com` host (default port,
+root or `/v1` route), logs include `upstream_body_limit_bytes=50331648` and
+`body_limit_basis=deepseek_documentation`, sourced from the [DeepSeek vision
+limits](https://api-docs.deepseek.com/guides/vision/#limits), verified 2026-09-12.
+This is a documented 48 MiB limit, not a value returned by the observed 413 and
+not a local enforcement setting. Other providers/proxies show an unknown limit.
+A 413 remains an upstream HTTP request rejection and does not trip provider health.
+
+The current vision policy sends pixels for every ready attachment in retained,
+uncompacted history on each applicable request. `max_request_images` bounds this
+count; it does not implement a rolling image window or a descriptions-only memory.
+Base64 adds roughly one third to original image bytes, before text/tool/JSON
+content. Increasing local image budgets or token windows cannot override an
+upstream HTTP body limit. Separating old image descriptions from on-demand pixels
+is a follow-up policy change; changing the count to ten does not silently remove images.

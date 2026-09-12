@@ -10,7 +10,7 @@ Image bytes live in `$HORTATOR_DATA_DIR/images/<sha256>`, outside the checkout, 
 
 Only HTTPS URLs on `cdn.discordapp.com` or `media.discordapp.net` with Discord attachment paths are fetched. No arbitrary hosts, credentials in URLs, alternate ports, redirects, or environment proxy settings are used. Responses must advertise a supported raster image type or generic binary type, and Pillow validates the actual container/pixels. PNG, JPEG, WebP and GIF are supported. The original bytes are preserved; animation support depends on the model/provider, and local validation decodes only the first frame.
 
-Limits are 20 MiB per file (20,971,520 bytes), 20 megapixels, eight image captures per Discord message, and 15 seconds per download. Oversized, unsupported or invalid attachments retain explicit failure metadata. The image cache is private application storage, not a public static mount. Publishing an attachment is a separate scoped plugin action; merely uploading it to Discord does not publish the local cache.
+Limits are 20 MiB per file (20,971,520 bytes), 20 megapixels, ten image captures per Discord message, and 15 seconds per download. Oversized, unsupported or invalid attachments retain explicit failure metadata. The image cache is private application storage, not a public static mount. Publishing an attachment is a separate scoped plugin action; merely uploading it to Discord does not publish the local cache.
 
 ## Model requests and observability
 
@@ -18,7 +18,7 @@ Generation and compaction both contain structured image parts paired with the so
 
 The assembled request uses internal durable image references. Immediately before the HTTP request, the provider adapter loads the bytes, checks their hash and converts each reference into an OpenAI-compatible `image_url` part containing a base64 data URI. The request ledger keeps the durable reference, not megabytes of base64. A missing/corrupt reference fails the request explicitly and does not open a provider-wide failure circuit.
 
-A wire request is limited to eight images and 40 MiB of combined original image bytes. Context preparation triggers normal compaction when images exceed those limits, and compaction batches obey the same limits. Tool follow-up requests retain the same relevant image context. No capability-name registry or model-name heuristic suppresses image input.
+A wire request defaults to ten images and 40 MiB of combined original image bytes; its model profile can override both budgets. Context preparation triggers normal compaction when images exceed those limits, and compaction batches obey the same limits. Tool follow-up requests retain the same relevant image context. No capability-name registry or model-name heuristic suppresses image input.
 
 Context planning adds a **4,096-token reserve per image** to the existing approximate text estimate. This is a planning allowance, not measured provider image tokens or a guarantee for every tokenizer/resolution. The usual calibration against reported input usage remains active; actual provider usage/cost continues to come from response usage fields. Request/context metadata states the image count and estimator explicitly.
 
@@ -32,4 +32,4 @@ At the image-ceiling patch stage, `web_fetch` was a bounded text extractor and s
 
 ## Per-model request budgets (2026-09-12)
 
-The per-request eight-image/40 MiB values described above are now compatibility defaults, not fixed ceilings. Model profiles expose `max_request_images` and `max_request_image_mib` under Context & retained summary. Compaction triggers, summary batches, retained tail selection and outbound validation all honor these fields. The byte count excludes base64 overhead. Intake file/pixel bounds remain unchanged. Operator-selected budgets do not assert provider support. Compaction events report image and token measurements and the exact trigger(s).
+Per-request defaults are ten images / 40 MiB, not fixed ceilings. The owner subsequently requested ten images on every saved profile after testing larger budgets; this supersedes the earlier eight-image default and 256-image live configuration. The count field has no fixed schema maximum, so an operator can raise it for a future workload without a code change. The separate byte budget and upstream limits still apply. Model profiles expose `max_request_images` and `max_request_image_mib` under Context & retained summary. Compaction triggers, summary batches, retained tail selection and outbound validation all honor these fields. The byte count excludes base64 overhead. Intake file/pixel bounds remain unchanged. Operator-selected budgets do not assert provider support. Compaction events report image and token measurements and the exact trigger(s).

@@ -286,3 +286,74 @@ async def test_cost_threshold_checked_between_requests(kernel):
     with pytest.raises(ProviderError, match="cost threshold"):
         await kernel.pool.complete(**call_args(kernel, bot))
     assert len(kernel.store.rows("SELECT * FROM requests")) == 1
+
+
+async def test_http_413_logs_exact_serialized_body_and_documented_limit(kernel):
+    from test_console import output
+    from hortator.diagnostics import read_diagnostics
+
+    bot = configured(kernel)
+    provider = kernel.store.get("providers", "openrouter")
+    provider["base_url"] = "https://api.deepseek.com"
+    provider["headers"] = {"User-Agent": "Council-test", "X-Test": "keep"}
+    kernel.store.put("providers", provider)
+    args = call_args(kernel, bot)
+    args["messages"] = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "café 猫"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAE="}},
+            ],
+        }
+    ]
+    seen = []
+
+    def handler(request):
+        seen.append(len(request.content))
+        assert int(request.headers["content-length"]) == len(request.content)
+        assert request.headers["content-type"] == "application/json"
+        assert request.headers["user-agent"] == "Council-test"
+        assert request.headers["x-test"] == "keep"
+        assert json.loads(request.content)["messages"] == args["messages"]
+        return httpx.Response(413, text="Failed to buffer the request body: length limit exceeded")
+
+    await install_client(kernel, handler)
+    with output() as console:
+        console.bind(kernel)
+        with pytest.raises(ProviderError) as error:
+            await kernel.pool.complete(**args)
+        assert error.value.http_status == 413
+        assert not error.value.provider_fault
+        assert f"request_body_bytes={seen[0]}" in console.stream.getvalue()
+        assert "upstream_body_limit_bytes=50331648" in console.stream.getvalue()
+        assert "body_limit_basis=deepseek_documentation" in console.stream.getvalue()
+    row = kernel.store.one("SELECT id,context FROM requests ORDER BY started_at DESC LIMIT 1")
+    context = json.loads(row["context"])
+    assert context["request_body_bytes"] == seen[0]
+    assert context["inline_image_count"] == 1
+    assert context["image_bytes"] == 2
+    assert context["image_base64_bytes"] == 4
+    diag = read_diagnostics(kernel.store, row["id"])
+    assert diag["response"]["request_size"]["request_body_bytes"] == seen[0]
+    assert not any(e["kind"] == "provider.failure" for e in kernel.store.events())
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "https://proxy.example.com/chat/completions",
+        "https://api.deepseek.com.evil.example/chat/completions",
+        "http://api.deepseek.com/chat/completions",
+        "https://api.deepseek.com:8443/chat/completions",
+    ],
+)
+def test_other_endpoints_have_unknown_upstream_body_limits(endpoint):
+    from hortator.request_payload import encode_request
+
+    body = {"messages": [{"role": "user", "content": "unicode 猫"}]}
+    payload, facts = encode_request(body, endpoint)
+    assert json.loads(payload) == body
+    assert facts["request_body_bytes"] == len(payload)
+    assert facts["upstream_body_limit_bytes"] is None
+    assert facts["body_limit_basis"] == "unknown"
