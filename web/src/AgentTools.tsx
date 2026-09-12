@@ -133,7 +133,7 @@ export function WorkTaskSettings({
               "File and reading time limit (seconds)",
               900,
               30,
-              3600,
+              7200,
             ],
             [
               "tool_working_set_tokens",

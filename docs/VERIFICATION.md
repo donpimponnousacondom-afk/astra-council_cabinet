@@ -409,3 +409,20 @@ boundary coverage. Ruff and diff checks passed. These are mock/synthetic tests,
 not paid model or Discord validation. Runtime rollout uses the shared Screen
 refresh command and its external startup/build receipt; no configuration changes
 are needed for this parser fix.
+
+### 2026-09-12 — Two-hour task deadlines
+
+Raised document/work task validation maxima and the modern file/reading editor
+bound to 7,200 seconds. Defaults and provider per-request timeouts are unchanged.
+Both modern and legacy editors already contain a workspace/file-reading task
+field; the earlier conversational claim that modern lacked it was incorrect.
+It is conditionally shown in Capabilities for granted workspace/shell/web-fetch
+capabilities; the frozen legacy frontend is unchanged by this patch.
+
+Validation: 35 document configuration, agentic API/runtime and runtime-feedback
+tests passed. Direct model validation accepts 7,200 for both fields and rejects
+7,201 at the corresponding field. Ruff and diff checks passed. Existing deadline
+semantics are tested with short synthetic timeouts; no two-hour live run claimed.
+The owner's requested live change sets only Hortator's two task deadlines to
+7,200 via the revision-aware service, recorded in normal config events and an
+external deployment receipt.

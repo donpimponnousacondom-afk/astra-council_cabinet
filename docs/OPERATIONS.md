@@ -624,3 +624,20 @@ with `field`, `observed_bytes` and `limit_bytes`; it does not mark the provider
 unhealthy. Partial private diagnostics remain inspectable and an incomplete
 summary never advances the checkpoint. These byte bounds are separate from model
 context windows, per-profile image budgets and retained-summary token limits.
+
+### Two-hour extended tasks
+
+Both per-bot absolute task deadlines accept 30–7,200 seconds (default 900):
+`document_task_seconds` for document/site starts and `work_task_seconds` for
+workspace/web starts. The owner requested both set to 7,200 for Hortator on
+2026-09-12. In the modern bot editor, use **Document task time limit (seconds)**
+or **File and reading time limit (seconds)** under the corresponding extended
+task budget. The same change is available via:
+
+```text
+!set bots hortator {"work_task_seconds":7200,"document_task_seconds":7200}
+```
+
+Saving cancels the bot's active turn. These remain total elapsed deadlines from
+the first successful task start, not idle timers or a fresh allowance per call.
+Provider per-request deadlines, tool round limits and other bots are unchanged.

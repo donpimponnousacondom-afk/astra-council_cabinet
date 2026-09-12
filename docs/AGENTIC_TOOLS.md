@@ -39,7 +39,7 @@ For long reading, call `web_fetch` with `{"operation":"start"}`, then `{"url":"h
 | --- | --- | --- |
 | `work_task_rounds` | 20 | Additional work rounds after the first successful workspace/web start; zero disables this extension |
 | `work_task_calls_per_round` | 8 | Calls allowed in each subsequent extended round, executed sequentially |
-| `work_task_seconds` | 900 | Elapsed extended work deadline, bounded to 30–3,600 seconds |
+| `work_task_seconds` | 900 | Elapsed extended work deadline, bounded to 30–7,200 seconds |
 | `tool_working_set_tokens` | 6,000 | Maximum estimated active tool-exchange working set; reduced further to fit actual calibrated input headroom |
 
 The existing `document_task_*` defaults and successful document-start behavior are retained. Only the **first successful task start** of any of these packs can extend a turn. Repeated starts, changing task IDs, starting shell jobs or switching between document/workspace/web tools cannot stack rounds or reset the clock. Zero additional rounds on that first start also prevents another pack from opening a later extension. Normal final-response opportunities, cancellation, provider concurrency, hourly activation and measured daily-cost checks remain in force. Exhausting the time deadline stops work and retains previously saved files; it does not promise a late Discord send.
