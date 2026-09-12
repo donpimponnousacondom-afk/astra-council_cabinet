@@ -555,7 +555,7 @@ See [VISION.md](VISION.md) for image capture limits and upstream failures, [PRIC
 
 Image and document bytes and the separate `site_history/` repository belong under external runtime storage and are included by `hortator backup`. Stop the foreground runtime for a consistent snapshot including files, history and queue metadata. Older code may not understand new profile/bot configuration fields or document tables: preserve the matching backup and use compatible code rather than clearing configuration. Published local sites are intentionally readable without dashboard login; manual-mode drafts require authentication. The sandboxed local preview permits scripts but denies dashboard origin privileges, external resources, and cross-site asset access. Persistent browser storage is unavailable in this opaque origin. Remote transport is implemented with explicit global configuration; inspect the document panel for actual readiness and delivery evidence, as described [above](#automatic-remote-publishing).
 
-Image intake currently accepts up to **20 MiB per image**, with 20 megapixels per image. **Model profiles → Context & retained summary** exposes **Images per request** (`max_request_images`, default 10) and **Combined image budget (MiB)** (`max_request_image_mib`, default 40). These are local operator budgets, shared by compaction planning/batching and final wire validation, not detected provider capabilities. They count images retained in history as well as new images. The owner subsequently requested 10 images on every saved profile, including Hortator, superseding the temporary 256-image setting. The count field has no fixed schema maximum; raise it explicitly for future workloads. Existing byte budgets remain unchanged (512 MiB on the affected DeepSeek profiles, 40 MiB elsewhere). Discord intake admits up to ten image captures per message independently. These are separate from text-fetch, document-import and outbound-artifact limits. See [VISION.md](VISION.md) for the one-time retry of historical size rejections and unchanged pixel handling. Optional bot filesystem/Bash tools are described in [AGENTIC_TOOLS.md](AGENTIC_TOOLS.md). They preserve this image ceiling and require explicit plugin grants.
+Image intake currently accepts up to **20 MiB per image**, with 20 megapixels per image. **Model profiles → Context & retained summary** exposes **Images per request** (`max_request_images`, default 10) and **Combined image budget (MiB)** (`max_request_image_mib`, default 40). These are local operator budgets for current-turn selection, planning and final wire validation, not detected provider capabilities. Only unhandled-message pixels are eligible; older attachments remain metadata-only. Newest messages take priority within the budgets. Extra images receive an explicit omission notice instead of triggering compaction. The owner subsequently requested 10 images on every saved profile, including Hortator, superseding the temporary 256-image setting. The count field has no fixed schema maximum; raise it explicitly for future workloads. Existing byte budgets remain unchanged (512 MiB on the affected DeepSeek profiles, 40 MiB elsewhere). Discord intake admits up to ten image captures per message independently. These are separate from text-fetch, document-import and outbound-artifact limits. See [VISION.md](VISION.md) for the one-time retry of historical size rejections and unchanged pixel handling. Optional bot filesystem/Bash tools are described in [AGENTIC_TOOLS.md](AGENTIC_TOOLS.md). They preserve this image ceiling and require explicit plugin grants.
 
 ## Private tools and isolated execution
 
@@ -600,7 +600,7 @@ paths are preserved to avoid inventing precedence between vendor fields.
 An already active turn retains its captured profile; profile edits apply to new
 turns. These summaries never contain provider-produced reasoning text or credentials.
 
-`compaction.started` now names all applicable triggers (`manual`, `token_threshold`, `image_count`, `image_bytes`) and records calibrated tokens/threshold, image count/limit, original image bytes/limit, profile revision and channel. A small `before_tokens` alone does not explain why compaction ran. No images or history are silently dropped when a budget is exceeded.
+`compaction.started` now names all applicable triggers (`manual`, `token_threshold`, `image_count`, `image_bytes`) and records calibrated tokens/threshold, image count/limit, original image bytes/limit, profile revision and channel. A small `before_tokens` alone does not explain why compaction ran. Image selection now happens before token planning; image count alone no longer forces compaction. No original files or transcript history are deleted when pixels expire from prompts.
 
 ### Provider response bounds
 
@@ -659,10 +659,33 @@ This is a documented 48 MiB limit, not a value returned by the observed 413 and
 not a local enforcement setting. Other providers/proxies show an unknown limit.
 A 413 remains an upstream HTTP request rejection and does not trip provider health.
 
-The current vision policy sends pixels for every ready attachment in retained,
-uncompacted history on each applicable request. `max_request_images` bounds this
-count; it does not implement a rolling image window or a descriptions-only memory.
-Base64 adds roughly one third to original image bytes, before text/tool/JSON
-content. Increasing local image budgets or token windows cannot override an
-upstream HTTP body limit. Separating old image descriptions from on-demand pixels
-is a follow-up policy change; changing the count to ten does not silently remove images.
+Generation now includes only selected new-message pixels for the current turn;
+compaction sends text only. `max_request_images` caps the selection without
+forcing compaction. Base64 adds roughly one third to original image bytes before
+text/tool/JSON content; local budgets and token windows cannot override upstream
+HTTP body limits. See the turn-scoped image policy below.
+
+### Turn-scoped image inputs
+
+A bot receives new attachment pixels for one handled turn, including all its
+tool rounds. Its existing `contexts.last_seen` marker advances after an answer
+is sent or silence is selected. Later turns keep original message/attachment
+metadata and attributed written observations, without replaying old pixels.
+Failure/cancellation does not acknowledge input; this change does not alter
+normal task retries. Other bots retain independent handled-message markers.
+
+Compaction summarizes text only. Old images and new excess images cannot force
+whole-context compaction or make a two-image message impossible under a one-image
+profile. Newest unhandled messages take priority, with the profile count and byte
+budgets applied before generation. An explicit omission notice identifies any
+new images outside those budgets; files remain intact. Reattach an older image
+when its pixels need another inspection. Replies alone do not reopen images.
+
+`context.image_selection` reports selected, historical and budget-omitted counts:
+ordinary historical expiry is DEBUG; omitting new images is WARNING. Request
+metadata records the frozen image plan, while `image_count` describes the actual
+remaining inputs after checking source deletion/removal. The prompt's
+`pixels_in_this_request` flag distinguishes an attachment being cached from being
+visually available now. A genuine compaction token failure now names the blocking
+message and actual required/allowed token estimates; the allowance is no longer
+mislabelled as an observed input size.

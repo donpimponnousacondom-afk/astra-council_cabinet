@@ -267,3 +267,26 @@ Align Discord capture with ten images per message, separately from a profile's
 request limit. This supersedes the temporary 256-image live configuration above.
 Existing compaction handles over-budget history; do not silently delete pixels,
 truncate the transcript or change its retention policy.
+
+## 2026-09-12 — Decouple image lifetime from transcript compaction
+
+The owner clarified that image pixels should last for one conversational turn,
+with written observations remaining afterwards. This supersedes the earlier
+proposal to treat retained-image count as a compaction trigger. Raising the count
+to 256 caused large HTTP bodies; lowering it to one made a single old two-image
+message impossible to batch. A count cap was not a retention policy.
+
+Reuse the existing per-bot/channel handled-message boundary for new image
+eligibility, keep a fixed bounded selection through the current tool loop, and
+revoke inputs when source attachments are removed. Prioritize newest new messages;
+report excess attachments as metadata-only. Keep original pixels, transcripts,
+private evidence and operator budgets. Compaction is text-only, preserving
+attributed written observations rather than private reasoning or invented visual
+analysis. Selected new pixels remain available for current generation even when
+text compaction advances the source checkpoint. A reattachment reopens pixels;
+no implicit reply-chain traversal or new remote-fetch tool is introduced.
+
+Normal failure retries remain unchanged; failure/cancellation does not mark
+input handled. This task does not clear repetitive historical notes or summarize
+images with extra paid model calls. Token-only compaction errors must distinguish
+actual required input tokens from the available budget.

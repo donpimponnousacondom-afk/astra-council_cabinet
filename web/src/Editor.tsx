@@ -1055,12 +1055,12 @@ export function Editor({
                     {numeric(
                       "max_request_images",
                       "Images per request",
-                      "Separate compaction trigger and request limit. Includes images in retained history; increase for capable vision models.",
+                      "Maximum new attachment images for a turn, newest messages first. Pixels expire after a handled turn. Extra images stay as metadata; they do not trigger compaction.",
                     )}
                     {numeric(
                       "max_request_image_mib",
                       "Combined image budget (MiB)",
-                      "Separate compaction trigger and request limit, before base64 encoding. Per-file intake remains 20 MiB. These are local budgets, not detected provider limits.",
+                      "Combined selected image bytes before base64 encoding. Per-file intake remains 20 MiB. These are local budgets, not detected provider limits.",
                     )}
                     {numeric(
                       "compact_threshold",
