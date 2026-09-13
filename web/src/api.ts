@@ -9,8 +9,16 @@ export type Kind =
   | "plugins"
   | "rooms"
   | "settings";
-export type Page = "council" | "trajectory" | "analytics" | "commands" | Kind;
+export type Page =
+  | "council"
+  | "trajectory"
+  | "analytics"
+  | "commands"
+  | "snapshots"
+  | Kind;
 export type Dashboard = {
+  maintenance_pause?: boolean;
+  snapshot_operation?: string | null;
   version?: RuntimeVersion;
   bots: RecordData[];
   providers: RecordData[];

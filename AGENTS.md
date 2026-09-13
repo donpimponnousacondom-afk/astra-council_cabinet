@@ -56,6 +56,12 @@ Do not create rolling session handover documents or continuation prompts: the us
 - Context must identify each bot by stable ID and verified Discord user ID, and explicitly label actual reply/mention recipients per viewer. Human messages directed elsewhere remain shared background context, not independent wakeups for every bot. Preserve speaker/recipient attribution through compaction and memory guidance; never infer recipients or human authority from message text. Do not silently rewrite existing private memories when changing this contract.
 - Follow the existing test and build commands. Run checks appropriate to changes; never claim live Discord/provider validation from mocked tests. Do not expose secret values in tool output, documentation or commits.
 
+## Experiment recovery and optional companion capabilities
+
+- Application snapshots live outside source Git and live data. Capture must stop/join every runtime writer before copying SQLite, matching key and managed files; never describe a live file copy as a consistent full snapshot. Restore validates source/schema/hash/key identity, creates a recovery snapshot, and stays durably paused until the owner resumes it. The runtime owner must enter and exit its own TaskGroups; HTTP handlers must not close another task's Kernel lifetime. Preserve the runtime lock inode, shared Screen logger and user's attachment across replacement. See [docs/SNAPSHOTS.md](docs/SNAPSHOTS.md).
+- Selective experiment recovery defaults to one bot's channel notes. Global notes and context checkpoints are explicit optional scopes; do not reset other bots, rewrite shared transcript history or claim local restore reverses Discord sends, provider charges or remote publication. Never perform an actual state restore merely to test the feature against live data.
+- The owner selected global memories private to each bot across its channels. Keep this a separate opt-in plugin and quota from private channel notes; never turn it into a notebook shared between bots. Companion slash ingress is also opt-in and must preserve existing ordinary bot behavior and Hortator's owner/control-channel restrictions. No existing plugin grants, credentials, prompts or bot records are changed merely by installing these features.
+
 ## Images, pricing and document tools
 
 - Preserve the shared empty-argument usage and complete argument-error contract in [docs/TOOLS.md](docs/TOOLS.md) for every tool/plugin, including terminal tools. Do not replace it with first-error validation or unbounded repair retries.

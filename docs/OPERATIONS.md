@@ -541,6 +541,12 @@ Audits inspect registered namespaces, public release pointers and checksums. Cha
 
 Use the recorded local/remote snapshot commits and job IDs to trace what changed. For a normal content rollback, use the document tool's `history`, pinned `read` and single-file `restore`: this creates a new revision and follows the same publication path without deleting newer assets or rewriting history. Unexpected remote drift or ownership errors require operator inspection of the recorded evidence; do not remove metadata to force adoption. Remote snapshots complement the complete Hortator backup below. They cannot recover local drafts, bot configuration or credentials without the matching database, key and other data stores.
 
+## Dashboard snapshots
+
+Use **Snapshots** in the modern dashboard to name and capture a consistent application state. Capture cancels active turns/jobs while shutting down every runtime writer, then resumes the previous runtime mode; it does not suspend a provider request halfway through and continue it later. Restore first captures a recovery snapshot, validates the selected snapshot and leaves gateways, turns and publishing stopped until **Resume runtime**. A full restore revokes dashboard sessions; log in again with the restored password. The external password environment override remains authoritative when configured.
+
+Default storage is `$HORTATOR_DATA_DIR`'s sibling with `-snapshots` appended: `/home/codexy/.local/share/hortator-snapshots` here. `HORTATOR_SNAPSHOT_DIR` may select another private directory outside the checkout and live data. These versioned application snapshots exclude host launcher/environment files and console logs; the manual host archive procedure below remains useful for moving the installation. They do not change the manual archive's `.latest-requested` pointer. See [SNAPSHOTS.md](SNAPSHOTS.md) for captured stores, compatibility checks, selective restore, interruption recovery and exclusions.
+
 ## Backup and restore
 
 From the repository root, or with `--data-dir` before the command:

@@ -2,6 +2,14 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
 
+## Experiment snapshots: stage 1 (2026-09-13)
+
+Branched clean stable `7b6cb1cf6b999c739270b54fa8a30748196f8acb` into `feat/slash_snapshots_global_memory` for the owner's three-stage request. No main changes or pushes. Existing live configuration, notes and credentials remained untouched during implementation.
+
+- **73 backend checks passed**: 16 new snapshot tests plus 57 operations, security, concurrency, agentic API, site-preview and version regressions. Coverage includes source/schema incompatibility, payload/hash/key validation, quota-scoped restoration, recovery capture, full-restore session revocation, persistent pause, same-task Kernel replacement, request draining, repeated cancellation, transcript-anchor checks and interrupted file-swap recovery with durable flush ordering.
+- **Two Chromium checks passed** for the modern snapshot page using isolated fixture data and mocked operation receipts: named capture, notes-only defaults, explicit confirmation, independent resume, incompatible-version refusal and protected drafts. These browser mocks do not prove a live restore; backend tests execute actual restores on temporary stores.
+- TypeScript/Vite built to `/tmp/hortator-three-features-web`; scoped Ruff and `git diff --check` passed. The production assets/runtime were not rebuilt or restarted during this stage.
+
 ## Shared Screen recovery shortcut (2026-09-10)
 
 The owner reported accidentally closing Screen. Inspection found no `hortator` session and no listener on port 8000; the other named Screen sessions were left alone. Added the local `hortator-start` fast action, using the existing verified process/shell inspection helpers, user Screen configuration, login Bash and external runtime launcher. It does not initialize data, switch branches or restart an already running server. Ruff formatting/lint, Bash syntax and whitespace checks passed. Recovery and repeated-invocation PID/health checks are recorded after execution in the external `logs/screen-start-verification.json` receipt; no live Discord test messages or configuration mutations are involved.
