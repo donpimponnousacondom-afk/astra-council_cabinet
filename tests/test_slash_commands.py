@@ -88,8 +88,9 @@ async def test_ingress_cannot_be_called_as_tool_even_when_granted(kernel):
     assert not kernel.store.rows("SELECT * FROM slash_invocations")
 
 
-async def test_owner_only_stale_ids_and_duplicate_invocations(kernel):
-    bot = enable(kernel)
+@pytest.mark.parametrize("interval", [0, 60])
+async def test_owner_only_stale_ids_and_duplicate_invocations(kernel, interval):
+    bot = enable(kernel, interval_seconds=interval)
     await install_client(kernel, lambda _: completion())
     stranger = interaction(bot, actor="555555555555555555")
     await kernel.connector.slash.receive("ada", stranger)

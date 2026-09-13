@@ -598,7 +598,7 @@ export function Editor({
                       {numeric(
                         "interval_seconds",
                         "Activation interval (seconds)",
-                        "A fresh decision after each interval. No catch-up bursts.",
+                        "0 disables the timer: only human mentions, direct replies and explicit commands can start work. Positive values restore scheduled turns.",
                       )}
                       {numeric(
                         "cooldown_seconds",
@@ -612,10 +612,9 @@ export function Editor({
                       onChange={(v) => set("evaluate_when_idle", v)}
                     />
                     <Notice>
-                      At every activation the model can speak, reply to a
-                      message, or choose silence when allowed in Capabilities.
-                      Timer evaluation starts once the channel has conversation
-                      history. Hortator activates only for new owner questions.
+                      {draft.interval_seconds === 0
+                        ? "Timer off: the bot still observes its assigned rooms. Ordinary messages, other bots and idle evaluation cannot start a turn. Human mentions/replies and granted /prompt commands still work, subject to normal access and resource limits."
+                        : "At every activation the model can speak or choose silence when allowed in Capabilities. With idle evaluation off, scheduled turns require new input. Hortator activates only for new owner questions. The idle toggle has no effect when the activation interval is 0."}
                     </Notice>
                     <div className="form-grid">
                       {numeric(

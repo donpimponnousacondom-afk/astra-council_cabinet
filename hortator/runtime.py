@@ -252,6 +252,11 @@ class Engine:
                 continue
             if not self.available(bot):
                 continue
+            # Keep observing input, but only explicit human attention may start
+            # a scheduler turn with the timer off. Do not change pick_channel:
+            # owner-requested compaction also uses it to select a context.
+            if bot["interval_seconds"] == 0 and not attention:
+                continue
             state = self.store.runtime(bot["id"])
             if (
                 state["gateway_status"] != "online"
