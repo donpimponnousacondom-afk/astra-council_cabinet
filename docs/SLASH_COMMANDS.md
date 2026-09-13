@@ -17,17 +17,21 @@ Discord separates application installation contexts from command invocation cont
 
 The command remains **owner-only**, checked against the genuine Discord user ID `1482143139828596916`, even if another user installs the app or can see the command. A prompt, display name or selected room cannot grant that authority.
 
+The connected backend reconciles registration every 60 seconds. Unchanged commands require only a read, with no registration event. Discord may omit an optional parameter's `required: false` default; this is equivalent to the saved definition, not drift. `discord.slash_registered` means the backend created or updated its owned command, **not** that someone invoked it. Actual invocation emits `turn.started` with `trigger: slash_prompt`.
+
 ## Invocation
 
 ```text
 /prompt text:Search for the latest release notes and summarize them
-/prompt text:Create a small HTML checklist for this project private:false
+/prompt text:Create a small HTML checklist for this project private:true
 ```
 
 | Parameter | Meaning |
 | --- | --- |
 | `text` | Required prompt, 1–6,000 characters. Surrounding channel messages are not implicitly read. |
-| `private` | Optional boolean, default `true`. The interaction response is visible only to the invoking owner. `false` requests a public response in that interaction's channel. |
+| `private` | Optional boolean, default `false`. The answer is public in the invocation's channel. Set `true` for a response visible only to the invoking owner. |
+
+The owner requested public answers by default on 2026-09-13 for sharing news and searches in their channels. No extra command or saved preference is needed; `private:true` overrides visibility for that invocation. This changes response visibility only, never who can invoke the assistant. Registration refreshes the option's help text after deployment; an already-running invocation retains its original visibility.
 
 Discord permits at most 6,000 characters for a string command option. Options have strict validation; malformed/stale input receives all detected option errors together with usage. [Application command option limits](https://docs.discord.com/developers/interactions/application-commands#application-command-object-application-command-option-structure).
 

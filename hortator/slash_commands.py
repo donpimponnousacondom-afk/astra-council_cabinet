@@ -44,7 +44,7 @@ COMMAND = {
         {
             "type": 5,
             "name": "private",
-            "description": "Only you see the response (default true). False posts it in this channel.",
+            "description": "Only you see the response when true. Default false: posts it in this channel.",
             "required": False,
         },
     ],
@@ -63,7 +63,8 @@ def register(registry):
             "Slash command assistant",
             "Owner-only /prompt through this bot's Discord application. Supports user and server installs. "
             "Keeps ordinary assigned-room chat unchanged; each prompt starts a fresh conversation, with granted "
-            "private/global notes and tools. Private responses by default; maximum 14 minutes per invocation. "
+            "private/global notes and tools. Public responses by default; set private:true for only you. "
+            "Maximum 14 minutes per invocation. "
             "Council bots only; Hortator's control-channel scope is unchanged.",
             {"type": "object", "properties": {}, "additionalProperties": False},
             ingress_only,
@@ -109,15 +110,21 @@ def parse_options(data):
         raise ControlError(
             "; ".join(errors) + ". Usage: /prompt text:<prompt> private:<true|false, optional>"
         )
-    return values["text"].strip(), values.get("private", True)
+    return values["text"].strip(), values.get("private", False)
 
 
 def matches_definition(actual, expected):
-    """Ignore Discord-added defaults while checking every field we own."""
+    """Compare owned fields, including Discord's omitted optional-option default."""
     if isinstance(expected, dict):
-        return isinstance(actual, dict) and all(
-            key in actual and matches_definition(actual[key], value) for key, value in expected.items()
-        )
+        if not isinstance(actual, dict):
+            return False
+        for key, value in expected.items():
+            # Discord may omit required=false; required=true must remain explicit.
+            if key == "required" and value is False and key not in actual:
+                continue
+            if key not in actual or not matches_definition(actual[key], value):
+                return False
+        return True
     if isinstance(expected, list):
         return (
             isinstance(actual, list)
