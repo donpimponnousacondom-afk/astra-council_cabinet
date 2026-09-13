@@ -26,9 +26,10 @@ from .vision_turn import select_images, current_inputs, with_inputs, attachment_
 
 
 class ContextBuilder:
-    def __init__(self, store, pool, global_memory=None):
+    def __init__(self, store, pool, global_memory=None, application_emojis=None):
         self.store, self.pool = store, pool
         self.global_memory = global_memory
+        self.application_emojis = application_emojis
         self.images = ImageCache(store)
         self.encoder = tiktoken.get_encoding("cl100k_base")
         self.token_slots = asyncio.Semaphore(2)
@@ -205,6 +206,8 @@ class ContextBuilder:
             values["task_budget"] = bot["active_task_budget"]
         if bot.get("activation"):
             values["activation"] = bot["activation"]
+        if self.application_emojis is not None:
+            values["application_emojis"] = self.application_emojis.prompt(bot)
         custom = bot["dynamic_prompt"]
         # Literal substitutions only: no Python format attribute traversal or executable templates.
         for name, value in values.items():

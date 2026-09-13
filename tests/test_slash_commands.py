@@ -14,7 +14,7 @@ from test_provider import install_client
 from test_runtime import completion, settle
 from hortator.models import OWNER_ID, ControlError
 from hortator.plugins import ToolContext
-from hortator.slash_commands import COMMAND, MAX_PROMPT_CHARS, parse_options
+from hortator.slash_commands import COMMAND, MAX_PROMPT_CHARS, matches_definition, parse_options
 
 
 def enable(k, bot_id="ada", **changes):
@@ -109,6 +109,25 @@ async def test_owner_only_stale_ids_and_duplicate_invocations(kernel, interval):
     assert kernel.store.one("SELECT count(*) AS n FROM turns")["n"] == 1
     assert kernel.store.one("SELECT count(*) AS n FROM requests")["n"] == 1
     assert kernel.store.one("SELECT status FROM slash_invocations")["status"] == "sent"
+
+
+@pytest.mark.parametrize("private", [None, False, True])
+async def test_public_default_and_explicit_private_response(kernel, private):
+    bot = enable(kernel)
+    await install_client(kernel, lambda _: completion("The requested news"))
+    item = interaction(bot, private=private)
+    if private is None:
+        item.data["options"].pop()  # Discord omits an option the owner did not select.
+    await kernel.connector.slash.receive("ada", item)
+    await settle(kernel)
+    item.response.defer.assert_awaited_once_with(thinking=True, ephemeral=private is True)
+    assert item.edit_original_response.call_args.kwargs["content"] == "The requested news"
+    assert kernel.store.one("SELECT private,status FROM slash_invocations") == {
+        "private": int(private is True),
+        "status": "sent",
+    }
+    routing = json.loads(kernel.store.one("SELECT routing FROM outbox")["routing"])
+    assert routing["private"] is (private is True)
 
 
 async def test_tool_loop_isolated_prompt_notes_and_footer(kernel):
@@ -259,17 +278,58 @@ async def test_registration_ignores_discord_added_option_defaults(kernel):
     remote.update(id="123456789012345678", application_id=bot["application_id"], version="123")
     remote["options"][0]["autocomplete"] = False
     remote["options"][1]["name_localizations"] = None
+    del remote["options"][1]["required"]
     kernel.store.execute("UPDATE slash_commands SET definition=?", (dumps(COMMAND),))
     http = AsyncMock()
     http.get_global_commands.return_value = [remote]
     client = SimpleNamespace(bot_id="ada", application_id=int(bot["application_id"]), http=http)
     await kernel.connector.slash.sync(client)
+    await kernel.connector.slash.sync(client)
+    assert http.get_global_commands.await_count == 2
     http.upsert_global_command.assert_not_awaited()
+    assert not kernel.store.rows("SELECT * FROM events WHERE kind='discord.slash_registered'")
     # Actual drift in a field we own still gets repaired.
     remote["options"][0]["max_length"] = 10
     http.upsert_global_command.return_value = {"id": "123456789012345678"}
     await kernel.connector.slash.sync(client)
     http.upsert_global_command.assert_awaited_once()
+
+
+@pytest.mark.parametrize("required", [True, None, "false", 0])
+def test_optional_option_still_rejects_changed_or_malformed_required(required):
+    assert not matches_definition({"required": required}, {"required": False})
+
+
+def test_registration_still_requires_nondefault_fields_and_options():
+    assert matches_definition({}, {"required": False})
+    assert matches_definition({"required": False}, {"required": False})
+    assert not matches_definition({}, {"required": True})
+    assert not matches_definition({"required": False}, {"required": True})
+    assert not matches_definition({}, {"autocomplete": False})
+    assert not matches_definition({"options": []}, {"options": COMMAND["options"]})
+
+
+async def test_registration_updates_old_private_help_once(kernel):
+    from copy import deepcopy
+    from hortator.store import dumps
+
+    bot = enable(kernel)
+    previous = deepcopy(COMMAND)
+    previous["options"][1]["description"] = (
+        "Only you see the response (default true). False posts it in this channel."
+    )
+    kernel.store.execute("UPDATE slash_commands SET definition=?", (dumps(previous),))
+    remote = {**previous, "id": "123456789012345678"}
+    del remote["options"][1]["required"]
+    http = AsyncMock()
+    http.get_global_commands.return_value = [remote]
+    http.upsert_global_command.return_value = {"id": remote["id"]}
+    client = SimpleNamespace(bot_id="ada", application_id=int(bot["application_id"]), http=http)
+    await kernel.connector.slash.sync(client)
+    remote["options"][1]["description"] = COMMAND["options"][1]["description"]
+    await kernel.connector.slash.sync(client)
+    http.upsert_global_command.assert_awaited_once_with(int(bot["application_id"]), payload=COMMAND)
+    assert len(kernel.store.rows("SELECT * FROM events WHERE kind='discord.slash_registered'")) == 1
 
 
 async def test_deadline_cancels_stream_and_does_not_retry(kernel, monkeypatch):
