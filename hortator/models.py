@@ -164,7 +164,12 @@ class Bot(Entity):
     model_profile_id: str
     room_ids: list[str] = Field(default_factory=list, max_length=100)
     enabled: bool = False
-    interval_seconds: float = Field(default=60, ge=1, le=86400)
+    interval_seconds: float = Field(
+        default=60,
+        ge=0,
+        le=86400,
+        description="0 disables scheduled turns; human mentions/replies and explicit commands remain available.",
+    )
     cooldown_seconds: float = Field(default=60, ge=1, le=86400)
     evaluate_when_idle: bool = True
     allow_silence: bool = True

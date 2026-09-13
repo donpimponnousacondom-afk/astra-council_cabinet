@@ -17,9 +17,11 @@ from test_runtime import completion, settle
 CHANNEL = "222222222222222222"
 
 
-def pair(kernel):
+def pair(kernel, *, interval_seconds=120):
     bots = [
-        configured(kernel, name, interval_seconds=120, cooldown_seconds=120, evaluate_when_idle=False)
+        configured(
+            kernel, name, interval_seconds=interval_seconds, cooldown_seconds=120, evaluate_when_idle=False
+        )
         for name in ("ada", "socrates")
     ]
     for bot in bots:
@@ -57,8 +59,9 @@ async def receive(kernel, msg, *, historical=False):
 
 
 @pytest.mark.parametrize("kind", ["mention", "reply"])
-async def test_human_target_bypasses_interval_and_cooldown_once_without_waking_peer(kernel, kind):
-    ada, socrates = pair(kernel)
+@pytest.mark.parametrize("interval", [0, 120])
+async def test_human_target_bypasses_interval_and_cooldown_once_without_waking_peer(kernel, kind, interval):
+    ada, socrates = pair(kernel, interval_seconds=interval)
     parent = message(555555555555555554, author=socrates["application_id"], bot=True)
     await receive(kernel, parent, historical=True)
     kernel.store.execute("UPDATE contexts SET last_seen=(SELECT max(seq) FROM messages)")

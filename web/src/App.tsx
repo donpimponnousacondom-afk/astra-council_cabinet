@@ -975,7 +975,8 @@ function BotTable({
       value: (b) => b.interval_seconds,
       render: (b) => (
         <span title="Activation interval / minimum send interval">
-          {b.interval_seconds}s / {b.cooldown_seconds}s
+          {b.interval_seconds === 0 ? "Off" : `${b.interval_seconds}s`} /{" "}
+          {b.cooldown_seconds}s
           <small className="cell-secondary">
             {b.enabled_plugins.length} plugins · {b.room_ids.length} rooms
           </small>

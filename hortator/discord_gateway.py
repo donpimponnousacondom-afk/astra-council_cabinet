@@ -51,7 +51,7 @@ COMMANDS = [
     ("!clone <profile-id> [new-name]", "Clone a model profile with independent parameters"),
     ("!use <bot-id> <profile-id>", "Switch the model without changing personality or tools"),
     ("!prompt <bot-id> <text>", "Replace that bot's persona prompt"),
-    ("!interval <bot-id> <seconds>", "Set activation interval and minimum send cooldown"),
+    ("!interval <bot-id> <seconds>", "Set activation/cooldown; 0 disables timer, preserving cooldown"),
     ("!context <bot-id> [channel-id]", "Inspect scoped memory and compaction"),
     ("!compact <bot-id> [channel-id]", "Request model-driven compaction"),
     ("!memory <bot-id> <JSON>", "Edit notes: channel_id, key, value (empty deletes)"),
@@ -925,13 +925,15 @@ class DiscordManager:
                 result = await self.service.control(actor, {"action": name, "kind": kind, "id": target})
             elif name in ("use", "prompt", "interval"):
                 bot_id, value = rest.split(maxsplit=1)
-                data = (
-                    {"model_profile_id": value.strip()}
-                    if name == "use"
-                    else {"persona": value}
-                    if name == "prompt"
-                    else {"interval_seconds": float(value), "cooldown_seconds": float(value)}
-                )
+                if name == "use":
+                    data = {"model_profile_id": value.strip()}
+                elif name == "prompt":
+                    data = {"persona": value}
+                else:
+                    seconds = float(value)
+                    data = {"interval_seconds": seconds}
+                    if seconds != 0:
+                        data["cooldown_seconds"] = seconds
                 result = await self.service.control(
                     actor, {"action": "save", "kind": "bots", "id": bot_id, "data": data}
                 )
