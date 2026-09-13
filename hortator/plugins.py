@@ -199,6 +199,9 @@ class PluginSpec:
 class Registry:
     def __init__(self, store, vault, directory, inspect):
         self.store, self.vault = store, vault
+        from .application_emojis import ApplicationEmojis
+
+        self.application_emojis = ApplicationEmojis(store)
         self.directory = directory / "artifacts"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.inspect = inspect

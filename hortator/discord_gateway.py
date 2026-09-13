@@ -82,6 +82,7 @@ class CouncilClient(discord.Client):
             return
         self.manager.gateway(self.bot_id, "online", source="ready")
         self.manager.slash.schedule_sync(self)
+        self.manager.emojis.schedule_sync(self.manager, self)
         if not self.backfill_task or self.backfill_task.done():
             self.backfill_task = self.manager.background.spawn(
                 self.manager.backfill(self), name=f"backfill:{self.bot_id}", bot_id=self.bot_id
@@ -215,6 +216,7 @@ class DiscordManager:
     def __init__(self, service):
         self.service, self.store, self.vault = service, service.store, service.vault
         self.images = ImageCache(self.store)
+        self.emojis = service.registry.application_emojis
         self.clients: dict[str, CouncilClient] = {}
         self.runners: dict[str, tuple[str, asyncio.Task]] = {}
         self.task = None
@@ -294,6 +296,9 @@ class DiscordManager:
                         self.gateway(bot["id"], "failed", "Stored token does not match this application")
                         return
                     self.vault.put(f"bot/{bot['id']}/user_id", str(client.user.id))
+                    # Populate rendering metadata before the gateway can admit
+                    # the first model turn; discovery failure does not stop chat.
+                    await self.emojis.sync(self, client)
                     await client.connect(reconnect=True)
             except (discord.LoginFailure, discord.PrivilegedIntentsRequired) as exc:
                 self.gateway(
@@ -369,6 +374,7 @@ class DiscordManager:
                             self.unhealthy[bot_id] = 0
                 for client in list(self.clients.values()):
                     self.slash.schedule_sync(client)
+                    self.emojis.schedule_sync(self, client)
                 await self.notifications()
             except asyncio.CancelledError:
                 raise

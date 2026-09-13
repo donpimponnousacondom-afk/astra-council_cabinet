@@ -128,8 +128,8 @@ def matches_definition(actual, expected):
 
 
 class SlashContexts(ContextBuilder):
-    def __init__(self, store, pool, invocation, global_memory):
-        super().__init__(store, pool, global_memory)
+    def __init__(self, store, pool, invocation, global_memory, application_emojis=None):
+        super().__init__(store, pool, global_memory, application_emojis)
         self.invocation = invocation
 
     def layers(self, bot, channel_id):
@@ -197,7 +197,9 @@ class SlashEngine(Engine):
         main = manager.service.engine
         super().__init__(main.store, main.vault, main.pool, main.registry)
         self.manager, self.interaction, self.invocation = manager, interaction, invocation
-        self.contexts = SlashContexts(self.store, self.pool, invocation, main.registry.global_memory)
+        self.contexts = SlashContexts(
+            self.store, self.pool, invocation, main.registry.global_memory, main.registry.application_emojis
+        )
         self.scope = f"slash:{invocation['bot_id']}:{invocation['channel_id']}"
 
     def channel_allowed(self, bot, channel_id):
