@@ -177,7 +177,7 @@ def scope_for(kind):
         return "bots"
     if prefix in {"tool", "workspace", "job", "shell", "web_fetch", "web_search", "document", "publishing"}:
         return "tools"
-    if prefix in {"context", "compaction", "memory"}:
+    if prefix in {"context", "compaction", "memory", "global_memory"}:
         return "context"
     if prefix == "http":
         return "dashboard"

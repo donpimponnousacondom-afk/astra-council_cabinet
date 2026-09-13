@@ -489,6 +489,15 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
             after=after, before=before, bot_id=bot_id, turn_id=turn_id, level=level, limit=limit
         )
 
+    @app.get("/api/global-memory/{bot_id}")
+    async def global_memory(bot_id: str, actor=Depends(authenticated), k=Depends(kernel)):
+        actor.require_owner()
+        return k.service.global_memory_view(bot_id)
+
+    @app.post("/api/global-memory/{bot_id}")
+    async def change_global_memory(bot_id: str, body: dict, actor=Depends(authenticated), k=Depends(kernel)):
+        return await k.service.global_memory_change(actor, bot_id, body)
+
     @app.get("/api/context/{bot_id}/{channel_id}")
     async def context(bot_id: str, channel_id: str, actor=Depends(authenticated), k=Depends(kernel)):
         return k.service.context(bot_id, channel_id)

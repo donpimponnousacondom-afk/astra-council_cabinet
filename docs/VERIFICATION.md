@@ -2,6 +2,13 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
 
+## Private cross-channel global memory: stage 2 (2026-09-13)
+
+- **86 backend checks passed**: 34 global-memory tests and 52 existing memory, plugins, security and context regressions. They verify off-by-default grants, same-bot cross-channel sharing, separate bot/channel stores, strict quota validation, 5% consolidation headroom, usage/error guidance, authenticated owner endpoints without a channel prerequisite, cancellation and source provenance.
+- **Three Chromium scenarios passed** on an isolated fixture runtime: create/read/replace/delete, quota fields and grace warnings, disabled-plugin owner editing, note drafts across tabs/navigation, and pending-save destination protection. TypeScript/Vite and scoped Ruff passed. No legacy dashboard files changed.
+- Independently extracted stage 1 commit `862a638` into a temporary archive and passed **54 tests**, including its 16 snapshot cases plus security, concurrency and backup operations. This verifies that the first rollback point does not depend on unfinished global-memory/slash code.
+- Following a harness interruption, re-inspection confirmed the working branch/files and the existing attached Screen listener survived. Runtime remained on stable `7b6cb1cf6b99` throughout these tests. No live notes, bot grants, provider settings or secrets were changed.
+
 ## Experiment snapshots: stage 1 (2026-09-13)
 
 Branched clean stable `7b6cb1cf6b999c739270b54fa8a30748196f8acb` into `feat/slash_snapshots_global_memory` for the owner's three-stage request. No main changes or pushes. Existing live configuration, notes and credentials remained untouched during implementation.

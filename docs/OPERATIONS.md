@@ -709,3 +709,9 @@ remaining inputs after checking source deletion/removal. The prompt's
 visually available now. A genuine compaction token failure now names the blocking
 message and actual required/allowed token estimates; the allowance is no longer
 mislabelled as an observed input size.
+
+## Private cross-channel global notes
+
+Enable **Plugins → Global memory**, then grant **Global memory** under the selected bot's **Capabilities**. This adds `global_memory` alongside the independent channel-scoped `memory` tool. It is off globally and ungranted by default. The bot's **Global memory budget (characters across channels)** field accepts 1–48,000 (default 48,000); zero and negative values are rejected. A 5% temporary allowance and the 8,000-character note limit follow the existing private-memory contract.
+
+Use **Bots → <bot> → Global notes** to inspect, create, replace or delete that bot's notes, including before its first channel conversation or while the plugin is disabled. This owner's editor cancels active work for the affected bot before a mutation; configuration saves cannot silently discard a pending note draft. Stored channel notes are not copied or merged automatically. Full snapshots include global notes; selective restoration requires **Also restore this bot's global notebook**. See [GLOBAL_MEMORY.md](GLOBAL_MEMORY.md) for scope, provenance, examples and budgets.

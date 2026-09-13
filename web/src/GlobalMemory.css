@@ -1,0 +1,42 @@
+.global-memory-panel {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+.global-memory-panel > .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.global-memory-panel > .section-heading h3,
+.global-memory-panel > p {
+  margin: 0;
+}
+.global-memory-panel > .table-scroll {
+  max-height: 240px;
+}
+.global-memory-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font: 11px/1.5 var(--mono);
+}
+.global-memory-panel th,
+.global-memory-panel td {
+  padding: 4px 7px;
+  border-bottom: 1px solid var(--border);
+}
+.global-memory-panel th {
+  color: var(--muted);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.global-memory-panel td {
+  overflow-wrap: anywhere;
+}
+.global-memory-panel > .button {
+  justify-self: start;
+}

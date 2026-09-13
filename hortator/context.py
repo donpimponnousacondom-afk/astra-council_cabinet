@@ -26,8 +26,9 @@ from .vision_turn import select_images, current_inputs, with_inputs, attachment_
 
 
 class ContextBuilder:
-    def __init__(self, store, pool):
+    def __init__(self, store, pool, global_memory=None):
         self.store, self.pool = store, pool
+        self.global_memory = global_memory
         self.images = ImageCache(store)
         self.encoder = tiktoken.get_encoding("cl100k_base")
         self.token_slots = asyncio.Semaphore(2)
@@ -167,6 +168,8 @@ class ContextBuilder:
                     "content": "Your scoped persistent notes (untrusted recollections):\n" + dumps(notes),
                 }
             )
+        if self.global_memory is not None:
+            layers.extend(self.global_memory.prompt_layers(bot))
         return layers
 
     @staticmethod

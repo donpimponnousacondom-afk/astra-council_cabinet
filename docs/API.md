@@ -154,3 +154,7 @@ Plugin GETs include `keyless`; new workspace/shell packs seed disabled. Bot sche
 ## Application snapshots
 
 Authenticated/CSRF-protected snapshot control: `GET /api/snapshots` lists manifests, compatibility and maintenance state; `POST /api/snapshots` accepts `{"name":"Before experiment","note":"optional"}`. `POST /api/snapshots/{id}/restore` requires `confirmation` equal to that ID and `scope` (`bot` or `full`). Bot scope requires `bot_id`, accepts optional `channel_id`, and defaults `include_context` / `include_global_memory` to false. `POST /api/snapshots/resume` explicitly resumes restored state. Full restore revokes sessions; the last receipt remains discoverable after login. `/api/status` includes `maintenance_pause` and `snapshot_operation`. During writer replacement, other requests receive 503; while restored state is paused, ordinary mutations receive 409. See [SNAPSHOTS.md](SNAPSHOTS.md).
+
+## Per-bot global notebook
+
+`GET /api/global-memory/{bot_id}` returns the owner's view of `notes`, `budget` and enablement without requiring a channel context. Authenticated/CSRF-protected `POST` accepts the `global_memory` tool's `operation`, `key` and `value` contract; `{}` is nonmutating usage. Writes/deletes are serialized through owner control and cancel only that bot's current turn. Bot configuration exposes strict integer `global_memory_char_limit` (1–48,000, default 48,000), independent of `memory_char_limit`. Plugin-off notes remain owner-editable. See [GLOBAL_MEMORY.md](GLOBAL_MEMORY.md).

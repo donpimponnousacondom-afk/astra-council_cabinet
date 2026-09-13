@@ -171,6 +171,9 @@ class Bot(Entity):
     memory_char_limit: int = Field(
         default=DEFAULT_MEMORY_CHAR_LIMIT, ge=1, le=DEFAULT_MEMORY_CHAR_LIMIT, strict=True
     )
+    global_memory_char_limit: int = Field(
+        default=DEFAULT_MEMORY_CHAR_LIMIT, ge=1, le=DEFAULT_MEMORY_CHAR_LIMIT, strict=True
+    )
     prompt_ids: list[str] = Field(default_factory=list, max_length=30)
     persona: str = Field(
         default="Be curious, thoughtful, concise, and willing to disagree constructively.", max_length=60000

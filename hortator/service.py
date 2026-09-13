@@ -141,6 +141,9 @@ class Service:
             value.update(footer_settings(value))
             value.setdefault("allow_silence", True)
             value.setdefault("memory_char_limit", SCHEMAS["bots"].model_fields["memory_char_limit"].default)
+            value.setdefault(
+                "global_memory_char_limit", SCHEMAS["bots"].model_fields["global_memory_char_limit"].default
+            )
             for field in ("document_task_rounds", "document_task_calls_per_round", "document_task_seconds"):
                 value.setdefault(field, SCHEMAS["bots"].model_fields[field].default)
             for field in (
@@ -172,13 +175,14 @@ class Service:
         elif kind == "plugins":
             value["key_configured"] = bool(self.vault.get(f"plugin/{value['id']}/api_key"))
             spec = self.registry.specs.get(value["id"])
-            if value["id"] in ("shell", "web_search", "memory") and spec:
+            if value["id"] in ("shell", "web_search", "memory", "global_memory") and spec:
                 # Display the installed contract, not obsolete seeded descriptions.
                 value["description"] = spec.description
             value["schema"] = spec.parameters if spec else None
             value["installed"] = bool(spec)
             value["keyless"] = value["id"] in (
                 "memory",
+                "global_memory",
                 "council_inspect",
                 "discord_send",
                 "document_site",
@@ -236,6 +240,7 @@ class Service:
             exists("providers", entity["provider_id"])
         if kind == "bots":
             exists("profiles", entity["model_profile_id"])
+            self.registry.global_memory.validate_budget(entity["id"], entity["global_memory_char_limit"])
             largest = largest_channel_usage(self.store, entity["id"])
             if largest and largest["used"] > hard_limit(entity["memory_char_limit"]):
                 raise ControlError(
@@ -550,6 +555,25 @@ class Service:
         for event in events:
             event["data"] = json.loads(event["data"])
         return self.vault.redact({"turn": turn, "requests": requests, "events": events, "outbox": outbox})
+
+    def global_memory_view(self, bot_id):
+        return self.vault.redact(self.registry.global_memory.inspect(bot_id))
+
+    async def global_memory_change(self, actor, bot_id, args):
+        actor.require_owner()
+        async with self.lock:
+            bot = self.entity("bots", bot_id)
+            self.registry.global_memory.validate_operator_arguments(bot, args)
+            mutation = args.get("operation") in {"write", "delete"}
+            if mutation and self.engine:
+                await self.engine.cancel([bot_id], "Global memory changed by the owner")
+            result = await self.registry.global_memory.operator_change(bot_id, args)
+            if mutation:
+                self.store.emit(
+                    "control.executed",
+                    {"actor": actor.label, "action": "global_memory", "id": bot_id, "data": args},
+                )
+            return self.vault.redact(result)
 
     def context(self, bot_id, channel_id):
         self.entity("bots", bot_id)
