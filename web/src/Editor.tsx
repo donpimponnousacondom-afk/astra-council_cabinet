@@ -16,6 +16,8 @@ import type { Dashboard, Kind, RecordData } from "./api";
 import { ReasoningEditor, reasoningFields } from "./Reasoning";
 import { FooterEditor } from "./Footer";
 import { PricingEditor } from "./Pricing";
+import { GlobalMemoryPanel } from "./GlobalMemory";
+import { SlashCommandSetup } from "./SlashCommands";
 import {
   DocumentBotSettings,
   DocumentPluginSettings,
@@ -184,6 +186,7 @@ export function Editor({
   const [pendingCredentials, setPendingCredentials] = useState<
     Record<string, boolean>
   >({});
+  const [globalNoteDirty, setGlobalNoteDirty] = useState(false);
   const credentialDraftChanged = useCallback((id: string, pending: boolean) => {
     setPendingCredentials((previous) =>
       previous[id] === pending ? previous : { ...previous, [id]: pending },
@@ -211,6 +214,7 @@ export function Editor({
   const dirty =
     baseline !== draftContent(draft) ||
     Object.values(pendingCredentials).some(Boolean) ||
+    globalNoteDirty ||
     invalidJsonDraft ||
     !modelJsonValid;
   const dirtyRef = useRef(dirty);
@@ -309,7 +313,9 @@ export function Editor({
         step={step}
         min={schemas[kind]?.properties?.[key]?.minimum}
         max={schemas[kind]?.properties?.[key]?.maximum}
-        required={key === "memory_char_limit"}
+        required={
+          key === "memory_char_limit" || key === "global_memory_char_limit"
+        }
         value={draft[key] ?? ""}
         onChange={(e) =>
           set(key, e.target.value === "" ? null : Number(e.target.value))
@@ -391,6 +397,12 @@ export function Editor({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (operations.current.size) return;
+    if (globalNoteDirty) {
+      setError(
+        "Save or discard the pending global note first. Notes use their own save button in Global notes.",
+      );
+      return;
+    }
     if (Object.values(pendingCredentials).some(Boolean)) {
       setError(
         "Save or clear the pending credential first. Credentials use their own save button.",
@@ -447,6 +459,7 @@ export function Editor({
               ["model", "Model & rhythm"],
               ["prompts", "Prompts"],
               ["tools", "Capabilities"],
+              ["global-memory", "Global notes"],
               ["footer", "Message footer"],
               ["discord", "Discord"],
             ].map(([id, label]) => (
@@ -689,10 +702,16 @@ export function Editor({
                       dashboard.plugins,
                       "Bot capabilities",
                     )}
+                    <SlashCommandSetup bot={entity} draft={draft} />
                     {numeric(
                       "memory_char_limit",
                       "Private memory budget (characters per channel)",
                       "1–48,000 characters per channel; default 48,000. Small overshoots get 5% headroom, then the bot must shrink or delete notes before adding more. Each note allows at most 8,000 characters. Zero and negative values are invalid. Uncheck Private memory to stop memory tools and automatic note injection; stored notes stay available for inspection.",
+                    )}
+                    {numeric(
+                      "global_memory_char_limit",
+                      "Global memory budget (characters across channels)",
+                      "Independent allowance for this bot's global_memory plugin: 1–48,000, default 48,000, with 5% temporary headroom. Shared across this bot's channels, never other bots. Disable its plugin grant to stop tool access and automatic global-note injection while retaining notes.",
                     )}
                     <div className="form-grid">
                       {numeric(
@@ -783,6 +802,21 @@ export function Editor({
                     )}
                   </>
                 )}
+                <div hidden={tab !== "global-memory"}>
+                  {entity ? (
+                    <GlobalMemoryPanel
+                      key={entity.id}
+                      botId={entity.id}
+                      onDirtyChange={setGlobalNoteDirty}
+                      onBusyChange={operationChanged}
+                    />
+                  ) : (
+                    <Notice>
+                      Save the bot first to create or inspect its global notes.
+                      No channel context is required.
+                    </Notice>
+                  )}
+                </div>
                 {tab === "footer" && (
                   <FooterEditor
                     draft={draft}

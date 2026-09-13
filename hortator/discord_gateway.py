@@ -81,6 +81,7 @@ class CouncilClient(discord.Client):
         if self.stopping or self.manager.closed:
             return
         self.manager.gateway(self.bot_id, "online", source="ready")
+        self.manager.slash.schedule_sync(self)
         if not self.backfill_task or self.backfill_task.done():
             self.backfill_task = self.manager.background.spawn(
                 self.manager.backfill(self), name=f"backfill:{self.bot_id}", bot_id=self.bot_id
@@ -115,6 +116,17 @@ class CouncilClient(discord.Client):
                 bot_id=self.bot_id,
                 level="error",
             )
+
+    async def on_interaction(self, interaction):
+        if self.stopping or self.manager.closed:
+            return
+        # Discord owns the short gateway callback; application work has an
+        # explicit lifetime owner and cannot outlive SQLite/provider clients.
+        self.manager.background.spawn(
+            self.manager.slash.receive(self.bot_id, interaction),
+            name=f"slash-intake:{self.bot_id}:{interaction.id}",
+            bot_id=self.bot_id,
+        )
 
     async def on_raw_message_delete(self, payload):
         existing = self.manager.store.one(
@@ -213,6 +225,9 @@ class DiscordManager:
         self.unhealthy = {}
         self.reconnect_started = {}
         self.pending_reconnects = {}
+        from .slash_commands import DiscordSlash
+
+        self.slash = DiscordSlash(self)
 
     async def validate_token(self, token):
         try:
@@ -352,6 +367,8 @@ class DiscordManager:
                             # Close one client; its single supervisor recreates it. Never start competing reconnect loops.
                             await client.close()
                             self.unhealthy[bot_id] = 0
+                for client in list(self.clients.values()):
+                    self.slash.schedule_sync(client)
                 await self.notifications()
             except asyncio.CancelledError:
                 raise

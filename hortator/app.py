@@ -27,6 +27,7 @@ from .runtime import Engine
 from .security import Actor, Auth, Vault
 from .service import Service
 from .store import Store
+from .snapshot_runtime import SnapshotGate, SnapshotRuntime
 
 
 class Kernel:
@@ -144,6 +145,20 @@ class CredentialBody(BaseModel):
     value: str = Field(max_length=16000)
 
 
+class SnapshotBody(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    note: str = Field(default="", max_length=2000)
+
+
+class SnapshotRestoreBody(BaseModel):
+    confirmation: str
+    scope: str = Field(default="bot", pattern="^(full|bot)$")
+    bot_id: str | None = Field(default=None, max_length=80)
+    channel_id: str | None = Field(default=None, max_length=100)
+    include_context: bool = False
+    include_global_memory: bool = False
+
+
 class ControlBody(BaseModel):
     action: str
     kind: str | None = None
@@ -154,6 +169,7 @@ class ControlBody(BaseModel):
 def create_app(directory=None, start_runtime=True, *, stopping=None, console=None):
     directory = Path(directory or os.getenv("HORTATOR_DATA_DIR", "data")).resolve()
     stopping = stopping if stopping is not None else asyncio.Event()
+    gate = SnapshotGate()
 
     @asynccontextmanager
     async def lifespan(app):
@@ -166,21 +182,19 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
             raise RuntimeError(
                 "Another Hortator process owns this database. Run exactly one worker."
             ) from exc
-        kernel = None
+        controller = SnapshotRuntime(app, directory, Kernel, start_runtime=start_runtime, console=console)
+        app.state.snapshots = controller
         try:
-            kernel = Kernel(directory)
-            app.state.kernel = kernel
-            async with kernel.lifetime():
-                if console:
-                    console.bind(kernel)
-                if start_runtime:
-                    kernel.start()
-                yield
+            async with asyncio.TaskGroup() as group:
+                task = group.create_task(controller.run(), name="snapshot-runtime-owner")
+                await controller.ready.wait()
+                try:
+                    yield
+                finally:
+                    task.cancel()
         finally:
             if console:
                 console.stop_keys()
-            if kernel:
-                await kernel.close()
             fcntl.flock(lock, fcntl.LOCK_UN)
             lock.close()
 
@@ -194,7 +208,10 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
     )
 
     async def kernel(request: Request):
-        return request.app.state.kernel
+        current = request.app.state.kernel
+        if current is None or current.closed:
+            raise ControlError("Runtime is restarting for snapshot maintenance", 503)
+        return current
 
     def check_origin(request):
         origin = request.headers.get("origin")
@@ -225,7 +242,30 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
             and int(request.headers.get("content-length", "0")) > 1_000_000
         ):
             return JSONResponse({"error": "Request body exceeds 1 MB"}, status_code=413)
-        response = await call_next(request)
+        snapshot_mutation = request.method == "POST" and request.url.path.startswith("/api/snapshots")
+        try:
+            async with gate.enter(exclusive=snapshot_mutation):
+                controller = getattr(request.app.state, "snapshots", None)
+                if controller and controller.busy:
+                    return JSONResponse(
+                        {"error": "Snapshot maintenance is still in progress; retry after it completes"},
+                        status_code=503,
+                    )
+                if (
+                    controller
+                    and controller.paused
+                    and request.method not in ("GET", "HEAD", "OPTIONS")
+                    and not request.url.path.startswith(("/api/auth/", "/api/snapshots"))
+                ):
+                    return JSONResponse(
+                        {
+                            "error": "Runtime is paused after snapshot restoration. Inspect the restored state, then use Snapshots → Resume runtime before changing it."
+                        },
+                        status_code=409,
+                    )
+                response = await call_next(request)
+        except ControlError as error:
+            response = JSONResponse({"error": str(error)}, status_code=error.status)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Frame-Options"] = "DENY"
@@ -320,7 +360,32 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
 
     @app.get("/api/status")
     async def status(actor=Depends(authenticated), k=Depends(kernel)):
-        return k.service.status()
+        return k.service.status() | {
+            "maintenance_pause": app.state.snapshots.paused,
+            "snapshot_operation": app.state.snapshots.operation,
+        }
+
+    @app.get("/api/snapshots")
+    async def snapshots(actor=Depends(authenticated)):
+        return await app.state.snapshots.catalog()
+
+    @app.post("/api/snapshots")
+    async def capture_snapshot(body: SnapshotBody, actor=Depends(authenticated)):
+        return await app.state.snapshots.request("capture", body.model_dump())
+
+    @app.post("/api/snapshots/resume")
+    async def resume_snapshot(actor=Depends(authenticated)):
+        if not app.state.snapshots.paused:
+            return {"paused": False}
+        return await app.state.snapshots.request("resume", {})
+
+    @app.post("/api/snapshots/{identifier}/restore")
+    async def restore_snapshot(identifier: str, body: SnapshotRestoreBody, actor=Depends(authenticated)):
+        if body.confirmation != identifier:
+            raise ControlError("Type the complete snapshot identifier to confirm restoration", 409)
+        return await app.state.snapshots.request(
+            "restore", {"identifier": identifier, **body.model_dump(exclude={"confirmation"})}
+        )
 
     @app.get("/api/stats")
     async def stats(hours: int = Query(24, ge=1, le=8760), actor=Depends(authenticated), k=Depends(kernel)):
@@ -388,6 +453,8 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
                 cursor = k.store.one("SELECT coalesce(max(seq),0) AS seq FROM events")["seq"]
             yield f"event: connected\ndata: {json.dumps({'cursor': cursor})}\n\n"
             while not stopping.is_set() and not await request.is_disconnected():
+                if gate.maintenance or k.closed:
+                    return
                 try:
                     k.auth.session(request.cookies.get("hortator_session"))
                 except ControlError:
@@ -421,6 +488,15 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
         return k.store.events(
             after=after, before=before, bot_id=bot_id, turn_id=turn_id, level=level, limit=limit
         )
+
+    @app.get("/api/global-memory/{bot_id}")
+    async def global_memory(bot_id: str, actor=Depends(authenticated), k=Depends(kernel)):
+        actor.require_owner()
+        return k.service.global_memory_view(bot_id)
+
+    @app.post("/api/global-memory/{bot_id}")
+    async def change_global_memory(bot_id: str, body: dict, actor=Depends(authenticated), k=Depends(kernel)):
+        return await k.service.global_memory_change(actor, bot_id, body)
 
     @app.get("/api/context/{bot_id}/{channel_id}")
     async def context(bot_id: str, channel_id: str, actor=Depends(authenticated), k=Depends(kernel)):

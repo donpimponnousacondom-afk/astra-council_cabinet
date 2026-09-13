@@ -58,7 +58,7 @@ class TurnSuperseded(ControlError):
 class Engine:
     def __init__(self, store, vault, pool, registry, transport=None):
         self.store, self.vault, self.pool, self.registry = store, vault, pool, registry
-        self.contexts = ContextBuilder(store, pool)
+        self.contexts = ContextBuilder(store, pool, registry.global_memory)
         self.transport = transport
         self.tasks: dict[str, asyncio.Task] = {}
         self.room_locks = defaultdict(asyncio.Lock)

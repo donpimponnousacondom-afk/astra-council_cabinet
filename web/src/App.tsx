@@ -45,6 +45,7 @@ import { Editor, ContextPanel, confirmEditorNavigation } from "./Editor";
 import { Trajectory } from "./Trajectory";
 import { Analytics, UsageChart } from "./Analytics";
 import { Version } from "./Version";
+import { Snapshots } from "./Snapshots";
 import { reasoningSummary } from "./Reasoning";
 import { WorkbenchTable } from "./WorkbenchTable";
 import type { Column } from "./WorkbenchTable";
@@ -74,6 +75,7 @@ const navigation: {
   },
   { id: "plugins", label: "Plugins", icon: Zap, group: "CONFIGURATION" },
   { id: "rooms", label: "Rooms", icon: Hash, group: "CONFIGURATION" },
+  { id: "snapshots", label: "Snapshots", icon: Layers3, group: "CONTROL" },
   {
     id: "settings",
     label: "Council settings",
@@ -559,11 +561,22 @@ export default function App() {
               <button onClick={refresh}>Reconnect</button>
             </div>
           )}
-          {!dashboard.settings.enabled && (
+          {dashboard.maintenance_pause ? (
             <div className="pause-banner">
               <Pause size={13} />
-              The council is paused. Hortator’s commands remain available.
+              Snapshot restore pause: gateways, bot turns and publishing are
+              stopped.
+              <button onClick={() => navigate("snapshots")}>
+                Inspect and resume
+              </button>
             </div>
+          ) : (
+            !dashboard.settings.enabled && (
+              <div className="pause-banner">
+                <Pause size={13} />
+                The council is paused. Hortator’s commands remain available.
+              </div>
+            )
           )}
           <div className="workspace-panes">
             <main className="workbench-content" id="main-content">
@@ -740,6 +753,9 @@ export default function App() {
               )}
               {page === "analytics" && <Analytics dashboard={dashboard} />}
               {page === "commands" && <Commands />}
+              {page === "snapshots" && (
+                <Snapshots dashboard={dashboard} refresh={refresh} />
+              )}
             </main>
             {(editor || contextBot) && (
               <aside className="editor-pane" aria-label="Record inspector">

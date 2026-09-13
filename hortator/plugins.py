@@ -193,6 +193,7 @@ class PluginSpec:
     handler: Callable[[dict, ToolContext, dict, str], Awaitable[Any]]
     defaults: dict
     owner_only: bool = False
+    model_tool: bool = True
 
 
 class Registry:
@@ -364,6 +365,12 @@ class Registry:
         )
 
         self.agentic = AgentTools(self, directory)
+        from .global_memory import register as register_global_memory
+
+        register_global_memory(self)
+        from .slash_commands import register as register_slash
+
+        register_slash(self)
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
             entry.load()(self)
 
@@ -396,6 +403,8 @@ class Registry:
 
     def spec_for(self, name, context):
         spec = self.specs[name]
+        if name == "global_memory":
+            return self.global_memory.spec_for(context)
         if name == "memory":
             return replace(
                 spec,
@@ -408,7 +417,7 @@ class Registry:
         return [
             function(name, spec.description, spec.parameters)
             for name in self.specs
-            if self.allowed(name, context)
+            if self.allowed(name, context) and self.specs[name].model_tool
             for spec in (self.spec_for(name, context),)
         ]
 
@@ -422,6 +431,10 @@ class Registry:
             turn_id=context.turn_id,
         )
         try:
+            if name in self.specs and not self.specs[name].model_tool:
+                raise ControlError(
+                    "This plugin is an application input capability, not a model-callable tool"
+                )
             if not self.allowed(name, context):
                 raise ControlError("Tool is not enabled for this bot and trusted request")
             spec = self.spec_for(name, context)
@@ -450,7 +463,15 @@ class Registry:
                     result = self.evidence.read(args, context, self.allowed)
                 else:
                     result = self.vault.redact(await spec.handler(args, context, config, key))
-            if name in {"memory", "council_inspect", "web_fetch", "workspace", "shell", "document_site"}:
+            if name in {
+                "memory",
+                "global_memory",
+                "council_inspect",
+                "web_fetch",
+                "workspace",
+                "shell",
+                "document_site",
+            }:
                 result = present_times(result, council_timezone(self.store))
             search_failed = name == "web_search" and result.get("ok") is False
             if search_failed:
@@ -461,7 +482,7 @@ class Registry:
                     "text": dumps(result)[:50000],
                     **(
                         {key: result[key] for key in ("budget", "warning") if key in result}
-                        if name == "memory"
+                        if name in {"memory", "global_memory"}
                         else {}
                     ),
                 }
@@ -522,7 +543,7 @@ class Registry:
             return result
 
     async def call_raw(self, name, raw, context, call_id):
-        if not self.allowed(name, context):
+        if not self.allowed(name, context) or not self.specs[name].model_tool:
             return await self.call(name, None, context, call_id)
         try:
             args = parse_arguments(raw)

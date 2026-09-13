@@ -541,6 +541,12 @@ Audits inspect registered namespaces, public release pointers and checksums. Cha
 
 Use the recorded local/remote snapshot commits and job IDs to trace what changed. For a normal content rollback, use the document tool's `history`, pinned `read` and single-file `restore`: this creates a new revision and follows the same publication path without deleting newer assets or rewriting history. Unexpected remote drift or ownership errors require operator inspection of the recorded evidence; do not remove metadata to force adoption. Remote snapshots complement the complete Hortator backup below. They cannot recover local drafts, bot configuration or credentials without the matching database, key and other data stores.
 
+## Dashboard snapshots
+
+Use **Snapshots** in the modern dashboard to name and capture a consistent application state. Capture cancels active turns/jobs while shutting down every runtime writer, then resumes the previous runtime mode; it does not suspend a provider request halfway through and continue it later. Restore first captures a recovery snapshot, validates the selected snapshot and leaves gateways, turns and publishing stopped until **Resume runtime**. A full restore revokes dashboard sessions; log in again with the restored password. The external password environment override remains authoritative when configured.
+
+Default storage is `$HORTATOR_DATA_DIR`'s sibling with `-snapshots` appended: `/home/codexy/.local/share/hortator-snapshots` here. `HORTATOR_SNAPSHOT_DIR` may select another private directory outside the checkout and live data. These versioned application snapshots exclude host launcher/environment files and console logs; the manual host archive procedure below remains useful for moving the installation. They do not change the manual archive's `.latest-requested` pointer. See [SNAPSHOTS.md](SNAPSHOTS.md) for captured stores, compatibility checks, selective restore, interruption recovery and exclusions.
+
 ## Backup and restore
 
 From the repository root, or with `--data-dir` before the command:
@@ -703,3 +709,21 @@ remaining inputs after checking source deletion/removal. The prompt's
 visually available now. A genuine compaction token failure now names the blocking
 message and actual required/allowed token estimates; the allowance is no longer
 mislabelled as an observed input size.
+
+## Private cross-channel global notes
+
+Enable **Plugins → Global memory**, then grant **Global memory** under the selected bot's **Capabilities**. This adds `global_memory` alongside the independent channel-scoped `memory` tool. It is off globally and ungranted by default. The bot's **Global memory budget (characters across channels)** field accepts 1–48,000 (default 48,000); zero and negative values are rejected. A 5% temporary allowance and the 8,000-character note limit follow the existing private-memory contract.
+
+Use **Bots → <bot> → Global notes** to inspect, create, replace or delete that bot's notes, including before its first channel conversation or while the plugin is disabled. This owner's editor cancels active work for the affected bot before a mutation; configuration saves cannot silently discard a pending note draft. Stored channel notes are not copied or merged automatically. Full snapshots include global notes; selective restoration requires **Also restore this bot's global notebook**. See [GLOBAL_MEMORY.md](GLOBAL_MEMORY.md) for scope, provenance, examples and budgets.
+
+## Companion slash commands
+
+For Loki or another council companion, enable **Plugins → Slash command assistant**, grant it under **Bots → <bot> → Capabilities**, and keep the bot enabled. Its Capabilities panel shows setup instructions, registration state and a personal installation link. This capability is keyless and not exposed as a model tool. Existing bots and Hortator's director behavior remain unchanged until explicitly configured.
+
+In Discord Developer Portal → Installation, enable **User Install + Guild Install** and select Discord Provided Link. User Install needs `applications.commands`; Guild Install needs `bot` + `applications.commands` and existing bot permissions. Install to your account for invocation in supported Discord contexts, and install to the server for ordinary room conversations. Leave Interactions Endpoint URL unset: the existing gateway receives commands. This does not expose the local dashboard publicly.
+
+Use `/prompt text:<request> private:true` (the default) or `private:false` for a public answer in that invocation's channel. Only the genuine owner can invoke it. Each prompt starts fresh, uses granted notes/tools and does not read the surrounding channel. Ordinary room conversations retain their existing rhythm and context. Slash requests share the bot's active slot and stop at 14 minutes because Discord response tokens expire after 15; normal 7,200-second document budgets do not extend this deadline. `!stop <bot-id>` through Hortator and normal dashboard stop controls cancel slash work. See [SLASH_COMMANDS.md](SLASH_COMMANDS.md) for installation, cancellation, evidence and limitations.
+
+## Original publishing explanation
+
+The owner-requested mobile report from September 10 is retained at `/home/codexy/.local/share/hortator/artifacts/publishing-system-report-2026-09-10.html` and [published under Hortator's guide site](https://council.zombiedawn.net/hortator/publishing-system-guide-2026-09-10/). It explains model tools, local snapshots, queued SSH delivery and remote audit for reuse in another project. This is a dated report, not a live configuration handover: some numeric limits have since changed. [DOCUMENTS.md](DOCUMENTS.md) and the automatic-remote-publishing section above are the maintained implementation references.
