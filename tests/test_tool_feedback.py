@@ -94,8 +94,9 @@ async def test_empty_tool_call_returns_usage_before_credentials_handler_or_netwo
     key_read.assert_not_called()
 
 
-async def test_every_registered_plugin_returns_usage_without_executing_its_handler(kernel, monkeypatch):
-    names = list(kernel.registry.specs)
+async def test_every_registered_model_tool_returns_usage_without_executing_its_handler(kernel, monkeypatch):
+    # Input capabilities (such as Discord slash ingress) are never model-callable.
+    names = [name for name, spec in kernel.registry.specs.items() if spec.model_tool]
     bot = configured(kernel, bot_id="hortator", enabled_plugins=names)
     context = ToolContext(bot, "channel", "turn-all-usage", owner_verified=True)
     for name in names:

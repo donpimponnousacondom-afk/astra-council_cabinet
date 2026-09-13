@@ -163,3 +163,7 @@ Useful modern-only improvements are search across inventories, sortable columns,
 Some diagnostics remain bounded by the current API: trajectory text search searches loaded rows, agentic inspection lists recent records, and site inspection reports existing queue state. A frontend refresh cannot turn these into whole-ledger search, a job runner, arbitrary remote editing, private-memory revision history or background compaction. Those require separately scoped API/domain work. Do not rewrite the backend to make the visual migration seem more complete.
 
 The desktop requirement removes mobile layout obligations for the active workbench. It does not remove keyboard navigation, readable focus, semantic labels, error visibility or usable controls. Existing legacy mobile tests live under `web/tests/legacy/` during acceptance but must not force touch-sized spacing back into the workbench.
+
+## Optional experiment and companion controls (2026-09-13)
+
+The active workbench adds **Snapshots** for named application captures, compatibility inspection and guarded full/selected-bot restoration with explicit runtime resume. **Bots → Global notes** inspects and edits that bot's cross-channel notebook without requiring an existing conversation; unsaved notes survive tab navigation and pending actions remain bound to their originating bot. Capabilities exposes its independent strict memory quota and optional slash registration/setup guidance. None of these features are added to the frozen legacy build or require legacy modules.

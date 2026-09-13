@@ -164,6 +164,9 @@ class Service:
                 "SELECT * FROM contexts WHERE bot_id=? ORDER BY updated_at DESC", (value["id"],)
             )
             value["readiness"] = self.readiness(value)
+            from .slash_commands import public_status as slash_public_status
+
+            value["slash_commands"] = slash_public_status(self.store, value)
             if value["application_id"]:
                 # View, Send, Embed, Attach, Read History, Create Public Threads, Send in Threads.
                 permissions = (
@@ -180,9 +183,11 @@ class Service:
                 value["description"] = spec.description
             value["schema"] = spec.parameters if spec else None
             value["installed"] = bool(spec)
+            value["capability_type"] = "tool" if not spec or spec.model_tool else "input"
             value["keyless"] = value["id"] in (
                 "memory",
                 "global_memory",
+                "slash_commands",
                 "council_inspect",
                 "discord_send",
                 "document_site",

@@ -368,6 +368,9 @@ class Registry:
         from .global_memory import register as register_global_memory
 
         register_global_memory(self)
+        from .slash_commands import register as register_slash
+
+        register_slash(self)
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
             entry.load()(self)
 

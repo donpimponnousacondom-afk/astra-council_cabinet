@@ -165,3 +165,5 @@ Global **Automatically publish document changes** and **Enable remote delivery**
 Optional [private files, isolated Bash and complete web reading](docs/AGENTIC_TOOLS.md) support attachment compression and long reading tasks. Configure grants, readiness, quotas, extended task budgets and private inspection in the dashboard. These tools never grant site publication or remote sync.
 
 Experiment recovery is available in the modern dashboard's **Snapshots** page; see [snapshot guarantees and restore scopes](docs/SNAPSHOTS.md). The optional [global-memory plugin](docs/GLOBAL_MEMORY.md) gives each bot its own notebook across channels, independently of its private channel notes. Both preserve existing configuration unless explicitly used.
+
+A separate [slash-command assistant plugin](docs/SLASH_COMMANDS.md) lets a council companion such as Loki answer owner `/prompt` invocations through personal/server Discord installation. It is off by default and leaves Hortator's existing intake unchanged.

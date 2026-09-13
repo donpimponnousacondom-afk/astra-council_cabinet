@@ -17,6 +17,7 @@ import { ReasoningEditor, reasoningFields } from "./Reasoning";
 import { FooterEditor } from "./Footer";
 import { PricingEditor } from "./Pricing";
 import { GlobalMemoryPanel } from "./GlobalMemory";
+import { SlashCommandSetup } from "./SlashCommands";
 import {
   DocumentBotSettings,
   DocumentPluginSettings,
@@ -701,6 +702,7 @@ export function Editor({
                       dashboard.plugins,
                       "Bot capabilities",
                     )}
+                    <SlashCommandSetup bot={entity} draft={draft} />
                     {numeric(
                       "memory_char_limit",
                       "Private memory budget (characters per channel)",
