@@ -130,29 +130,78 @@ def public_url(url):
     return url
 
 
-async def fetch_public(url, limit=1_000_000):
+async def fetch_public_response(url, limit=1_000_000):
+    from .http_evidence import HTTPResponse, headers_evidence
+
     connector = aiohttp.TCPConnector(resolver=PublicResolver(), use_dns_cache=False)
     timeout = aiohttp.ClientTimeout(total=25)
+    redirects, remaining = [], limit
     async with aiohttp.ClientSession(
         connector=connector, timeout=timeout, trust_env=False, cookie_jar=aiohttp.DummyCookieJar()
     ) as session:
-        for _ in range(6):
+        for index in range(6):
             public_url(url)
             async with session.get(
                 url, allow_redirects=False, headers={"User-Agent": "Hortator/0.1"}
             ) as response:
-                if response.status in (301, 302, 303, 307, 308):
-                    url = urljoin(url, response.headers.get("Location", ""))
-                    continue
-                if response.status >= 400:
-                    raise ControlError(f"Web request returned HTTP {response.status}")
-                data = bytearray()
-                async for chunk in response.content.iter_chunked(65536):
-                    data.extend(chunk)
-                    if len(data) > limit:
-                        raise ControlError(f"Response exceeds the {limit} byte limit")
-                return bytes(data), response.headers.get("Content-Type", ""), str(response.url)
-    raise ControlError("Too many redirects")
+                data, complete = bytearray(), True
+                transport_error = None
+                try:
+                    async for chunk in response.content.iter_chunked(65536):
+                        available = max(0, remaining - len(data))
+                        data.extend(chunk[:available])
+                        if len(chunk) > available:
+                            complete = False
+                            break
+                except (aiohttp.ClientError, TimeoutError) as exc:
+                    complete = False
+                    transport_error = error_text(exc)
+                received = HTTPResponse(
+                    bytes(data),
+                    response.headers.get("Content-Type", ""),
+                    str(response.url),
+                    response.status,
+                    getattr(response, "reason", None),
+                    headers_evidence(response.headers.items()),
+                    list(redirects),
+                    complete,
+                    limit,
+                    None
+                    if complete
+                    else "Configured response download byte limit reached; capture is partial",
+                )
+                received.transport_error = transport_error
+                if transport_error:
+                    received.local_issue = "Response body was interrupted; capture is partial"
+                remaining -= len(data)
+                if response.status in (301, 302, 303, 307, 308) and complete:
+                    target = response.headers.get("Location")
+                    if target and index < 5:
+                        redirects.append({k: v for k, v in received.evidence().items() if k != "redirects"})
+                        next_url = urljoin(url, target)
+                        try:
+                            public_url(next_url)
+                        except ControlError as exc:
+                            received.local_issue = str(exc)
+                            return received
+                        url = next_url
+                        continue
+                    received.local_issue = (
+                        "Redirect target missing" if not target else "Redirect request limit reached"
+                    )
+                return received
+
+
+async def fetch_public(url, limit=1_000_000):
+    # Existing binary media callers still require a successful complete download.
+    response = await fetch_public_response(url, limit)
+    if response.status >= 400:
+        raise ControlError(f"Web request returned HTTP {response.status}")
+    if not response.complete:
+        raise ControlError(f"Response exceeds the {limit} byte limit")
+    if response.local_issue:
+        raise ControlError(response.local_issue)
+    return response.data, response.content_type, response.url
 
 
 class ExtractText(HTMLParser):
@@ -427,9 +476,12 @@ class Registry:
     async def call(self, name, args, context, call_id):
         start = time.perf_counter()
         spec = None
+        call_fields = {"name": name, "call_id": call_id}
+        if isinstance(args, dict):
+            call_fields.update({k: args[k] for k in ("operation", "url", "query", "engine") if k in args})
         self.store.emit(
             "tool.started",
-            {"name": name, "call_id": call_id, "arguments": args},
+            {**call_fields, "arguments": args},
             bot_id=context.bot["id"],
             turn_id=context.turn_id,
         )
@@ -447,7 +499,7 @@ class Registry:
                 report = self.evidence.record(context, name, call_id, report)
                 self.store.emit(
                     "tool.help" if report.get("usage_only") else "tool.failed",
-                    {"name": name, "call_id": call_id, **report},
+                    {**call_fields, **report},
                     bot_id=context.bot["id"],
                     turn_id=context.turn_id,
                     level="info" if report.get("usage_only") else "warning",
@@ -462,7 +514,10 @@ class Registry:
                 f"plugin/{name}/api_key"
             )
             async with asyncio.timeout(120):
-                if name in ("web_fetch", "workspace", "shell") and args.get("operation") == "read_result":
+                if (
+                    name in ("web_fetch", "web_search", "workspace", "shell")
+                    and args.get("operation") == "read_result"
+                ):
                     result = self.evidence.read(args, context, self.allowed)
                 else:
                     result = self.vault.redact(await spec.handler(args, context, config, key))
@@ -477,9 +532,35 @@ class Registry:
             }:
                 result = present_times(result, council_timezone(self.store))
             search_failed = name == "web_search" and result.get("ok") is False
+            http = result.get("http_response", {}) if isinstance(result, dict) else {}
+            if http:
+                call_fields.update(
+                    {k: http[k] for k in ("http_status", "http_reason", "url", "local_issue") if k in http}
+                )
+                if isinstance(args, dict) and args.get("url") != http.get("url") and args.get("url"):
+                    call_fields["requested_url"] = args["url"]
+            web_warning = (name in {"web_fetch", "web_search"} and result.get("ok") is False) or (
+                http.get("http_status") is not None and http["http_status"] >= 400
+            )
             if search_failed:
                 result["usage"] = usage(name, spec.parameters, spec.description, args)
-            if len(dumps(result)) > 60000:
+            if name in {"web_fetch", "web_search"} and len(dumps(result)) > 60000:
+                full = self.evidence.record(context, name, call_id, result)
+                result = {
+                    "ok": result.get("ok", True),
+                    "error": result.get("error"),
+                    "http_status": http.get("http_status"),
+                    "http_reason": http.get("http_reason"),
+                    "result_is_paged": True,
+                    "notice": "Full structured response exceeds one tool-result page; use read_result. No original evidence was discarded.",
+                    "read_response": {
+                        "operation": "read_result",
+                        "result_id": full["result_id"],
+                        "offset": 0,
+                        "length": 18000,
+                    },
+                }
+            elif len(dumps(result)) > 60000:
                 result = {
                     "truncated": True,
                     "text": dumps(result)[:50000],
@@ -495,29 +576,28 @@ class Registry:
                 call_id,
                 result,
                 source_result_id=args["result_id"]
-                if name in ("workspace", "shell", "web_fetch") and args.get("operation") == "read_result"
+                if name in ("workspace", "shell", "web_fetch", "web_search")
+                and args.get("operation") == "read_result"
                 else None,
             )
             self.store.emit(
                 "tool.failed" if search_failed else "tool.completed",
                 {
-                    "name": name,
-                    "call_id": call_id,
+                    **call_fields,
                     "result": result,
                     **({"error": result["error"]} if search_failed else {}),
                     "duration_ms": (time.perf_counter() - start) * 1000,
                 },
                 bot_id=context.bot["id"],
                 turn_id=context.turn_id,
-                level="warning" if search_failed else "info",
+                level="error" if http.get("transport_error") else "warning" if web_warning else "info",
             )
             return result
         except asyncio.CancelledError:
             self.store.emit(
                 "tool.cancelled",
                 {
-                    "name": name,
-                    "call_id": call_id,
+                    **call_fields,
                     "reason": "Tool interrupted by its owning turn or runtime; inspect retained results before retrying",
                 },
                 bot_id=context.bot["id"],
@@ -534,8 +614,7 @@ class Registry:
             self.store.emit(
                 "tool.failed",
                 {
-                    "name": name,
-                    "call_id": call_id,
+                    **call_fields,
                     **result,
                     "duration_ms": (time.perf_counter() - start) * 1000,
                 },
@@ -570,7 +649,7 @@ class Registry:
     async def web_search(self, args, context, config, key):
         from .web_search import search
 
-        return await search(args, context, config, key, self.store)
+        return await search(args, context, config, key, self.store, self.vault)
 
     async def media_request(self, config, key, body):
         # Endpoints are operator configuration, never model-supplied URLs. No redirect credential forwarding.

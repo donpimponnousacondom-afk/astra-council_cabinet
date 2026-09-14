@@ -167,6 +167,32 @@ INCIDENT_FIELDS = (
 )
 
 
+MESSAGE_FIELDS = ("http_reason", "local_issue", "error", "reason", "notice", "note", "message")
+DISPLAY_FIELDS = (
+    "name",
+    "operation",
+    "engine",
+    "http_status",
+    "status",
+    "duration_ms",
+    "ttft_ms",
+    "url",
+    "requested_url",
+    "query",
+    "attempt",
+    "max_attempts",
+    "next_attempt",
+    "retry_in_seconds",
+)
+
+
+def is_web_event(event):
+    return event.get("kind", "").startswith("web_search.") or event.get("data", {}).get("name") in {
+        "web_fetch",
+        "web_search",
+    }
+
+
 def scope_for(kind):
     prefix = kind.split(".", 1)[0]
     if prefix in {"provider", "request"}:
@@ -189,12 +215,12 @@ def plain(value):
     return "".join(c if c.isprintable() else f"\\u{ord(c):04x}" for c in str(value))
 
 
-def safe_text(value, *, include_reasoning=False):
+def safe_text(value, *, include_reasoning=False, full_urls=False):
     if not include_reasoning:
         value = strip_reasoning(value)
     value = re.sub(r"(?i)\b(bearer\s+)[\w.~+/-]+=*", r"\1[REDACTED]", value)
     value = re.sub(
-        r"(?i)\b(authorization|api[_-]?key|token|password|secret|cookie|csrf)([\s\"']*[:=][\s\"']*)[^\s,;\"']+",
+        r"(?i)\b(authorization|api[_-]?key|token|password|secret|cookie|csrf)([\s\"']*[:=][\s\"']*)[^\s,;\"'&#]+",
         r"\1\2[REDACTED]",
         value,
     )
@@ -203,14 +229,22 @@ def safe_text(value, *, include_reasoning=False):
         try:
             url = urlsplit(match[0])
             host = url.netloc.rsplit("@", 1)[-1]
-            return urlunsplit((url.scheme, host, url.path, "", ""))
+            return urlunsplit(
+                (
+                    url.scheme,
+                    host,
+                    url.path,
+                    url.query if full_urls else "",
+                    url.fragment if full_urls else "",
+                )
+            )
         except ValueError:
             return "[invalid URL omitted]"
 
     return re.sub(r"https?://[^\s\"'<>]+", safe_url, value)
 
 
-def safe_value(value, depth=0, *, bounded=True, include_reasoning=False):
+def safe_value(value, depth=0, *, bounded=True, include_reasoning=False, full_urls=False):
     if depth > (8 if bounded else 32):
         return "[nested detail omitted]"
     if isinstance(value, dict):
@@ -228,18 +262,24 @@ def safe_value(value, depth=0, *, bounded=True, include_reasoning=False):
                 result[plain(name)] = "[REDACTED]"
             else:
                 result[plain(name)] = safe_value(
-                    item, depth + 1, bounded=bounded, include_reasoning=include_reasoning
+                    item,
+                    depth + 1,
+                    bounded=bounded and not (full_urls and name in {"url", "requested_url", "final_url"}),
+                    include_reasoning=include_reasoning,
+                    full_urls=full_urls,
                 )
         if bounded and len(value) > 80:
             result["…"] = "Additional fields are available in the event ledger"
         return result
     if isinstance(value, (list, tuple)):
         return [
-            safe_value(v, depth + 1, bounded=bounded, include_reasoning=include_reasoning)
+            safe_value(
+                v, depth + 1, bounded=bounded, include_reasoning=include_reasoning, full_urls=full_urls
+            )
             for v in (value[:40] if bounded else value)
         ] + (["[additional items omitted]"] if bounded and len(value) > 40 else [])
     if isinstance(value, str):
-        text = safe_text(value, include_reasoning=include_reasoning)
+        text = safe_text(value, include_reasoning=include_reasoning, full_urls=full_urls)
         return (
             text
             if not bounded or len(text) <= 6000
@@ -248,7 +288,7 @@ def safe_value(value, depth=0, *, bounded=True, include_reasoning=False):
     return (
         value
         if value is None or isinstance(value, (int, float, bool))
-        else safe_text(str(value), include_reasoning=include_reasoning)
+        else safe_text(str(value), include_reasoning=include_reasoning, full_urls=full_urls)
     )
 
 
@@ -546,7 +586,7 @@ class OperationalConsole(logging.Handler):
     def event(self, event):
         if event["kind"] == "config.updated" and self.store is not None:
             self.timezone = council_timezone(self.store)
-        event = safe_value(self.redact(event))
+        event = safe_value(self.redact(event), full_urls=is_web_event(event))
         kind = event["kind"]
         level = event.get("level", "info")
         if level == "info" and kind in QUIET_EVENTS:
@@ -555,7 +595,11 @@ class OperationalConsole(logging.Handler):
         if len(encoded) > 12000:
             event["data"] = {
                 **{
-                    k: event["data"][k] for k in set(INCIDENT_FIELDS + ("provider_id",)) if k in event["data"]
+                    k: event["data"][k]
+                    for k in set(
+                        INCIDENT_FIELDS + ("provider_id", "url", "requested_url", "query", "duration_ms")
+                    )
+                    if k in event["data"]
                 },
                 "detail_preview": encoded[:4000],
                 "truncated": "Full detail remains in the event ledger",
@@ -644,6 +688,11 @@ class OperationalConsole(logging.Handler):
             key = (
                 event["scope"],
                 event["kind"],
+                event["level"],
+                data.get("http_status"),
+                data.get("url"),
+                data.get("query"),
+                data.get("engine"),
                 event.get("bot_id"),
                 data.get("provider_id"),
                 data.get("job_id"),
@@ -889,6 +938,28 @@ class OperationalConsole(logging.Handler):
                         else "Stored result exceeds console limit; inspect this result ID in the dashboard."
                     )
                     sections.append(("Immutable tool result", evidence))
+            if is_web_event(source):
+                # Follow the captured response handles, never fetch the URL again.
+                # Bodies are stored separately to keep ordinary tool pages compact.
+                responses = [data.get("http_response"), result.get("http_response")]
+                responses.extend(
+                    item.get("http_response")
+                    for item in result.get("engine_status", [])
+                    if isinstance(item, dict)
+                )
+                seen = set()
+                for response in responses:
+                    response_id = response.get("response_result_id") if isinstance(response, dict) else None
+                    if not response_id or response_id in seen:
+                        continue
+                    seen.add(response_id)
+                    raw = self.store.one(
+                        "SELECT substr(content,1,?) AS content FROM tool_result_evidence "
+                        "WHERE id=? AND bot_id=? AND turn_id=? AND tool IN ('web_fetch','web_search')",
+                        (EVIDENCE_LIMIT + 1, response_id, source.get("bot_id"), source.get("turn_id")),
+                    )
+                    if raw:
+                        sections.append(("Original HTTP response " + response_id, raw["content"]))
             if job:
                 for stream in ("stdout", "stderr"):
                     try:
@@ -917,7 +988,9 @@ class OperationalConsole(logging.Handler):
             value = safe_value(
                 self.redact(value),
                 bounded=False,
-                include_reasoning=title == "Private provider reasoning and diagnostics",
+                include_reasoning=title == "Private provider reasoning and diagnostics"
+                or is_web_event(event),
+                full_urls=is_web_event(event),
             )
             encoded = (
                 value
@@ -947,6 +1020,7 @@ class OperationalConsole(logging.Handler):
             "page": 0,
             "pinned": False,
             "private_diagnostics": event["scope"] == "providers",
+            "full_urls": is_web_event(event),
         }
         if selected or self.evidence is None or not self.evidence.get("pinned"):
             self.evidence = snapshot
@@ -956,7 +1030,9 @@ class OperationalConsole(logging.Handler):
     def print_evidence_page(self, snapshot):
         # Redact again before slicing so a newly added secret cannot span page boundaries.
         text = safe_text(
-            self.redact(snapshot["text"]), include_reasoning=snapshot.get("private_diagnostics", False)
+            self.redact(snapshot["text"]),
+            include_reasoning=snapshot.get("private_diagnostics", False) or snapshot.get("full_urls", False),
+            full_urls=snapshot.get("full_urls", False),
         )
         start = snapshot["offsets"][snapshot["page"]]
         end = min(len(text), start + EVIDENCE_PAGE_CHARS)
@@ -1002,7 +1078,7 @@ class OperationalConsole(logging.Handler):
 
     def render(self, event, *, suffix="", details=None, select_evidence=False):
         # Re-redact history at display time too, including credentials added since capture.
-        event = safe_value(self.redact(event))
+        event = safe_value(self.redact(event), full_urls=is_web_event(event))
         data = event["data"]
         if event["kind"].startswith("job.") and data.get("status") == "failed":
             data = {**data, "outcome": job_outcome(data)}
@@ -1015,19 +1091,23 @@ class OperationalConsole(logging.Handler):
             if value
         )
         incident = level in {"warning", "error"}
-        keys = tuple(dict.fromkeys(INCIDENT_FIELDS + SUMMARY_FIELDS)) if incident else SUMMARY_FIELDS
-        fields = [
-            f"{key}={plain(data[key])}"
-            if key not in {"error", "message", "reason", "notice", "note"}
-            else plain(data[key])
-            for key in keys
-            if data.get(key) is not None and data[key] != ""
-        ]
+        keys = tuple(dict.fromkeys(DISPLAY_FIELDS + SUMMARY_FIELDS + INCIDENT_FIELDS))
+        keys = [k for k in keys if k not in MESSAGE_FIELDS and k != "call_id"]
+        keys += list(MESSAGE_FIELDS)
+        fields = []
+        for key in keys:
+            value = data.get(key)
+            if value is None or value == "":
+                continue
+            if key.endswith("_ms") and isinstance(value, (int, float)):
+                value = f"{value:.1f}"
+            fields.append(f"{key}={plain(value)}")
         summary = " · ".join(fields)
         if incident and not summary:
             summary = "No diagnostic summary recorded; press f to inspect event fields"
+        # Web destinations are operational evidence, never an ellipsized preview.
         limit = 640 if incident else 320
-        if len(summary) > limit:
+        if not is_web_event(event) and len(summary) > limit:
             summary = summary[: limit - 3] + "…"
         reference = f" #{event['seq']}" if event.get("seq") else ""
         scope_color = SCOPE_COLORS.get(event["scope"], "97")

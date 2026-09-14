@@ -259,21 +259,24 @@ async def test_expired_metadata_is_bounded_without_removing_live_snapshots(fetch
 @pytest.mark.parametrize("mime,data", [("image/png", b"PNG"), ("application/pdf", b"%PDF"), ("", b"binary")])
 async def test_binary_responses_explain_attachment_import_without_persistence(fetched, mime, data):
     response(fetched, data, mime)
-    with pytest.raises(ControlError, match="workspace attachment import"):
-        await call(fetched, {"url": "https://example.com"})
+    result = await call(fetched, {"url": "https://example.com"})
+    assert "workspace attachment import" in result["local_issue"]
+    assert result["http_response"]["response_result_id"]
     assert fetched.list_documents() == []
 
 
 async def test_false_text_binary_limit_and_invalid_encoding_have_actionable_failures(fetched):
     response(fetched, b"bad\x00content")
-    with pytest.raises(ControlError, match="binary control.*attachment import"):
-        await call(fetched, {"url": "https://example.com"})
+    result = await call(fetched, {"url": "https://example.com"})
+    assert "binary control" in result["local_issue"]
+    assert result["http_response"]["body"] == "bad\x00content"
     response(fetched, b"x" * 1025)
     with pytest.raises(ControlError, match="1024.*smaller source"):
         await call(fetched, {"url": "https://example.com"}, config={**DEFAULTS, "max_download_bytes": 1024})
     response(fetched, b"text", "text/plain; charset=invalid-charset")
-    with pytest.raises(ControlError, match="unsupported character encoding"):
-        await call(fetched, {"url": "https://example.com"})
+    result = await call(fetched, {"url": "https://example.com"})
+    assert "unsupported character encoding" in result["local_issue"]
+    assert result["http_response"]["body_encoding"] == "base64"
     assert fetched.list_documents() == []
 
 
@@ -346,16 +349,18 @@ async def test_real_fetch_helper_keeps_redirect_socket_deadline_and_environment_
 
     monkeypatch.setattr(module.aiohttp, "ClientSession", Session)
     if scenario == "private_redirect":
-        with pytest.raises(ControlError, match="Private addresses"):
-            await call(fetched, {"url": "https://example.com/redirect"})
+        result = await call(fetched, {"url": "https://example.com/redirect"})
+        assert "Private addresses" in result["local_issue"]
+        assert result["http_response"]["http_status"] == 302
         assert len(requests) == 1
     elif scenario == "download_limit":
-        with pytest.raises(ControlError, match="1024.*smaller source"):
-            await call(
-                fetched,
-                {"url": "https://example.com/redirect"},
-                config={**DEFAULTS, "max_download_bytes": 1024},
-            )
+        result = await call(
+            fetched,
+            {"url": "https://example.com/redirect"},
+            config={**DEFAULTS, "max_download_bytes": 1024},
+        )
+        assert result["http_response"]["capture_complete"] is False
+        assert result["http_response"]["body_bytes"] == 1024
     else:
         result = await call(fetched, {"url": "https://example.com/redirect"})
         assert result["url"] == "https://example.com/final" and result["text"] == "a" * 800

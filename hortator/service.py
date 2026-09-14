@@ -131,6 +131,8 @@ class Service:
             for field in ("max_request_images", "max_request_image_mib"):
                 value.setdefault(field, SCHEMAS["profiles"].model_fields[field].default)
         if kind == "providers":
+            for field in ("retry_count", "retry_delay_seconds"):
+                value.setdefault(field, SCHEMAS["providers"].model_fields[field].default)
             value["key_configured"] = bool(self.vault.get(f"provider/{value['id']}/api_key"))
             value["health"] = self.store.health(value["id"])
             value["recent"] = self.store.one(

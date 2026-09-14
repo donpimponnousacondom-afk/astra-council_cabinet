@@ -75,3 +75,8 @@ Active tool exchanges have a per-bot estimated working-set cap and must fit actu
 ## Global memories belong to one bot
 
 The optional `global_memory` tool mirrors channel memory's `read`, `write` (same-key replacement) and `delete` operations, including `{}` usage and complete argument feedback. Its store and quota are private to the current bot across channels. No caller-supplied bot/channel selector can change that scope. Guidance, usage results and automatic prompt layers report the actual allowance; source channel/time is evidence of where the note was written, not proof that its claims are correct or current instructions. See [GLOBAL_MEMORY.md](GLOBAL_MEMORY.md) for complete examples.
+
+
+### Original web HTTP evidence
+
+`web_fetch` and `web_search` retain actual HTTP response status, headers and body independently of local extraction errors. Follow returned `read_response` arguments with the originating tool to page stored evidence without another network request. Both support `operation: "read_result"` plus `result_id`, `offset`, `length`; omit search query/engine when reading a search result. Fetch also supports `read_response` with a retained `document_id` across turns in its bot/channel. Empty calls and complete validation feedback remain unchanged. See [HTTP_EVIDENCE.md](HTTP_EVIDENCE.md). A received 202 is not proof the upstream task completed; a received 404 is not proof the connection failed.

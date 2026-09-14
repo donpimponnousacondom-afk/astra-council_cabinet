@@ -37,6 +37,45 @@ class ProviderError(ControlError):
         self.details = details or {}
 
 
+def retryable(error):
+    """Retry transient inference failures, never credentials/validation/local limits."""
+    origin = error.details.get("origin")
+    return (
+        origin in {"transport", "local_deadline", "response_format"}
+        or (origin == "local_client" and error.details.get("timeout_kind") == "pool")
+        or error.http_status in {408, 409, 425, 429}
+        or (error.http_status is not None and 500 <= error.http_status <= 599)
+        or (origin == "upstream_error" and error.http_status is None)
+    )
+
+
+def exception_causes(error):
+    """Preserve grouped socket/TLS causes without locals or request headers."""
+    causes, seen, pending = [], set(), [(error, None)]
+    while pending and len(causes) < 32:
+        error, parent = pending.pop(0)
+        if id(error) in seen:
+            continue
+        seen.add(id(error))
+        index = len(causes)
+        causes.append(
+            {
+                "type": type(error).__name__,
+                "message": str(error),
+                "errno": getattr(error, "errno", None),
+                "parent": parent,
+            }
+        )
+        linked = error.__cause__ or error.__context__
+        if linked is not None:
+            pending.append((linked, index))
+        if isinstance(error, BaseExceptionGroup):
+            pending.extend((child, index) for child in error.exceptions)
+    if pending:
+        causes.append({"omitted": True, "reason": "Exception evidence limit reached"})
+    return causes
+
+
 def transport_error(error, timeout_seconds):
     """Identify the observed HTTP phase without treating local capacity as an outage."""
     phases = {
@@ -56,12 +95,17 @@ def transport_error(error, timeout_seconds):
                     "timeout_seconds": timeout_seconds,
                     "exception_type": kind.__name__,
                     "transport_message": str(error) or None,
+                    "causes": exception_causes(error),
                 },
             )
     return ProviderError(
         f"Provider connection/protocol failure: {type(error).__name__}: "
         f"{str(error) or 'HTTP transport supplied no further detail'}",
-        details={"origin": "transport", "exception_type": type(error).__name__},
+        details={
+            "origin": "transport",
+            "exception_type": type(error).__name__,
+            "causes": exception_causes(error),
+        },
     )
 
 
@@ -368,427 +412,510 @@ class ProviderPool:
         if not provider:
             raise ProviderError("Provider no longer exists", provider_fault=False)
         queued = time.perf_counter()
+        retries = provider.get("retry_count", 3)
+        group_id = uid("retry_")
+        previous = None
+        # One logical completion owns its slot and context throughout retries.
+        # No model tool executes until a whole attempt has completed successfully.
         async with self.slot(provider):
-            limit = bot.get("daily_cost_limit")
-            if limit is not None:
-                now = time.time()
-                budget = self.store.one(
-                    "SELECT coalesce(sum(cost),0) AS cost,sum(CASE WHEN status='completed' AND cost IS NULL THEN 1 ELSE 0 END) AS unknown FROM requests WHERE bot_id=? AND started_at>=?",
-                    (bot["id"], now - now % 86400),
-                )
-                if budget["cost"] >= limit or budget["unknown"]:
-                    raise ProviderError(
-                        "Daily model cost threshold reached or a completed request has unknown cost",
-                        provider_fault=False,
+            for attempt in range(1, retries + 2):
+                current = self.store.get("providers", provider["id"])
+                if not current or not current["enabled"]:
+                    raise ProviderError("Provider disabled while waiting to retry", provider_fault=False)
+                metadata = {
+                    **context,
+                    "retry_group_id": group_id,
+                    "attempt": attempt,
+                    "max_attempts": retries + 1,
+                    "previous_request_id": previous,
+                }
+                try:
+                    return await self._attempt(
+                        bot=bot,
+                        profile=profile,
+                        messages=messages,
+                        tools=tools,
+                        turn_id=turn_id,
+                        context=metadata,
+                        purpose=purpose,
+                        provider=provider,
+                        # Only the initial attempt waits for a concurrency slot;
+                        # previous inference/backoff is not queue latency.
+                        queued=queued if attempt == 1 else time.perf_counter(),
+                        retry_available=attempt <= retries,
                     )
-            headers = self.headers(provider, bot["id"])
-            body = copy.deepcopy(profile["request_json"])
-            omitted_caps = []
-            if purpose == "compaction":
-                body.update(copy.deepcopy(profile.get("compaction_request_json", {})))
-                # Compaction budgets only the retained summary. These wire caps
-                # combine thinking and final text, so neither generation JSON
-                # nor compaction overrides may impose them on summarization.
-                for key in ("max_tokens", "max_completion_tokens", "max_output_tokens"):
-                    if key in body:
-                        omitted_caps.append(key)
-                        body.pop(key)
-            body.update(model=profile["model"], messages=messages, stream=profile["stream"])
-            if not profile["stream"]:
-                body.pop("stream_options", None)
-            if tools:
-                body["tools"] = tools
-                body["tool_choice"] = "auto"
-            if profile["stream"] and profile["include_usage"]:
-                body.setdefault("stream_options", {"include_usage": True})
-            request_id, started, clock = uid("req_"), time.time(), time.perf_counter()
-            meta = {
-                **context,
-                "diagnostic_capture_version": 2,
-                "queue_ms": (clock - queued) * 1000,
-                "profile_revision": profile["revision"],
-                "provider_revision": provider["revision"],
-                "endpoint": provider["base_url"] + "/chat/completions",
-            }
-            if purpose == "compaction":
-                meta.update(
-                    compaction_output_policy="provider_default",
-                    omitted_output_cap_fields=omitted_caps,
-                    retained_summary_token_limit=profile["summary_tokens"],
-                    summary_tokenizer="cl100k_base",
-                )
-            self.store.execute(
-                """INSERT INTO requests(id,turn_id,bot_id,provider_id,profile_id,model,purpose,
-              started_at,status,body,context) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-                (
-                    request_id,
-                    turn_id,
-                    bot["id"],
-                    provider["id"],
-                    profile["id"],
-                    profile["model"],
-                    purpose,
-                    started,
-                    "running",
-                    dumps(self.vault.redact(safe_payload(body))),
-                    dumps(self.vault.redact(meta)),
-                ),
+                except ProviderError as exc:
+                    if attempt > retries or not retryable(exc):
+                        raise
+                    previous = getattr(exc, "request_id", None)
+                    delay = max(provider.get("retry_delay_seconds", 10), exc.retry_after)
+                    details = {
+                        "provider_id": provider["id"],
+                        "model": profile["model"],
+                        "purpose": purpose,
+                        "attempt": attempt,
+                        "max_attempts": retries + 1,
+                        "next_attempt": attempt + 1,
+                        "retry_in_seconds": delay,
+                        "retry_group_id": group_id,
+                        "http_status": exc.http_status,
+                        "error_origin": exc.details.get("origin"),
+                        "error": str(exc),
+                        "reason": "Retrying this model request with the same context; completed tools are not repeated",
+                    }
+                    self.store.emit(
+                        "request.retry_scheduled",
+                        details,
+                        bot_id=bot["id"],
+                        turn_id=turn_id,
+                        request_id=previous,
+                        level="warning",
+                    )
+                    try:
+                        await asyncio.sleep(delay)
+                    except asyncio.CancelledError:
+                        self.store.emit(
+                            "request.retry_cancelled",
+                            {
+                                **details,
+                                "reason": "Retry wait cancelled by the owning turn; no further attempt started",
+                            },
+                            bot_id=bot["id"],
+                            turn_id=turn_id,
+                            request_id=previous,
+                            level="warning",
+                        )
+                        raise
+
+    async def _attempt(
+        self, *, bot, profile, messages, tools, turn_id, context, purpose, provider, queued, retry_available
+    ):
+        limit = bot.get("daily_cost_limit")
+        if limit is not None:
+            now = time.time()
+            budget = self.store.one(
+                "SELECT coalesce(sum(cost),0) AS cost,sum(CASE WHEN status='completed' AND cost IS NULL THEN 1 ELSE 0 END) AS unknown FROM requests WHERE bot_id=? AND started_at>=?",
+                (bot["id"], now - now % 86400),
             )
-            request_settings = {
-                "reasoning": reasoning_settings(body, self.vault.redact),
-                "profile_revision": profile["revision"],
-            }
-            self.store.emit(
-                "request.started",
+            if budget["cost"] >= limit or budget["unknown"]:
+                raise ProviderError(
+                    "Daily model cost threshold reached or a completed request has unknown cost",
+                    provider_fault=False,
+                )
+        headers = self.headers(provider, bot["id"])
+        body = copy.deepcopy(profile["request_json"])
+        omitted_caps = []
+        if purpose == "compaction":
+            body.update(copy.deepcopy(profile.get("compaction_request_json", {})))
+            # Compaction budgets only the retained summary. These wire caps
+            # combine thinking and final text, so neither generation JSON
+            # nor compaction overrides may impose them on summarization.
+            for key in ("max_tokens", "max_completion_tokens", "max_output_tokens"):
+                if key in body:
+                    omitted_caps.append(key)
+                    body.pop(key)
+        body.update(model=profile["model"], messages=messages, stream=profile["stream"])
+        if not profile["stream"]:
+            body.pop("stream_options", None)
+        if tools:
+            body["tools"] = tools
+            body["tool_choice"] = "auto"
+        if profile["stream"] and profile["include_usage"]:
+            body.setdefault("stream_options", {"include_usage": True})
+        request_id, started, clock = uid("req_"), time.time(), time.perf_counter()
+        meta = {
+            **context,
+            "diagnostic_capture_version": 2,
+            "queue_ms": (clock - queued) * 1000,
+            "profile_revision": profile["revision"],
+            "provider_revision": provider["revision"],
+            "endpoint": provider["base_url"] + "/chat/completions",
+        }
+        if purpose == "compaction":
+            meta.update(
+                compaction_output_policy="provider_default",
+                omitted_output_cap_fields=omitted_caps,
+                retained_summary_token_limit=profile["summary_tokens"],
+                summary_tokenizer="cl100k_base",
+            )
+        self.store.execute(
+            """INSERT INTO requests(id,turn_id,bot_id,provider_id,profile_id,model,purpose,
+          started_at,status,body,context) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                request_id,
+                turn_id,
+                bot["id"],
+                provider["id"],
+                profile["id"],
+                profile["model"],
+                purpose,
+                started,
+                "running",
+                dumps(self.vault.redact(safe_payload(body))),
+                dumps(self.vault.redact(meta)),
+            ),
+        )
+        request_settings = {
+            "attempt": context["attempt"],
+            "max_attempts": context["max_attempts"],
+            "retry_group_id": context["retry_group_id"],
+            "reasoning": reasoning_settings(body, self.vault.redact),
+            "profile_revision": profile["revision"],
+        }
+        self.store.emit(
+            "request.started",
+            {
+                "provider_id": provider["id"],
+                "purpose": purpose,
+                "profile_id": profile["id"],
+                "model": profile["model"],
+                "estimated_tokens": context.get("estimated_tokens"),
+                "attempt": context["attempt"],
+                "max_attempts": context["max_attempts"],
+                "retry_group_id": context["retry_group_id"],
+                **request_settings,
+            },
+            bot_id=bot["id"],
+            turn_id=turn_id,
+            request_id=request_id,
+        )
+        result = Completion(request_id=request_id)
+        ttft = visible = None
+        response_state = ChatResponse(result)
+        result.response_diagnostics["requested_stream"] = profile["stream"]
+        total_bytes = 0
+        request_size = {}
+        status_code = None
+        error_data = None
+        diagnostic_at = clock
+        deadline = asyncio.timeout(provider["timeout_seconds"])
+        phase = "prepare_request"
+        try:
+            record_diagnostics(self.store, self.vault, request_id, result, body, status="running")
+            try:
+                body["messages"] = ImageCache(self.store).wire_messages(messages, profile)
+            except ControlError as exc:
+                raise ProviderError(str(exc), provider_fault=False) from exc
+            # Total deadline covers streamed bodies as well as the connection, not just inactivity.
+            async with deadline:
+                phase = "serialize_request"
+                endpoint = provider["base_url"] + "/chat/completions"
+                request_payload, request_size = await asyncio.to_thread(encode_request, body, endpoint)
+                meta.update(request_size)
+                result.response_diagnostics["request_size"] = request_size
+                self.store.execute(
+                    "UPDATE requests SET context=? WHERE id=?",
+                    (dumps(self.vault.redact(meta)), request_id),
+                )
+                wire_headers = httpx.Headers(
+                    {"Content-Type": self.client.headers.get("Content-Type", "application/json")}
+                )
+                wire_headers.update(headers)
+                phase = "await_response_headers"
+                async with self.client.stream(
+                    "POST",
+                    endpoint,
+                    headers=wire_headers,
+                    content=request_payload,
+                    timeout=provider["timeout_seconds"],
+                ) as response:
+                    status_code = response.status_code
+                    phase = "read_error_response" if status_code >= 300 else "read_response"
+                    if response.status_code >= 300:
+                        error_bytes = bytearray()
+                        async for chunk in response.aiter_bytes():
+                            error_bytes.extend(chunk[: 12000 - len(error_bytes)])
+                            if len(error_bytes) >= 12000:
+                                break
+                        raw = error_bytes.decode(errors="replace")
+                        try:
+                            error_data = json.loads(raw)
+                        except ValueError:
+                            error_data = raw
+                        try:
+                            retry = float(response.headers.get("retry-after", "0"))
+                        except ValueError:
+                            retry = 0
+                        raise ProviderError(
+                            f"HTTP {response.status_code}: {self.vault.redact(raw)[:2000]}",
+                            http_status=response.status_code,
+                            retry_after=min(max(retry, 0), 3600),
+                            provider_fault=(
+                                response.status_code in (401, 403, 429)
+                                and not self.vault.get(f"bot/{bot['id']}/provider_key")
+                            )
+                            or response.status_code >= 500,
+                        )
+                    content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                    is_sse = content_type == "text/event-stream"
+                    phase = "read_sse" if is_sse else "read_json"
+                    result.response_diagnostics.update(
+                        response_format="sse" if is_sse else "json", content_type=content_type
+                    )
+                    if is_sse:
+                        reader = SSEReader(result.response_diagnostics)
+                        finished = False
+                        try:
+                            async for frame in reader.frames(response):
+                                finished = response_state.frame(frame)
+                                if profile["stream"] and response_state.activity():
+                                    if ttft is None:
+                                        ttft = (time.perf_counter() - clock) * 1000
+                                        self.store.emit(
+                                            "request.first_token",
+                                            {"ttft_ms": ttft},
+                                            bot_id=bot["id"],
+                                            turn_id=turn_id,
+                                            request_id=request_id,
+                                        )
+                                    if result.content and visible is None:
+                                        visible = (time.perf_counter() - clock) * 1000
+                                if time.perf_counter() - diagnostic_at >= 2:
+                                    record_diagnostics(
+                                        self.store, self.vault, request_id, result, body, status="running"
+                                    )
+                                    diagnostic_at = time.perf_counter()
+                                if finished:
+                                    break
+                        except httpx.TransportError:
+                            if not result.finish_reason:
+                                raise
+                            # The final choice is complete; a lost usage/trailer
+                            # connection cannot make that full answer incomplete.
+                            response_state.note("transport_closed_after_finish")
+                        if not finished and not result.finish_reason:
+                            raise ProviderError(
+                                "Stream disconnected before a completion boundary",
+                                details={"origin": "transport", "reason": "incomplete_stream"},
+                            )
+                        result.response_diagnostics.setdefault("completion_boundary", "finish_reason")
+                    else:
+                        chunks = []
+                        async for chunk in response.aiter_bytes():
+                            total_bytes += len(chunk)
+                            result.response_diagnostics["response_bytes"] = total_bytes
+                            if total_bytes > RESPONSE_LIMIT:
+                                raise ResponseLimitError(
+                                    "buffered JSON response", total_bytes, RESPONSE_LIMIT
+                                )
+                            chunks.append(chunk)
+                        raw = b"".join(chunks).decode("utf-8-sig", errors="strict")
+                        result.response_diagnostics["response_bytes"] = total_bytes
+                        response_state.current = Frame(raw)
+                        response_state.packet(response_state.decode(raw), streamed=False)
+                        # Buffered responses have no measurable TTFT/TPS.
+            response_state.finish()
+            record_diagnostics(self.store, self.vault, request_id, result, body, status="completed")
+            result.content = strip_reasoning(result.content)
+            self.success(provider)
+            metrics = normalized_usage(result.usage, profile)
+            duration = (time.perf_counter() - clock) * 1000
+            self.store.execute(
+                """UPDATE requests SET ended_at=:ended_at,status='completed',ttft_ms=:ttft,
+              first_visible_ms=:visible,duration_ms=:duration,input_tokens=:input_tokens,output_tokens=:output_tokens,
+              reasoning_tokens=:reasoning_tokens,cached_tokens=:cached_tokens,cost=:cost,cost_source=:cost_source,
+              usage=:usage,response=:response,http_status=:http_status WHERE id=:id""",
                 {
+                    **metrics,
+                    "ended_at": time.time(),
+                    "ttft": ttft,
+                    "visible": visible,
+                    "duration": duration,
+                    "usage": dumps(self.vault.redact(result.usage)),
+                    "response": dumps(
+                        self.vault.redact(
+                            {
+                                "content": result.content,
+                                "tool_calls": result.tool_calls,
+                                "finish_reason": result.finish_reason,
+                                "provider_metadata": result.metadata,
+                                "pricing": metrics["pricing"],
+                            }
+                        )
+                    ),
+                    "http_status": status_code,
+                    "id": request_id,
+                },
+            )
+            self.store.emit(
+                "request.completed",
+                {
+                    **request_settings,
+                    "request_body_bytes": request_size.get("request_body_bytes"),
                     "provider_id": provider["id"],
-                    "purpose": purpose,
                     "profile_id": profile["id"],
                     "model": profile["model"],
-                    "estimated_tokens": context.get("estimated_tokens"),
-                    **request_settings,
+                    **metrics,
+                    "duration_ms": duration,
+                    "ttft_ms": ttft,
+                    "finish_reason": result.finish_reason,
                 },
                 bot_id=bot["id"],
                 turn_id=turn_id,
                 request_id=request_id,
             )
-            result = Completion(request_id=request_id)
-            ttft = visible = None
-            response_state = ChatResponse(result)
-            result.response_diagnostics["requested_stream"] = profile["stream"]
-            total_bytes = 0
-            request_size = {}
-            status_code = None
-            error_data = None
-            diagnostic_at = clock
-            deadline = asyncio.timeout(provider["timeout_seconds"])
-            phase = "prepare_request"
-            try:
-                record_diagnostics(self.store, self.vault, request_id, result, body, status="running")
-                try:
-                    body["messages"] = ImageCache(self.store).wire_messages(messages, profile)
-                except ControlError as exc:
-                    raise ProviderError(str(exc), provider_fault=False) from exc
-                # Total deadline covers streamed bodies as well as the connection, not just inactivity.
-                async with deadline:
-                    phase = "serialize_request"
-                    endpoint = provider["base_url"] + "/chat/completions"
-                    request_payload, request_size = await asyncio.to_thread(encode_request, body, endpoint)
-                    meta.update(request_size)
-                    result.response_diagnostics["request_size"] = request_size
-                    self.store.execute(
-                        "UPDATE requests SET context=? WHERE id=?",
-                        (dumps(self.vault.redact(meta)), request_id),
-                    )
-                    wire_headers = httpx.Headers(
-                        {"Content-Type": self.client.headers.get("Content-Type", "application/json")}
-                    )
-                    wire_headers.update(headers)
-                    phase = "await_response_headers"
-                    async with self.client.stream(
-                        "POST",
-                        endpoint,
-                        headers=wire_headers,
-                        content=request_payload,
-                        timeout=provider["timeout_seconds"],
-                    ) as response:
-                        status_code = response.status_code
-                        phase = "read_error_response" if status_code >= 300 else "read_response"
-                        if response.status_code >= 300:
-                            error_bytes = bytearray()
-                            async for chunk in response.aiter_bytes():
-                                error_bytes.extend(chunk[: 12000 - len(error_bytes)])
-                                if len(error_bytes) >= 12000:
-                                    break
-                            raw = error_bytes.decode(errors="replace")
-                            try:
-                                error_data = json.loads(raw)
-                            except ValueError:
-                                error_data = raw
-                            try:
-                                retry = float(response.headers.get("retry-after", "0"))
-                            except ValueError:
-                                retry = 0
-                            raise ProviderError(
-                                f"HTTP {response.status_code}: {self.vault.redact(raw)[:2000]}",
-                                http_status=response.status_code,
-                                retry_after=min(max(retry, 0), 3600),
-                                provider_fault=(
-                                    response.status_code in (401, 403, 429)
-                                    and not self.vault.get(f"bot/{bot['id']}/provider_key")
-                                )
-                                or response.status_code >= 500,
-                            )
-                        content_type = (
-                            response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-                        )
-                        is_sse = content_type == "text/event-stream"
-                        phase = "read_sse" if is_sse else "read_json"
-                        result.response_diagnostics.update(
-                            response_format="sse" if is_sse else "json", content_type=content_type
-                        )
-                        if is_sse:
-                            reader = SSEReader(result.response_diagnostics)
-                            finished = False
-                            try:
-                                async for frame in reader.frames(response):
-                                    finished = response_state.frame(frame)
-                                    if profile["stream"] and response_state.activity():
-                                        if ttft is None:
-                                            ttft = (time.perf_counter() - clock) * 1000
-                                            self.store.emit(
-                                                "request.first_token",
-                                                {"ttft_ms": ttft},
-                                                bot_id=bot["id"],
-                                                turn_id=turn_id,
-                                                request_id=request_id,
-                                            )
-                                        if result.content and visible is None:
-                                            visible = (time.perf_counter() - clock) * 1000
-                                    if time.perf_counter() - diagnostic_at >= 2:
-                                        record_diagnostics(
-                                            self.store, self.vault, request_id, result, body, status="running"
-                                        )
-                                        diagnostic_at = time.perf_counter()
-                                    if finished:
-                                        break
-                            except httpx.TransportError:
-                                if not result.finish_reason:
-                                    raise
-                                # The final choice is complete; a lost usage/trailer
-                                # connection cannot make that full answer incomplete.
-                                response_state.note("transport_closed_after_finish")
-                            if not finished and not result.finish_reason:
-                                raise ProviderError(
-                                    "Stream disconnected before a completion boundary",
-                                    details={"origin": "transport", "reason": "incomplete_stream"},
-                                )
-                            result.response_diagnostics.setdefault("completion_boundary", "finish_reason")
-                        else:
-                            chunks = []
-                            async for chunk in response.aiter_bytes():
-                                total_bytes += len(chunk)
-                                result.response_diagnostics["response_bytes"] = total_bytes
-                                if total_bytes > RESPONSE_LIMIT:
-                                    raise ResponseLimitError(
-                                        "buffered JSON response", total_bytes, RESPONSE_LIMIT
-                                    )
-                                chunks.append(chunk)
-                            raw = b"".join(chunks).decode("utf-8-sig", errors="strict")
-                            result.response_diagnostics["response_bytes"] = total_bytes
-                            response_state.current = Frame(raw)
-                            response_state.packet(response_state.decode(raw), streamed=False)
-                            # Buffered responses have no measurable TTFT/TPS.
-                response_state.finish()
-                record_diagnostics(self.store, self.vault, request_id, result, body, status="completed")
-                result.content = strip_reasoning(result.content)
-                self.success(provider)
-                metrics = normalized_usage(result.usage, profile)
-                duration = (time.perf_counter() - clock) * 1000
-                self.store.execute(
-                    """UPDATE requests SET ended_at=:ended_at,status='completed',ttft_ms=:ttft,
-                  first_visible_ms=:visible,duration_ms=:duration,input_tokens=:input_tokens,output_tokens=:output_tokens,
-                  reasoning_tokens=:reasoning_tokens,cached_tokens=:cached_tokens,cost=:cost,cost_source=:cost_source,
-                  usage=:usage,response=:response,http_status=:http_status WHERE id=:id""",
-                    {
-                        **metrics,
-                        "ended_at": time.time(),
-                        "ttft": ttft,
-                        "visible": visible,
-                        "duration": duration,
-                        "usage": dumps(self.vault.redact(result.usage)),
-                        "response": dumps(
-                            self.vault.redact(
-                                {
-                                    "content": result.content,
-                                    "tool_calls": result.tool_calls,
-                                    "finish_reason": result.finish_reason,
-                                    "provider_metadata": result.metadata,
-                                    "pricing": metrics["pricing"],
-                                }
-                            )
-                        ),
-                        "http_status": status_code,
-                        "id": request_id,
-                    },
-                )
-                self.store.emit(
-                    "request.completed",
-                    {
-                        **request_settings,
-                        "request_body_bytes": request_size.get("request_body_bytes"),
-                        "provider_id": provider["id"],
-                        "profile_id": profile["id"],
-                        "model": profile["model"],
-                        **metrics,
-                        "duration_ms": duration,
-                        "ttft_ms": ttft,
-                        "finish_reason": result.finish_reason,
-                    },
-                    bot_id=bot["id"],
-                    turn_id=turn_id,
-                    request_id=request_id,
-                )
-                return result
-            except BaseException as error:
-                cancelled = isinstance(error, asyncio.CancelledError)
-                if not isinstance(error, (Exception, asyncio.CancelledError)):
-                    raise
-                if isinstance(error, UpstreamResponseError):
-                    error_data = error.envelope
-                    exc = envelope_error(
-                        error_data, private_key=bool(self.vault.get(f"bot/{bot['id']}/provider_key"))
-                    )
-                    exc.details["origin"] = "upstream_error"
-                elif isinstance(error, ResponseLimitError):
-                    exc = ProviderError(
-                        str(error),
-                        provider_fault=False,
-                        details={"origin": "local_client", "reason": "response_limit", **error.details},
-                    )
-                    result.response_diagnostics["last_frame"] = response_state.failure_evidence(
-                        self.vault.redact
-                    )
-                elif isinstance(error, (ResponseFormatError, UnicodeError, httpx.DecodingError)):
-                    exc = ProviderError(
-                        f"Response format error: {error}",
-                        provider_fault=False,
-                        details={"origin": "response_format", **getattr(error, "details", {})},
-                    )
-                    evidence_key = (
-                        "last_frame"
-                        if exc.details.get("field") in ("SSE body", "body")
-                        or not isinstance(error, ResponseFormatError)
-                        else "offending_frame"
-                    )
-                    result.response_diagnostics[evidence_key] = response_state.failure_evidence(
-                        self.vault.redact
-                    )
-                elif isinstance(error, ProviderError):
-                    exc = error
-                elif cancelled:
-                    exc = ProviderError(
-                        "Request cancelled by its owning turn or runtime; partial output withheld, provider usage may be incomplete",
-                        provider_fault=False,
-                        details={"origin": "cancelled"},
-                    )
-                elif isinstance(error, TimeoutError) and deadline.expired():
-                    exc = ProviderError(
-                        f"Local total request deadline exceeded: {provider['timeout_seconds']:g} seconds. "
-                        "Partial output withheld; adjust Providers → Total request timeout for longer requests.",
-                        provider_fault=False,
-                        details={
-                            "origin": "local_deadline",
-                            "timeout_kind": "total",
-                            "timeout_seconds": provider["timeout_seconds"],
-                        },
-                    )
-                elif isinstance(error, httpx.TransportError):
-                    exc = transport_error(error, provider["timeout_seconds"])
-                else:
-                    # A Python/adapter bug must never masquerade as upstream downtime.
-                    import traceback
-
-                    frames = traceback.extract_tb(error.__traceback__)
-                    exc = ProviderError(
-                        f"Local provider-client failure: {type(error).__name__}: {error}",
-                        provider_fault=False,
-                        details={
-                            "origin": "local_client",
-                            "exception_type": type(error).__name__,
-                            "location": [{"function": f.name, "line": f.lineno} for f in frames[-4:]],
-                        },
-                    )
-                origin = exc.details.get("origin") or (
-                    "upstream_http" if exc.http_status is not None else "request_configuration"
-                )
-                exc.request_id = request_id
-                if cancelled:
-                    error.request_id = request_id
-                failure_context = {
-                    **request_size,
-                    "purpose": purpose,
-                    "model": profile["model"],
-                    "phase": phase,
-                    "duration_ms": (time.perf_counter() - clock) * 1000,
-                    **{
-                        k: exc.details[k]
-                        for k in ("timeout_kind", "timeout_seconds", "observed_bytes", "limit_bytes")
-                        if k in exc.details
-                    },
-                }
-                message = self.vault.redact(str(exc))[:3000]
-                record_diagnostics(
-                    self.store,
-                    self.vault,
-                    request_id,
-                    result,
-                    body,
-                    status="cancelled" if cancelled else "failed",
-                    error={
-                        "envelope": error_data,
-                        "message": message,
-                        "error_status": exc.http_status,
-                        "provider_fault": exc.provider_fault,
-                        "transport_http_status": status_code,
-                        "origin": origin,
-                        "details": {**exc.details, **failure_context},
-                    },
-                )
-                metrics = normalized_usage(result.usage, profile)
-                self.store.execute(
-                    """UPDATE requests SET ended_at=:ended,status=:status,error=:error,
-                    duration_ms=:duration,ttft_ms=:ttft,http_status=:http_status,usage=:usage,response=:response,
-                    input_tokens=:input_tokens,output_tokens=:output_tokens,reasoning_tokens=:reasoning_tokens,
-                    cached_tokens=:cached_tokens,cost=:cost,cost_source=:cost_source WHERE id=:id""",
-                    {
-                        **metrics,
-                        "ended": time.time(),
-                        "status": "cancelled" if cancelled else "failed",
-                        "error": message,
-                        "duration": (time.perf_counter() - clock) * 1000,
-                        "ttft": ttft,
-                        "http_status": status_code,
-                        "usage": dumps(self.vault.redact(result.usage)),
-                        "response": dumps(
-                            self.vault.redact(
-                                {
-                                    "partial": True,
-                                    "content": strip_reasoning(result.content),
-                                    "tool_calls": result.tool_calls,
-                                    "finish_reason": result.finish_reason,
-                                    "provider_metadata": result.metadata,
-                                    "pricing": metrics["pricing"],
-                                }
-                            )
-                        ),
-                        "id": request_id,
-                    },
-                )
-                self.store.emit(
-                    "request.cancelled" if cancelled else "request.failed",
-                    {
-                        "error": message,
-                        **failure_context,
-                        "provider_id": provider["id"],
-                        "profile_id": profile["id"],
-                        "http_status": status_code,
-                        "error_status": exc.http_status,
-                        "provider_fault": exc.provider_fault,
-                        "error_origin": origin,
-                        "response_format": result.response_diagnostics.get("response_format"),
-                        "frame_index": result.response_diagnostics.get("frame_index"),
-                        "field": exc.details.get("field"),
-                    },
-                    bot_id=bot["id"],
-                    turn_id=turn_id,
-                    request_id=request_id,
-                    level="warning" if cancelled else "error",
-                )
-                if not cancelled:
-                    self.failure(provider, exc, bot_id=bot["id"], turn_id=turn_id, request_id=request_id)
-                    raise exc from error
+            return result
+        except BaseException as error:
+            cancelled = isinstance(error, asyncio.CancelledError)
+            if not isinstance(error, (Exception, asyncio.CancelledError)):
                 raise
+            if isinstance(error, UpstreamResponseError):
+                error_data = error.envelope
+                exc = envelope_error(
+                    error_data, private_key=bool(self.vault.get(f"bot/{bot['id']}/provider_key"))
+                )
+                exc.details["origin"] = "upstream_error"
+            elif isinstance(error, ResponseLimitError):
+                exc = ProviderError(
+                    str(error),
+                    provider_fault=False,
+                    details={"origin": "local_client", "reason": "response_limit", **error.details},
+                )
+                result.response_diagnostics["last_frame"] = response_state.failure_evidence(self.vault.redact)
+            elif isinstance(error, (ResponseFormatError, UnicodeError, httpx.DecodingError)):
+                exc = ProviderError(
+                    f"Response format error: {error}",
+                    provider_fault=False,
+                    details={"origin": "response_format", **getattr(error, "details", {})},
+                )
+                evidence_key = (
+                    "last_frame"
+                    if exc.details.get("field") in ("SSE body", "body")
+                    or not isinstance(error, ResponseFormatError)
+                    else "offending_frame"
+                )
+                result.response_diagnostics[evidence_key] = response_state.failure_evidence(self.vault.redact)
+            elif isinstance(error, ProviderError):
+                exc = error
+            elif cancelled:
+                exc = ProviderError(
+                    "Request cancelled by its owning turn or runtime; partial output withheld, provider usage may be incomplete",
+                    provider_fault=False,
+                    details={"origin": "cancelled"},
+                )
+            elif isinstance(error, TimeoutError) and deadline.expired():
+                exc = ProviderError(
+                    f"Local total request deadline exceeded: {provider['timeout_seconds']:g} seconds. "
+                    "Partial output withheld; adjust Providers → Total request timeout for longer requests.",
+                    provider_fault=False,
+                    details={
+                        "origin": "local_deadline",
+                        "timeout_kind": "total",
+                        "timeout_seconds": provider["timeout_seconds"],
+                    },
+                )
+            elif isinstance(error, httpx.TransportError):
+                exc = transport_error(error, provider["timeout_seconds"])
+            else:
+                # A Python/adapter bug must never masquerade as upstream downtime.
+                import traceback
+
+                frames = traceback.extract_tb(error.__traceback__)
+                exc = ProviderError(
+                    f"Local provider-client failure: {type(error).__name__}: {error}",
+                    provider_fault=False,
+                    details={
+                        "origin": "local_client",
+                        "exception_type": type(error).__name__,
+                        "location": [{"function": f.name, "line": f.lineno} for f in frames[-4:]],
+                    },
+                )
+            origin = exc.details.get("origin") or (
+                "upstream_http" if exc.http_status is not None else "request_configuration"
+            )
+            exc.request_id = request_id
+            if cancelled:
+                error.request_id = request_id
+            will_retry = not cancelled and retry_available and retryable(exc)
+            failure_context = {
+                "attempt": context["attempt"],
+                "max_attempts": context["max_attempts"],
+                "retry_group_id": context["retry_group_id"],
+                "will_retry": will_retry,
+                **request_size,
+                "purpose": purpose,
+                "model": profile["model"],
+                "phase": phase,
+                "duration_ms": (time.perf_counter() - clock) * 1000,
+                **{
+                    k: exc.details[k]
+                    for k in ("timeout_kind", "timeout_seconds", "observed_bytes", "limit_bytes")
+                    if k in exc.details
+                },
+            }
+            message = self.vault.redact(str(exc))[:3000]
+            record_diagnostics(
+                self.store,
+                self.vault,
+                request_id,
+                result,
+                body,
+                status="cancelled" if cancelled else "failed",
+                error={
+                    "envelope": error_data,
+                    "message": message,
+                    "error_status": exc.http_status,
+                    "provider_fault": exc.provider_fault,
+                    "transport_http_status": status_code,
+                    "origin": origin,
+                    "details": {**exc.details, **failure_context},
+                },
+            )
+            metrics = normalized_usage(result.usage, profile)
+            self.store.execute(
+                """UPDATE requests SET ended_at=:ended,status=:status,error=:error,
+                duration_ms=:duration,ttft_ms=:ttft,http_status=:http_status,usage=:usage,response=:response,
+                input_tokens=:input_tokens,output_tokens=:output_tokens,reasoning_tokens=:reasoning_tokens,
+                cached_tokens=:cached_tokens,cost=:cost,cost_source=:cost_source WHERE id=:id""",
+                {
+                    **metrics,
+                    "ended": time.time(),
+                    "status": "cancelled" if cancelled else "failed",
+                    "error": message,
+                    "duration": (time.perf_counter() - clock) * 1000,
+                    "ttft": ttft,
+                    "http_status": status_code,
+                    "usage": dumps(self.vault.redact(result.usage)),
+                    "response": dumps(
+                        self.vault.redact(
+                            {
+                                "partial": True,
+                                "content": strip_reasoning(result.content),
+                                "tool_calls": result.tool_calls,
+                                "finish_reason": result.finish_reason,
+                                "provider_metadata": result.metadata,
+                                "pricing": metrics["pricing"],
+                            }
+                        )
+                    ),
+                    "id": request_id,
+                },
+            )
+            self.store.emit(
+                "request.cancelled" if cancelled else "request.failed",
+                {
+                    "error": message,
+                    **failure_context,
+                    "provider_id": provider["id"],
+                    "profile_id": profile["id"],
+                    "http_status": status_code,
+                    "error_status": exc.http_status,
+                    "provider_fault": exc.provider_fault,
+                    "error_origin": origin,
+                    "response_format": result.response_diagnostics.get("response_format"),
+                    "frame_index": result.response_diagnostics.get("frame_index"),
+                    "field": exc.details.get("field"),
+                },
+                bot_id=bot["id"],
+                turn_id=turn_id,
+                request_id=request_id,
+                level="warning" if cancelled or will_retry else "error",
+            )
+            if not cancelled:
+                if not will_retry:
+                    self.failure(provider, exc, bot_id=bot["id"], turn_id=turn_id, request_id=request_id)
+                raise exc from error
+            raise
 
     async def probe(self, provider):
         start = time.perf_counter()
