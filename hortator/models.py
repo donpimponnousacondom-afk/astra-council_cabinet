@@ -67,6 +67,8 @@ class Provider(Entity):
     max_concurrency: int = Field(default=4, ge=1, le=100)
     failure_threshold: int = Field(default=3, ge=1, le=30)
     circuit_seconds: float = Field(default=60, ge=1, le=3600)
+    retry_count: int = Field(default=3, ge=0, le=10, strict=True)
+    retry_delay_seconds: float = Field(default=10, ge=0, le=3600)
     requires_key: bool = True
     auth_header: str = Field(default="Authorization", pattern=r"^[A-Za-z0-9-]{1,80}$")
     auth_scheme: str = Field(default="Bearer", max_length=60)

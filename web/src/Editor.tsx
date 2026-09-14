@@ -1027,6 +1027,17 @@ export function Editor({
                     )}
                     {numeric("circuit_seconds", "Recovery delay (seconds)")}
                   </div>
+                  <div className="form-grid">
+                    {numeric("retry_count", "Retries per model request")}
+                    {numeric("retry_delay_seconds", "Retry delay (seconds)")}
+                  </div>
+                  <p className="field-hint">
+                    Three retries means up to four attempts. Retries keep the
+                    same turn and completed tool results, including slash
+                    requests and compaction. Only an exhausted request counts
+                    toward opening the circuit. Stop controls and task deadlines
+                    still apply.
+                  </p>
                   <div className="switch-stack">
                     <Switch
                       label="Provider enabled"

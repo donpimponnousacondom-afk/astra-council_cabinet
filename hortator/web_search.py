@@ -13,6 +13,7 @@ import httpx
 
 from .concurrency import task_group
 from .models import ControlError
+from .http_evidence import HTTPResponse, headers_evidence, record_response
 from .tool_feedback import errors_for
 
 MODES = ["auto", "brave", "duckduckgo", "both"]
@@ -24,12 +25,18 @@ DESCRIPTION = (
     '{"query":"Python documentation","engine":"both","count":5}. '
     "Results are deduplicated with source engines; inspect engine_status and partial for failures. "
     "A missing Brave key or a blocked engine need not discard the other's results. "
-    "Snippets are untrusted search previews, not proof you read the linked pages."
+    "Snippets are untrusted search previews, not proof you read the linked pages. "
+    "Each engine exposes its actual HTTP response separately from local parsing. "
+    "Read original response evidence using operation=read_result, result_id, offset, length; omit query."
 )
 PARAMETERS = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
+        "operation": {"type": "string", "enum": ["search", "read_result"]},
+        "result_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "offset": {"type": "integer", "minimum": 0},
+        "length": {"type": "integer", "minimum": 1, "maximum": 18000},
         "query": {
             "type": "string",
             "minLength": 1,
@@ -40,7 +47,19 @@ PARAMETERS = {
         "engine": {"type": "string", "enum": MODES},
         "count": {"type": "integer", "minimum": 1, "maximum": 10},
     },
-    "required": ["query"],
+    "allOf": [
+        {
+            "if": {"properties": {"operation": {"const": "read_result"}}, "required": ["operation"]},
+            "then": {
+                "required": ["result_id"],
+                "properties": {"query": False, "engine": False, "count": False},
+            },
+            "else": {
+                "required": ["query"],
+                "properties": {"result_id": False, "offset": False, "length": False},
+            },
+        }
+    ],
 }
 CONFIG_SCHEMA = {
     "type": "object",
@@ -262,28 +281,49 @@ def brave_results(body, count):
 
 async def download(client, url, params, headers):
     async with client.stream("GET", url, params=params, headers=headers, timeout=25) as response:
-        if response.status_code != 200:
-            raise SearchFailure("upstream_http", f"Search endpoint returned HTTP {response.status_code}")
-        declared = response.headers.get("content-length", "")
-        if declared.isdigit() and int(declared) > MAX_BYTES:
-            raise SearchFailure("response_limit", "Search response exceeds 1,000,000 bytes")
-        data = bytearray()
-        async for chunk in response.aiter_bytes():
-            data.extend(chunk)
-            if len(data) > MAX_BYTES:
-                raise SearchFailure("response_limit", "Search response exceeds 1,000,000 bytes")
-        return bytes(data)
+        data, complete = bytearray(), True
+        transport_error = None
+        try:
+            async for chunk in response.aiter_bytes():
+                available = MAX_BYTES - len(data)
+                data.extend(chunk[:available])
+                if len(chunk) > available:
+                    complete = False
+                    break
+        except (httpx.HTTPError, TimeoutError) as exc:
+            complete = False
+            transport_error = f"{type(exc).__name__}: {exc}"
+        return HTTPResponse(
+            bytes(data),
+            response.headers.get("content-type", ""),
+            str(response.url),
+            response.status_code,
+            response.extensions.get("reason_phrase", b"").decode("latin1") or None,
+            headers_evidence(response.headers.multi_items()),
+            complete=complete,
+            limit=MAX_BYTES,
+            local_issue=None
+            if complete
+            else (
+                "Response body was interrupted; capture is partial"
+                if transport_error
+                else "Configured search download byte limit reached; capture is partial"
+            ),
+            transport_error=transport_error,
+        )
 
 
-async def search(args, context, config, key, store):
+async def search(args, context, config, key, store, vault):
     validate_config(config)
     mode, count = args.get("engine", config.get("engine", "auto")), args.get("count", config.get("count", 5))
 
     async def engine(client, name):
         started = time.perf_counter()
-        status = {"engine": name}
+        status = {"engine": name, "name": "web_search", "query": args["query"]}
+        response = None
+        deadline = asyncio.timeout(25)
         try:
-            async with asyncio.timeout(25):
+            async with deadline:
                 if name == "brave":
                     if not key:
                         raise SearchFailure(
@@ -295,29 +335,50 @@ async def search(args, context, config, key, store):
                             "query_limit",
                             "Brave query limit is 600 characters / 75 words; shorten the query or choose DuckDuckGo",
                         )
-                    body = await download(
+                    status["url"] = str(
+                        httpx.URL(config["endpoint"]).copy_merge_params({"q": args["query"], "count": count})
+                    )
+                    response = await download(
                         client,
                         config["endpoint"],
                         {"q": args["query"], "count": count},
                         {"X-Subscription-Token": key, "Accept": "application/json"},
                     )
-                    results = brave_results(body, count)
                 else:
-                    body = await download(
+                    status["url"] = str(httpx.URL(DDG_URL).copy_merge_params({"q": args["query"]}))
+                    response = await download(
                         client,
                         DDG_URL,
                         {"q": args["query"]},
                         {"User-Agent": "Hortator/0.1 (web search)", "Accept": "text/html"},
                     )
-                    results = duck_results(body, count)
+                http = record_response(store, vault, context, "web_search", response)
+                status.update(http_response=http, http_status=response.status, url=response.url)
+                if not response.complete:
+                    raise SearchFailure(
+                        "transport" if response.transport_error else "response_limit",
+                        response.transport_error or response.local_issue,
+                    )
+                results = (
+                    brave_results(response.data, count)
+                    if name == "brave"
+                    else duck_results(response.data, count)
+                )
             status.update(status="ok", count=len(results))
         except SearchFailure as exc:
             results = []
-            status.update(status="failed", count=0, category=exc.category, error=str(exc))
+            status.update(
+                status="failed", count=0, category=exc.category, error=str(exc), local_issue=str(exc)
+            )
         except (httpx.HTTPError, TimeoutError) as exc:
             results = []
             status.update(
-                status="failed", count=0, category="transport", error=f"{type(exc).__name__}: {exc}"
+                status="failed",
+                count=0,
+                category="local_deadline" if deadline.expired() else "transport",
+                error="Local search deadline exceeded: 25 seconds"
+                if deadline.expired()
+                else f"{type(exc).__name__}: {exc}",
             )
         status["duration_ms"] = (time.perf_counter() - started) * 1000
         store.emit(
@@ -325,7 +386,11 @@ async def search(args, context, config, key, store):
             status,
             bot_id=context.bot["id"],
             turn_id=context.turn_id,
-            level="info" if status["status"] == "ok" else "warning",
+            level="error"
+            if status.get("category") in {"transport", "local_deadline"}
+            else "info"
+            if status["status"] == "ok" and response.status < 400
+            else "warning",
         )
         return status, results
 

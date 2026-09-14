@@ -19,7 +19,7 @@ def owner():
 
 def configured(k, bot_id="ada", **changes):
     provider = k.store.get("providers", "openrouter")
-    provider.update(requires_key=False, base_url="https://provider.test/v1")
+    provider.update(requires_key=False, base_url="https://provider.test/v1", retry_count=0)
     provider.pop("revision")
     k.store.put("providers", provider)
     profile = k.store.get("profiles", "balanced")

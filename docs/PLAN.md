@@ -1,5 +1,11 @@
 # Implementation and acceptance plan
 
+## HTTP evidence and in-turn provider recovery (2026-09-14)
+
+The owner requested actual response evidence for web fetching/searching and full operational URLs with stable console ordering. Numeric HTTP status is independent of extracted-document readiness and parser outcomes; received errors retain bodies/headers instead of becoming generic `ControlError` text. Raw decoded response evidence remains paged and credential-protected. See [HTTP_EVIDENCE.md](HTTP_EVIDENCE.md).
+
+Provider recovery now has a separate request-level retry policy: three additional attempts at ten-second intervals by default, configured below circuit controls. This closes the gap where one transient failure terminated a long turn. Retries retain its exact model context and completed tool work and run through the common provider client for ordinary/slash/compaction calls. Circuit recovery remains a separate future-request pause after exhausted calls. No retry restarts a whole task, repeats completed tools or bypasses cancellation, budgets or Discord's deadline. Permanent request/auth errors are not blindly resent; see [operations](OPERATIONS.md#provider-request-retries).
+
 This implementation lives at `/home/codexy/codex/astra-council_cabinet`. [AGENTS.md](../AGENTS.md) records standing agent rules; [OPERATIONS.md](OPERATIONS.md) covers the shared GNU Screen runtime, storage and branch workflow. The design below remains the accepted foundation.
 
 ## Experiment recovery and companion plugins (2026-09-13)
