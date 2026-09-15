@@ -43,7 +43,7 @@ test("prompt library overrides, per-bot toggles and clean slate stay isolated", 
     .selectOption("transcript");
   await dialog.getByLabel("Message role", { exact: true }).selectOption("user");
   await dialog
-    .getByLabel("System prompt", { exact: true })
+    .getByLabel("User prompt", { exact: true })
     .fill("{latest_content}");
   await dialog
     .getByRole("button", { name: "Create draft", exact: true })

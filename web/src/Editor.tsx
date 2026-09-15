@@ -1393,7 +1393,9 @@ export function Editor({
                   </Field>
                 </div>
                 <Field
-                  label="System prompt"
+                  label={
+                    draft.role === "user" ? "User prompt" : "System prompt"
+                  }
                   hint="Edits cancel affected active turns before new text is used. Empty text omits this layer. Literal data placeholders are substituted once; no code is executed."
                 >
                   <textarea
