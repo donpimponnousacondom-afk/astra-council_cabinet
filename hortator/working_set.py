@@ -53,7 +53,7 @@ class ToolEvidence:
                 dumps(sorted(required)),
             ),
         )
-        return (
+        reference = (
             {**result, "result_id": result_id}
             if isinstance(result, dict)
             else {
@@ -61,6 +61,14 @@ class ToolEvidence:
                 "result_id": result_id,
             }
         )
+        if name == "council_inspect":
+            reference["read_response"] = {
+                "resource": "read_result",
+                "result_id": result_id,
+                "offset": 0,
+                "length": 6000,
+            }
+        return reference
 
     def read(self, args, context, allowed):
         row = self.store.one(
@@ -114,6 +122,7 @@ def result_reference(message):
         "exit_code",
         "task_budget",
         "_working_set",
+        "read_response",
     )
     reference = {key: body[key] for key in keys if key in body}
     # A result can supply structured progress; oversized metadata is not allowed to
@@ -123,10 +132,16 @@ def result_reference(message):
             del reference[key]
     if body.get("result_id"):
         reference["reread"] = {"operation": "read_result", "result_id": body["result_id"], "length": 2000}
+        read_response = body.get("read_response")
+        if message.get("name") == "council_inspect" or (
+            isinstance(read_response, dict) and read_response.get("resource") == "read_result"
+        ):
+            reference["reread"] = {"resource": "read_result", "result_id": body["result_id"], "length": 2000}
     return {
         "omitted_from_active_prompt": True,
         "notice": "Body omitted from this prompt, not summarized. Original evidence remains in the trajectory. "
-        "Use read_result on workspace, shell or web_fetch when granted, or the saved document/file/job handle.",
+        "Use council_inspect resource=read_result for inspection evidence, or operation=read_result on "
+        "workspace, shell, web_fetch or web_search when granted, or the saved document/file/job handle.",
         **reference,
     }
 

@@ -130,9 +130,11 @@ async def test_version_inspection_requires_trusted_hortator_context(kernel):
     )
     from hortator.timekeeping import present_times
 
-    assert {key: value for key, value in result.items() if key != "result_id"} == present_times(
-        kernel.service.version(), "Europe/Madrid"
-    )
+    assert {
+        key: value for key, value in result.items() if key not in ("result_id", "read_response")
+    } == present_times(kernel.service.version(), "Europe/Madrid")
+    assert result["read_response"]["result_id"] == result["result_id"]
+    assert result["read_response"]["resource"] == "read_result"
     assert kernel.store.one("SELECT id FROM tool_result_evidence WHERE id=?", (result["result_id"],))
     assert not kernel.store.rows("SELECT * FROM requests")
     denied = await kernel.registry.call(
@@ -141,7 +143,7 @@ async def test_version_inspection_requires_trusted_hortator_context(kernel):
         ToolContext(bot, "channel", "turn", owner_verified=False),
         "untrusted-call",
     )
-    assert {key: value for key, value in denied.items() if key != "result_id"} == {
+    assert {key: value for key, value in denied.items() if key not in ("result_id", "read_response")} == {
         "ok": False,
         "error": "ControlError: Tool is not enabled for this bot and trusted request",
     }

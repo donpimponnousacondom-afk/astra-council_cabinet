@@ -133,7 +133,7 @@ class Service:
             raise ControlError(f"{kind}/{entity_id} does not exist", 404)
         return entity
 
-    def public(self, kind, entity):
+    def public(self, kind, entity, *, include_context=True):
         value = dict(entity)
         if kind == "profiles":
             for field in ("max_request_images", "max_request_image_mib", "compaction_max_tokens"):
@@ -172,9 +172,10 @@ class Service:
             ]
             value["runtime"] = self.store.runtime(value["id"])
             value["active_turn"] = bool(self.engine and value["id"] in self.engine.tasks)
-            value["contexts"] = self.store.rows(
-                "SELECT * FROM contexts WHERE bot_id=? ORDER BY updated_at DESC", (value["id"],)
-            )
+            if include_context:
+                value["contexts"] = self.store.rows(
+                    "SELECT * FROM contexts WHERE bot_id=? ORDER BY updated_at DESC", (value["id"],)
+                )
             value["context_resets"] = self.store.rows(
                 "SELECT * FROM context_resets WHERE bot_id=? ORDER BY after_at DESC", (value["id"],)
             )
@@ -193,7 +194,7 @@ class Service:
         elif kind == "plugins":
             value["key_configured"] = bool(self.vault.get(f"plugin/{value['id']}/api_key"))
             spec = self.registry.specs.get(value["id"])
-            if value["id"] in ("shell", "web_search", "memory", "global_memory") and spec:
+            if value["id"] in ("shell", "web_search", "memory", "global_memory", "council_inspect") and spec:
                 # Display the installed contract, not obsolete seeded descriptions.
                 value["description"] = spec.description
             value["schema"] = spec.parameters if spec else None
@@ -679,6 +680,11 @@ class Service:
             }
         ][:30]
         return value
+
+    def inspect_model(self, resource, entity_id=None, channel_id=None):
+        from .council_inspector import inspect
+
+        return inspect(self, resource, entity_id, channel_id)
 
     def inspect(self, resource, entity_id=None, channel_id=None):
         if resource == "version":
