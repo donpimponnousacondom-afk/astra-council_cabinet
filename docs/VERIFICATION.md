@@ -2,6 +2,13 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
 
+## Standalone simulated-tool laboratory (2026-09-15)
+
+- Extended only the standalone Featherless tester, its report generator and documentation/tests. Production prompts, plugins, bot configuration, notes and runtime remain unchanged. The new tool mode uses isolated JSON notebooks and fake web/email receipts; actual inference calls use the existing credential read-only.
+- **27 targeted tests passed** covering previous tester behavior, all five memory aliases, explicit usage and aggregated validation, replacement/deletion/read-back, native tool IDs and reasoning continuation, fake-only web/email effects, text-shaped call rejection, partial SSE evidence, retry without tool replay, HTML escaping and disclosed study exclusions. Ruff and diff checks passed.
+- A local Playwright check opened the self-contained HTML at 390×844: document width remained 390 pixels, model filtering hid nonmatching cases, and the screenshot was visually inspected. No dashboard build or council restart was needed.
+- Live study artifacts are stored outside source Git at `/home/codexy/.local/share/hortator/benchmarks/20260915-tool-calling-study/`. The roster uses bounded filtered discovery and individual metadata, including popularity/availability snapshots. An initial interleaved-model exploratory pass hit the account's explicit four-model-switches-per-minute 429 response; it was interrupted, retained with a disclosed exclusion, and replaced by serial model blocks. Subsequent study results and interpretation belong to the report and dated evidence below, not assumptions based on that aborted schedule.
+
 ## Footer token counts (2026-09-15)
 
 - Added reasoning/thinking, completion and total placeholders to the existing per-bot footer configuration and modern editor. Reported counts take precedence; deterministic cl100k_base text estimates carry `~`. Missing reasoning is `none`, explicit upstream zero remains `0`. Estimates are separate from billing, context calibration and raw usage. No existing template, bot setting, prompt, memory or credential was changed.

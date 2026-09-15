@@ -38,6 +38,7 @@ from hortator.chat_response import (
     ResponseLimitError,
 )
 from hortator.provider import Completion
+from hortator.footer_tokens import measure_footer_tokens
 
 API = "https://api.featherless.ai"
 DATA = Path(os.environ.get("HORTATOR_DATA_DIR", Path.home() / ".local/share/hortator"))
@@ -57,6 +58,9 @@ METRICS = [
     "output_tokens",
     "output_count_source",
     "reasoning_tokens",
+    "reasoning_count_source",
+    "visible_tokens_estimate",
+    "tool_call_count",
     "ttft_ms",
     "first_visible_ms",
     "elapsed_s",
@@ -169,12 +173,13 @@ class Evidence:
         path = self.root / name
         with path.open("x", encoding="utf-8") as output:
             os.chmod(path, 0o600)
-            json.dump(self.redact(value), output, ensure_ascii=False, indent=2, allow_nan=False)
+            json.dump(self.redact(value), output, ensure_ascii=True, indent=2, allow_nan=False)
             output.write("\n")
         return str(path)
 
     def result(self, row):
         path = self.write(f"request-{uuid.uuid4().hex[:12]}.json", row)
+        row["record"] = path
         summary = {k: row.get(k) for k in METRICS}
         summary["record"] = path
         self.rows.append(summary)
@@ -398,8 +403,22 @@ class Tester:
             length = next_length
         return closest
 
-    async def request(self, model, messages, parameters, *, stream, purpose="benchmark", repeat=1):
+    async def request(
+        self,
+        model,
+        messages,
+        parameters,
+        *,
+        stream,
+        purpose="benchmark",
+        repeat=1,
+        tools=None,
+        tool_choice="auto",
+    ):
         body = {**copy.deepcopy(parameters), "model": model["id"], "messages": messages, "stream": stream}
+        if tools:
+            body["tools"] = copy.deepcopy(tools)
+            body["tool_choice"] = tool_choice
         if stream:
             body["stream_options"] = {"include_usage": True}
         else:
@@ -453,12 +472,14 @@ class Tester:
                                     len(result.content),
                                     len(result.reasoning_content),
                                     len(str(result.reasoning_details)),
+                                    len(str(result.tool_calls)),
                                 )
                                 done = parser.frame(frame)
                                 after = (
                                     len(result.content),
                                     len(result.reasoning_content),
                                     len(str(result.reasoning_details)),
+                                    len(str(result.tool_calls)),
                                 )
                                 if before != after and parser.activity():
                                     last = time.perf_counter()
@@ -475,6 +496,12 @@ class Tester:
                                 if len(raw) > MAX_RESPONSE:
                                     raise ValueError("Local diagnostic capture exceeded 128 MiB")
                             if response.status_code >= 400:
+                                try:
+                                    envelope = json.loads(raw).get("error")
+                                    if isinstance(envelope, dict):
+                                        row["upstream_error_code"] = envelope.get("code")
+                                except ValueError, AttributeError:
+                                    pass
                                 raise ValueError(
                                     f"HTTP {response.status_code}: {raw.decode('utf-8', errors='replace')}"
                                 )
@@ -503,20 +530,30 @@ class Tester:
                 if isinstance(exc, TimeoutError)
                 else "transport"
                 if isinstance(exc, httpx.HTTPError)
+                else "upstream_http"
+                if row.get("http_status") and row["http_status"] >= 400
+                else "response_format"
+                if isinstance(exc, ValueError) and row.get("http_status") == 200
                 else "http_or_local"
             )
             row["exception_traceback"] = traceback.format_exc()
         finally:
             elapsed = time.perf_counter() - started if started else 0
             usage = result.usage
-            output = usage.get("completion_tokens")
-            source = "provider_usage" if isinstance(output, int) else "cl100k_base_estimate"
-            if not isinstance(output, int):
-                output = (
-                    local_tokens(result.content + result.reasoning_content) if parser.activity() else None
-                )
-            details = usage.get("completion_tokens_details") or {}
-            reasoning = details.get("reasoning_tokens", usage.get("reasoning_tokens"))
+            counts = await asyncio.to_thread(
+                measure_footer_tokens,
+                body,
+                usage,
+                result.content,
+                result.reasoning_content,
+                result.reasoning_details,
+                result.tool_calls,
+            )
+            output = counts["completion"]["value"] if parser.activity() or usage else None
+            source = (
+                "provider_usage" if counts["completion"]["source"] == "reported" else "cl100k_base_estimate"
+            )
+            reasoning = counts["reasoning"]["value"]
             row.update(
                 elapsed_s=round(elapsed, 3),
                 finish_reason=result.finish_reason,
@@ -529,6 +566,7 @@ class Tester:
                 output_tokens=output,
                 output_count_source=source if output is not None else "unknown",
                 reasoning_tokens=reasoning,
+                reasoning_count_source=counts["reasoning"]["source"],
                 visible_tokens_estimate=local_tokens(result.content),
                 reasoning_tokens_estimate=local_tokens(result.reasoning_content),
                 input_tokens=usage.get("prompt_tokens"),
@@ -537,6 +575,10 @@ class Tester:
                 content=result.content,
                 reasoning_content=result.reasoning_content,
                 reasoning_details=result.reasoning_details,
+                tool_calls=result.tool_calls,
+                tool_call_count=len(result.tool_calls),
+                assistant_message=result.message(),
+                token_evidence=counts,
                 diagnostics=result.response_diagnostics,
                 raw_response=raw.decode("utf-8", errors="replace"),
                 raw_response_note="SSE events reconstructed after framing; JSON body as received. Local limit 128 MiB.",
@@ -721,6 +763,63 @@ def parser():
     p.add_argument("--retry-delay", type=positive, default=10)
     p.add_argument("--show-reasoning", action="store_true")
     p.add_argument("--show-output", action="store_true")
+    p.add_argument(
+        "--tools",
+        default="",
+        help="Simulated tools, comma-separated; all enables the eight fixtures. Omit for no tools.",
+    )
+    p.add_argument("--disable-tools", default="", help="Comma-separated simulated tool names to remove")
+    p.add_argument(
+        "--tool-suite",
+        choices=["custom", "baseline"],
+        default="custom",
+        help="Custom uses --prompt; baseline runs identical memory CRUD/web/email tasks",
+    )
+    p.add_argument(
+        "--tool-exposure",
+        choices=["isolated", "all"],
+        default="isolated",
+        help="Baseline exposes one selected name per case, or all enabled tools",
+    )
+    p.add_argument("--tool-guidance", choices=["runtime", "simple", "none"], default="runtime")
+    p.add_argument(
+        "--tool-prompt-file", type=Path, help="Replace only the tester's tool guidance with editable text"
+    )
+    p.add_argument(
+        "--tool-schema",
+        choices=["runtime", "conditional", "simple"],
+        default="runtime",
+        help="Runtime includes the {} usage wrapper; conditional omits it; simple also omits conditionals. Validation stays strict.",
+    )
+    p.add_argument(
+        "--tool-choice",
+        choices=["auto", "required"],
+        default="auto",
+        help="Initial tool choice; later rounds use auto so the model can finish with text",
+    )
+    p.add_argument("--tool-rounds", type=positive, default=6)
+    p.add_argument(
+        "--tool-template-probe",
+        action="store_true",
+        help="Capture provider-rendered initial and first continuation templates (metadata only)",
+    )
+    p.add_argument("--tool-calls-per-round", type=positive, default=4)
+    p.add_argument(
+        "--model-switch-delay",
+        type=int,
+        default=16,
+        help="Tool mode: seconds between model blocks to avoid model-switch throttling",
+    )
+    p.add_argument(
+        "--tool-memory-file",
+        type=Path,
+        help="JSON baseline copied into independent per-case notebooks; original is never edited",
+    )
+    p.add_argument(
+        "--tool-fixtures-file",
+        type=Path,
+        help="JSON overrides for simulated web/email results; no external effects",
+    )
     p.add_argument("--data-dir", type=Path, default=DATA)
     p.add_argument("--provider-id", default="featherless")
     p.add_argument("--output", type=Path, help="New private report directory outside source Git")
@@ -797,6 +896,17 @@ async def main_async(options):
         if options.mode not in {"sse", "json", "both"}:
             raise ValueError("mode must be sse, json or both")
         params = parameters(options)
+        if options.tools:
+            from featherless_tools import names
+
+            if not set(names(options.tools)) - set(names(options.disable_tools)):
+                raise ValueError("Enable at least one simulated tool")
+            if options.model_switch_delay < 0:
+                raise ValueError("model-switch-delay must be zero or positive")
+            if options.input_tokens or options.generate_filler or options.filler_file:
+                raise ValueError(
+                    "Tool cases use explicit short prompts; filler options are not applied in tool mode. Supply larger text with --prompt/--system if needed."
+                )
         filler = (
             options.filler_file.read_text()
             if options.filler_file
@@ -831,6 +941,11 @@ async def main_async(options):
             "run.json",
             {
                 "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                "tool_lab_sha256": hashlib.sha256(
+                    Path(__file__).with_name("featherless_tools.py").read_bytes()
+                ).hexdigest()
+                if options.tools
+                else None,
                 "models": [m["id"] for m in models],
                 "parameters": params,
                 "options": {k: str(v) if isinstance(v, Path) else v for k, v in vars(options).items()},
@@ -839,12 +954,26 @@ async def main_async(options):
             },
         )
         try:
-            async with asyncio.TaskGroup() as group:
-                # Cold preflight starts first; metadata polling releases inference slots for warm models.
-                for model in sorted(models, key=lambda m: not needs_warmup(m)):
-                    group.create_task(tester.benchmark(model, filler, params), name="probe:" + model["id"])
+            if options.tools:
+                from featherless_tools import benchmark_tools
+
+                # One resident model at a time; workers parallelize its independent cases.
+                for index, model in enumerate(models):
+                    if index:
+                        await asyncio.sleep(options.model_switch_delay)
+                    await benchmark_tools(tester, model, params)
+            else:
+                async with asyncio.TaskGroup() as group:
+                    for model in sorted(models, key=lambda m: not needs_warmup(m)):
+                        group.create_task(
+                            tester.benchmark(model, filler, params), name="probe:" + model["id"]
+                        )
         finally:
             evidence.write("summary.json", evidence.rows)
+            if options.tools:
+                from featherless_report import build_report
+
+                evidence.log(f"HTML report: {build_report(evidence.root)}")
             evidence.log(
                 f"Finished; {len(evidence.rows)} inference attempts recorded. Results: {evidence.root / 'results.csv'}"
             )
