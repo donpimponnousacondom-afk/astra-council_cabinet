@@ -1,6 +1,14 @@
 # Discord attachment vision
 
-All bots receive actual image pixels through the same context and provider path. This is independent of the model name and does not require a vision plugin. A provider/model that rejects image input produces its ordinary visible upstream request failure; Hortator does not silently retry without the images. A provider could also accept a request without using its images, so HTTP success alone is not evidence of visual understanding.
+Bots with **Receive image inputs** enabled receive actual image pixels through the same context and provider path. This is independent of the model name and does not require a vision plugin. A provider/model that rejects image input produces its ordinary visible upstream request failure; Hortator does not silently retry without the images. A provider could also accept a request without using its images, so HTTP success alone is not evidence of visual understanding.
+
+## Per-bot image inputs
+
+**Bots → edit bot → Capabilities → Receive image inputs** controls `allow_images` (default true, including older records). Off disables automatic image capture for this bot's gateway observations and context preparation, and excludes pixels from every model request. Cached images belonging to shared channel history do not bypass the setting. Text, attachment metadata and other participants' written descriptions remain available, with `pixels_in_this_request:false` and explicit guidance that the operator disabled visual input. This is an intentional configuration choice, not an image-processing failure. Normal turn checkpoints still advance after a sent/silent turn, so re-enabling does not revive already-handled images.
+
+The provider serialization boundary also rejects unexpected structured image inputs for a disabled bot. Configuration saves cancel affected active turns through the existing lifecycle. The setting applies to the shared context path used by ordinary and slash turns; slash prompts currently carry text, not attachment inputs. This switch does not disable file imports, image generation or sending files, which are separate plugin capabilities, and it does not delete the shared image cache or Discord uploads.
+
+Bots may share one provider/model profile while only some receive images. To give two image-enabled bots different count/byte limits (for example one versus two images), clone their model profile and adjust its budgets; both profiles may use the exact same provider/model slug. Keep model profile image counts positive. Neither the per-bot switch nor the profile budgets claim that an upstream endpoint actually supports vision.
 
 ## Capture and durable storage
 

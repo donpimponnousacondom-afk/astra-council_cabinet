@@ -676,6 +676,28 @@ export function Editor({
                       <label>
                         <input
                           type="checkbox"
+                          aria-label="Receive image inputs"
+                          checked={draft.allow_images !== false}
+                          onChange={(e) =>
+                            set("allow_images", e.target.checked)
+                          }
+                        />
+                        <span>
+                          <strong>Receive image inputs</strong>
+                          <small>
+                            Send new attachment pixels to this bot's model. Turn
+                            off for text-only or faster bots: attachment
+                            metadata and conversation text remain available.
+                            Other bots sharing the model profile are unaffected.
+                            Image count and byte budgets stay in the model
+                            profile; enabling this does not guarantee provider
+                            vision support.
+                          </small>
+                        </span>
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
                           aria-label="Allow intentional silence"
                           checked={draft.allow_silence !== false}
                           onChange={(e) =>

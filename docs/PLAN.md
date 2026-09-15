@@ -1,5 +1,9 @@
 # Implementation and acceptance plan
 
+## Per-bot image input control (2026-09-15)
+
+The owner needs text-only and vision-enabled bots sharing one provider/model profile, without inferring upstream vision support. Add `bots.allow_images` (default true) and the modern **Receive image inputs** capability. Off skips automatic downloads for that bot and excludes even shared cached pixels from its requests; attachment metadata and written observations remain. The provider boundary rejects stray image parts. Profile image-count/byte budgets stay independent and positive; different positive budgets can use cloned profiles with the same upstream model. No existing bot configuration, context checkpoint or shared image cache is changed by installing this feature. Legacy UI remains frozen.
+
 ## Slash acknowledgement recovery and readable console time (2026-09-15)
 
 Follow-up tuning: the owner requested stronger boldness and contrast between

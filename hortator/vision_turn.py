@@ -5,10 +5,10 @@ import json
 from .vision import image_candidate, image_limits
 
 
-def select_images(rows, after_sequence, profile):
+def select_images(rows, after_sequence, profile, *, allow_images=True):
     """Prefer the newest unhandled attachments without modifying stored rows."""
     max_count, max_bytes = image_limits(profile)
-    selected, omitted, historical = [], [], 0
+    selected, omitted, historical, disabled = [], [], 0, 0
     total = 0
     for row in reversed(rows):
         if row.get("deleted"):
@@ -18,6 +18,9 @@ def select_images(rows, after_sequence, profile):
                 continue
             if row["seq"] <= after_sequence:
                 historical += 1
+                continue
+            if not allow_images:
+                disabled += 1
                 continue
             vision = attachment.get("vision") or {}
             if vision.get("status") != "ready":
@@ -42,10 +45,11 @@ def select_images(rows, after_sequence, profile):
             )
             total += size
     return {
-        "policy": "new_messages_per_turn",
+        "policy": "new_messages_per_turn" if allow_images else "bot_images_disabled",
         "after_sequence": after_sequence,
         "inputs": selected,
         "historical_images": historical,
+        "disabled_images": disabled,
         "budget_omitted": omitted,
     }
 

@@ -414,7 +414,7 @@ class ImageCache:
                     )
         return parts if len(parts) > 1 else text
 
-    def wire_messages(self, messages, profile=None):
+    def wire_messages(self, messages, profile=None, *, allow_images=True):
         max_images, max_bytes = image_limits(profile)
         result = copy.deepcopy(messages)
         count = total = 0
@@ -422,6 +422,11 @@ class ImageCache:
             if not isinstance(message.get("content"), list):
                 continue
             for part in message["content"]:
+                if not allow_images and part.get("type") in {"hortator_image", "image_url", "input_image"}:
+                    raise ControlError(
+                        "Image inputs are disabled for this bot; refusing to send pixels. "
+                        "Use a text-only context or enable Bots → Capabilities → Receive image inputs."
+                    )
                 if part.get("type") != "hortator_image":
                     continue
                 count += 1

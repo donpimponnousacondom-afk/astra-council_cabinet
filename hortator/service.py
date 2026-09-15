@@ -143,6 +143,7 @@ class Service:
             value["application_emojis"] = self.registry.application_emojis.prompt(value)
             value.update(footer_settings(value))
             value.setdefault("allow_silence", True)
+            value.setdefault("allow_images", True)
             value.setdefault("memory_char_limit", SCHEMAS["bots"].model_fields["memory_char_limit"].default)
             value.setdefault(
                 "global_memory_char_limit", SCHEMAS["bots"].model_fields["global_memory_char_limit"].default

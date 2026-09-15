@@ -204,7 +204,7 @@ class SlashContexts(ContextBuilder):
             }
         ]
         self.store.context(bot["id"], channel_id)
-        image_plan = select_images([], 0, profile)
+        image_plan = select_images([], 0, profile, allow_images=bot.get("allow_images", True))
         _, meta = await self.assemble(bot, profile, channel_id, rows, "", tools=tools, image_plan=image_plan)
         meta.update(checkpoint=0, calibration_factor=1)
         if meta["estimated_tokens"] + profile["response_tokens"] >= profile["context_window"]:

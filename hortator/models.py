@@ -175,6 +175,7 @@ class Bot(Entity):
     cooldown_seconds: float = Field(default=60, ge=1, le=86400)
     evaluate_when_idle: bool = True
     allow_silence: bool = True
+    allow_images: bool = True
     memory_char_limit: int = Field(
         default=DEFAULT_MEMORY_CHAR_LIMIT, ge=1, le=DEFAULT_MEMORY_CHAR_LIMIT, strict=True
     )
