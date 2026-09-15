@@ -205,7 +205,12 @@ async def test_missing_sse_finish_is_format_failure_with_partial_evidence(tmp_pa
     assert row["content"] == "green" and row["finish_reason"] is None
 
 
-async def test_transient_retry_reuses_context_without_replaying_executed_tool(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "status,code,delay", [(429, "model_switching_limit_exceeded", 65), (524, "edge_timeout", 1)]
+)
+async def test_transient_retry_reuses_context_without_replaying_executed_tool(
+    tmp_path, monkeypatch, status, code, delay
+):
     waits, inputs = [], []
 
     async def sleep(delay):
@@ -225,9 +230,7 @@ async def test_transient_retry_reuses_context_without_replaying_executed_tool(tm
                 200, json={"choices": [{"message": message, "finish_reason": "tool_calls"}]}
             )
         if len(inputs) == 2:
-            return httpx.Response(
-                429, json={"error": {"code": "model_switching_limit_exceeded", "message": "wait"}}
-            )
+            return httpx.Response(status, json={"error": {"code": code, "message": "wait"}})
         return httpx.Response(
             200, json={"choices": [{"message": {"content": "AMBER-42"}, "finish_reason": "stop"}]}
         )
@@ -244,7 +247,7 @@ async def test_transient_retry_reuses_context_without_replaying_executed_tool(tm
             prompt="Fetch it",
         )
     assert result["success"] and len(result["calls"]) == 1
-    assert inputs[1] == inputs[2] and waits == [65]
+    assert inputs[1] == inputs[2] and waits == [delay]
 
 
 def test_report_discloses_excluded_cases_without_counting_them(tmp_path):
@@ -342,3 +345,29 @@ def test_report_matched_comparison_keeps_tuning_failures_visible(tmp_path):
     matrix = report.split('id="matrix"', 1)[1].split("</table>", 1)[0]
     assert ">1/1</td>" in matrix and ">1/2</td>" not in matrix
     assert "Matched baseline only" in report and "tuning" in report and "output_limit" in report
+
+
+def test_report_standalone_control_excludes_reasoning_and_raw_continuation(tmp_path):
+    from featherless_report import build_report
+
+    (tmp_path / "request-control.json").write_text(
+        json.dumps(
+            {
+                "model": "reference/model",
+                "status": "failed",
+                "mode": "json",
+                "purpose": "benchmark",
+                "finish_reason": None,
+                "content": "OK",
+                "reasoning_content": "PRIVATE_REASONING",
+                "raw_response": "PRIVATE_RAW",
+                "request_body": {"messages": [{"reasoning_content": "PRIVATE_CONTINUATION"}]},
+                "reasoning_tokens": 42,
+            }
+        )
+    )
+    (tmp_path / "findings.md").write_text("## Control\n\n<script>bad()</script>")
+    report = build_report(tmp_path).read_text()
+    assert "reference/model" in report and "Standalone controls" in report
+    assert "PRIVATE_" not in report
+    assert "reasoning_tokens&quot;: 42" in report and "&lt;script&gt;" in report

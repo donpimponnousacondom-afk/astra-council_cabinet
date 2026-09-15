@@ -133,9 +133,9 @@ Fixtures are labelled simulated. A status value does not imply a real request or
 
 ### Tool reports
 
-Report token totals include failed attempts and captured partial output; timing medians use completed responses. Missing reasoning stays distinct from explicit zero, and malformed Unicode code units are displayed as escapes instead of breaking the HTML export.
+Report token totals include failed attempts and captured partial output; timing medians use completed responses. The stored `argument_errors` counter counts rejected calls, including unknown tool names and malformed JSON; inspect the trace for the actual cause. Missing reasoning stays distinct from explicit zero, and malformed Unicode code units are displayed as escapes instead of breaking the HTML export.
 
-Every tool run writes `report.html`, `case-input-*.json`, `case-result-*.json`, `memory-*.json` and the usual private request evidence. The report is self-contained and readable on mobile. It includes exact prompts/schemas, operation checks, argument repairs, native tool traces, TTFT/TPS, completion/reasoning counts and their provenance. Provider reasoning text remains in adjacent private request files rather than the HTML. Rebuild one run or aggregate several runs with:
+Every tool run writes `report.html`, `case-input-*.json`, `case-result-*.json`, `memory-*.json` and the usual private request evidence. The report is self-contained and readable on mobile. It includes exact prompts/schemas, operation checks, argument repairs, native tool traces, TTFT/TPS, completion/reasoning counts and their provenance. Dedicated provider reasoning fields remain in adjacent private request files rather than the HTML. Malformed ordinary assistant content is shown as received and may contain reasoning markers; the report remains private evidence. Rebuild one run or aggregate several runs with:
 
 ```bash
 uv run python featherless_report.py /absolute/path/to/benchmark-directory
@@ -152,7 +152,7 @@ Compare identical settings before attributing differences to tool names. A provi
 Each run creates a new private directory under `$HORTATOR_DATA_DIR/benchmarks/` (default `~/.local/share/hortator/benchmarks/`). Use `--output /absolute/new/directory` to choose another location outside the source checkout. Directories are 0700 and files 0600; credentials are redacted. Do not commit these artifacts.
 
 - `catalog.json`: chosen model metadata and plan; `metadata-*.json`: bounded raw metadata responses/headers.
-- `run.json`: options, exact model IDs, request parameters, script and filler hashes.
+- `run.json`: options, exact model IDs, request parameters, script and filler hashes. New runs capture inference-module source hashes at import, so later disk edits cannot relabel code already loaded in a long-running study process.
 - `filler.txt`: reusable reference corpus; `prompt-*.json`: complete measured prompts and fit checks.
 - `request-*.json`: every warm-up/filler/benchmark attempt, request, HTTP headers, original error, partial output, reasoning, usage and diagnostics. SSE events are reconstructed after framing; raw capture is bounded to 128 MiB, with an explicit failure if exceeded.
 - `results.csv` and `summary.json`: measurements and links to complete per-request evidence. Interrupted requests preserve partial evidence; Ctrl-C cancels and joins owned work.

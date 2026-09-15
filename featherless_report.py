@@ -23,6 +23,22 @@ def load(path):
     return json.loads(path.read_text())
 
 
+def findings_html(text):
+    """Render plain report paragraphs/headings, never arbitrary embedded HTML."""
+    blocks = []
+    for block in text.strip().split("\n\n"):
+        lines = block.splitlines()
+        if len(lines) == 1 and lines[0].startswith("#"):
+            level = min(4, len(lines[0]) - len(lines[0].lstrip("#")) + 1)
+            blocks.append(f"<h{level}>{esc(lines[0].lstrip('# ').strip())}</h{level}>")
+        elif block.startswith("```") or any(" | " in line for line in lines):
+            # Keep literal tables/commands available without claiming full Markdown support.
+            blocks.append(f'<pre class="source-block">{esc(block)}</pre>')
+        else:
+            blocks.append(f"<p>{esc(block).replace(chr(10), '<br>')}</p>")
+    return "".join(blocks)
+
+
 def build_report(root):
     root = Path(root).resolve()
     comparison_path = root / "comparison.json"
@@ -155,7 +171,7 @@ def build_report(root):
                 f"<h4>Final answer</h4><pre>{esc(case['final'])}</pre>"
                 f"<h4>Unconfirmed partial visible output (never accepted as a final answer)</h4><pre>{esc(case.get('partial_content', ''))}</pre>"
                 f"<h4>Per-request performance</h4><pre>{esc(json.dumps(case['metrics'], indent=2))}</pre>"
-                f"<p>Raw provider responses and private reasoning remain in the adjacent request JSON files. This HTML embeds no private reasoning text.</p></details></td></tr>"
+                f"<p>Raw provider responses and dedicated private reasoning fields remain in the adjacent request JSON files. This HTML omits dedicated reasoning fields. Malformed ordinary assistant content is shown as received and may itself contain reasoning markers.</p></details></td></tr>"
             )
     variant_rows = []
     for key, group in sorted(variants.items()):
@@ -189,7 +205,7 @@ def build_report(root):
         )
     notes_path = root / "findings.md"
     findings = (
-        f'<section><h2>Findings</h2><pre class="prose">{esc(notes_path.read_text())}</pre></section>'
+        f"<section><h2>Findings</h2>{findings_html(notes_path.read_text())}</section>"
         if notes_path.exists()
         else ""
     )
@@ -197,6 +213,53 @@ def build_report(root):
     selection = (
         f"<details><summary>Model selection, popularity and availability evidence</summary><pre>{esc(json.dumps(load(metadata_path), ensure_ascii=False, indent=2))}</pre></details>"
         if metadata_path.exists()
+        else ""
+    )
+    linked_requests = {str(Path(p).resolve()) for c in cases for p in c.get("requests", []) if p}
+    standalone_rows = []
+    for path in sorted(root.rglob("request-*.json")):
+        if str(path.resolve()) in linked_requests:
+            continue
+        request = load(path)
+        if "model" not in request or "status" not in request:
+            continue
+        evidence = {
+            k: request.get(k)
+            for k in (
+                "model",
+                "mode",
+                "purpose",
+                "status",
+                "http_status",
+                "finish_reason",
+                "error",
+                "error_origin",
+                "elapsed_s",
+                "ttft_ms",
+                "stream_tps",
+                "e2e_tps",
+                "input_tokens",
+                "output_tokens",
+                "output_count_source",
+                "reasoning_tokens",
+                "reasoning_count_source",
+                "visible_tokens_estimate",
+                "content",
+            )
+        }
+        standalone_rows.append(
+            f"<tr><th>{esc(request['model'])}</th><td>{esc(path.parent.name)}</td>"
+            f"<td>{esc(request.get('mode'))} / {esc(request.get('purpose'))}</td>"
+            f"<td>{esc(request['status'])} / HTTP {esc(request.get('http_status'))} / finish {esc(request.get('finish_reason'))}</td>"
+            f"<td><details><summary>Response metrics and visible output</summary><pre>{esc(json.dumps(evidence, ensure_ascii=False, indent=2))}</pre></details></td></tr>"
+        )
+    standalone = (
+        "<section><h2>Standalone controls and unlinked partial attempts</h2>"
+        "<p>These requests are not scored as tool workflows. They include no-tool controls and interrupted attempts retained before a case could link its response. Exact settings remain in the run manifests and private request files.</p>"
+        '<details><summary>Open request records</summary><div class="scroll"><table><thead><tr><th>Model</th><th>Run</th><th>Mode / purpose</th><th>Outcome</th><th>Evidence</th></tr></thead><tbody>'
+        + "".join(standalone_rows)
+        + "</tbody></table></div></details></section>"
+        if standalone_rows
         else ""
     )
     document = f"""<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -208,12 +271,12 @@ def build_report(root):
 <label for="filter">Filter by model, tool, prompt variant or result</label><input id="filter" placeholder="e.g. gemma, annotations, upstream_error">
 <section><h2>Failure labels</h2><ul><li><b>text_instead_of_tool:</b> no native call executed; ordinary text may contain plausible JSON arguments.</li><li><b>task_incorrect:</b> calls executed, but an explicitly requested step, exact argument, final state or answer check was missing. This does not mean the tool syntax was invalid.</li><li><b>response_format:</b> the received response did not establish a valid complete message, including missing finish_reason. Partial text and successful earlier operations remain visible.</li><li><b>upstream_http / upstream_error:</b> the server rejected the request, including error envelopes carried inside HTTP 200. These do not measure the model's ability to call tools.</li><li><b>output_limit / tool_round_budget / local_deadline:</b> the configured experiment bound was reached; a larger bound is a different experiment, not evidence that the original task completed.</li></ul></section>
 <section><h2>Model/tool matrix and performance</h2><p>{esc(comparison_description)}</p><div class="scroll"><table id="matrix"><thead><tr><th>Model</th><th>Fetch</th><th>Search</th><th>Email</th><th>Global memory</th><th>Memory</th><th>Remember</th><th>Notes</th><th>Annotations</th><th>Median TTFT ms</th><th>Median TPS</th><th>Median E2E TPS</th><th>Reasoning tokens Σ</th><th>Completion tokens Σ</th><th>Visible estimate Σ</th><th>Failures</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>
-<section><h2>Individual cases: exact prompts and results</h2><div class="scroll"><table id="cases"><thead><tr><th>Model/run</th><th>Tool</th><th>Mode / guidance / schema</th><th>Outcome</th><th>Errors / help calls</th><th>Evidence</th></tr></thead><tbody>{"".join(detail_rows)}</tbody></table></div></section>
-<section><h2>Controlled variants: compare matching settings</h2><div class="scroll"><table><thead><tr><th>Model</th><th>Run</th><th>Mode / guidance / schema</th><th>Native parameters</th><th>Passes / cases</th><th>Argument errors</th><th>TTFT ms</th><th>TPS</th><th>E2E TPS</th><th>Reasoning Σ / availability</th><th>Median reasoning / request</th><th>Failures</th></tr></thead><tbody>{"".join(variant_rows)}</tbody></table></div></section>
+<section><h2>Individual cases: exact prompts and results</h2><details id="case-details"><summary>Open all {len(cases)} case records (also opens when filtering)</summary><div class="scroll"><table id="cases"><thead><tr><th>Model/run</th><th>Tool</th><th>Mode / guidance / schema</th><th>Outcome</th><th>Errors / help calls</th><th>Evidence</th></tr></thead><tbody>{"".join(detail_rows)}</tbody></table></div></details></section>
+<section><h2>Controlled variants: compare matching settings</h2><div class="scroll"><table><thead><tr><th>Model</th><th>Run</th><th>Mode / guidance / schema</th><th>Native parameters</th><th>Passes / cases</th><th>Rejected calls</th><th>TTFT ms</th><th>TPS</th><th>E2E TPS</th><th>Reasoning Σ / availability</th><th>Median reasoning / request</th><th>Failures</th></tr></thead><tbody>{"".join(variant_rows)}</tbody></table></div></section>
 <section><h2>Memory workflow checks independently of final delivery</h2><p>A model can complete every note operation and still fail final-response validation. Counts use the same selected scope as the matrix and show steps satisfied in the requested order / attempted cases. An operation performed out of order may fail its step check even when the final notebook is correct; inspect the native call trace. Unconfirmed final text is not accepted.</p><div class="scroll"><table><thead><tr><th>Model</th><th>Alias</th><th>Read</th><th>Write</th><th>Replace</th><th>Delete</th><th>Read back</th><th>Exact state</th><th>Final answer</th></tr></thead><tbody>{"".join(operation_rows)}</tbody></table></div></section>
-<section><h2>Reproduction and selection</h2>{selection}{"".join(manifests)}</section>
+{standalone}<section><h2>Reproduction and selection</h2>{selection}{"".join(manifests)}</section>
 <section><h2>Documentation consulted</h2><p><a href="https://featherless.ai/docs/api-reference-models">Models, popularity and availability</a> · <a href="https://featherless.ai/docs/chat-template-kwargs">Thinking and template controls</a> · <a href="https://featherless.ai/docs/tool-calling">Tool calling</a> · <a href="https://featherless.ai/docs/api-reference-error-codes">Error codes</a>. Live observations in this report are backed by the adjacent recorded responses.</p></section></main>
-<script>document.querySelector('#filter').addEventListener('input',e=>{{const q=e.target.value.toLowerCase();document.querySelectorAll('tbody tr').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(q));}});</script></html>"""
+<script>document.querySelector('#filter').addEventListener('input',e=>{{const q=e.target.value.toLowerCase();document.querySelector('#case-details').open=Boolean(q);document.querySelectorAll('tbody tr').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(q));}});</script></html>"""
     path = root / "report.html"
     path.write_text(document)
     path.chmod(0o600)

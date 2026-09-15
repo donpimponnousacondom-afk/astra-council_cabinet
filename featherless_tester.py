@@ -40,6 +40,7 @@ from hortator.chat_response import (
 from hortator.provider import Completion
 from hortator.footer_tokens import measure_footer_tokens
 
+SOURCE_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 API = "https://api.featherless.ai"
 DATA = Path(os.environ.get("HORTATOR_DATA_DIR", Path.home() / ".local/share/hortator"))
 ENCODER = tiktoken.get_encoding("cl100k_base")
@@ -625,6 +626,27 @@ class Tester:
         )
         return model if result["status"] in {"completed", "length"} else None
 
+    def retry_wait(self, result):
+        """Shared retry eligibility for tool and ordinary benchmark requests."""
+        if result.get("status") in {"completed", "length", "cancelled"}:
+            return None
+        status = result.get("http_status")
+        retryable = (
+            status in (408, 429)
+            or isinstance(status, int)
+            and 500 <= status < 600
+            or result.get("error_origin") in {"transport", "local_deadline"}
+            or result.get("upstream_error_code")
+            in {"capacity_exhausted", "rate_limit_exceeded", "server_error"}
+        )
+        if not retryable:
+            return None
+        return (
+            max(self.options.retry_delay, 65)
+            if result.get("upstream_error_code") == "model_switching_limit_exceeded"
+            else self.options.retry_delay
+        )
+
     async def benchmark(self, model, filler, parameters):
         try:
             model = await self.ready(model)
@@ -663,15 +685,11 @@ class Tester:
                         result = await self.request(model, messages, parameters, stream=stream, repeat=repeat)
                         if result["status"] in {"completed", "length"}:
                             break
-                        retry = (
-                            result["http_status"] in {408, 429, 500, 502, 503, 504}
-                            or result.get("error_origin") in {"transport", "local_deadline"}
-                            or result.get("upstream_error_code")
-                            in {"capacity_exhausted", "rate_limit_exceeded", "server_error"}
-                        )
-                        if not retry or attempt == self.options.retries:
+                        delay = self.retry_wait(result)
+                        if delay is None or attempt == self.options.retries:
                             break
-                        await asyncio.sleep(self.options.retry_delay)
+                        self.evidence.log(f"Retrying same request after {delay}s")
+                        await asyncio.sleep(delay)
                     if self.options.show_reasoning and result.get("reasoning_content"):
                         self.evidence.log(f"Reasoning {model['id']}: {result['reasoning_content']}")
                     if self.options.show_output and result.get("content"):
@@ -943,15 +961,16 @@ async def main_async(options):
         corpus = evidence.root / "filler.txt"
         corpus.write_text(evidence.redact(filler))
         corpus.chmod(0o600)
+        tool_source_hash = None
+        if options.tools:
+            from featherless_tools import SOURCE_SHA256 as tool_source_hash, benchmark_tools
+
         evidence.write(
             "run.json",
             {
-                "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                "tool_lab_sha256": hashlib.sha256(
-                    Path(__file__).with_name("featherless_tools.py").read_bytes()
-                ).hexdigest()
-                if options.tools
-                else None,
+                "script_sha256": SOURCE_SHA256,
+                "tool_lab_sha256": tool_source_hash,
+                "source_hash_basis": "Module source captured at import, preserved across calls in this process",
                 "models": [m["id"] for m in models],
                 "parameters": params,
                 "options": {k: str(v) if isinstance(v, Path) else v for k, v in vars(options).items()},
@@ -961,8 +980,6 @@ async def main_async(options):
         )
         try:
             if options.tools:
-                from featherless_tools import benchmark_tools
-
                 # One resident model at a time; workers parallelize its independent cases.
                 for index, model in enumerate(models):
                     if index:

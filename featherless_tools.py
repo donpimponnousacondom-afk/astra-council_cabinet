@@ -4,6 +4,7 @@ import asyncio
 import copy
 import hashlib
 import json
+from pathlib import Path
 import uuid
 from urllib.parse import quote
 
@@ -11,6 +12,7 @@ import httpx
 
 from hortator.tool_feedback import feedback, parse_arguments, usage, with_usage
 
+SOURCE_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 MEMORY_NAMES = ("global_memory", "memory", "remember", "notes", "annotations")
 TOOL_NAMES = ("web_fetch", "web_search", "send_email", *MEMORY_NAMES)
 BASE_MEMORY = {"project": "Orion", "obsolete": "old fixture"}
@@ -371,19 +373,9 @@ async def run_case(tester, model, parameters, *, stream, name, enabled, prompt, 
                     tool_choice=options.tool_choice if round_index == 0 else "auto",
                 )
                 rows.append(row)
-                retry = (
-                    row.get("http_status") in (408, 429, 500, 502, 503, 504)
-                    or row.get("error_origin") in ("transport", "local_deadline")
-                    or row.get("upstream_error_code")
-                    in ("capacity_exhausted", "rate_limit_exceeded", "server_error")
-                )
-                if row["status"] in ("completed", "length") or not retry or attempt == options.retries:
+                delay = tester.retry_wait(row)
+                if delay is None or attempt == options.retries:
                     break
-                delay = (
-                    max(options.retry_delay, 65)
-                    if row.get("upstream_error_code") == "model_switching_limit_exceeded"
-                    else options.retry_delay
-                )
                 evidence.log(
                     f"Retrying same request after {delay}s: {row.get('upstream_error_code') or row.get('error_origin')}"
                 )
