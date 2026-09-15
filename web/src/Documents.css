@@ -1,0 +1,53 @@
+.document-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+.document-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.document-heading h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.document-card {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.document-card h4 {
+  margin: 0 0 5px;
+  font: 12px var(--mono);
+}
+.document-card p {
+  margin: 5px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.document-card a {
+  color: #9cdcfe;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.document-card a svg {
+  vertical-align: middle;
+}
+.document-card summary {
+  cursor: pointer;
+  padding: 5px 0;
+  font-size: 12px;
+}
+.document-card li {
+  padding: 3px 0;
+  font: 11px/1.5 var(--mono);
+}
+.document-card .badge {
+  margin-bottom: 3px;
+}

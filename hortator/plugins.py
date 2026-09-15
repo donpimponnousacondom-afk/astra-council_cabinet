@@ -1,0 +1,784 @@
+from __future__ import annotations
+
+import asyncio
+import base64
+import importlib.metadata
+import ipaddress
+import json
+import socket
+import time
+from dataclasses import dataclass, replace
+from html.parser import HTMLParser
+from typing import Any, Awaitable, Callable
+from urllib.parse import urljoin, urlparse
+
+import aiohttp
+import httpx
+from jsonschema import Draft202012Validator
+
+from .models import ControlError
+from .memory_budget import DEFAULT_MEMORY_CHAR_LIMIT, NOTE_CHAR_LIMIT, budget_for, describe_budget
+from .fetched_documents import (
+    DEFAULTS as FETCH_DEFAULTS,
+    DESCRIPTION as FETCH_DESCRIPTION,
+    PARAMETERS as FETCH_PARAMETERS,
+)
+from .store import dumps, uid
+from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage, with_usage
+from .working_set import ToolEvidence
+from .concurrency import error_text
+from .timekeeping import council_timezone, present_times
+from .web_search import (
+    DEFAULTS as SEARCH_DEFAULTS,
+    DESCRIPTION as SEARCH_DESCRIPTION,
+    PARAMETERS as SEARCH_PARAMETERS,
+)
+
+
+def schema(properties, required=()):
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": list(required),
+        "additionalProperties": False,
+    }
+
+
+STR = {"type": "string"}
+MEMORY_DESCRIPTION = (
+    'Always include operation. Write: {"operation":"write","key":"topic","value":"Concise note"}. '
+    'Read all notes: {"operation":"read"}. Delete: {"operation":"delete","key":"topic"}. '
+    "Sending only key/value is invalid; never omit operation. {} returns usage, not notes. "
+    "Notes belong only to this bot and channel; other bots/channels are inaccessible. Writes replace that key's value. "
+)
+
+
+def function(name, description, parameters):
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description + " Call with {} for usage only; no action is executed.",
+            "parameters": with_usage(parameters),
+        },
+    }
+
+
+ATTACH = function(
+    "discord_attach",
+    "Prepare files for your next ordinary text answer. This does not post or end your turn. "
+    "Use artifact IDs created in this turn; an optional reply_to must be a message ID in this context. "
+    "The list replaces your previous selection; [] clears it. After preparation, write your answer "
+    "as normal assistant content. No tool is needed for an answer without files.",
+    schema(
+        {
+            "reply_to": STR,
+            "artifact_ids": {"type": "array", "items": STR, "maxItems": 4},
+        },
+        ("artifact_ids",),
+    ),
+)
+SILENCE = function(
+    "council_silence",
+    "Choose to listen without posting. Ends this activation. Give only a short operational label, not private reasoning.",
+    schema({"label": {"type": "string", "maxLength": 200}}, ("label",)),
+)
+
+
+class PublicResolver(aiohttp.abc.AbstractResolver):
+    """Validate and pin the actual DNS answers used by the socket (including redirects)."""
+
+    async def resolve(self, host, port=0, family=socket.AF_INET):
+        infos = await asyncio.get_running_loop().getaddrinfo(
+            host, port, family=family, type=socket.SOCK_STREAM
+        )
+        out = []
+        for fam, _, proto, _, address in infos:
+            ip = ipaddress.ip_address(address[0])
+            if not ip.is_global or ip.is_multicast:
+                raise ControlError("web_fetch cannot access private, local, reserved, or multicast addresses")
+            out.append(
+                {
+                    "hostname": host,
+                    "host": str(ip),
+                    "port": port,
+                    "family": fam,
+                    "proto": proto,
+                    "flags": socket.AI_NUMERICHOST,
+                }
+            )
+        return out
+
+    async def close(self):
+        pass
+
+
+def public_url(url):
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+        raise ControlError("Only public HTTP(S) URLs without credentials are allowed")
+    if parsed.port not in (None, 80, 443):
+        raise ControlError("Web tools allow ports 80 and 443")
+    try:
+        address = ipaddress.ip_address(parsed.hostname)
+    except ValueError:
+        if parsed.hostname.lower() == "localhost" or parsed.hostname.lower().endswith(".localhost"):
+            raise ControlError("Local addresses are not allowed")
+    else:
+        if not address.is_global or address.is_multicast:
+            raise ControlError("Private addresses are not allowed")
+    return url
+
+
+async def fetch_public_response(url, limit=1_000_000):
+    from .http_evidence import HTTPResponse, headers_evidence
+
+    connector = aiohttp.TCPConnector(resolver=PublicResolver(), use_dns_cache=False)
+    timeout = aiohttp.ClientTimeout(total=25)
+    redirects, remaining = [], limit
+    async with aiohttp.ClientSession(
+        connector=connector, timeout=timeout, trust_env=False, cookie_jar=aiohttp.DummyCookieJar()
+    ) as session:
+        for index in range(6):
+            public_url(url)
+            async with session.get(
+                url, allow_redirects=False, headers={"User-Agent": "Hortator/0.1"}
+            ) as response:
+                data, complete = bytearray(), True
+                transport_error = None
+                try:
+                    async for chunk in response.content.iter_chunked(65536):
+                        available = max(0, remaining - len(data))
+                        data.extend(chunk[:available])
+                        if len(chunk) > available:
+                            complete = False
+                            break
+                except (aiohttp.ClientError, TimeoutError) as exc:
+                    complete = False
+                    transport_error = error_text(exc)
+                received = HTTPResponse(
+                    bytes(data),
+                    response.headers.get("Content-Type", ""),
+                    str(response.url),
+                    response.status,
+                    getattr(response, "reason", None),
+                    headers_evidence(response.headers.items()),
+                    list(redirects),
+                    complete,
+                    limit,
+                    None
+                    if complete
+                    else "Configured response download byte limit reached; capture is partial",
+                )
+                received.transport_error = transport_error
+                if transport_error:
+                    received.local_issue = "Response body was interrupted; capture is partial"
+                remaining -= len(data)
+                if response.status in (301, 302, 303, 307, 308) and complete:
+                    target = response.headers.get("Location")
+                    if target and index < 5:
+                        redirects.append({k: v for k, v in received.evidence().items() if k != "redirects"})
+                        next_url = urljoin(url, target)
+                        try:
+                            public_url(next_url)
+                        except ControlError as exc:
+                            received.local_issue = str(exc)
+                            return received
+                        url = next_url
+                        continue
+                    received.local_issue = (
+                        "Redirect target missing" if not target else "Redirect request limit reached"
+                    )
+                return received
+
+
+async def fetch_public(url, limit=1_000_000):
+    # Existing binary media callers still require a successful complete download.
+    response = await fetch_public_response(url, limit)
+    if response.status >= 400:
+        raise ControlError(f"Web request returned HTTP {response.status}")
+    if not response.complete:
+        raise ControlError(f"Response exceeds the {limit} byte limit")
+    if response.local_issue:
+        raise ControlError(response.local_issue)
+    return response.data, response.content_type, response.url
+
+
+class ExtractText(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.skip = 0
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style", "noscript"):
+            self.skip += 1
+        if tag in ("p", "div", "br", "li", "h1", "h2", "h3"):
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "noscript"):
+            self.skip = max(0, self.skip - 1)
+
+    def handle_data(self, data):
+        if not self.skip:
+            self.parts.append(data)
+
+
+@dataclass
+class ToolContext:
+    bot: dict
+    channel_id: str
+    turn_id: str
+    owner_verified: bool = False
+
+
+@dataclass
+class PluginSpec:
+    id: str
+    name: str
+    description: str
+    parameters: dict
+    handler: Callable[[dict, ToolContext, dict, str], Awaitable[Any]]
+    defaults: dict
+    owner_only: bool = False
+    model_tool: bool = True
+
+
+class Registry:
+    def __init__(self, store, vault, directory, inspect):
+        self.store, self.vault = store, vault
+        from .application_emojis import ApplicationEmojis
+
+        self.application_emojis = ApplicationEmojis(store)
+        self.directory = directory / "artifacts"
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.inspect = inspect
+        self.discord_dispatch = None
+        self.evidence = ToolEvidence(store, vault)
+        from .documents import DocumentSites, DEFAULTS, DESCRIPTION, PARAMETERS
+
+        self.documents = DocumentSites(store, directory, vault)
+        self.specs: dict[str, PluginSpec] = {}
+        self.register(
+            PluginSpec(
+                "document_site",
+                "Documents & local sites",
+                DESCRIPTION,
+                PARAMETERS,
+                self.documents.call,
+                DEFAULTS,
+            )
+        )
+        self.register(
+            PluginSpec(
+                "web_fetch",
+                "Web fetch",
+                FETCH_DESCRIPTION,
+                FETCH_PARAMETERS,
+                self.web_fetch,
+                FETCH_DEFAULTS,
+            )
+        )
+        self.register(
+            PluginSpec(
+                "web_search",
+                "Web search",
+                SEARCH_DESCRIPTION,
+                SEARCH_PARAMETERS,
+                self.web_search,
+                SEARCH_DEFAULTS,
+            )
+        )
+        self.register(
+            PluginSpec(
+                "image_generation",
+                "Image generation",
+                "Generate an image from a prompt. Returns an artifact ID for discord_attach, then answer normally.",
+                schema({"prompt": {"type": "string", "minLength": 1, "maxLength": 8000}}, ("prompt",)),
+                self.image_generation,
+                {
+                    "endpoint": "https://api.openai.com/v1/images/generations",
+                    "request_json": {"model": "gpt-image-1", "size": "1024x1024"},
+                },
+            )
+        )
+        self.register(
+            PluginSpec(
+                "tts",
+                "Text to speech",
+                "Generate an audio attachment from text. Returns an artifact ID.",
+                schema({"text": {"type": "string", "minLength": 1, "maxLength": 4000}}, ("text",)),
+                self.tts,
+                {
+                    "endpoint": "https://api.openai.com/v1/audio/speech",
+                    "request_json": {"model": "tts-1", "voice": "alloy", "response_format": "mp3"},
+                },
+            )
+        )
+        self.register(
+            PluginSpec(
+                "memory",
+                "Private memory",
+                MEMORY_DESCRIPTION
+                + f"Each bot has a 1–{DEFAULT_MEMORY_CHAR_LIMIT:,} character budget per channel (default {DEFAULT_MEMORY_CHAR_LIMIT:,}), with 5% temporary headroom and at most {NOTE_CHAR_LIMIT:,} per note. Over budget, shrink/delete notes before adding more. Disable the plugin to stop memory tools and automatic note injection; stored notes are preserved.",
+                schema(
+                    {
+                        "operation": {
+                            "type": "string",
+                            "enum": ["read", "write", "delete"],
+                            "description": "REQUIRED on every real call. Use write when saving key/value; read lists notes; delete removes one key. No default is inferred.",
+                        },
+                        "key": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": r"\S"},
+                        "value": {"type": "string", "maxLength": NOTE_CHAR_LIMIT},
+                    },
+                    ("operation",),
+                )
+                | {
+                    "examples": [
+                        {"operation": "write", "key": "topic", "value": "Concise note"},
+                        {"operation": "read"},
+                        {"operation": "delete", "key": "topic"},
+                    ],
+                    "allOf": [
+                        {
+                            "if": {
+                                "properties": {"operation": {"enum": ["write", "delete"]}},
+                                "required": ["operation"],
+                            },
+                            "then": {"required": ["key"]},
+                        }
+                    ],
+                },
+                self.memory,
+                {},
+            )
+        )
+        self.register(
+            PluginSpec(
+                "council_inspect",
+                "Council inspector",
+                "Read the running code version, council status, statistics, configuration, events, trajectory or context for The Boss. No mutations or credentials.",
+                schema(
+                    {
+                        "resource": {
+                            "type": "string",
+                            "enum": [
+                                "version",
+                                "status",
+                                "stats",
+                                "bots",
+                                "providers",
+                                "profiles",
+                                "prompts",
+                                "rooms",
+                                "plugins",
+                                "settings",
+                                "events",
+                                "turn",
+                                "context",
+                            ],
+                        },
+                        "id": {"type": "string", "minLength": 1},
+                        "channel_id": STR,
+                    },
+                    ("resource",),
+                )
+                | {
+                    "allOf": [
+                        {
+                            "if": {
+                                "properties": {"resource": {"enum": ["turn", "context"]}},
+                                "required": ["resource"],
+                            },
+                            "then": {"required": ["id"]},
+                        }
+                    ],
+                },
+                self.council_inspect,
+                {},
+                True,
+            )
+        )
+        from .agentic import AgentTools
+
+        from .discord_dispatch import DESCRIPTION as SEND_DESCRIPTION, PARAMETERS as SEND_PARAMETERS
+
+        self.register(
+            PluginSpec(
+                "discord_send",
+                "Send to council channel",
+                SEND_DESCRIPTION,
+                SEND_PARAMETERS,
+                self.send_discord,
+                {},
+                True,
+            )
+        )
+
+        self.agentic = AgentTools(self, directory)
+        from .global_memory import register as register_global_memory
+
+        register_global_memory(self)
+        from .slash_commands import register as register_slash
+
+        register_slash(self)
+        for entry in importlib.metadata.entry_points(group="hortator.plugins"):
+            entry.load()(self)
+
+    def register(self, spec):
+        if spec.id in self.specs or spec.id in ("council_speak", "council_silence", "discord_attach"):
+            raise ValueError("Duplicate/reserved plugin ID")
+        Draft202012Validator.check_schema(spec.parameters)
+        self.specs[spec.id] = spec
+
+    async def send_discord(self, args, context, config, key):
+        if self.discord_dispatch is None:
+            raise ControlError("Discord dispatch is unavailable")
+        return await self.discord_dispatch.call(args, context, config, key)
+
+    def allowed(self, name, context):
+        spec = self.specs.get(name)
+        config = self.store.get("plugins", name)
+        current_bot = self.store.get("bots", context.bot["id"])
+        return bool(
+            spec
+            and config
+            and config["enabled"]
+            and name in context.bot["enabled_plugins"]
+            and current_bot
+            and name in current_bot["enabled_plugins"]
+            and (context.bot["role"] != "hortator" or context.owner_verified)
+            and (name != "shell" or self.allowed("workspace", context))
+            and (not spec.owner_only or (context.bot["role"] == "hortator" and context.owner_verified))
+        )
+
+    def spec_for(self, name, context):
+        spec = self.specs[name]
+        if name == "global_memory":
+            return self.global_memory.spec_for(context)
+        if name == "memory":
+            return replace(
+                spec,
+                description=MEMORY_DESCRIPTION
+                + describe_budget(budget_for(self.store, context.bot, context.channel_id)),
+            )
+        return spec
+
+    def schemas(self, context):
+        return [
+            function(name, spec.description, spec.parameters)
+            for name in self.specs
+            if self.allowed(name, context) and self.specs[name].model_tool
+            for spec in (self.spec_for(name, context),)
+        ]
+
+    async def call(self, name, args, context, call_id):
+        start = time.perf_counter()
+        spec = None
+        call_fields = {"name": name, "call_id": call_id}
+        if isinstance(args, dict):
+            call_fields.update({k: args[k] for k in ("operation", "url", "query", "engine") if k in args})
+        self.store.emit(
+            "tool.started",
+            {**call_fields, "arguments": args},
+            bot_id=context.bot["id"],
+            turn_id=context.turn_id,
+        )
+        try:
+            if name in self.specs and not self.specs[name].model_tool:
+                raise ControlError(
+                    "This plugin is an application input capability, not a model-callable tool"
+                )
+            if not self.allowed(name, context):
+                raise ControlError("Tool is not enabled for this bot and trusted request")
+            spec = self.spec_for(name, context)
+            report = feedback(name, args, spec.parameters, spec.description)
+            if report is not None:
+                report = self.vault.redact(report)
+                report = self.evidence.record(context, name, call_id, report)
+                self.store.emit(
+                    "tool.help" if report.get("usage_only") else "tool.failed",
+                    {**call_fields, **report},
+                    bot_id=context.bot["id"],
+                    turn_id=context.turn_id,
+                    level="info" if report.get("usage_only") else "warning",
+                )
+                return report
+            config = {
+                **spec.defaults,
+                **self.store.get("plugins", name)["config"],
+                **context.bot["plugin_config"].get(name, {}),
+            }
+            key = self.vault.get(f"bot/{context.bot['id']}/plugin:{name}") or self.vault.get(
+                f"plugin/{name}/api_key"
+            )
+            async with asyncio.timeout(120):
+                if (
+                    name in ("web_fetch", "web_search", "workspace", "shell")
+                    and args.get("operation") == "read_result"
+                ):
+                    result = self.evidence.read(args, context, self.allowed)
+                else:
+                    result = self.vault.redact(await spec.handler(args, context, config, key))
+            if name in {
+                "memory",
+                "global_memory",
+                "council_inspect",
+                "web_fetch",
+                "workspace",
+                "shell",
+                "document_site",
+            }:
+                result = present_times(result, council_timezone(self.store))
+            search_failed = name == "web_search" and result.get("ok") is False
+            http = result.get("http_response", {}) if isinstance(result, dict) else {}
+            if http:
+                call_fields.update(
+                    {k: http[k] for k in ("http_status", "http_reason", "url", "local_issue") if k in http}
+                )
+                if isinstance(args, dict) and args.get("url") != http.get("url") and args.get("url"):
+                    call_fields["requested_url"] = args["url"]
+            web_warning = (name in {"web_fetch", "web_search"} and result.get("ok") is False) or (
+                http.get("http_status") is not None and http["http_status"] >= 400
+            )
+            if search_failed:
+                result["usage"] = usage(name, spec.parameters, spec.description, args)
+            if name in {"web_fetch", "web_search"} and len(dumps(result)) > 60000:
+                full = self.evidence.record(context, name, call_id, result)
+                result = {
+                    "ok": result.get("ok", True),
+                    "error": result.get("error"),
+                    "http_status": http.get("http_status"),
+                    "http_reason": http.get("http_reason"),
+                    "result_is_paged": True,
+                    "notice": "Full structured response exceeds one tool-result page; use read_result. No original evidence was discarded.",
+                    "read_response": {
+                        "operation": "read_result",
+                        "result_id": full["result_id"],
+                        "offset": 0,
+                        "length": 18000,
+                    },
+                }
+            elif len(dumps(result)) > 60000:
+                result = {
+                    "truncated": True,
+                    "text": dumps(result)[:50000],
+                    **(
+                        {key: result[key] for key in ("budget", "warning") if key in result}
+                        if name in {"memory", "global_memory"}
+                        else {}
+                    ),
+                }
+            result = self.evidence.record(
+                context,
+                name,
+                call_id,
+                result,
+                source_result_id=args["result_id"]
+                if name in ("workspace", "shell", "web_fetch", "web_search")
+                and args.get("operation") == "read_result"
+                else None,
+            )
+            self.store.emit(
+                "tool.failed" if search_failed else "tool.completed",
+                {
+                    **call_fields,
+                    "result": result,
+                    **({"error": result["error"]} if search_failed else {}),
+                    "duration_ms": (time.perf_counter() - start) * 1000,
+                },
+                bot_id=context.bot["id"],
+                turn_id=context.turn_id,
+                level="error" if http.get("transport_error") else "warning" if web_warning else "info",
+            )
+            return result
+        except asyncio.CancelledError:
+            self.store.emit(
+                "tool.cancelled",
+                {
+                    **call_fields,
+                    "reason": "Tool interrupted by its owning turn or runtime; inspect retained results before retrying",
+                },
+                bot_id=context.bot["id"],
+                turn_id=context.turn_id,
+                level="warning",
+            )
+            raise
+        except Exception as exc:
+            error = self.vault.redact(error_text(exc))[:2000]
+            result = {"ok": False, "error": error}
+            if spec:
+                result["usage"] = self.vault.redact(usage(name, spec.parameters, spec.description, args))
+            result = self.evidence.record(context, name, call_id, result)
+            self.store.emit(
+                "tool.failed",
+                {
+                    **call_fields,
+                    **result,
+                    "duration_ms": (time.perf_counter() - start) * 1000,
+                },
+                bot_id=context.bot["id"],
+                turn_id=context.turn_id,
+                level="error",
+            )
+            return result
+
+    async def call_raw(self, name, raw, context, call_id):
+        if not self.allowed(name, context) or not self.specs[name].model_tool:
+            return await self.call(name, None, context, call_id)
+        try:
+            args = parse_arguments(raw)
+        except (ValueError, TypeError) as exc:
+            spec = self.spec_for(name, context)
+            result = self.vault.redact(syntax_feedback(name, exc, spec.parameters, spec.description))
+            result = self.evidence.record(context, name, call_id, result)
+            self.store.emit(
+                "tool.failed",
+                {"name": name, "call_id": call_id, **result},
+                bot_id=context.bot["id"],
+                turn_id=context.turn_id,
+                level="warning",
+            )
+            return result
+        return await self.call(name, args, context, call_id)
+
+    async def web_fetch(self, args, context, config, key):
+        return await self.fetched_documents.call(args, context, config, key)
+
+    async def web_search(self, args, context, config, key):
+        from .web_search import search
+
+        return await search(args, context, config, key, self.store, self.vault)
+
+    async def media_request(self, config, key, body):
+        # Endpoints are operator configuration, never model-supplied URLs. No redirect credential forwarding.
+        headers = {"Authorization": f"Bearer {key}"} if key else {}
+        async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as client:
+            async with client.stream(
+                "POST", config["endpoint"], json=body, headers=headers, timeout=100
+            ) as response:
+                response.raise_for_status()
+                data = bytearray()
+                async for chunk in response.aiter_bytes():
+                    data.extend(chunk)
+                    if len(data) > 20_000_000:
+                        raise ControlError("Media response exceeds 20 MB")
+                return bytes(data), response.headers.get("content-type", "application/octet-stream")
+
+    def artifact(self, data, mime, suffix, context):
+        if len(data) > 8_000_000:
+            raise ControlError("Generated attachment exceeds the 8 MB delivery limit")
+        artifact_id = uid("art_")
+        filename = artifact_id + suffix
+        path = self.directory / filename
+        path.write_bytes(data)
+        path.chmod(0o600)
+        self.store.execute(
+            "INSERT INTO artifacts VALUES(?,?,?,?,?,?,?)",
+            (artifact_id, context.bot["id"], context.turn_id, filename, mime, len(data), time.time()),
+        )
+        return {"artifact_id": artifact_id, "mime": mime, "bytes": len(data)}
+
+    async def image_generation(self, args, context, config, key):
+        data, _ = await self.media_request(
+            config, key, {**config.get("request_json", {}), "prompt": args["prompt"], "n": 1}
+        )
+        result = json.loads(data)
+        item = result["data"][0]
+        mime = "image/png"
+        if item.get("b64_json"):
+            image = base64.b64decode(item["b64_json"], validate=True)
+        elif item.get("url"):
+            image, mime, _ = await fetch_public(item["url"], 8_000_000)
+        else:
+            raise ControlError("Image endpoint returned neither b64_json nor a public image URL")
+        suffix = ".png"
+        if image.startswith(b"\xff\xd8\xff"):
+            mime, suffix = "image/jpeg", ".jpg"
+        elif image[:4] == b"RIFF" and image[8:12] == b"WEBP":
+            mime, suffix = "image/webp", ".webp"
+        elif not image.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise ControlError("Generated image is not PNG, JPEG or WebP")
+        return {**self.artifact(image, mime, suffix, context), "usage": result.get("usage")}
+
+    async def tts(self, args, context, config, key):
+        body = {**config.get("request_json", {}), "input": args["text"]}
+        fmt = body.get("response_format", "mp3")
+        if fmt not in ("mp3", "opus", "aac", "flac", "wav", "pcm"):
+            raise ControlError("Unsupported audio response format")
+        data, mime = await self.media_request(config, key, body)
+        if not data or "json" in mime or "html" in mime:
+            raise ControlError("TTS endpoint did not return audio")
+        return self.artifact(data, mime, "." + fmt, context)
+
+    async def memory(self, args, context, config, key):
+        scope = (context.bot["id"], context.channel_id)
+        budget = budget_for(self.store, context.bot, context.channel_id)
+        if args["operation"] == "read":
+            return {
+                "notes": self.store.rows(
+                    "SELECT key,value,updated_at FROM memories WHERE bot_id=? AND channel_id=? ORDER BY key",
+                    scope,
+                ),
+                "budget": budget,
+                **({"warning": describe_budget(budget)} if budget["must_consolidate"] else {}),
+            }
+        name = args.get("key", "").strip()
+        if not name:
+            raise ControlError("A memory key is required")
+        if args["operation"] == "delete":
+            self.store.execute(
+                "DELETE FROM memories WHERE bot_id=? AND channel_id=? AND key=?", (*scope, name)
+            )
+        else:
+            value = self.vault.redact(args.get("value", ""))
+            if len(value) > NOTE_CHAR_LIMIT:
+                raise ControlError(f"Each memory note allows at most {NOTE_CHAR_LIMIT:,} characters")
+            previous = self.store.one(
+                "SELECT value FROM memories WHERE bot_id=? AND channel_id=? AND key=?",
+                (*scope, name),
+            )
+            attempted = budget["used_chars"] - (len(previous["value"]) if previous else 0) + len(value)
+            shrinking = attempted < budget["used_chars"]
+            if (attempted > budget["hard_limit_chars"] and not shrinking) or (
+                budget["must_consolidate"] and not shrinking
+            ):
+                raise ControlError(
+                    f"Memory write not saved: it would use {attempted:,} characters. "
+                    + describe_budget(budget)
+                )
+            self.store.execute(
+                "INSERT INTO memories VALUES(?,?,?,?,?) ON CONFLICT(bot_id,channel_id,key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",
+                (*scope, name, value, time.time()),
+            )
+        budget = budget_for(self.store, context.bot, context.channel_id)
+        result = {"saved": True, "key": name, "budget": budget}
+        if budget["must_consolidate"]:
+            result["warning"] = describe_budget(budget)
+            self.store.emit(
+                "memory.budget_warning",
+                {
+                    "channel_id": context.channel_id,
+                    "key": name,
+                    "operation": args["operation"],
+                    "message": "Note change saved. " + result["warning"],
+                    **budget,
+                },
+                bot_id=context.bot["id"],
+                turn_id=context.turn_id,
+                level="warning",
+            )
+        return result
+
+    async def council_inspect(self, args, context, config, key):
+        return self.inspect(args["resource"], args.get("id"), args.get("channel_id"))
+
+    def resolve_artifact(self, artifact_id, context):
+        item = self.store.one(
+            "SELECT * FROM artifacts WHERE id=? AND bot_id=? AND turn_id=?",
+            (artifact_id, context.bot["id"], context.turn_id),
+        )
+        if not item:
+            raise ControlError("Attachment does not belong to this bot and turn")
+        return self.directory / item["filename"]

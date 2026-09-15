@@ -1,0 +1,27 @@
+# Local state and credentials. Keep these on disk, never in commits.
+/data/
+.env
+.env.*
+!.env.example
+
+# Reproducible dependencies, builds and verification artifacts.
+.venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+/web/dist/
+/hortator/_build_info.json
+/web/test-results/
+/web/playwright-report/
+/test-results/
+/playwright-report/
+*.tsbuildinfo
+*.egg-info/
+
+# Local editor and operating-system files.
+.DS_Store
+*.swp

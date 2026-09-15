@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Install as ~/.local/bin/hortator-start; safe for a repeatable harness action.
+set -euo pipefail
+hortator_script_dir="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
+source /home/codexy/.config/hortator/runtime.env
+exec python3.14 "$hortator_script_dir/start_screen.py" "$@"

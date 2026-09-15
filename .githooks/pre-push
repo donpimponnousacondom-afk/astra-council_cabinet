@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The owner explicitly forbids every push to main, including force pushes
+# and deletion. Check the remote destination rather than the local branch.
+while read -r council_local_ref council_local_oid council_remote_ref council_remote_oid; do
+  if [[ "$council_remote_ref" == "refs/heads/main" ]]; then
+    printf '%s\n' 'Push rejected: this project must NEVER push to main.' >&2
+    exit 1
+  fi
+done

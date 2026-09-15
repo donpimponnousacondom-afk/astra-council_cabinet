@@ -1,0 +1,735 @@
+# Verification record
+
+Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
+
+## Footer token counts (2026-09-15)
+
+- Added reasoning/thinking, completion and total placeholders to the existing per-bot footer configuration and modern editor. Reported counts take precedence; deterministic cl100k_base text estimates carry `~`. Missing reasoning is `none`, explicit upstream zero remains `0`. Estimates are separate from billing, context calibration and raw usage. No existing template, bot setting, prompt, memory or credential was changed.
+- **74 targeted backend tests passed** across token estimation, ordinary footer delivery and slash requests. Cases cover explicit zero versus absence, malformed counts, reported aliases, full reasoning fields/inline text, mirrored reasoning, opaque payloads, image-base64 exclusion, tool arguments, deterministic fallback counts, SSE/buffered responses, off-thread tokenization, private-text isolation, and selecting only the final request after completed tool rounds.
+- **114 provider/context regression tests passed**, covering parser behavior, retries, private diagnostics and responsiveness. Two existing FastAPI/Starlette dependency deprecation warnings remain unrelated.
+- **One Playwright workbench test passed** on isolated port 18332: insert all three placeholders, check sample values and the missing-reasoning explanation, save/reopen the bot, and preserve other bot/settings. Screenshot inspected; legacy sources unchanged. TypeScript/production build, Ruff/formatting and diff checks passed. These tests use controlled transports; no diagnostic provider call or Discord message was sent to validate the feature.
+
+## Editable prompts, per-bot clean slate and Unicode responses (2026-09-15)
+
+- Branched the clean `feat/next_feature` checkout to `feat/prompt_layer_controls`, without pushing. Added persisted runtime prompt templates/roles, per-bot layer switches and overrides, actual assembly metadata, and modern-only library/editor controls. Existing prompts, bot settings, capabilities and provider JSON are preserved. Empty/all-disabled requests and incomplete compaction source wrappers fail explicitly without silently dropping history. See [PROMPTS.md](PROMPTS.md).
+- Read-only diagnosis of request `req_d2eff3266896407aa984` / turn `turn_3f59ea67c2384541aae6` (events #31238–31241) found a first-token event followed by a raw UnicodeEncodeError and no request.failed record; restart subsequently marked its request interrupted. Last retained response progress was 42 SSE frames / 10,082 bytes; the precise offending later frame was not saved. Controlled reproduction demonstrates UTF-16 surrogate failures in response retention and a secondary failure when malformed evidence is serialized to SQLite. Valid split emoji pairs now join by streamed field; malformed final scalars produce explicit response-format evidence with escaped code units, no broken failure ledger or circuit penalty. JSON-escaped malformed tool arguments are rejected before execution with complete usage feedback.
+- The owner clarified that **Forget everything before now** preserves private/global notes and does not restore snapshots. Added the red confirmed Control-tab action, target-only cancel/join, persistent per-bot/channel cutoff, history/backfill/reply-preview filtering and effective-cutoff restoration with explicitly selected snapshot contexts. New slash invocations stay fresh; pre-reset pending acknowledgements cannot start old work. No live bot was reset, no memory was erased, and no provider completion or Discord message was sent for these tests.
+- Final focused regression groups: **161 tests passed** across prompt controls, Unicode/tool feedback, context responsiveness, addressing, private global notes, snapshots and concurrency; **99 tests passed** across vision, clean-slate controls, prompt templates and slash execution; **111 tests passed** across prompts, compaction allowances and Unicode/tool feedback (overlapping groups). Controlled transports only. The fresh-image-after-compaction regression found by the broader run was fixed and the vision group passed afterwards.
+- **16 Playwright tests passed** on isolated port 18331: one new end-to-end prompt/override/reset test plus all 15 workbench cases. Verified save/reopen, per-bot isolation, confirmation cancellation, persistent cutoff, roles, JSON/draft protection and existing controls. Ruff, TypeScript/build, formatting and diff checks passed. Legacy sources remain unchanged.
+- Full-suite baseline run: 1,075 passed, one skipped, two failed. One was the fixed fresh-image regression above. The remaining pre-existing mismatch is `test_five_attempts_and_three_missing_receipts_stop_without_work`: the base commit already sets `ACK_ATTEMPTS=30` / `ACK_RETRY_DELAY=0.090`, whereas its test and standing notes expect five / 0.025. This task preserves the existing runtime retry settings; reconcile that operator tuning separately. Two dependency deprecation warnings are unrelated.
+- Final deployment uses the committed source, dashboard rebuild and shared-Screen refresh. Actual runtime/build identity and unchanged pre-existing configuration checks are recorded privately under `$HORTATOR_DATA_DIR/logs/prompt-controls-deployment.json`; inspect startup identity for current state rather than treating this dated entry as current Git state.
+
+## Explicit compaction allowance and Featherless tester (2026-09-15)
+
+- Added optional per-profile `compaction_max_tokens` to the shared schema/API and modern dashboard. It sends a dedicated native `max_tokens` only for compaction; blank keeps provider-default behavior. Saved generation JSON and formerly ignored compaction JSON caps remain unchanged. Batch planning reserves output space, while incomplete/oversized summaries preserve the old checkpoint. Console/request diagnostics identify the actual cap and policy.
+- **172 targeted backend tests passed**, covering compaction limits/planning, generation isolation, streaming/buffered requests, retries, private diagnostics, console rendering, context responsiveness and the standalone tester. The tester's 13 cases include filtered bounded discovery, unit-aware concurrency/cancellation, token filler, raw upstream errors, reasoning/TTFT accounting, warm-up polling, availability flags and SSE capacity retry evidence. These use controlled transports, not production inference.
+- **One Playwright test passed** on an isolated port-18000 fixture: set/save/reopen/clear the compaction cap and preserve SSE, native vendor JSON and image budgets. Ruff, TypeScript and dashboard build passed. No legacy frontend changes.
+- The owner authorized live standalone Featherless measurements while the account was vacant. Evidence is outside Git under `/home/codexy/.local/share/hortator/benchmarks/`, particularly `20260915-first-round`, `20260915-context29000` and `20260915-context32000`. Tests use the new script, not live bot turns: no notes/checkpoints/configuration/Discord messages were changed. The plan reported 32,768 context tokens and four concurrency units; selected Qwen27B variants cost two units, Kimi and Llama70B four.
+- Short-prompt streamed results measured roughly 19–20 TPS for Qwen variants, 18.9 for Huihui Llama3.3-70B and 9.8 for Kimi-K3, with substantial TTFT/capacity variability. Native thinking-off requests with explicit 512-token output allowance completed near 29K and 32K input for official Qwen, Huihui Qwen and Kimi. These are bounded text-only probes, not guarantees for tool-heavy council contexts or image input. Official gated Llama3.3 required Hugging Face authorization; no account permission was modified. Models reporting no live/recent worker answered warm-up probes, so metadata alone did not establish an actual cold start.
+- A reasoning-enabled Kimi-K3 probe (29K input, native thinking on plus reasoning_effort high, max_tokens 2,048) returned reasoning and answer text but `finish_reason: null` in both SSE and buffered JSON. Raw evidence under `20260915-reasoning` confirms this upstream completion-boundary omission; the tester retains both outputs as unconfirmed, rather than labelling them complete or treating it as a network outage.
+
+## Per-bot image inputs and Featherless diagnostics (2026-09-15)
+
+- Created `feat/bot_image_inputs` from the clean post-merge `feat/next_feature` checkout. Added the default-on `allow_images` capability to the shared schema/API and modern editor. Off skips the bot's automatic downloads and excludes shared cached pixels, with explicit metadata-only guidance across tool rounds and a provider serialization guard. Other bot/profile records, memories and image files are not rewritten. Legacy frontend remains frozen.
+- **116 backend tests passed**: bot image controls, vision, image preprocessing, context responsiveness, provider and slash behavior. New cases exercise old-record defaults, API persistence, two bots sharing a profile with opposite settings, stale image-plan exclusion across rounds, create/edit intake without downloads, and rejection of unexpected wire image parts. Provider and Discord transports in these tests are mocked.
+- **One Playwright test passed** on the isolated port-18000 fixture: toggle off, save, reopen, toggle on, and verify the shared profile and other bot remain unchanged. Ruff, TypeScript and the production dashboard build passed.
+- Separately, the owner authorized bounded live Featherless diagnostics after stopping the experimental bot. The original compaction request (no pixels) rendered successfully at their debug endpoint with **29,655 input tokens**; their plan endpoint reported **32,768**. Buffered replay without an output cap returned the same generic HTTP 400 `bad_request`. Adding only a diagnostic `max_tokens:32` admitted that request (29,655 input / 32 output, intentional `length` termination). A tiny thinking-off request worked both with and without a cap; halving the transcript also worked without a cap (13,565 input / 522 output, `stop`). Evidence points to output/default-budget handling near the endpoint's context ceiling; their generic error does not disclose its exact internal default allocation. No diagnostic completion was saved as a bot summary, sent to Discord or used to change live configuration.
+- The apparent compaction loop had **1,163 shared channel messages**, no completed compactions and checkpoint zero, with repeated upstream rejections followed by cancelled attempts. Roughly 350K estimated tokens described the aggregate backlog, not one provider request. **Keep recent messages: 2** retains the post-compaction verbatim tail; it does not cap the imported history. The owner chose another provider to perform initial summarization. This feature leaves compaction output-cap policy, saved profiles and checkpoints intact.
+- Deploy through the shared-Screen refresh after the source commit and only when no bot turn is active. External `logs/bot-image-inputs-deployment.json` records actual startup/build identities and configuration checks; no source push is performed.
+
+## Console emphasis and eager acknowledgement retry tuning (2026-09-15)
+
+- Continued the user's clean `dev/fine_tuning_discord_and_logging` branch after
+  PR #41. The stated faster retry edit was not present in the checkout; it still
+  had three calls/100 ms gaps. After requesting the intended values and proceeding
+  with the stated assumption, changed deferral recovery to five calls/25 ms gaps
+  while retaining the single 2.9-second window. Receipt recovery now has its own
+  three-attempt constant so deferral tuning does not increase receipt polling.
+- The owner rejected white timestamps and requested bolder color contrast.
+  Timestamps are now bold soft blue, labels/scopes/severities bold, generic field
+  labels teal and numeric metrics warm amber. Existing semantic scope/identity
+  colors remain; model/profile values are blue and URLs light cyan. No changes to
+  log text, field order, rounding, filtering or terminal/credential protection.
+- Added inline explanations and a documentation table distinguishing initial
+  acknowledgement, retry gaps, receipt lookup, final-answer delivery and total
+  slash lifetime. The 30-second final Discord edit/upload timeout and 14-minute
+  whole-task deadline were not changed; Discord's response token expires at
+  15 minutes.
+- **79 tests passed** across console, slash acknowledgement recovery, slash
+  behavior and gateway notifications. Recovery coverage now includes four
+  failures then success with exactly one model request, five failed deferrals
+  followed by only three receipt reads, and duplicate-input suppression. Existing
+  timeout/cancellation/identity/visibility/token-redaction tests remain passing.
+  Ruff lint/format and whitespace checks passed. Network/Discord tests are mocked;
+  no live test invocation was sent.
+- Deployment uses the existing shared-Screen refresh after the source commit.
+  External `logs/discord-tuning-deployment.json` records matching frontend/runtime
+  identities, unchanged configuration/credential hashes and the actual timestamp
+  color sequence in Screen. No source push is performed.
+
+## Discord slash acknowledgement recovery and console contrast (2026-09-15)
+
+- Created `hotfix/discord_slash_recovery` from the clean post-merge placeholder
+  at `6444a7c` (image-intake PR #40). Read-only live inspection found six slash
+  invocations in the preceding day: four sent, two failed; one failed before a
+  turn was created because acknowledgement failed. This patch does not attribute
+  that REST failure to a gateway reconnect without evidence.
+- Implemented at most three transient deferral calls within one 2.9-second
+  creation-based deadline, replacing the former single 2.5-second wait. Uncertain
+  acceptance/Discord 40060 gets up to three bounded read-only original-response
+  lookups. Only a verified deferred placeholder with matching visibility/identity
+  permits model work. Existing provider retries, duplicate suppression, gates,
+  TaskGroup ownership, cancellation and uncertain final-delivery semantics remain.
+- Added staged acknowledgement/receipt diagnostics, HTTP/Discord codes, bounded
+  redacted exception chains, available socket-close causes/latency and existing
+  gateway supervisor retry delays. Slash final-answer/status-notice errors also
+  name their REST operation. Tokens and request objects are never serialized.
+  Console timestamps now use bright neutral ANSI white for gray backgrounds;
+  normal scrollback, no-color output and scope/severity controls remain.
+- **155 tests passed** across acknowledgement recovery, existing slash behavior,
+  gateway notifications, console, Discord intake/dispatch, concurrency, provider
+  retries and snapshots. New cases cover two quick failures then success, a real
+  2.55-second acknowledgement, local timeout then confirmed receipt, Discord
+  40060, three-attempt exhaustion, 401/403/expired/local refusals, stale initial
+  windows, receipt timeouts/mismatches, cancellation during all three wait stages,
+  and token-safe HTTP/socket cause evidence. One initial new-test assertion used
+  a positional Store.events limit; corrected to the existing keyword-only API
+  before the successful run. Two existing dependency deprecations remain.
+- Ruff lint/format and whitespace checks passed. Discord/provider requests use
+  controlled transports; no live test message or inference call was sent. The
+  source commit is deployed with `hortator-next-feature --refresh` in the existing
+  attached Screen. External `logs/discord-slash-recovery-deployment.json` records
+  matching startup/dashboard identities and configuration/credential comparisons;
+  credential hashes compare decrypted values so routine bot-ID re-encryption is
+  not mistaken for a credential change. No source push is performed.
+
+## Image intake: 64 MP and disclosed JPEG resizing (2026-09-15)
+
+- Renamed the clean local placeholder to `hotfix/image_intake_limits`. The owner
+  explicitly selected proportional resizing above 64 MP after clarifying that
+  JPEG quality cannot reduce megapixels. Existing model/provider/bot settings are
+  preserved; no changes to the retired workspace or source pushes.
+- **240 regression tests passed** across image preprocessing, vision, Discord
+  intake, workspaces, context responsiveness/compaction, addressing, gateway
+  notifications, delivery, documents, security and slash ingress. **Two additional
+  workspace import cases passed** for fresh/cached resized images: actual reduced
+  dimensions, protected imports, source hash and `original_preserved: false` with
+  the resize notice. Ruff lint/format and whitespace checks passed. The two
+  existing dependency deprecation warnings remain.
+- Conversion fixtures cover baseline/progressive RGB, grayscale and CMYK JPEGs,
+  exact original-byte preservation within the ceiling, proportional resizing,
+  EXIF orientation, quality reduction without another resolution change, truncated
+  input refusal, converted-copy-only caching and model/console disclosure. Mocked
+  gateway history/edit observations and a new cache instance reuse a persisted
+  rejection with one download/warning. Refreshed URLs recover transport failures;
+  old 20 MP rejections get one attempt under the new policy.
+- A local check of the actual 8160 × 6120 JPEG (49,939,200 pixels; 1,794,998 bytes)
+  preserved its exact bytes and dimensions. A real Pillow conversion of a
+  synthetic 10,000 × 8,000 JPEG produced 8944 × 7155 (63,994,320 pixels), quality
+  90, 1,002,358 bytes; the output passed image validation. These checks exercised
+  the production ceiling, not just scaled test bounds. Evidence is local at
+  `/tmp/hortator-image-preprocessing-check.json`; the inspection copy is retained.
+  No live provider request or Discord test message was sent.
+- Deployment follows the source commit through the attached shared-Screen
+  `hortator-next-feature --refresh` workflow. Its external `logs/next-feature.json`
+  receipt verifies matching dashboard/server identities. A separate external
+  `logs/image-intake-deployment.json` records the settings comparison and live
+  cache check without storing credentials in source documents.
+
+## Original web HTTP evidence and provider request retries (2026-09-14)
+
+- Branched the clean `dev/stable_all_sync_remote` checkout to `hotfix/http_evidence_provider_retries`. No source push or changes to the retired workspace. The owner's defaults are three additional attempts with ten seconds between eligible failures, separate from circuit recovery. Ordinary, slash and compaction calls share the request loop, retain completed tools, and obey cancellation/owning task deadlines.
+- Targeted backend runs passed: **250** provider/retry/HTTP/console/runtime/slash/compaction/concurrency/security/snapshot checks, **131** additional streaming/diagnostics/formatting checks, and **127** additional integration checks (these groups overlap). One near-megabyte reading integration initially failed because duplicate HTTP body previews crowded the latest page out of a small active prompt. Removing the duplicate preview while preserving response handles fixed it; the affected scenario plus HTTP/fetched-document coverage passed **62 checks**. Final retry/HTTP/console checks passed **63 tests**, including direct console access to the original body and corrected retry queue timing. Two existing dependency deprecation warnings remain.
+- Synthetic failures cover connection refusal/nested socket causes, interrupted SSE with private partial reasoning, HTTP 429/503, four-attempt exhaustion, nonretryable 400/401/413, cancellation during delay, the slash deadline, same-payload compaction and ordinary/slash tool execution exactly once. No live provider failure was induced, credit spent or Discord test message sent.
+- HTTP fixtures cover 24 numeric statuses, original bodies/headers/reasons, duplicate headers, credential protection, missing/blocked redirects, capture limits/interrupted bodies, cross-channel read refusal, DuckDuckGo 202 challenge evidence with retained Brave results, and 7,000-character console URLs. Different severities retain field order, messages follow metadata, milliseconds have one display decimal, and full call IDs remain in expanded evidence.
+- **One Chromium provider-editor scenario passed** against isolated test storage/build: 3/10 defaults, editable values, save/reopen persistence and unchanged circuit settings. TypeScript/Vite, Ruff lint/format, targeted frontend formatting and whitespace checks passed. Legacy source is unchanged.
+- Deployment follows the source commit using the existing attached Screen `hortator-next-feature --refresh` workflow. Existing providers are explicitly updated through the authenticated control API using revision-checked partial saves; unrelated configuration is compared with a private predeployment hash inventory. Actual server/dashboard identity and provider-policy confirmation are recorded outside Git in `logs/http-retry-deployment.json`; no state restore or credential change is performed.
+
+## Slash registration reconciliation and public default (2026-09-13)
+
+- Read-only inspection of Loki's registered `/prompt` found that Discord omits `required: false` for the optional `private` parameter. The previous comparator treated this documented default as missing configuration and upserted the command every 60 seconds. The comparator now accepts precisely that omitted false default, still rejects malformed values/missing required fields, and preserves owned-command collision protections. `discord.slash_registered` denotes an actual registration write; invocations emit `turn.started` with `trigger: slash_prompt`.
+- The owner requested public answers by default for sharing searches/news. Omitted `private` now means false, `private:true` remains an explicit per-invocation override, and the Discord option help/plugin description/documentation agree. Exact-owner authorization, notes isolation and existing bot settings remain unchanged. Updating old command help performs one upsert, then subsequent unchanged checks are quiet.
+- **45 tests passed** across slash commands and application emojis. New coverage exercises omitted/explicit-public/explicit-private visibility through deferral, delivery and stored receipts; omitted Discord defaults across repeated syncs; genuine drift; malformed booleans; and one-time help migration. The initial run exposed an incorrect event-column name in two test assertions, corrected to the existing `kind` column before the successful rerun. Ruff lint/format and whitespace checks passed. Provider and interaction deliveries are mocked; no test chat messages were sent.
+- Deployment uses the existing attached shared-Screen refresh after the source commit, rebuilding both dashboard stamps and runtime. The external `logs/slash-public-registration-deployment.json` receipt records live registration checks, saved-configuration comparison and startup/build identity after deployment; no push is performed.
+
+## Application-owned emoji discovery (2026-09-13)
+
+- Read-only live Discord inspection verified Loki's configured/authenticated/posting application identity (`1548576826778194011`) and its application-owned static `red` emoji (`1548579891820232704`). The existing `weirdo` echo was retrieved from Discord with unchanged answer text, posted by Loki without a webhook. The long diagnostic report used the normal truncated preview/full-response attachment path. No runtime application-emoji discovery existed; no verified `red` ID was being supplied to the model. The investigation sent no Discord messages and changed no credentials or bot settings.
+- Implemented an ephemeral per-bot/application inventory, authenticated read before initial gateway connection, five-minute refreshes, bounded ordinary/slash prompt guidance and derived owner API metadata. Discovery failures name the operation/application/cause and local deadline where relevant, clear the affected inventory, and do not fail chat/provider health. Late results from replaced clients and cross-application cache reuse are rejected. Text delivery remains native Markdown, with mention suppression and code/escape semantics intact; there is no guessed shortcode replacement, new tool grant, emoji management or reaction tool.
+- **146 distinct targeted backend checks passed**: the original 118-check emoji/formatting/slash/context/compaction/intake/typing/runtime run, then a 40-check emoji/security follow-up after derived API metadata and explicit discovery-deadline diagnostics were added (overlapping emoji cases). Coverage includes exact static/animated IDs, unavailable/deleted/stale inventories, ownership, replaced-client races, bounded large lists, invalid metadata, periodic single-flight refresh, TaskGroup cancellation, redacted failures, and model-to-Discord ordinary/slash content preservation. The security follow-up reports two existing dependency deprecation warnings. Scoped Ruff/format and whitespace checks pass.
+- Work is on `feat/app_ability_send_custom_emotes`. Deployment uses the existing shared-Screen refresh after the source commit, with matching server/dashboard build metadata and unchanged stored configuration checked read-only. The loaded catalog is verified through authenticated bot metadata, without spending model credit or claiming a live rendered-message test. Deployment receipts remain in external logs. No push is performed.
+
+## Per-bot timer disable (2026-09-13)
+
+- **97 backend checks passed** across timer disable, addressing, slash commands, runtime and security suites. New checks cover zero accepted through the authenticated API, negative/null rejection, unchanged minimum send cooldown, ordinary human/bot/historical input remaining observed without model work, idle evaluation ignored at zero, real human mentions/replies still delivered once, slash owner/idempotence checks at zero, failed directed turns not automatically retried, explicit compaction and restoration of positive scheduling. `!interval <bot> 0` preserves cooldown; positive values retain the command's existing combined update.
+- **One Chromium scenario passed** against the isolated port-18000 fixture and `/tmp/hortator-timer-web` build: native minimum zero, negative input refused, timer-off guidance, save/reopen at zero, inventory `Off`, positive re-enable and unrelated settings/grants preserved. The first test attempt raced login completion; waiting for the authenticated page fixed the test setup. Production TypeScript/Vite, scoped Ruff/Prettier and whitespace checks passed. The backend reports the two existing dependency deprecation warnings.
+- Source work is on `dev/testing_new_snapshot_memory_loki_plugins`. Deployment uses the existing shared-Screen `--refresh` procedure after the source commit; actual matching startup/dashboard identities are recorded by its external `logs/next-feature.json` receipt. No source push or implicit change to Loki/other bot intervals is performed. Automated provider/Discord calls are mocked; live bot behavior after opting into zero remains owner acceptance.
+
+## Companion slash ingress: stage 3 (2026-09-13)
+
+- Full Python suite: **896 passed, one skipped**, and one old universal-tool test failed because it assumed every plugin was model-callable. Updated that test to cover `model_tool` plugins; input capabilities are independently tested as forbidden model calls. The affected feedback/slash suite then passed **78 checks**, covering the corrected case. Together, **897 distinct backend checks passed**; the optional external package-download check remains skipped.
+- Slash tests use the production registry bridge and mocked Discord/provider transports. They cover owner/command/application checks, disabled defaults, inherited provider/tool execution, global-memory provenance, no ambient channel history, shared concurrency/stop/deadline handling, token and reasoning containment, uncertain delivery, individual command ownership, server-added metadata and bounded Unicode failure receipts. Independent review found and verified the failure-receipt bound fix.
+- **One Chromium slash-setup scenario passed**, alongside the earlier two snapshot and three global-memory scenarios (six feature browser checks total). The slash test uses an isolated API and synthetic registration metadata; it does not install or invoke a live Discord application. Production TypeScript/Vite, scoped Ruff/Prettier and whitespace checks passed.
+- Deployment follows the final source commit: preserve an offline pre-feature archive, rebuild/restart in the existing attached Screen, verify startup/build identity and capture a current baseline with the new facility. Actual deployment receipts belong in external runtime logs; these tests never restore live state. Existing bot/provider/profile configuration and new-plugin off defaults are checked after deployment. Owner portal installation and a live Loki `/prompt` remain acceptance steps.
+
+## Private cross-channel global memory: stage 2 (2026-09-13)
+
+- **86 backend checks passed**: 34 global-memory tests and 52 existing memory, plugins, security and context regressions. They verify off-by-default grants, same-bot cross-channel sharing, separate bot/channel stores, strict quota validation, 5% consolidation headroom, usage/error guidance, authenticated owner endpoints without a channel prerequisite, cancellation and source provenance.
+- **Three Chromium scenarios passed** on an isolated fixture runtime: create/read/replace/delete, quota fields and grace warnings, disabled-plugin owner editing, note drafts across tabs/navigation, and pending-save destination protection. TypeScript/Vite and scoped Ruff passed. No legacy dashboard files changed.
+- Independently extracted stage 1 commit `862a638` into a temporary archive and passed **54 tests**, including its 16 snapshot cases plus security, concurrency and backup operations. This verifies that the first rollback point does not depend on unfinished global-memory/slash code.
+- Following a harness interruption, re-inspection confirmed the working branch/files and the existing attached Screen listener survived. Runtime remained on stable `7b6cb1cf6b99` throughout these tests. No live notes, bot grants, provider settings or secrets were changed.
+
+## Experiment snapshots: stage 1 (2026-09-13)
+
+Branched clean stable `7b6cb1cf6b999c739270b54fa8a30748196f8acb` into `feat/slash_snapshots_global_memory` for the owner's three-stage request. No main changes or pushes. Existing live configuration, notes and credentials remained untouched during implementation.
+
+- **73 backend checks passed**: 16 new snapshot tests plus 57 operations, security, concurrency, agentic API, site-preview and version regressions. Coverage includes source/schema incompatibility, payload/hash/key validation, quota-scoped restoration, recovery capture, full-restore session revocation, persistent pause, same-task Kernel replacement, request draining, repeated cancellation, transcript-anchor checks and interrupted file-swap recovery with durable flush ordering.
+- **Two Chromium checks passed** for the modern snapshot page using isolated fixture data and mocked operation receipts: named capture, notes-only defaults, explicit confirmation, independent resume, incompatible-version refusal and protected drafts. These browser mocks do not prove a live restore; backend tests execute actual restores on temporary stores.
+- TypeScript/Vite built to `/tmp/hortator-three-features-web`; scoped Ruff and `git diff --check` passed. The production assets/runtime were not rebuilt or restarted during this stage.
+
+## Shared Screen recovery shortcut (2026-09-10)
+
+The owner reported accidentally closing Screen. Inspection found no `hortator` session and no listener on port 8000; the other named Screen sessions were left alone. Added the local `hortator-start` fast action, using the existing verified process/shell inspection helpers, user Screen configuration, login Bash and external runtime launcher. It does not initialize data, switch branches or restart an already running server. Ruff formatting/lint, Bash syntax and whitespace checks passed. Recovery and repeated-invocation PID/health checks are recorded after execution in the external `logs/screen-start-verification.json` receipt; no live Discord test messages or configuration mutations are involved.
+
+## Dense desktop workbench and frozen legacy dashboard (2026-09-09)
+
+Continued the clean `feat/next_feature` checkout from squash commit `7937e8842181`. The active frontend now uses compact Dark+ inventories and docked/maximizable editors. All 16 files copied into `web/src/legacy/` were compared byte-for-byte against that baseline and match; the active frontend imports no legacy UI modules. Both HTML entries build through Vite and use the unchanged Python API, authentication and external data. No backend code, migrations, provider settings, bot activation or private memories were changed by this task.
+
+- **44 distinct browser/build checks passed** against the isolated Playwright fixture runtime on port 18140. The initial complete run passed 39 checks (25 frozen-dashboard scenarios, two build-metadata checks and 12 workbench scenarios). After the final draft/schema/thread fixes, 16 of 17 modern checks passed; the remaining test looked for an identity field while the token-less fixture correctly opened its Discord section. Selecting Identity fixed that test, which passed on the focused rerun. No application fallback or changed assertion value was needed for that fixture correction.
+- Modern checks exercise all navigation pages, build details, sorting/filtering, six bots and six providers at **1440×900 and 1280×800**, keyboard navigation, dock/maximize, real isolated API saves, native model JSON and SSE mode, provider User-Agent, upstream 401/local 502 separation, bot silence/footer fields, populated trajectories/private reasoning, context/notes, document revisions/downloads and workspace/job evidence. Screenshots of overview, bot/provider inventories and trajectory inspection were reviewed. Capability checkboxes remain 16×16 rather than shrinking inside dense rows.
+- Added failure/concurrency checks retain malformed JSON across section changes and other field edits, offer explicit reset to current form values, protect note/channel and credential destinations, keep save/credential operations pending through fresh dashboard acknowledgment, retain thread-name drafts during delayed receipts, recover from schema-loading failure and keep Quick Open keyboard focus predictable. Tests use controlled responses and synthetic credentials; they do not send a live Discord message, create a remote thread or spend provider credit.
+- TypeScript/Vite, scoped frontend formatting and `git diff --check` passed. An in-memory scan of changed source against the live encrypted vault found no credential matches. The legacy regression files are isolated under `web/tests/legacy/`; shared build metadata tests remain outside that directory. [DASHBOARD.md](DASHBOARD.md) records the parity inventory, frontend boundary and removal steps. Automated checks do not substitute for the owner's daily-use acceptance.
+
+Deployment follows the final source commit with a stopped-runtime backup at `/home/codexy/.local/share/hortator-backups/20260909-dashboard-workbench` and `hortator-next-feature --refresh` in the existing attached Screen session. The external `logs/dashboard-workbench-deployment.json` receipt records the actual startup/build identity, route/asset health, Screen attachment, backup and post-start configuration/key/credential comparisons. The frozen UI stays available at `/legacy/` until the owner accepts removal. No push is authorized.
+
+## Warning/error explanations and local deadlines (2026-09-09)
+
+Read-only inspection of Dirac's incidents #15901–15905 and the preceding attempt showed HTTP 200 SSE compactions stopped at 120.024 and 120.023 seconds. The latter inspected response retained 5,516 frames, 53,156 private reasoning characters and 10,432 visible candidate characters. The provider setting was then 120 seconds; the operator subsequently changed it to 600. No diagnostic request, configuration change or memory edit was made by this task. Review covered application WARNING/ERROR emit sites and the previous 24 hours of retained incidents.
+
+- `HORTATOR_REQUIRE_SANDBOX=1 uv run pytest -q`: **782 passed, 1 skipped**, two existing TestClient dependency deprecation warnings, 147.88 seconds. The skip is the opt-in public package-download test; real namespace/shell tests were required and passed. Full output: `/tmp/hortator-logging-full-tests.log`.
+- The earlier focused provider/parser/discovery/console/compaction/typing run passed **132 tests**. Thirteen new regression cases exercise deadlines before headers and during SSE/JSON, retained private partial reasoning, unchanged provider health, real HTTP timeout phases versus local pool capacity, owner cancellation, compaction checkpoint retention/correlation, redacted callback failures, typing retry/throttling, separate channel incidents and visible runner/cleanup explanations.
+- Ruff lint, format checks and `git diff --check` passed. No dashboard source or dependency changes are needed; the final dashboard build still follows the source commit so its version matches the restarted server.
+
+Deployment uses the existing attached Screen session and a complete stopped-runtime backup. The external `logs/logging-improvements-deployment.json` receipt records the final startup/build identity, health, backup verification and configuration/credential comparison. Automated failures above use synthetic fixtures; no live provider failure or Discord message is deliberately generated to exercise the new logs. Existing runtime traffic resumes under the operator's saved settings. No push is authorized.
+
+## Retained summary limits independent of reasoning (2026-09-09)
+
+- Continued the user's clean `feat/compat_debug` from merged `0d89634` (PR21). The owner explicitly authorized omitting compaction's combined reasoning/output cap and removing the fixed 32,000 ceiling. Existing `summary_tokens` values now cap only retained text; saved profile JSON, reasoning settings, generation caps and activation/budget settings are preserved. No database migration, context reset, alternate compactor model or background batch API was introduced.
+- **769 distinct backend checks verified** across the full run and focused rerun: the full suite had 767 passes, one optional public package-download skip, and two failures in image test fixtures that returned `SimpleNamespace` without request identity. Replacing those fixtures with the real `Completion` type yielded **50 passing image/compaction checks**. No production fallback was added to accommodate an incomplete mock. Two existing test-client deprecation warnings remain. The initial focused transport/runtime/console subset passed 116 checks.
+- New tests cover compaction omission of inherited/override `max_tokens`, `max_completion_tokens` and `max_output_tokens`; unchanged generation wire fields and stored JSON; streaming/buffered reasoning retention; reported output usage much larger than the summary cap; absent usage remaining unknown; worker-thread summary counting; exact retained-text boundaries; full candidate/previous-checkpoint retention on overflow; incomplete upstream finish reasons; and a 65,536-token configured summary limit with context-relative validation. Existing multi-batch, cancellation, image, provider, privacy and delivery checks passed. Local text counts do not overwrite provider billing usage.
+- **16 Chromium scenarios passed**, covering the new editor/card labels and 65,536 save/reopen flow, preserved generation/compaction JSON, context-relative rejection, mobile width, existing reasoning controls and dashboard trajectories. The new compaction scenario passed again after clarifying the card's separate **Generation output cap** label. Tests used isolated temporary data, port18124 and `/tmp/hortator-summary-ui-build`; the final mobile screenshot was inspected. TypeScript/Vite, Ruff lint/format, Prettier and whitespace checks passed. These checks make no live model/Discord calls.
+- Stopped foreground PID2102591 in the existing attached `387556.hortator`, preserving window0 and Bash387558. Complete archive `/home/codexy/.local/share/hortator-backups/20260909-compaction-summary-budget` passed SQLite integrity, matching-key decryption of **20 encrypted entries**, and **317 file hashes** across all runtime stores/logs/host settings. The `.latest-requested` pointer was advanced. Changed-source scanning found no saved credential values.
+
+Final deployment follows the source commit through `hortator-next-feature --refresh`. The external `logs/compaction-summary-deployment.json` records startup/build identity, health, schema ceiling removal, live compaction request metadata when present, and the post-restart configuration/credential comparison against this backup. Normal enabled-bot traffic resumes under the owner's settings; no paid test compaction is forced. No push is authorized or performed.
+
+## Structured tasks, compaction responsiveness and council time (2026-09-09)
+
+- Continued the user's clean `hotfix/asyncio_tyranny`, based on squash-merged `be7416e` (PR20). No branch transition or push. Existing bot/provider/model configuration, raised Hortator budgets, memory and transcript data were preserved.
+- Read-only request evidence for failed Ada compaction #11890 (`req_85c24a0b95064ddbb374`): buffered `deepseek-v4-flash` on `AGENTROUTER_CARLITOSLOPEZ`, output limit 1,024, medium reasoning, HTTP200, `finish_reason=length`, zero visible characters, 1,024 output tokens and 1,024 reasoning tokens. Private diagnostic text was present and was not printed. The prior checkpoint was retained. The later `kimi-k3:cloud` request on Ollama completed with 981 output tokens and a usable summary. No operator limit/override was changed automatically.
+- The successful large compaction had a **21.949-second** interval between compaction start and provider request start, coinciding with Discord heartbeat warnings. Source inspection found synchronous repeated prefix tokenization. An isolated offline replay of saved request `req_48accce7a790429696fb` used **767 messages / 497,337 transcript bytes**: old preparation made 767 tokenizer calls, took **21,258.66 ms**, and stalled a 5-ms ticker for **21,263.87 ms**. New preparation made one probe, took **78.39 ms**, with a maximum measured ticker gap of **14.01 ms**. Both selected all 767 messages. This conservative comparison excludes the old loop's repeated DB attribution work, uses no provider/Discord calls, and writes no live data. Timing depends on host load; it is not a throughput guarantee. The saved console traceback was truncated, so a full blocking stack was not reconstructed from that log.
+- **754 backend tests passed, 1 skipped** (the opt-in public package-download test), in 164.33 seconds. Two existing test-client dependency deprecation warnings remain. Tests cover native grouped failure/cancellation, multiple preserved errors, immediate redacted background failure evidence, independent bot survival, shutdown finalizer/store ordering, cleanup failures, shell process-tree cleanup, context responsiveness, bisection and later-batch failure, cancellation during worker preparation, reasoning-only exhaustion and retained checkpoints. Existing provider, delivery uncertainty, human priority, publishing, vision and tool contracts passed. An AST guard rejects unowned application task creation and discarded gather errors. Earlier failures exposed and corrected shell cleanup cancellation; other fixture assertions were updated for propagated cancellation and local-time presentation.
+- **26 Chromium tests passed** against isolated temporary storage on port18124 and a separate build in `/tmp/hortator-asyncio-ui-build`. Two timezone checks also passed after making screenshot capture wait for CSS transitions. A Los Angeles browser displays the Madrid council date across midnight while retaining the canonical UTC `<time datetime>` value; winter +01:00, another configured zone, unknown values and 390-pixel layout are covered. The mobile screenshot was inspected. TypeScript/Vite, Ruff lint/format, Prettier and whitespace checks passed. These are controlled tests, not live Discord/provider acceptance.
+- Stopped foreground PID1908849 in the existing attached `387556.hortator`, window0, preserving Bash387558 and the user's attachment. Complete backup `/home/codexy/.local/share/hortator-backups/20260909-asyncio-timezone` passed SQLite integrity, matching-key decryption of **20 encrypted entries** and **315 archived file hashes**, including all eight runtime stores, logs and host settings. The `.latest-requested` pointer was advanced. An in-memory credential scan found no saved secret values in changed source files.
+
+Final deployment follows the source commit using `hortator-next-feature --refresh` in shared Screen. The external `logs/asyncio-timezone-deployment.json` receipt records the resulting startup/build identity, health and configuration/credential comparison against the stopped backup. No task creates paid diagnostic completions, sends test Discord messages or changes council activation settings; resumed runtime traffic follows existing operator configuration.
+
+## Brave/DuckDuckGo and first-call tool guidance (2026-09-09)
+
+- Work continued on `hotfix/web_search`, based on the merged `50b16e1` source. No branch transition, push or bot-memory reset was performed. Current state must still be read from Git/API, not this dated entry.
+- Read-only SQLite inspection of the eight hours ending at event #10837 (`2026-09-08T22:18:44.670396Z`) found **20 Dirac memory failures**, all missing `operation`; none were empty usage requests. One also violated the existing terminal-tool batch rule. The reported Hortator turn independently hit the `web_fetch` 1,000,000-byte download cap, a missing Brave key and a nonexistent `aa-data` workspace. That shell command never executed. Notes and command content were not copied into documentation.
+- The full backend run passed **738 tests**, skipped one opt-in check and found one error in a newly written test assertion: it queried a jobs table absent from the workspace-only fixture. After correcting that assertion, all **106 search/feedback/workspace tests passed**. The subsequent console search-identity addition passed all **20 console tests**, for **740 passing distinct backend tests** across that run and focused reruns. The initial test formatting/table mistakes did not require application behavior changes. Existing dependency deprecation warnings remain.
+- Search tests cover Auto after missing-key/401/429/timeout/empty/malformed/oversized/redirect responses; explicit engine selection; concurrent five-plus-five merging and provenance; partial/all-engine failures; challenge/unknown HTML; nullable Brave fields; streamed byte limits without Content-Length; cancellation; bounded structured output; bot/call overrides; full argument errors and secret separation. Guidance tests preserve notes on invalid writes, select operation-matching usage examples and refuse implicit workspace creation.
+- Dashboard TypeScript/Vite build passed into isolated `/tmp/hortator-search-ui-build`. **Three Playwright tests passed** on port 18124 with temporary synthetic data: search settings and write-only Brave credential persistence (including mobile width), all operational pages, and populated trajectory inspection. Ruff lint/format, frontend formatting and `git diff --check` passed. These tests did not use production keys or generate live model/Discord traffic.
+- A bounded, read-only **live DuckDuckGo** query for `Python documentation` through the completed adapter returned **five results** in approximately 611 ms, including the official Python documentation URLs. This proves the adapter worked from this host at that time, not that DuckDuckGo will never challenge later requests. Brave had neither a global nor Hortator override key at inspection, so live Brave validation remains pending operator credential entry. [WEB_SEARCH.md](WEB_SEARCH.md) records the exact dashboard/account steps.
+- The existing attached Screen session `387556.hortator`, window `0`, was preserved while stopping its foreground server for a complete backup at `/home/codexy/.local/share/hortator-backups/20260909-web-search`. SQLite integrity, matching-key decryption of **19 encrypted entries**, and hashes for **216 archived files** passed. The archive includes all present runtime stores, logs and host settings; `.latest-requested` selects it. No model/provider settings, grants or memories were intentionally changed.
+
+Final deployment follows the source commit using `hortator-next-feature --refresh`, rebuilding the production dashboard and restarting in the same Screen shell. The external `logs/next-feature.json` and `logs/web-search-deployment.json` receipts identify the final startup/build revision and configuration comparison; no future agent should infer live state from this entry.
+
+## Intentional silence controls and scoped history reconnect (2026-09-08)
+
+Continued the user's clean `feat/next_feature` placeholder from merged commit `31d8453` (#18). Read-only production evidence identified event **#9011** as channel `1546388539527397416` (`council`), retained in Dirac's contexts despite its current assignment to `random` (`1546674649532866640`). Configuration event #8985, before the incident, confirms that assignment. The neighbouring Ollama request `req_9fbe41a48f12470c95b3` completed with HTTP 200 and no error; its turn `turn_94a4a804f71347908c03` ended `silent` / `listen`. The warning was a reconnect candidate-selection issue, not evidence of that request failing.
+
+- Full backend suite: **708 passed, 1 skipped** (the opt-in public package-download integration). New checks cover legacy/default/per-bot silence settings, preserving unrelated configuration, disabled schemas even at zero remaining rounds, action tools followed by ordinary text, complete denied-call usage/argument feedback, bounded repeated rejection, empty response failures and active-turn cancellation. History checks cover old room assignments, removed thread grants, wrong stored guilds, preserved old context/transcripts, scope changes during fetch, and real current-channel discovery/scope/history failures with stage and channel evidence. Provider/Discord transports are controlled fixtures; no live message or paid diagnostic completion was sent by these checks.
+- **Three targeted Chromium scenarios passed** against isolated fixture storage on port 18122 and `/tmp/hortator-silence-ui-build`: silence checkbox default/save/reload/re-enable and desktop/mobile dimensions, preservation of another bot's settings, operational pages and populated trajectories. TypeScript/Vite, Ruff lint/format, full dashboard Prettier and whitespace checks passed.
+- Stopped the verified foreground process in attached Screen `387556.hortator`, preserving window 0 and Bash. Full archive `/home/codexy/.local/share/hortator-backups/20260908-silence-history-scope` passed SQLite integrity, matching-key decryption of **19 encrypted entries**, and **175 file hashes**, including all runtime stores and host settings. The backup pointer was advanced at this check. No bot/provider/profile settings, memories or credentials were changed for this deployment; silence stays enabled until the operator changes the new per-bot capability.
+
+Final deployment commits source before the shared-Screen `hortator-next-feature --refresh` build/restart. Inspect its external receipt and captured startup/build identities for the running version. No branch was pushed. Owner stress-test results remain live acceptance work, separate from the checks above.
+
+## Discord application intake and Hortator cross-channel delivery (2026-09-08)
+
+Continued the clean `feat/adding_composer` branch from squash commit `cf1a2be`. Read-only Discord inspection through Dirac's existing credential returned HTTP 200 for the reported Phoenix response in `random`. Its ordinary content and embeds were empty; `application_id`, `webhook_id` and Components V2 text were present. The existing room already allowed external bots. The response was absent from the ledger because intake unconditionally excluded webhooks and did not extract components. This was a local intake limitation, not a missing OAuth grant. No live message or paid provider diagnostic was sent for this check.
+
+- Full backend suite: **687 passed, 1 skipped** (the opt-in package-download integration). After the final pre-send revocation classification and three additional routing checks, **37 focused intake/routing tests passed**. These include Phoenix-shaped and real discord.py component objects, nested/oversized payload bounds, partial edits, delayed duplicate creates, attachment preservation, historical overlap, deleted messages, revocation and human/owner impersonation boundaries.
+- Routing checks cover room and channel IDs, granted observed threads, strict native replies, mention suppression, source-context separation, owner-only/keyless grants, complete argument feedback, artifact ownership, repeated/conflicting delivery keys and confirmed/failed/uncertain/cancelled outcomes. A complete mocked Hortator model/tool loop posts to the destination and then delivers its ordinary assistant answer in the original control channel. A grant revoked immediately before the network send is a definite failure. These are controlled transports, not live Discord delivery acceptance.
+- **Three targeted Chromium checks passed** against isolated fixture storage on port 18120 and a separate dashboard build under `/tmp/hortator-intake-ui-build`. They cover the clarified Hortator control-channel labels, external-app explanation and plugin catalog, operational pages and populated trajectories. TypeScript/Vite, Ruff lint/format, dashboard Prettier and whitespace checks passed.
+- Stopped the verified foreground runtime in attached Screen `387556.hortator`, preserving window 0 and its Bash. Complete archive `/home/codexy/.local/share/hortator-backups/20260908-discord-intake-routing` passed SQLite integrity, matching-key decryption of **19 encrypted entries** and **172 file hashes**, including all runtime stores and host settings. This precedes the additive message-source/outbox-routing migrations and new grant activation. The backup pointer was advanced at this check.
+- Enabled the new global `discord_send` plugin and added only its grant to Hortator, as requested. An in-memory comparison with the stopped archive confirmed all **19 credential values unchanged**, every other configuration record unchanged, and Hortator's grant list as the sole modification to an existing record. The separate new plugin record defaults off on new installations. Activation evidence is retained outside source Git at `$HORTATOR_DATA_DIR/logs/discord-intake-routing-configuration.json`.
+
+Final deployment uses a source commit followed by the shared-Screen `hortator-next-feature --refresh` workflow. The external receipt and captured startup/build identities identify the actual running release. Recent-history overlap is bounded to 100 messages; older previously skipped app results may need reposting. Hortator's owner/control-channel/thread/DM intake stays unchanged; the new tool is an explicit outbound action, not an invitation to converse in every channel. The owner performs live cross-post acceptance. No branch was pushed.
+
+## SSE compatibility, profile transport mode and private capture states (2026-09-08)
+
+Continued on `hotfix/providers_ext` after `6fa0df1`. The owner resolved AgentRouter access with its required User-Agent and then reported a `NoneType` failure after HTTP200. Existing ledger evidence contained six Featherless nullable-iteration failures and five AgentRouter nullable-container failures. A synthetic `data: null` replay reproduced the latter at the old `if key in packet`; `tool_calls: null` reproduced the former at its tool iteration. The original raw frame was not stored, so this establishes matching local failure paths, not the exact historical wire payload. Genuine upstream bad-request/capacity/timeout incidents remain separate.
+
+- **651 backend tests passed, 1 skipped** in the full run (the opt-in public package-download test). The initial run found a pre-existing `/proc` existence/read race in the subprocess-cleanup test; the assertion now treats a disappearing child as successful cleanup, and all18 workflow tests passed separately. After the final content/reasoning field-path refinement, **108 focused provider/runtime tests passed**, including **49 new protocol/capture cases**. Coverage includes nullable frames/fields, BOM and split UTF-8, CR/LF/CRLF, multiline data, comments/keepalives, usage-only packets, indexed/interleaved tool calls, strict field errors, named upstream errors, truncated streams, lost trailers after completion, bounded redacted private frame evidence, deadlines/byte limits, local-error attribution and buffered generation/compaction without stream options. Existing success/failure/cancellation reasoning and console privacy tests passed.
+- **Five targeted Chromium scenarios passed** with isolated fixture storage on port18118 and a separate `/tmp/hortator-sse-ui-build`: immediate per-model card toggling, matching editor state, preserved vendor JSON/usage/provider settings, mobile fit, request-specific missing-capture explanation, populated private reasoning, existing advanced-profile configuration and User-Agent behavior. The first new test used the wrong ARIA role for the existing checkbox component; correcting that selector made its retry pass. TypeScript/Vite, Ruff lint/format, Prettier and whitespace checks passed. Mock provider/Discord fixtures made no live completion calls.
+- Read-only production inspection found the newest request without private capture at **2026-09-08T09:32:31.330029Z**, and the first captured request at **09:34:10.910521Z**. At the later check, AgentRouter had17 requests/0 missing, Featherless70/54 missing, and Ollama317/127 missing. Recent Ollama records contained native reasoning (lengths1655,2675,242 and6258 characters among the latest five), while one returned no reasoning text. No missing capture was newer than the deployment boundary. The old generic unavailable message therefore described historical requests; new diagnostics explicitly distinguish absence, active capture and provider-returned text. No history or saved reasoning was rewritten.
+- Stopped the verified foreground server in the existing attached `387556.hortator`, window0, preserving its Bash and user attachment. Full backup `/home/codexy/.local/share/hortator-backups/20260908-sse-diagnostics` passed SQLite integrity, decryption of **19 encrypted entries** with the matching key, and **170 archived file hashes** across all existing runtime stores and host settings. Its pointer/restore instructions were updated. Deployment preserves all live model/provider/bot settings and the owner's current User-Agent; streaming controls do not automatically change saved modes.
+
+Final build/restart follows the source commit through `hortator-next-feature --refresh`; the external `logs/next-feature.json` receipt and startup/build identities identify the running revision. Configuration and decrypted-secret comparisons against the stopped backup are performed in memory after restart. No push or paid provider/Discord validation was performed for this change.
+
+## Provider User-Agent and discovery errors (2026-09-08)
+
+Implemented on the user's clean `hotfix/providers_ext`, based on squash-merged `b64ce8b` (PR16). The previous discovery path raised a `ProviderError` with local status 502 and upstream `http_status: 401`, but retained neither the upstream body nor a discovery-failure event. Consequently the access line showed the local 502 while the dashboard's error text named the provider 401.
+
+- **604 backend tests passed, 1 skipped** (the opt-in public package-download test); the initial provider/security/console subset passed 73 checks. New tests verify case-insensitive single User-Agent headers across discovery/generation/compaction, default restoration, per-provider isolation, unrelated-header preservation, validation before network execution, both HTTP statuses, credential/cookie filtering, bounded response excerpts, console evidence, transport/setup failures, HTML challenges, malformed catalogs and HTTP-200 error envelopes. An authenticated API test confirms an upstream 401 becomes local 502 without expiring the dashboard session or changing completion health.
+- **Two targeted Chromium tests passed** against isolated fixture storage on port18116, with a separate build under `/tmp/hortator-provider-ui-build`. They cover User-Agent creation/editing/clearing, shared Advanced-header state, the existing credential flow, and an explicitly simulated provider-401/local-502 toast that keeps the user logged in. The mobile screenshot was inspected. TypeScript/Vite, Ruff lint/format, dashboard Prettier and whitespace checks passed. These tests do not call live providers or Discord.
+- Two separate, bounded, read-only `GET /models` diagnostics against the configured AgentRouter endpoint used the saved key in memory, first with the HTTP client default identifier and then a browser-style User-Agent. Both returned HTTP401 and JSON `UNAUTHENTICATED` / `unauthorized client detected`, with no `cf-mitigated` challenge header. Neither call generated a model completion, changed saved configuration, or exposed credentials. These responses establish that the tested User-Agent substitution did not clear the current rejection; they do not establish which internal upstream policy rejected the client or reconstruct an old response body that was never stored.
+- The verified idle foreground runtime was stopped in the existing attached Screen before deployment. Full archive `/home/codexy/.local/share/hortator-backups/20260908-provider-discovery` passed SQLite integrity, decryption of **19 encrypted entries** with the matching key, and **170 file hashes**, including all runtime stores and host settings. The backup pointer was advanced at this check. Existing provider/bot configuration is preserved; the User-Agent control does not choose or save an override automatically.
+
+Deployment builds after the final source commit and uses the shared-Screen `--refresh` workflow; the external receipt and captured startup/build identities remain the source for current deployment state. No branch was pushed.
+
+## Human reply priority and recipient attribution (2026-09-08)
+
+Continued on the same `hotfix/bot_error` after deploying the ordinary-reply commit `eb5c40b`. Inspection found that the old prompt included a bare `reply_to` message ID without its author's identity, the scheduler treated another bot's directed human replies as unseen triggers, and personal cooldown waits held the shared channel send lock. The user's recent Dirac/V reply links were present in the ledger, so this was missing recipient assembly rather than missing Discord references.
+
+- Full combined backend suite: **586 passed, 1 skipped** (the opt-in public package-download integration). After adding explicit restart-recovery checks and decoding addressing for transcript API consumers, **60 focused addressing, provider-diagnostics, runtime and gateway checks passed**. Ruff lint/format and whitespace checks passed. These tests use controlled Discord/provider transports and do not send live messages.
+- New checks cover human mention/reply bypass of both 120-second timers, automatic Discord reply targeting, no peer wakeup from directed human input, bot/webhook/quoted/historical exclusions, duplicate handling, same-channel reference lookup, missing parents and reply identity after compaction. They also cover pause/offline/circuit/retry/hourly barriers, selection ahead of routine work for a free global slot, independent room delivery while another bot waits on cooldown, stale-draft replacement, new input during generation, preserving an in-flight Discord send, one-time failed priority and durable claims after store reopen. Hortator still requires the exact human owner.
+- Partial running diagnostics become `interrupted` on recovery while retaining their last captured reasoning; completed diagnostics remain completed. The preceding dashboard trajectory test and production build cover the private diagnostic view; this follow-up changes backend addressing and scheduling, with a fresh production build required after its final commit.
+- Read-only live observation after the ordinary-reply deployment recorded **101 completed provider requests** (Dirac 55, V 40, Hortator 6), two request timeouts and six cancellations at the time of inspection. The two failures were `TimeoutError`, not the previous malformed reply-tool protocol. This is evidence of current traffic under the earlier reply fix, not a live acceptance claim for the new human-priority behavior or a promise of provider availability.
+- Before the addressing migration, the verified idle foreground process was stopped in attached Screen `387556.hortator`, preserving Bash/window and viewer attachment. Complete archive `/home/codexy/.local/share/hortator-backups/20260908-human-addressing` passed SQLite integrity, matching-key decryption of **17 encrypted entries**, and **168 file hashes**. It includes all eight runtime stores and host settings. The backup pointer was advanced at this check. No bot/provider/profile settings or private memories were changed by this implementation.
+
+Final deployment uses a clean branch commit followed by `hortator-next-feature --refresh`; inspect the external workflow receipt and startup/build identities for current state. The owner performs live conversation acceptance. No source branch was pushed.
+
+## Ordinary replies and private provider diagnostics (2026-09-08)
+
+Implemented on the user’s existing `hotfix/bot_error`, based on merged commit `94e56db`. Models now answer through ordinary content; silence and action tools remain. Attachment preparation contains no answer text, and obvious legacy wrappers are withheld with one bounded text-format repair. Private reasoning capture is separate from model/Discord inspection and remains credential-redacted.
+
+- Full backend suite: **565 passed, 1 skipped** (the opt-in public package-download test). Checks include the real isolated image compression/export/attachment path, ordinary string/text-part replies, native continuation, terminal/argument repair, silence, repeated wrappers, budgets, footers, private diagnostic auth boundaries, failed/cancelled partial reasoning, and independent console evidence pages. After the final diagnostic read-limit/error-classification changes, **26 provider/diagnostic checks passed**; the preceding console/diagnostic subset passed 34 checks.
+- The production dashboard build and targeted Chromium trajectory test passed against an isolated temporary API on port 18000. The test opens retained provider reasoning alongside request bodies, tool results, delivery and compaction. Ruff lint/format, dashboard Prettier and whitespace checks passed. These checks do not send Discord messages.
+- Read-only production evidence: event #2061 was an HTTP-200 `bad_request` envelope with no named invalid field and no generated content. The request ending at #2068 had `max_tokens: 2048`, 2,230 input tokens, 2,002 reported completion tokens and `finish_reason: length`; its 32K context was not exhausted. The original implementation counted the invalid request against shared provider health and discarded provider reasoning before persistence.
+- Four deliberately bounded live diagnostic POSTs to the configured Featherless endpoint used a synthetic prompt and a 128-token cap, with no Discord delivery or configuration writes. The new silence/memory tool set with Dirac’s saved `chat_template_kwargs.enable_thinking: false` returned normal text (`stop`, one completion token) on retry; the first attempt reported `capacity_exhausted`. Omitting the native thinking object also completed (47 tokens), while the no-tools variant timed out at 35 seconds. These results demonstrate acceptance of the new schema and the saved thinking setting, not full council acceptance or a uniquely identified cause for the earlier generic rejection.
+- Before deployment, the existing Screen server was gracefully stopped without detaching its viewers. Complete snapshot `/home/codexy/.local/share/hortator-backups/20260908-reply-protocol` passed SQLite integrity, matching-key decryption of **17 encrypted entries**, and **165 file hashes**, including all current runtime stores and host settings. `.latest-requested` points to this archive. No saved operator bot/provider settings were changed by this hotfix.
+
+The subsequent human mention/reply scheduling and addressing work is recorded above and remains on this same branch. Inspect the running startup identity and workflow receipt for deployment state.
+
+## One-command branch/build/Screen workflow (2026-09-08)
+
+Implemented on the user's clean local `feat/next_feature` placeholder after merged commit `294a164`. The new command preserves the user's practice of renaming that placeholder before publishing; it does not push or manufacture a merge commit.
+
+- **18 focused tests passed** in `tests/test_next_feature.py`. Real temporary repositories cover fresh/reused placeholders, preserving an older placeholder under an archive name, exact squash-head verification, extra unmerged commits, dirty tracked/untracked files, divergent main, another worktree owning main, and concurrent checkout changes. Test pushes target only a temporary bare repository, never this project's remote.
+- Worker tests verify dependency/build/start ordering, mismatch refusal, interruption reporting and lock release. A subprocess timeout test confirms a spawned process group is stopped. A real, separately named GNU Screen test verifies Ctrl-C stops the intended test process while preserving its Bash, and an unrelated foreground command is refused. The shared production Screen session is not used by those tests.
+- Bash syntax, Ruff lint/format and whitespace checks passed. Read-only live discovery correctly identified the existing shared Screen Bash/window and foreground Hortator PID without `screen -Q` or reading unrelated process environments. GitHub CLI confirmed the exact published head and squash commit of PR13, validating the selected merge-evidence fields against the real API.
+
+The local installation links `~/.local/bin/hortator-next-feature` to its tracked shell entry point. A successful external run writes the selected branch/commit and health/build verification to `$HORTATOR_DATA_DIR/logs/next-feature.json`. Final feature deployment uses `--refresh` after committing; the normal post-merge mode must refuse this feature until its PR is actually merged. Inspect that receipt and the startup version for current deployment state rather than treating this dated record as a rolling handover.
+
+## Automatic remote publishing and deep console inspection (2026-09-08)
+
+Implemented on `feat/document_generation_and_sync_v2`, continuing the user's merged baseline and the continuity repair below. No source-repository push or main-branch implementation was performed.
+
+- **514 backend tests passed**, including 65 receiver/worker/integration checks and 19 console checks. Publishing integration uses real local and receiver Git repositories, immutable asset trees and an HTTP test server; only the SSH hop is substituted in those tests. Cases cover explicit creation, missing-site edits, permanent ownership, path collisions, split assets, paged reads/edits/restoration, public-source copying, automatic queues, grant revocation, receipt loss, interrupted reservations, retries, backup recovery and remote-ahead restored data. Transport tests exercise bounded stdout/stderr, timeout/cancellation cleanup, memory-only SSH identities, strict host pins, symlink refusal and hostile Git environment isolation.
+- **18 dashboard browser tests passed** on an isolated fixture at port18112 with its build under `/tmp/hortator-publishing-ui-final-20260908`; production configuration was not used by that suite. The mobile screenshot was inspected. The UI distinguishes global destination/automation settings, local bot overrides, planned versus confirmed URLs and pending/current revisions. TypeScript, Ruff, Prettier and whitespace checks passed.
+- Console tests use stored events/jobs/requests and a real PTY. `T`/`P` cycle independently through concise, JSON and paged stored evidence; `[`/`]` select incidents and `n`/`N` navigate pinned pages. Original commands, stdout/stderr, request bodies/responses and timing evidence remain available beyond short previews, with credentials re-redacted and provider reasoning omitted. Nonzero command exits are distinguished from runner/validation errors; distinct job/call IDs are not hidden as repeated incidents. Ctrl-C/SIGTERM and ordinary scrollback remain intact.
+- **Live SSH and HTTPS acceptance succeeded** against the owner-approved `theredroom@council.zombiedawn.net:22`, using the previously verified ED25519 host pin and encrypted publishing identity. The remote `/home/theredroom/council/index.html` matches the domain's existing HTTPS response and remained unchanged (SHA-256 `d04b6e070fc6aa854a2ecbb6d5979a2630522f1665866b1eb02641998667e261`). No personal SSH configuration or agent was used.
+- Created the clearly identified **operator acceptance site** at <https://council.zombiedawn.net/hortator/publishing-check-20260908/> through the document registry with the owner's verified local test context. Seven separately stored assets were delivered at revision7, followed by an exact HTML edit at revision8. Both actual deployments have local Git commits and remote Git receipts; the old release remains retained. All seven HTTPS files matched their local SHA-256 values. A real browser loaded CSS, classic JavaScript, an imported JavaScript module, fetched JSON and SVG with zero console errors. `/hortator/` returned404; namespace control files and `.git/config` returned403; private remote history was not HTTP-accessible. This is an operator-driven tool/transport check, not a model-generated document or a paid provider/Discord conversation test.
+- Installed one managed remote audit cron entry, every15 minutes, preserving unrelated entries. A live audit checked the site with zero drift; a second unchanged audit created no repetitive snapshot. Remote metadata/history permissions are0700, remote Git `fsck` passed, and the separate local history repository passed `fsck` with both deployment snapshots. Private remote state is `/home/theredroom/council-publishing`; only static releases are selected beneath the public root.
+- Compared live configuration with the stopped-runtime pre-deployment backup. Only global `plugins/document_site` changed to enable automatic saves and the approved SSH destination; every bot/provider/model/grant setting and all **15 decrypted credential entries** remained unchanged. Hortator remained enabled; the four council bots remained paused for the user's activation. No credential values were displayed.
+- Created and verified stopped-runtime snapshots before and after setup. The completed backup is `/home/codexy/.local/share/hortator-backups/20260908T054325Z-remote-publishing-ready`: SQLite integrity passed, all15 encrypted entries decrypted with its matching key, and all101 archived file hashes matched. It includes site blobs, queue records, the separate local Git history and every existing runtime store. `.latest-requested` points to this archive; its `RESTORE.md` explains local/remote recovery and remote-ahead safeguards.
+
+The dashboard/server final identity is checked after the final feature commit, rebuild and shared-Screen restart; its deployment receipt belongs under external `logs/publishing-deployment.json` so a later commit cannot turn a copied current-state claim into a stale instruction.
+
+## Combined SSH and agentic-tools merge review (2026-09-08)
+
+Reviewed the user-resolved squash merge `a56febe` against its agentic-tools parent `937c8b8` and the earlier SSH implementation `c45dcbf`. Both sets of standing instructions and implementation files were retained. The backup CLI's directory list contains SSH public exports/host pins together with workspaces, jobs and fetched documents.
+
+The merge duplicated the backup/restore section with incomplete, conflicting directory lists and different consistency instructions. Consolidated it into one procedure covering all seven stores and requiring a stopped runtime for a complete file/database snapshot. Completed the storage inventory and plugin catalog, clarified the distinction between read-only administrative inspection and granted file/document tools, and marked earlier verification/deployment wording as historical. This documentation review does not establish remote delivery or live council acceptance.
+
+## Portable publishing SSH identity (2026-09-08)
+
+Implemented on `feat/document_generation_and_sync`, based on squash-merged `0474890`. The separate agentic-tools worktree was left untouched.
+
+- **42 focused backend tests passed** across SSH identity, operations/backup and security. Coverage includes Ed25519 signing/public verification, OpenSSH fingerprint agreement, ciphertext persistence, public-only command output, repeat-safe creation, invalid/missing identities, wrong master keys, runtime locking, refusal to initialize a missing installation, private-key redaction/config rejection, and public identity recovery from a backup. An initial test invocation referenced nonexistent `tests/test_models.py` and collected nothing; the corrected invocation passed. Ruff and whitespace checks passed.
+- Stopped the verified idle foreground server in attached `387556.hortator`, preserving the shared shell and user attachment. Saved before/after archives under `/home/codexy/.local/share/hortator-backups/20260908T025828Z-before-publishing-ssh` and `20260908T025828Z-publishing-ssh-ready`. Both passed SQLite integrity, matching-key decryption, file hashes and owner-only permissions; the final archive contains **15 encrypted entries** and **18 hashed files**.
+- The sole credential addition was `ssh/publishing/private_key`, encrypted in the existing vault. Every existing encrypted credential and every configuration body/revision matched the stopped pre-change snapshot exactly. Hortator was the only enabled bot at this check. The public export is `$HORTATOR_DATA_DIR/ssh/publishing.pub`; the restored private key successfully signed a challenge verified with the exported public key. No plaintext SSH private file was produced.
+- This stage added `ssh/` public exports and future host pins to the CLI backup. The private identity itself travels in the database with its matching master key. No remote endpoint, host trust, transport worker, automatic upload or remote model command capability was enabled or tested during identity creation.
+
+Final rollout follows the local commit and dashboard rebuild in the same Screen window. Sanitized evidence belongs in external `logs/publishing-ssh-verification.json`, including matching clean startup/build identities and preserved configuration/credential values. No paid completion probes or manual Discord messages are part of this check.
+
+## Private workspaces, isolated Bash and complete reading (2026-09-08)
+
+Implemented in the owner-authorized linked worktree `/home/codexy/codex/astra-council_cabinet-agentic-tools`, branch `feat/hortator_agentic_tools`, from fetched main `04748904e64a7a6202c99ccbf1ff24199782063e` (squashed PR #9). The canonical checkout, its HTML/site work, production data/configuration, port 8000 and shared Screen runtime were not changed by this task. Tests used private temporary data, this worktree's dependencies/build output and browser port **18110**. No push, merge, production deployment, provider-credit probe or live Discord post was performed.
+
+- `HORTATOR_TEST_PORT=18110 ./scripts/check.sh` passed: **385 backend tests in 60.40 seconds**, Ruff lint/format, Prettier, strict TypeScript/Vite production build and **17 Playwright tests in 34.2 seconds** (15 Chromium flows and two build-metadata cases). The backend run had no skips; the three warnings concern existing `audioop`, HTTPX/TestClient and AnyIO deprecations. Dependencies were installed with frozen `uv` and `npm ci` in the isolated worktree.
+- After correcting job-retention wording/output-byte display and extending the synthetic inspection fixture, `uv run ruff check hortator tests scripts`, `uv run ruff format --check --quiet hortator tests scripts` and `uv run pytest -q tests/test_agentic_api.py` passed (**2 tests in 1.26 seconds**). `npm run format:check --prefix web`, `npm run build --prefix web` and `HORTATOR_TEST_PORT=18110 npm test --prefix web` passed again (**17 tests in 34.7 seconds**). No backend application source changed after the full 385-test run. Whitespace and local documentation links were checked separately.
+- The local runner uses actual **Bubblewrap 0.12.0**, unprivileged Linux namespaces, pidfds, libseccomp, Bash and Python/Pillow. Its **20 focused runner tests** are included in the full run. Real execution covers pipelines/scripts, saved working directories, nonzero exits with valid copyback, simultaneous stdout/stderr byte paging, output/time limits, immediate startup cancellation, shutdown lease release, detached descendants and interrupted restart recovery. Independent controller processes are actually SIGKILLed during setup/running work; namespace init exits rather than leaving background jobs. Real pidfd regressions check acquisition before parent validation and descriptor cleanup on rejected/disappeared processes.
+- Sentinel files and synthetic private environment variables remain inaccessible, as do another bot/channel's workspace and a temporary loopback listener standing in for the local admin API. Path/symlink/hardlink/special-file escapes, unsafe output snapshots, process/address-space/tmpfs limits and quota/retention admission are exercised. The host has a read-only cgroup filesystem: memory limits are hard **per-process address space**, tmpfs byte limits are hard, and file count is monitored with strict final validation. This is not evidence of an aggregate cgroup resident/kernel-memory ceiling; [SHELL_RUNNER.md](SHELL_RUNNER.md) records the exact scope.
+- A synthetic valid **3,072 × 1,024 PNG, 9,441,284 bytes**, is imported from an already-observed attachment using cached original pixels. A real isolated Pillow command reports its measured dimensions/size and creates a separate **18,718-byte JPEG** with the same dimensions. Current-turn artifact export reaches the existing mocked Discord transport/outbox, and the original SHA-256 remains unchanged. Another real test revokes the shell grant during a running command and verifies cancellation/namespace cleanup in under five seconds, no committed output and no delivery. This does not establish live Discord upload or provider vision acceptance.
+- A **914,630-byte HTML fixture** produces **834,603 Unicode characters** and a marker well beyond character 18,000. Stable pagination/search tests and a simulated small-context provider loop traverse the complete snapshot without a second fetch, gaps or lost Unicode; EOF is exact. Old active tool bodies/pairs become explicit references while original requests/results stay immutable. Unique evidence IDs survive reused provider call IDs, preserve final task-budget metadata and require transitive source grants on rereads. No summarization helper/model is called.
+- Global/per-bot grants, immutable-owner enforcement, revoked/stale contexts, complete empty-call and all-error feedback, effective configuration validation and bot/channel/turn ownership are covered. Switching document/workspace/web task starts in both orders leaves one finite extension and the existing final-response opportunity. Existing document-task, provider-budget, delivery uncertainty, vision, pricing and site sandbox regressions remain passing.
+- Authenticated inspection tests cover bounded file/document paging, binary image metadata, wrong-channel/path rejection and lowered chunk settings. Backup/restore preserves workspace files, fetched snapshots, job logs and tool evidence, with private permissions; unfinished job metadata restores as interrupted without replay. Browser flows save keyless working limits/grants/budgets, inspect private files/fetched text and both job output streams, and verify non-shrinking capability controls/no horizontal overflow at 390 px. Job records in the browser fixture are explicitly synthetic. The mobile screenshot was visually inspected and remains ignored under `web/test-results/`.
+
+The durable feature/setup contract is [AGENTIC_TOOLS.md](AGENTIC_TOOLS.md), with explicit shared-file integration points for the concurrent document branch. At this isolated-worktree check, the final dashboard build was to follow the feature commit and was not a production deployment. Integration and a real end-to-end council workflow were separate owner acceptance steps.
+
+## 20 MiB image intake and checkbox correction (2026-09-08)
+
+Follow-up on `feat/image_cache_webgeneration`, based on `8de7024`, before the user lands the same PR:
+
+- **51 focused backend tests passed** (vision and runtime). New cases exercise the reported 10,583,216-byte size, exactly 20 MiB, rejection above 20 MiB at metadata/header/stream/decoder gates, 40 MiB combined wire budgeting, and one-time retry/persistence of legacy 8 MiB rejections including expired URLs. Synthetic valid PNG files test byte boundaries independently of pixel dimensions; this is not a live provider vision probe.
+- The existing document-settings Playwright flow passed. A read-only browser inspection of the live dashboard confirmed every capability checkbox remains 18×18 pixels at 1440px, 622px and 390px widths with no modal horizontal overflow. Screenshots were visually inspected; no bot settings were saved and the diagnostic session was logged out. An initial inspection attempt used the collapsed mobile navigation; opening the bot editor at desktop width before resizing corrected the inspection procedure.
+- Ruff lint/format, TypeScript/Vite build, Prettier and whitespace checks passed. Native checkboxes now have a non-shrinking size and keyboard focus outline; long descriptions and disabled-plugin badges retain their space. No permanent UI test was added for this small CSS correction.
+- Stopped the idle foreground runtime in attached `387556.hortator`. Backup `/home/codexy/.local/share/hortator-backups/20260908T015448Z-before-image-20mib-checkbox` passed SQLite integrity, matching-key decryption of **14 encrypted records**, **15 file hashes**, owner-only permissions and exact entity/encrypted-entry equality with stopped live data. Images and site blobs are included when present.
+
+Deploy after the final task commit/build in the same Screen window. Record sanitized local rollout evidence in external `logs/image20-checkbox-verification.json`, confirming matching clean server/dashboard stamps and unchanged configuration/credential values. No paid provider probe, manual Discord post, shell tool, remote sync or text-fetch limit change is part of this patch.
+
+## Images, cache pricing and document sites (2026-09-08)
+
+Implemented on the user-prepared `feat/image_cache_webgeneration`, based on the squash-merged footer baseline `9a66b54`. Work was split among vision, pricing and publishing agents, then integrated with shared tool feedback and runtime budget tests.
+
+- The full browser suite passed **15 tests**: 13 Chromium flows and two build-metadata cases. New flows cover saved cache rates, keyless document settings, per-bot document budget persistence, authenticated draft downloads, and real published HTML/CSS/classic/module JavaScript/SVG/JSON. Sandbox checks demonstrate an opaque origin, severed opener, denied cookies/storage, denied dashboard API/other-site/external fetches, and an unaffected dashboard session.
+- **285 backend tests passed** in the final suite; Ruff lint/format, Prettier, TypeScript/Vite build and whitespace checks passed. Backend tests cover image bytes in generation/compaction, cache expiry/corruption and bounds, reported versus estimated cache cost with immutable request-time rates, private bot/site scopes, immutable publication and durable queue behavior, complete schema/semantic tool feedback, safe empty usage calls, non-renewable extended budgets and deadline-safe Discord delivery. Transports and provider/Discord identities are synthetic; these checks do not claim a live vision answer or remote delivery.
+- Before rollout, stopped the idle foreground Hortator process in attached `387556.hortator`, retaining the existing shell and user attachment. Created `/home/codexy/.local/share/hortator-backups/20260908T011923Z-before-image-cache-sites`: SQLite integrity passed, **14 encrypted entries** decrypted with the matching key, **12 file hashes** and owner-only permissions passed. Entity bodies/revisions and encrypted entries exactly matched the stopped live database. This is a dated observation; inspect `.latest-requested` for the current snapshot.
+- The backup CLI now includes `images/` and `sites/` with artifacts and the database/key; restore testing verifies file content and permissions. The pre-rollout archive records an uncommitted implementation explicitly rather than pretending its base commit identifies the new source.
+- Owner pricing decision: retain active vision profile input **$0.22/M** and output **$0.66/M**; add cache hit **$0.014/M**, using the existing **$0.22/M** input rate for cache misses. No full peak tariff, hourly switching, other profile repricing, plugin grants or bot activation changes are authorized by this rollout. Existing Hortator-only activation is preserved; the document plugin is available as opt-in.
+
+The final build follows the task commit. Sanitized deployment evidence belongs in external `logs/image-cache-sites-verification.json`: clean matching server/dashboard stamps, one loopback process, authenticated document routes, exact authorized pricing delta, preserved existing configuration/credentials and revoked diagnostic session. No manual Discord posts, paid model probes or remote uploads are part of deployment verification.
+
+## Per-bot diagnostic footers (2026-09-08)
+
+On the user-prepared `feat/debug_footer`, based on main `a350990` (squashed logging PR #7, tree equal to the prior local `1fbaae8`):
+
+- **142 backend tests passed**, including **26 footer cases**. Coverage includes legacy defaults without writes, explicit disable persistence, literal templates/aliases, honest missing measurements, redaction before escaping, UTF-16 bounds, owner-only commands, per-bot settings isolation, all five identities, streaming content and terminal tool-call delivery after an earlier tool round, final-request attribution, separate canonical answer/attachment content, nonce/history reconciliation, embed updates/actual edits, silence, command pagination and incident notices. Providers and Discord transports are synthetic; no model credits were spent.
+- **12 Playwright tests passed**: ten Chromium dashboard flows plus two Node build-metadata cases. The new footer flow verifies Hortator-on/Ada-off defaults, saves/reopens per-bot templates, preserves model/persona/activation/tool settings, matches the raw JSON editor, rejects invalid placeholders and checks a 390px mobile layout. After improving button contrast, the affected browser flow was rerun successfully and its screenshot inspected. Generated images remain ignored under `web/test-results/`.
+- Ruff lint/format, Prettier, strict TypeScript, Vite build and `git diff --check` passed. The final production build must follow the final commit for matching server/dashboard source stamps.
+- Before rollout, the external configuration fingerprint remained unchanged throughout edits/tests. Three recent completed real Hortator generation requests already had TTFT and output-token measurements; this is read-only historical evidence, not a new footer delivery test. No live provider/model/credential/activation setting or SQLite schema was changed.
+- Stopped the idle foreground server in attached `387556.hortator`, preserving its shell, terminal configuration and user attachment. Created `/home/codexy/.local/share/hortator-backups/20260908T001457Z-before-debug-footer`: SQLite integrity, **11 file hashes**, owner-only permissions and matching-key decryption of **14 encrypted records** passed. All entity bodies/revisions and encrypted entries matched the stopped live database. This was the rollback snapshot for that rollout; inspect `.latest-requested` for the current one.
+
+After the committed build and Screen restart, write sanitized local rollout evidence to `/home/codexy/.local/share/hortator/logs/footer-verification.json`: one loopback API process, matching clean server/dashboard commit stamps, unchanged configuration fingerprint, effective per-bot footer defaults/readiness, session revocation and preserved Screen attachment. These checks establish local deployment; visual Discord subtext and full council activation remain for operator acceptance. No manual Discord posts or paid probes are part of this verification.
+
+On the same day, the user requested removal of the rolling session and continuation documents. They were deleted, references were updated, and standing rules now require actual Git/Screen/API/backup inspection. Durable documentation lives in AGENTS, README, PLAN, OPERATIONS and this dated evidence ledger.
+
+## Operational console logging
+
+On `feat/improving_logging`, already prepared by the user from main `d33cf80` (version PR #6), on 2026-09-07:
+
+- The initial tree was clean; main, origin/main and the new feature branch matched. Main's tree exactly matched the previous version feature tip `5870b74`. The agent continued this prepared branch without another checkout, branch deletion or push. The existing server was still in the attached `387556.hortator` Screen session.
+- **116 backend tests passed**, including **13 console tests**. Coverage includes real persisted-event forwarding, ISO offset timestamps and bot/provider/sequence attribution, healthy HTTP polling suppression, scope/verbosity/replay behavior, folded JSON/tracebacks, secret/query-string/reasoning redaction, terminal-control escaping, bounded history with separate retained errors, pre-startup ledger replay, read-only runtime inspection, repeat summaries without ledger loss, color/plain output, a broken output sink and rejection of wire-debug child loggers.
+- Two console tests run the actual CLI on a real pseudo-terminal with isolated disabled drafts and a random loopback port. They send single-key input, observe HTTP visibility/detail/scope changes, send an actual Ctrl-C byte or SIGTERM, and verify orderly exit plus exact restoration of terminal attributes. The existing two real CLI shutdown/SSE tests also pass. No live Discord/provider calls or production configuration mutations are part of these tests.
+- Ruff lint and formatting checks and `git diff --check` passed. Dashboard source/dependencies are unchanged, so browser tests were not repeated for this console feature. The deployment procedure still rebuilds Vite after the final commit to refresh its source stamp, then restarts the foreground server in the existing Screen session. Verify authenticated `/api/version` and `/build-info.json` match the committed source, exercise harmless console keys, and confirm INFO no longer prints successful HTTP polls. This procedure does not establish paid provider or full council acceptance.
+
+No bot/provider/profile settings, plugin grants, credentials, Discord notification policy or database schema are changed. The Screen session, shell configuration and external data location are preserved. Existing snapshots are older rollback points; they are not represented as fresh backups of later user configuration changes.
+
+The first live console rollout (`b9c096e`) passed authenticated API/health/polling checks and matching clean server/dashboard build stamps. With no active turns, requests or pending deliveries, the old server stopped through Screen and the new one started in the same attached session. Configuration bodies/revisions had identical hashes before and after. The log confirmed colors, active keyboard controls and no formatting errors. Harmless live `i`, `+`, `f`, `e`, `d` and `0` keys passed; successful HTTP polls stayed hidden at INFO, appeared at DEBUG, and omitted query strings. Defaults were restored. A subsequent formatting refinement renders expanded tracebacks/multiline errors as separate escaped terminal lines; its regression assertion uses a synthetic exception, not a fabricated live provider failure.
+
+The same-day color refinement passed all 13 existing console tests, Ruff lint/format and diff checks. Manual rendering checks confirmed that scope/help/state/snapshot styling adds ANSI colors while preserving the original plain text and escaping untrusted terminal controls. This presentation change does not introduce new runtime behavior or require repeating unrelated browser/provider acceptance.
+
+The first palette rollout exposed inherited `NO_COLOR` in the actual server environment; live help/status lines contained no ANSI codes even though the source/build stamps matched. An explicit `serve --color` override was added for the user's shared Screen command, preserving the shell environment and automatic/plain behavior elsewhere. Console regression tests were rerun after this correction. Live color acceptance must check the actual semantic spans in new help/status output, rather than treating ANSI from an earlier Bash prompt as proof of application colors.
+
+## Running version and Discord formatting
+
+On `feat/runtime_version`, based on fast-forwarded main `c42f0c3` on 2026-09-07:
+
+- Verified [PR #5](https://github.com/donpimponnousacondom-afk/astra-council_cabinet/pull/5) was squash-merged into main at 19:52:07 UTC and that its tree matched local `90671eb`. Let the active Hortator turn finish, stopped the existing server with one Ctrl-C in attached Screen, switched to main, ran `git pull --ff-only origin main`, and created the new feature branch. No merge commit, local main implementation commit, history rewrite, push or additional branch deletion occurred.
+- **103 backend tests passed** on Python 3.12. The 23 new cases cover real temporary Git commits/dirty and detached states, ignored runtime files, rejection of unrelated enclosing repositories, an authenticated API whose reported version stays unchanged after a later checkout, read-only owner inspection, explicit/missing/malformed Git-free build stamps, both deterministic command aliases, secret redaction, complete fenced help, owner/bot/webhook rejection, Unicode/fence message limits, native Markdown delivery for all five identities and complete long-output attachments with a closed preview fence. Tests use isolated state and synthetic transports; no live command was posted.
+- **11 Playwright tests passed:** nine Chromium dashboard flows plus two Node build-metadata checks. New browser cases compare the banner with the real temporary API and generated dashboard manifest, verify ISO timestamps/full commit/title details, display differing/uncommitted builds, and keep the panel usable without metadata. Desktop/mobile screenshots were visually inspected. Node checks cover Git-free stamps and malformed metadata without echoing inputs. Images/traces remain ignored under `web/test-results/`.
+- Ruff lint/format, Prettier, strict TypeScript and Vite build passed. Source stamping is generated during the build and excluded from Git. Container source-stamp wiring was added and Git-free metadata behavior was tested without Docker; an actual Docker image build/run remains unverified under the existing host limitation.
+- Deployment must use the final committed source, followed by a fresh dashboard build and a foreground restart in the same Screen. `!version`/`/api/version` and the dashboard identify the actual server/build snapshots directly, so no static PID or inferred live HEAD is a substitute. Local health/assets/auth checks do not establish visual Discord rendering or paid provider acceptance. Full council activation and the new commands' live rendering remain for the user.
+
+The work changes no saved provider/profile configuration, activation flags, credentials or schema. The external data directory and snapshot discovery procedure are documented in [OPERATIONS.md](OPERATIONS.md#backup-and-restore).
+
+## Council refinements and merged PR verification
+
+On `feat/council_refinements`, created from the checked-out main `2a20ca0` on 2026-09-07:
+
+- [PR #4](https://github.com/donpimponnousacondom-afk/astra-council_cabinet/pull/4) was already merged into main at 12:28:47 UTC. The original local typing tip `e8c75d9` and main `2a20ca0` have identical trees; the PR's changed files contain the expected typing implementation/tests/docs and no new runtime or credential files. GitHub reported no CI checks or reviews. The obsolete local typing branch was deleted at the user's request after that comparison. Main and remote refs were left unchanged, with no push.
+- **80 backend tests passed** on Python 3.12. Nine new cases cover brief reconnects in the same/separate notification polls, sustained outage/recovery despite startup throttling, reason updates preserving the original duration, unrelated incident reporting and secret redaction, disabled notifications/offline cleanup, intentional client close, public model discovery without authentication/health claims, and actual CLI shutdown under SIGINT and SIGTERM with an authenticated SSE connection held open. The shutdown cases use isolated child processes and verify persisted runtime cleanup and no forced-drain traceback.
+- **7 Chromium browser tests passed** against a real isolated temporary API and production build on port 18000. New reasoning cases cover native effort/toggle/budget edits, removal versus false, sibling/vendor JSON preservation, profile persistence/reopening, nested/custom summaries, compaction's top-level replacement preview, invalid-JSON protection, custom structure protection, custom negative budgets and mobile layout. Numeric controls impose no universal vendor minimum. React preview assertions wait for the rendered update. The test profile data and credentials are synthetic; no live dashboard configuration was changed by these tests.
+- Ruff lint/format, Prettier, strict TypeScript checking and Vite production build passed. The mobile reasoning screenshot was visually inspected; generated screenshots/traces remain ignored under `web/test-results/`.
+- Deployed through the existing attached Screen `387556.hortator`, window `dashboard`. The old loaded server needed its known second Ctrl-C to finish SSE drain, after verifying no active turns/requests or pending deliveries. The tested server is now PID `422205` on loopback port 8000; rediscover before later control. Health, dashboard HTML and matching new JS/CSS assets returned HTTP 200. Authenticated status lists all five configured bots with empty local readiness lists, Hortator online/enabled and the four normal bots disabled. Login/logout revocation passed, the diagnostic session was revoked, and cwd/database/lock/log paths remain in the intended repository/external storage. Screen attachment was preserved.
+- `20260907T124253Z-before-refinements` is a complete stopped-runtime rollback snapshot of the user-confirmed configuration. SQLite integrity, nine file hashes, owner-only permissions and decryption of all 13 encrypted entries passed. After deployment, all live configuration bodies/revisions and decrypted credential values still matched this snapshot exactly. No schema change, credential edit or saved model/provider setting change was required.
+- **Operator acceptance:** the user confirmed live Discord typing and Hortator's new provider/Kimi K3, and considers context/concurrency configuration resolved. Qwen is set to two concurrent requests for four units. Earlier audit corrections below are historical and superseded; do not repeat them as current blockers. Full normal-council activation/tool/delivery acceptance remains for the user. This feature session made no paid probes, sent no manual Discord messages and enabled no normal bots.
+
+## Earlier migration and recovery
+
+During the standalone-repository migration on the same date, dependencies were restored and the production build, 57 backend tests on Python 3.12 and all 5 browser tests were rerun successfully from `/home/codexy/codex/astra-council_cabinet` inside the shared Screen session. Ruff, Prettier, documentation links and the migrated production API/assets/login/logout checks also passed. Python 3.14 results below refer to the earlier implementation check. The local pre-push guard was checked against feature-branch updates, pushes to main and deletion of main without contacting a remote. Standing repository/runtime rules are in [AGENTS.md](../AGENTS.md) and [OPERATIONS.md](OPERATIONS.md).
+
+Later on 2026-09-07, the missing Screen session was recreated as `343348.hortator` and runtime storage was moved outside Git to `/home/codexy/.local/share/hortator`. A launcher and environment file installed outside the checkout select that directory on all branches. The old database/key were absent before recovery, so that recovery created a fresh disabled-draft setup, not a restoration of prior configuration. The frozen Python dependency sync, locked Node installation, strict TypeScript check, and production build passed. Launcher/environment shell syntax checks passed. The running API's file descriptors point to the external database and lock; Screen's log also points outside the checkout. Data directories are mode 0700 and the database/key/password/log files are mode 0600. Health, dashboard HTML, and matching JavaScript/CSS assets returned HTTP 200. Login and logout passed, the authenticated bot list showed three disabled bots with no tokens, and a post-logout status request returned HTTP 401. The backend/browser suites were not rerun for this host configuration and documentation change; their results below remain the earlier migration evidence. Live Discord/provider integration was unverified at that recovery.
+
+## Earlier typing feature and configuration audit
+
+On `feat/add_typing_indicator`, based on `dev/initial_phase` at `737c6bf`. These observations precede the operator's later configuration fixes and live typing confirmation above:
+
+- `uv run pytest -q`: **71 passed** on Python 3.12, including **14 new typing tests**. The new cases cover Ada, Socrates, Dirac, Curie and Hortator; activity before context preparation and during generation/delivery; silence, provider failure, cancellation and compaction failure; independent simultaneous identities; renewal and scope removal; redacted/throttled nonfatal failures; slow presence requests and paused bots. These are controlled transports, not visual Discord acceptance.
+- `uv run ruff check hortator tests` and `uv run ruff format --check hortator tests`: passed. No UI source changed; the existing production build was retained, and frontend/browser checks were not repeated for this backend-only feature.
+- Recreated the absent Screen using the user's `.screenrc` and `bash --login -i`. Verified interactive/login Bash, configured PS1 and `ll` alias. The existing configuration supplies 50,000 lines of scrollback and the xterm alternate-screen override. Host startup files were not edited. Mouse-wheel behavior in the user's terminal still requires their observation.
+- Restarted the server with the tested code in attached `387556.hortator`, window `dashboard`. Health and dashboard returned HTTP 200; authenticated readiness had no missing-field issues for all five bots, Hortator reconnected online, logout revoked the diagnostic session (subsequent status HTTP 401). API cwd resolves to this repository and database/lock/log paths resolve outside Git. One API process listens on loopback port 8000.
+- The stopped-runtime archives `20260907T113338Z-configured-before-typing` and `20260907T115803Z-configured-before-deploy` passed SQLite integrity, SHA-256 file checks, and decryption of all 12 encrypted entries using their matching keys. They include configuration, history, credentials, artifacts and host launch settings with owner-only permissions. Live snapshots at 14:06 and **14:17 Europe/Madrid** capture the user's timeout and new Ollama settings; the latest is `20260907T121700Z-configured-final`, including the disabled Ollama provider. Both passed the same checks for all **13** encrypted entries. Validation used immutable SQLite reads and verified all nine file hashes with WAL/SHM excluded. Logs/artifacts were copied separately rather than atomically with SQLite.
+- All five live Discord tokens matched their distinct configured applications and stored user IDs; Message Content Intent, guild membership and all seven effective channel permissions passed, without Administrator. Featherless model discovery and plan lookup returned HTTP 200. The original selected models are available and advertise tools. The user's new Ollama endpoint returned a public model catalog with `kimi-k3`, while the saved profile uses `kimi-k3:cloud`. Its credential field contains the endpoint URL and needs a real cloud API key; the public catalog response does not establish authentication. These issues and Featherless's Qwen concurrency limit prevent claiming the entire setup is ready for simultaneous activation; see [CONFIGURATION_STATUS.md](CONFIGURATION_STATUS.md).
+- Historical live ledger evidence includes successful Hortator Kimi requests/deliveries through Featherless, three brief Hortator reconnect pairs, one 120-second provider timeout and a cancelled Dirac request. No normal bots were enabled by the agent, no Discord messages or typing pulses were manually sent, and no paid completion probes were made. The new Ollama profile, normal-bot end-to-end tool/delivery behavior and visual typing remain for operator acceptance.
+
+## Earlier baseline checks
+
+| Check | Result |
+| --- | --- |
+| Backend suite, Python 3.12 | 57 passed |
+| Backend suite, Python 3.14 | 57 passed |
+| Ruff lint and formatting | Passed |
+| TypeScript strict checking and Vite production build | Passed |
+| Prettier frontend formatting | Passed |
+| Chromium browser suite against a real temporary API and production UI | 5 passed |
+| Local production startup, static assets, authenticated API and session revocation | Passed on port 8000; three disabled drafts, no external credentials |
+| Compose YAML parsing and deployment settings | Passed |
+| Docker image build / container startup | Unverified: Docker daemon socket access is denied in this environment |
+| Live Discord gateways, OAuth invitations, OpenRouter/model and media endpoints | Unverified: operator credentials and Discord channel IDs are required |
+
+The Python tests cover these behaviors:
+
+- Exact owner identity, impersonation/webhooks, unauthorized model tools, command routing without model calls, protected credentials, encrypted storage, secret redaction, token/application mismatch, preservation of public application IDs and invite links, session cookies, CSRF and origin checks.
+- Fragmented streaming responses and tool arguments, raw provider parameters, missing usage, hidden reasoning exclusion, provider metadata and partial output on failure, model-specific versus provider-wide errors, isolated credential overrides, circuit recovery and per-request cost thresholds.
+- Independent timer decisions, deliberate silence, duplicate input, arrivals during generation, cancellation, cooldowns, ambiguous delivery, restart recovery, scoped memory, model swaps, tool-round budgets, compaction boundaries and failure rollback. Current guild/channel/thread configuration is checked again before scheduling and sending; retired IDs cannot inherit another bot's historical memory.
+- Plugin permission enforcement, public-network fetch boundaries and DNS rebinding checks, Brave search key selection, image/audio attachment ownership, and read-only Hortator inspection.
+- Exclusion of a second process from the same runtime directory, and a live SQLite backup restored with matching credentials, memory, event history and artifacts. Existing backups cannot be overwritten.
+
+The browser suite covers login, pause/resume, command help, provider creation and write-only key entry, incomplete-setup errors, profile cloning, advanced parameter JSON, personality-preserving model swaps, all operational pages, and desktop/mobile layouts. Its seeded trajectory is produced by the actual engine using synthetic provider responses: a memory tool call, reply, delivery and compaction. Request bodies, prompt construction, tool results, delivery evidence and JSON export are inspected in the UI. This fixture only runs in an isolated temporary test directory; production begins with disabled drafts and no traffic.
+
+Dependency deprecation warnings remain in the test client (and Python 3.12's Discord audio dependency); they do not fail the checks. The tests establish application behavior with controlled endpoints, not compatibility with every provider's interpretation of the OpenAI protocol or a large-scale production load limit.
+
+## Repeat the checks
+
+From `/home/codexy/codex/astra-council_cabinet`:
+
+```bash
+uv sync --frozen
+npm ci --prefix web
+(cd web && npx playwright install chromium)
+./scripts/check.sh
+```
+
+Browser failure screenshots/traces and successful overview/trajectory screenshots are written under `web/test-results/` and ignored by Git.
+
+## First live acceptance
+
+After completing the dashboard's setup steps:
+
+1. Authorize distinct Discord applications for Hortator and at least two council members, with Message Content Intent enabled. Set the council and separate reporting channel IDs. Verify each gateway reports online.
+2. Choose real provider/model profiles, enter credentials, then activate the bots. Post a topic as The Boss. Inspect each activation's request, output/silence and delivery; confirm independent cooldowns and thread-specific history.
+3. Ask Hortator for status and a model-assisted incident summary. Confirm `!status`, `!stop all`, `!start all`, prompt/model changes, and `!dm` operate under the owner's identity. Attempt a command from another human account and verify it is ignored with no configuration change or model call.
+4. Force compaction through the Context panel, then inspect the before/after summaries and source boundaries. Swap a bot's model profile and confirm its personality, memory and tool grants remain intact.
+5. Exercise a controlled failure with a temporary profile or credential, inspect its attribution and notification, then restore it and verify recovery. The stop control cannot recall a message already accepted by Discord; uncertain acceptance must remain visible in the outbox.
+6. Enable the optional search/image/TTS plugins with their own credentials and endpoint options, then verify their provider-specific responses and Discord attachments. Keep their external usage separate from chat-model costs.
+
+These live steps are provided for external acceptance; they have not been represented as completed tests.
+
+## 2026-09-08 — expanded sandbox tools and Python 3.14
+
+The application and real Bubblewrap jobs were verified on the operator's installed **Python 3.14.4**, using an isolated test virtualenv while the shared runtime remained running. The toolchain uses uv 0.12.9 and the SHA-256-verified micromamba 2.9.0-0 bootstrap. pip 26.2.1 is the only added locked dependency; existing dependency versions were preserved while obsolete interpreter wheel entries were removed from the lockfile.
+
+- `UV_PROJECT_ENVIRONMENT=/tmp/hortator-toolset-venv-20260908 HORTATOR_REQUIRE_SANDBOX=1 HORTATOR_TEST_PACKAGE_NETWORK=1 HORTATOR_TEST_PORT=18114 bash scripts/check.sh` passed locked dependency installation, Ruff lint/format, the initial 536-test Python suite, npm locked installation, Prettier, TypeScript/Vite build and **18 Playwright tests** using separate temporary data and port 18114.
+- After the final readiness probe, standalone receiver compatibility check and existing-installation catalog correction, the full Python suite was rerun with both sandbox/network flags: **537 passed**, two TestClient dependency deprecation warnings, no skips (140.96 seconds). The final Ruff checks passed. A separate focused shell/publishing run passed **39 tests**, and private inspection/control API checks passed **2 tests**.
+- Real subprocess tests cover Python/python3/python3.14 resolving to Python 3.14; synthetic agent identity; process/network inspection; jq and Perl modules; Git initialization/commits; ordinary venv/ensurepip and uv-created environments; actual pip/uv wheel installation; EXTERNALLY-MANAGED refusal on the base interpreter; per-job package disposal with persistent deliverables; package byte/entry exhaustion; and existing ownership, import protection, link rejection, output paging, timeout/cancellation and parent-SIGKILL cleanup.
+- Opt-in public-network checks performed certificate-verified curl/wget HTTPS downloads, Git HTTPS remote discovery, installation/import of six 1.17.0, and native zstd 1.5.7 installation plus repeated installation through `pkg`. No ImageMagick application was installed. Node is absent from the supplied sandbox toolchain. These checks use disposable package storage and synthetic workspaces, not live provider requests or Discord sends.
+- The existing saved 256 MiB/12-process shell limits were tested separately: uv installed the small Python package, but micromamba aborted with an allocation failure. The tested 2 GiB/16-process defaults completed the Python/native workflow. This evidence motivates the scoped live shell-limit adjustment; new package scratch defaults are 2 GiB/50,000 monitored entries. Existing explicit configuration remains authoritative until deliberately changed.
+- `uv build --wheel` succeeded; all five shell assets were present and the pip/pkg wrappers retained executable permissions. The `python:3.14-slim-trixie` Docker manifest was verified. Docker image build/runtime validation was unavailable because the account could not access the Docker daemon socket; the Docker recipe still requires a compatible outer namespace policy.
+
+The application migration does not replace distribution Python or change the separately managed publishing receiver's interpreter contract. Resource documentation distinguishes per-process address space, hard tmpfs byte ceilings, monitored entries and strict workspace export validation. These tests do not establish live Discord/provider generation or remote publication acceptance. Committed rollout uses the shared-Screen refresh workflow; its external `logs/next-feature.json` and startup-captured version provide deployment evidence without a rolling source-tree handover.
+
+### 2026-09-12 — Reasoning configuration in operational logs
+
+Added bounded, credential-redacted native reasoning setting summaries and profile
+revisions to turn start and provider request start/completion. Request summaries
+use the assembled payload after compaction overrides. Mock provider coverage
+checks an override from low to max, folded console visibility, revision identity,
+and separation of absent/disabled controls from private reasoning text.
+
+Validation: provider diagnostics plus console tests passed (38 tests); the 18
+provider diagnostics tests passed again after ensuring credential masking occurs
+before field truncation. Ruff and diff whitespace checks passed. These are mocked
+request checks; they do not establish that an upstream model honors its controls.
+
+### 2026-09-12 — Remove hidden fixed image budget from compaction
+
+Live baseline: Ada event #18517 had 93,478 estimated tokens and 12 images;
+Dirac's corresponding compaction had 74,797 tokens and 9 images. Their saved
+262,000-token/78% profile had a 204,360-token threshold; the fixed eight-image
+limit caused these compactions. Calibration did not raise either estimate.
+
+Implemented per-profile request image count and original-byte budgets, exposed
+in the modern editor and shared by planning, retained-tail selection, summary
+batching and final wire validation. Old profiles default to 8 images/40 MiB.
+The owner authorized 256 images/512 MiB for the two affected DeepSeek profiles;
+other configuration remains intact. Compaction events identify all triggers,
+measured counts, limits, channel and profile revision. No history is discarded.
+
+Validation: 110 focused vision/context-responsiveness/provider-streaming/console
+tests passed; all 37 vision tests passed after the final added budget/default
+coverage. The isolated modern browser test passed, saving 256/512 through the
+editor and confirming they survive another profile edit alongside native JSON.
+TypeScript/Vite build, Ruff and diff checks passed. Tests use synthetic images
+and mock providers; they do not claim live acceptance of 256 images by DeepSeek.
+Deployment/configuration backup receipts belong outside source Git under the
+runtime logs and external backup directories.
+All 15 compaction-limit tests also passed, preserving complete-summary and
+retained-text-cap behavior independently of the new image budgets.
+
+### 2026-09-12 — Finish SSE limit separation and remove temporary patch note
+
+Confirmed saved image budgets on both DeepSeek profiles: 256 images/512 MiB;
+Hortator remains max reasoning, 512,000-token window, 87% threshold; council
+profile remains low reasoning, 262,000-token window, 78% threshold. Both retain
+32,768-token summary caps. Curie remains disabled. At the initial read-only check,
+no compaction/provider failures had been recorded since startup event #18767.
+
+Removed the pasted temporary comment only after completing its separate SSE
+recommendation. A regression streams 26,000 metadata-heavy chunks totaling more
+than 8,000,000 response bytes, with just 78,006 bytes of reasoning plus final text;
+it completes even with a 100,000-byte synthetic buffered-body/output allowance.
+Additional tests cover split unterminated lines, multiline events, comments,
+UTF-8 accounting, private partial reasoning, tool/detail payload limits, current
+metadata bounds and buffered JSON failures with actual observed/allowed bytes.
+Local bounds do not trip provider health. Genuine protocol validation and existing
+compaction retention requirements are preserved.
+
+Validation: streaming/diagnostics/compaction suite passed (90 tests), then final
+streaming/provider/console suite passed (91 tests) after adding metadata/tool
+boundary coverage. Ruff and diff checks passed. These are mock/synthetic tests,
+not paid model or Discord validation. Runtime rollout uses the shared Screen
+refresh command and its external startup/build receipt; no configuration changes
+are needed for this parser fix.
+
+### 2026-09-12 — Two-hour task deadlines
+
+Raised document/work task validation maxima and the modern file/reading editor
+bound to 7,200 seconds. Defaults and provider per-request timeouts are unchanged.
+Both modern and legacy editors already contain a workspace/file-reading task
+field; the earlier conversational claim that modern lacked it was incorrect.
+It is conditionally shown in Capabilities for granted workspace/shell/web-fetch
+capabilities; the frozen legacy frontend is unchanged by this patch.
+
+Validation: 35 document configuration, agentic API/runtime and runtime-feedback
+tests passed. Direct model validation accepts 7,200 for both fields and rejects
+7,201 at the corresponding field. Ruff and diff checks passed. Existing deadline
+semantics are tested with short synthetic timeouts; no two-hour live run claimed.
+The owner's requested live change sets only Hortator's two task deadlines to
+7,200 via the revision-aware service, recorded in normal config events and an
+external deployment receipt.
+
+### 2026-09-12 — HTTP 413 request-size evidence
+
+Event #22861 (`req_6da59775d59144b1a85e`, bot v) has 18 inline images totaling
+38,333,287 original bytes / 51,111,068 base64 bytes. Reconstruction from the stored
+request gives 51,489,386 JSON bytes (49.1041 MiB), exceeding DeepSeek's documented
+48 MiB / 50,331,648-byte limit by 1,157,738 bytes. No private reasoning replay
+entries were present. Historical body size is reconstructed, not a captured
+Content-Length. Its preceding successful 17-image request reconstructed to
+48,028,506 bytes (45.8036 MiB). The 413 response itself contains no numeric limit.
+Source verified: https://api-docs.deepseek.com/guides/vision/#limits.
+
+Implemented exact single-serialization request-size capture for future calls,
+before transmission, with numeric-only size evidence and documented-limit
+provenance. The detached encoder preserves native JSON/UTF-8 and provider headers.
+Tests verify HTTPX Content-Length matches recorded body bytes, image/base64 counts,
+folded console visibility, private diagnostics and HTTP 413 classification without
+provider-health failures. Noncanonical endpoints/proxies retain unknown limits.
+151 provider/streaming/diagnostics/vision/console tests passed; Ruff/diff checks
+passed. No paid diagnostic request was sent and no vision policy was changed.
+
+### 2026-09-12 — Ten-image profiles and request budgets
+
+All 16 saved model profiles now explicitly use `max_request_images=10`, including
+Hortator's separate reasoning profile. The revision-aware owner service applied
+this as one offline transaction; normalized profile comparisons confirmed that
+only the image count changed, and all non-profile records were preserved.
+The two DeepSeek byte budgets remain 512 MiB; other profiles retain 40 MiB.
+
+New profiles and records without an explicit count default to ten. The schema
+has no fixed count maximum; direct validation accepted 100,000 while retaining
+positive-count validation. Discord create/edit capture now admits ten per
+message independently. Existing vision tests cover all ten authorized downloads,
+refusal beyond the request count, explicit smaller/larger profile budgets and
+bounded compaction batches. Combined provider/streaming/diagnostics/vision/console/
+Discord-intake/compaction validation: **186 passed**, with two existing dependency
+deprecation warnings. Ruff format/check and diff checks passed. No paid test
+request or live ten-attachment Discord test was sent.
+
+A complete stopped-runtime backup was taken before the configuration update at
+`/home/codexy/.local/share/hortator-backups/20260912-ten-image-profiles`; SQLite
+`quick_check` returned `ok`. Normal config events and the private numeric receipt
+`$HORTATOR_DATA_DIR/logs/ten-image-profiles.json` record old/new revisions and
+image budgets. Deployment uses the existing shared-Screen refresh workflow;
+`logs/next-feature.json` records the resulting startup/build verification.
+
+### 2026-09-12 — Expire handled image inputs instead of repeatedly compacting them
+
+Investigated V's turn `turn_70d1b0e0becd40d583a1` and events #25228–25243.
+Compaction was triggered solely by four retained images against a one-image
+profile budget, at 109,872 estimated tokens versus a 460,800-token threshold.
+The first 23-message batch produced an accepted 19,131-token summary (limit
+32,768). The next pending message, `1548172836420718693` (seq 15959), contains two
+ready images totaling 2,398,504 bytes; the previous implementation could never
+fit that indivisible message into a one-image batch. Its old error's 407,347
+figure was the allowed token budget, not observed input size. All batches had to
+succeed before a checkpoint commit, so retrying repeated the earlier paid batch.
+
+Implemented current-turn selection using each bot/channel's existing last_seen,
+metadata-only old/excess attachments, fixed image inputs through tool rounds,
+text-only compaction, and source removal/deletion checks on subsequent requests.
+Preserved current-generation pixels when text compaction advances their source
+checkpoint. Failed/cancelled turns do not acknowledge input. No operator profile,
+image bytes, memories or existing summaries were rewritten by the deployment.
+New omission warnings include both count and byte limits plus the binding cause.
+Compaction token errors now name actual required and allowed estimates separately.
+
+107 vision/compaction/responsiveness/runtime/feedback/error tests passed, followed
+by 185 addressing/concurrency/typing/intake/footer/provider/streaming/diagnostics
+tests: 292 distinct tests, with two existing dependency deprecation warnings.
+Coverage includes two old images under a one-image profile, text-only forced
+compaction, new-image overflow without compaction, independent bot boundaries,
+retained pixels through tool rounds followed by expiry, original cache retention,
+source deletion and explicit token-budget diagnostics. Ruff/diff checks passed.
+
+An offline replay copied only the relevant current conversation/configuration
+into temporary private storage and prohibited provider calls. V's unmodified
+shared profile was revision 11 / count 3 (the owner edited it during diagnosis).
+The new preparation produced 0 image inputs, 4 historical metadata-only images,
+93,920 estimated tokens versus the 460,800-token threshold, and no compaction or
+provider call. The live database was not modified by this replay. This validates
+input preparation, not the quality of a newly generated model answer.
+
+The deployment procedure uses a stopped-runtime complete backup at
+`/home/codexy/.local/share/hortator-backups/20260912-turn-scoped-images`, then the
+shared-Screen refresh workflow. Its external `logs/next-feature.json` receipt
+records actual startup/dashboard matching; no source branch is pushed.
+
+### 2026-09-12 — Per-bot memory budgets and 5% consolidation headroom
+
+Implemented the final owner preference: `bots.memory_char_limit` is a strict
+integer from 1 to 48,000, default 48,000, exposed only in the modern Capabilities
+editor. Zero/negative/unlimited sentinels are rejected. Bot/global memory plugin
+grants control both tool access and automatic note injection without deleting
+notes. Existing records receive defaults without being rewritten.
+
+166 backend tests passed across `test_memory_budget`, `test_plugins`,
+`test_tool_feedback`, `test_runtime`, `test_runtime_feedback`,
+`test_silence_policy`, `test_security`, `test_context_responsiveness` and
+`test_compaction_limits`. The 18 new memory checks cover schema/API bounds,
+per-bot persistence, scope, Unicode/NUL character accounting, the 8,000-note
+bound, 50,400 default hard ceiling, accepted overshoot warnings, sequential
+consolidation, lowered limits in captured contexts, owner/tool parity and
+plugin disable/re-enable with retained notes. A mocked three-request model turn
+writes 104/100 characters, receives the warning in the next prompt/result,
+reduces to 90, then answers successfully. No public provider was called.
+
+The targeted modern `workbench.spec.ts` browser test passed against the isolated
+port-18000 fixture with a separate `/tmp/hortator-memory-budget-web` build. It
+checks 48,000 default, native 1–48,000 bounds, rejection of zero/negative/blank/
+above-maximum input without saving, per-bot 1,200 persistence/reopen and another
+bot remaining unchanged. Existing silence/footer controls continue to work.
+TypeScript/Vite build, Ruff check/format, targeted Prettier and diff checks pass.
+The test suite reports two existing Starlette/TestClient deprecation warnings.
+Legacy source was not edited. These are fixture tests, not live-model acceptance.
+
+Read-only inspection found all six current bots omit the new field and retain
+their memory grant, so they receive the effective 48,000 default after upgrade.
+No live notes, credentials, provider/model settings or source branches were
+rewritten for testing. Deployment uses the existing shared-Screen `--refresh`
+workflow after the source commit; its external `logs/next-feature.json` receipt
+records the actual matching dashboard/server identities. No push is performed.

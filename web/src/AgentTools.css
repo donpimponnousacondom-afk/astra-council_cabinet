@@ -1,0 +1,45 @@
+.agent-tools {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+.agent-tools-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 9px;
+}
+.agent-tools-heading h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.agent-tool-record {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+  font: 11px/1.5 var(--mono);
+}
+.agent-tool-record .text-button {
+  justify-self: start;
+}
+.agent-tools pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 360px;
+  overflow: auto;
+  padding: 8px 10px;
+  font: 12px/1.5 var(--mono);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.agent-tool-inspection {
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  padding: 10px;
+}
+.agent-tool-inspection > button {
+  margin: 4px 10px 4px 0;
+}

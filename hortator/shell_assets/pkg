@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+if [[ ${1:-} != install || $# -lt 2 ]]; then
+  echo 'Usage: pkg install PACKAGE... (conda-forge native packages, e.g. zstd)' >&2
+  echo 'Installs to /packages/native for this job only. Save outputs in /workspace.' >&2
+  exit 2
+fi
+shift
+action=create
+if [[ -d /packages/native/conda-meta ]]; then action=install; fi
+exec micromamba --no-rc "$action" --yes --prefix /packages/native \
+  --root-prefix /packages/mamba --override-channels --channel conda-forge \
+  --ssl-verify /etc/ssl/certs/ca-certificates.crt -- "$@"
