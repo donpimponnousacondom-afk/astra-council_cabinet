@@ -177,7 +177,9 @@ class CouncilClient(discord.Client):
                 item = {key: value.get(key) for key in ("id", "filename", "url", "size", "content_type")}
                 item["id"] = str(item["id"])
                 item = reuse_vision(item, prior.get(item["id"]))
-                if image_candidate(item):
+                if image_candidate(item) and (self.manager.store.get("bots", self.bot_id) or {}).get(
+                    "allow_images", True
+                ):
                     image_index += 1
                     if image_index <= MAX_CAPTURE_IMAGES:
                         item = await self.manager.images.capture(item)
@@ -606,7 +608,7 @@ class DiscordManager:
                 "content_type": a.content_type,
             }
             attachment = reuse_vision(attachment, prior.get(str(a.id)))
-            if image_candidate(attachment):
+            if image_candidate(attachment) and bot.get("allow_images", True):
                 image_index += 1
                 if image_index <= MAX_CAPTURE_IMAGES:
                     attachment = await self.images.capture(attachment)

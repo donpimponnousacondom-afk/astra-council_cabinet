@@ -311,7 +311,11 @@ export function Editor({
       <input
         type="number"
         step={step}
-        min={schemas[kind]?.properties?.[key]?.minimum}
+        min={
+          key === "compaction_max_tokens"
+            ? 1
+            : schemas[kind]?.properties?.[key]?.minimum
+        }
         max={schemas[kind]?.properties?.[key]?.maximum}
         required={
           key === "memory_char_limit" || key === "global_memory_char_limit"
@@ -673,6 +677,28 @@ export function Editor({
                   <>
                     <fieldset className="check-list">
                       <legend>Built-in capabilities</legend>
+                      <label>
+                        <input
+                          type="checkbox"
+                          aria-label="Receive image inputs"
+                          checked={draft.allow_images !== false}
+                          onChange={(e) =>
+                            set("allow_images", e.target.checked)
+                          }
+                        />
+                        <span>
+                          <strong>Receive image inputs</strong>
+                          <small>
+                            Send new attachment pixels to this bot's model. Turn
+                            off for text-only or faster bots: attachment
+                            metadata and conversation text remain available.
+                            Other bots sharing the model profile are unaffected.
+                            Image count and byte budgets stay in the model
+                            profile; enabling this does not guarantee provider
+                            vision support.
+                          </small>
+                        </span>
+                      </label>
                       <label>
                         <input
                           type="checkbox"
@@ -1126,7 +1152,12 @@ export function Editor({
                     {numeric(
                       "summary_tokens",
                       "Retained summary limit (tokens)",
-                      "Hard limit on the finished summary text using cl100k_base, excluding private reasoning. No combined output cap is sent to the provider. Must stay below 60% of the context window.",
+                      "Hard limit on the finished summary text using cl100k_base, excluding private reasoning. Separate from the provider output allowance. Must stay below 60% of the context window.",
+                    )}
+                    {numeric(
+                      "compaction_max_tokens",
+                      "Compaction output cap (max_tokens)",
+                      "Optional native max_tokens, covering reasoning plus summary. Blank uses the provider default, which may be only 8,192 tokens. Must leave input space within the context window. Does not change normal replies.",
                     )}
                     {numeric(
                       "keep_recent_messages",
@@ -1195,16 +1226,17 @@ export function Editor({
                       label="Compaction parameters"
                       value={draft.compaction_request_json || {}}
                       onChange={(v) => set("compaction_request_json", v)}
-                      hint="Native reasoning and other overrides for summarization. max_tokens, max_completion_tokens and max_output_tokens are omitted from compaction requests, even if configured here."
+                      hint="Native reasoning and other overrides for summarization. Output-cap fields here are ignored; use Compaction output cap (max_tokens) under Context & retained summary."
                     />
                     <p className="muted small-text">
                       Compaction starts with Model parameters and replaces any
                       top-level fields set here, including whole nested objects.
-                      Compaction sends no total-output cap: provider defaults
-                      and context limits still apply. Only the finished summary
-                      counts against the retained summary limit. An oversized or
-                      incomplete candidate is saved for inspection and leaves
-                      previous context intact.
+                      The separate Compaction output cap optionally sends
+                      max_tokens. Blank uses the provider default, not unlimited
+                      output. Context limits still apply. Only the finished
+                      summary counts against the retained summary limit. An
+                      oversized or incomplete candidate is saved for inspection
+                      and leaves previous context intact.
                     </p>
                     <Code
                       value={reasoningFields({

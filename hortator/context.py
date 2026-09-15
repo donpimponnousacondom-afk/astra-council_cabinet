@@ -124,6 +124,8 @@ class ContextBuilder:
         )
         universal += " " + TOOL_GUIDANCE
         universal += " Actual image parts grant visual access for this turn only. Attachment vision.status=ready means cached on disk, not necessarily included: pixels_in_this_request explicitly identifies attached pixels. If an image is marked IMAGE RESIZED or PIXELS UNAVAILABLE, disclose that limitation when answering about it; do not pretend you saw the original detail. Do not repeat image warnings in unrelated answers. Older attachments are metadata only; rely on attributed written observations, never invent visual details or keep discussing old images without a relevant request. Reattach an older image to inspect its pixels again. Private reasoning is not conversation memory."
+        if not bot.get("allow_images", True):
+            universal += " Image inputs are disabled for this bot by the operator. All attachments are metadata only, including new images and files cached for other bots. You cannot inspect their pixels; use only supplied text and attributed written observations. Reattaching an image will not enable visual access while this setting is off. Explain this when asked to inspect an image, without claiming the underlying model lacks vision support."
         if bot["role"] == "hortator":
             universal += " You are Hortator, the council director and diagnostic assistant. Only The Boss may address you. Use council_inspect for evidence, including resource version for the actual running code; distinguish provider failures from Discord delivery failures. Configuration changes are deterministic owner commands, never tool/model mutations."
             universal += " Your intake is limited to the owner's configured control channel, its threads and owner DMs; mentions elsewhere do not open turns. If granted, discord_send is an explicit owner-requested action for posting to another configured channel. It does not replace your normal answer here or change your intake scope. Never claim a cross-post succeeded without its confirmed delivery receipt."
@@ -196,6 +198,7 @@ class ContextBuilder:
             "round": round_index,
             "rounds_remaining": max(0, bot["max_tool_rounds"] - round_index),
             "allow_silence": bot.get("allow_silence", True),
+            "allow_images": bot.get("allow_images", True),
             "context_tokens": estimated,
             "context_window": profile["context_window"],
             "seconds_since_last_message": round(time.time() - state["last_sent"])
@@ -249,8 +252,13 @@ class ContextBuilder:
     async def assemble(
         self, bot, profile, channel_id, rows, summary, round_index=0, extras=None, tools=None, image_plan=None
     ):
-        if image_plan is None:
-            image_plan = select_images(rows, self.store.context(bot["id"], channel_id)["last_seen"], profile)
+        if image_plan is None or not bot.get("allow_images", True):
+            image_plan = select_images(
+                rows,
+                self.store.context(bot["id"], channel_id)["last_seen"],
+                profile,
+                allow_images=bot.get("allow_images", True),
+            )
         inputs = current_inputs(self.store, channel_id, image_plan)
         layers = self.layers(bot, channel_id)
         messages = [{"role": "system", "content": "\n\n".join(item["content"] for item in layers)}]
@@ -319,20 +327,23 @@ class ContextBuilder:
             rows.extend(page)
             cursor = page[-1]["seq"]
             await asyncio.sleep(0)
-        try:
-            async with asyncio.timeout(60):
-                await self.images.prepare_rows(
-                    [r for r in rows if r["seq"] > context["last_seen"]], bot_id=bot["id"]
-                )
-        except TimeoutError as exc:
-            raise ControlError(
-                "New-message image capture exceeded 60 seconds; cached progress is retained, retry preparation"
-            ) from exc
-        image_plan = select_images(rows, context["last_seen"], profile)
+        if bot.get("allow_images", True):
+            try:
+                async with asyncio.timeout(60):
+                    await self.images.prepare_rows(
+                        [r for r in rows if r["seq"] > context["last_seen"]], bot_id=bot["id"]
+                    )
+            except TimeoutError as exc:
+                raise ControlError(
+                    "New-message image capture exceeded 60 seconds; cached progress is retained, retry preparation"
+                ) from exc
+        image_plan = select_images(
+            rows, context["last_seen"], profile, allow_images=bot.get("allow_images", True)
+        )
         messages, meta = await self.assemble(
             bot, profile, channel_id, rows, context["summary"], tools=tools, image_plan=image_plan
         )
-        if image_plan["historical_images"] or image_plan["budget_omitted"]:
+        if image_plan["historical_images"] or image_plan["budget_omitted"] or image_plan["disabled_images"]:
             self.store.emit(
                 "context.image_selection",
                 {
@@ -341,13 +352,18 @@ class ContextBuilder:
                     "selected_images": len(image_plan["inputs"]),
                     "selected_image_bytes": sum(p["image"]["size"] for p in image_plan["inputs"]),
                     "historical_images": image_plan["historical_images"],
+                    "disabled_images": image_plan["disabled_images"],
                     "budget_omitted_images": len(image_plan["budget_omitted"]),
                     "image_limit": image_limits(profile)[0],
                     "image_byte_limit": image_limits(profile)[1],
                     "omission_reasons": sorted(
                         {r for a in image_plan["budget_omitted"] for r in a["reasons"]}
                     ),
-                    "reason": "Historical pixels expire after a handled turn; extra new images remain metadata only",
+                    "reason": (
+                        "Image inputs disabled for this bot; attachments remain metadata only"
+                        if not bot.get("allow_images", True)
+                        else "Historical pixels expire after a handled turn; extra new images remain metadata only"
+                    ),
                 },
                 bot_id=bot["id"],
                 turn_id=turn_id,
@@ -407,6 +423,8 @@ class ContextBuilder:
             pending = list(old_rows)
             compaction_id = "cmp_" + turn_id
             last_request_id = None
+            output_cap = profile.get("compaction_max_tokens")
+            output_policy = "explicit_max_tokens" if output_cap is not None else "provider_default"
             self.store.emit(
                 "compaction.started",
                 {
@@ -426,7 +444,8 @@ class ContextBuilder:
                     "before_summary": summary,
                     "retained_summary_token_limit": profile["summary_tokens"],
                     "summary_tokenizer": "cl100k_base",
-                    "compaction_output_policy": "provider_default",
+                    "compaction_output_policy": output_policy,
+                    "compaction_max_tokens": output_cap,
                     "message_ids": [r["discord_id"] for r in old_rows],
                 },
                 bot_id=bot["id"],
@@ -452,7 +471,8 @@ class ContextBuilder:
                         },
                         {"role": "user", "content": "Existing summary:\n" + summary},
                     ]
-                    budget = int((profile["context_window"] - profile["summary_tokens"]) / factor * 0.85)
+                    output_reserve = max(profile["summary_tokens"], output_cap or 0)
+                    budget = int((profile["context_window"] - output_reserve) / factor * 0.85)
                     prepared_at = time.perf_counter()
                     transcript = await self.conversation_async(pending, bot)
                     async with self.token_slots:
@@ -522,6 +542,8 @@ class ContextBuilder:
                             "reasoning_tokens": reported.get("reasoning_tokens"),
                             "finish_reason": result.finish_reason,
                             "accepted": not incomplete and not oversized,
+                            "compaction_output_policy": output_policy,
+                            "compaction_max_tokens": output_cap,
                         },
                         bot_id=bot["id"],
                         turn_id=turn_id,
@@ -533,7 +555,12 @@ class ContextBuilder:
                             f"finish_reason={result.finish_reason}, visible_chars={len(result.content or '')}, "
                             f"output_tokens={reported.get('output_tokens')}, reasoning_tokens={reported.get('reasoning_tokens')}, "
                             f"retained_summary_tokens={summary_size}, retained_summary_token_limit={profile['summary_tokens']}. "
-                            "No total-output cap was sent by Hortator for compaction. Previous context is retained; inspect the provider completion boundary, default output limit and context limit."
+                            + (
+                                f"Hortator sent max_tokens={output_cap} for reasoning plus summary. "
+                                if output_cap is not None
+                                else "No total-output cap was sent by Hortator; the provider default applies. "
+                            )
+                            + "Previous context is retained; inspect the provider completion boundary, output allowance and context limit."
                         )
                     if oversized:
                         raise ControlError(

@@ -19,14 +19,16 @@ CAPS = ("max_tokens", "max_completion_tokens", "max_output_tokens")
 
 @pytest.mark.parametrize("purpose", ["generation", "compaction"])
 @pytest.mark.parametrize("stream", [True, False])
+@pytest.mark.parametrize("explicit_cap", [None, 32768])
 async def test_compaction_omits_total_caps_without_mutating_saved_generation_or_reasoning(
-    kernel, purpose, stream
+    kernel, purpose, stream, explicit_cap
 ):
     bot = configured(kernel)
     args = call_args(kernel, bot)
     profile = args["profile"]
     profile.update(
         stream=stream,
+        compaction_max_tokens=explicit_cap,
         request_json={
             "max_tokens": 1024,
             "max_completion_tokens": 2048,
@@ -52,15 +54,54 @@ async def test_compaction_omits_total_caps_without_mutating_saved_generation_or_
     row = kernel.store.one("SELECT body,context FROM requests WHERE id=?", (result.request_id,))
     saved = json.loads(row["body"])
     if purpose == "compaction":
-        assert all(key not in body and key not in saved for key in CAPS)
+        expected_caps = {} if explicit_cap is None else {"max_tokens": explicit_cap}
+        assert {key: body[key] for key in CAPS if key in body} == expected_caps
+        assert {key: saved[key] for key in CAPS if key in saved} == expected_caps
         assert body["thinking"] == {"type": "enabled"}
         meta = json.loads(row["context"])
         assert meta["omitted_output_cap_fields"] == list(CAPS)
         assert meta["retained_summary_token_limit"] == profile["summary_tokens"]
-        assert read_diagnostics(kernel.store, result.request_id)["output_limits"] == {}
+        assert meta["compaction_max_tokens"] == explicit_cap
+        assert read_diagnostics(kernel.store, result.request_id)["output_limits"] == expected_caps
     else:
         assert body["max_tokens"] == 1024 and body["max_completion_tokens"] == 2048
         assert "thinking" not in body
+
+
+@pytest.mark.parametrize("cap", [0, -1, True, 1.5, 131072])
+def test_compaction_cap_rejects_nonpositive_noninteger_or_no_input_space(cap):
+    with pytest.raises(ValidationError):
+        Profile(id="test", name="Test", provider_id="test", model="test", compaction_max_tokens=cap)
+
+
+async def test_explicit_compaction_cap_reserves_input_space_and_explains_truncation(kernel, monkeypatch):
+    bot = configured(kernel)
+    ingest(kernel)
+    profile = kernel.store.get("profiles", "balanced")
+    profile.update(compaction_max_tokens=32768, stream=False)
+    context = kernel.engine.contexts
+    original = context.compaction_batch
+    budgets = []
+
+    def batch(prefix, pending, transcript, budget, profile):
+        budgets.append(budget)
+        return original(prefix, pending, transcript, budget, profile)
+
+    monkeypatch.setattr(context, "compaction_batch", batch)
+
+    async def response(request):
+        assert json.loads(request.content)["max_tokens"] == 32768
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": "Partial summary"}, "finish_reason": "length"}]}
+        )
+
+    await install_client(kernel, response)
+    before = kernel.store.context(bot["id"], CHANNEL)
+    with pytest.raises(ControlError, match="Hortator sent max_tokens=32768 for reasoning plus summary"):
+        await context.prepare(bot, profile, CHANNEL, "explicit-cap", [], force=True)
+    after = kernel.store.context(bot["id"], CHANNEL)
+    assert after["checkpoint"] == before["checkpoint"] and after["summary"] == before["summary"]
+    assert budgets == [int((profile["context_window"] - 32768) * 0.85)]
 
 
 @pytest.mark.parametrize("stream", [True, False])

@@ -128,7 +128,7 @@ class Service:
     def public(self, kind, entity):
         value = dict(entity)
         if kind == "profiles":
-            for field in ("max_request_images", "max_request_image_mib"):
+            for field in ("max_request_images", "max_request_image_mib", "compaction_max_tokens"):
                 value.setdefault(field, SCHEMAS["profiles"].model_fields[field].default)
         if kind == "providers":
             for field in ("retry_count", "retry_delay_seconds"):
@@ -143,6 +143,7 @@ class Service:
             value["application_emojis"] = self.registry.application_emojis.prompt(value)
             value.update(footer_settings(value))
             value.setdefault("allow_silence", True)
+            value.setdefault("allow_images", True)
             value.setdefault("memory_char_limit", SCHEMAS["bots"].model_fields["memory_char_limit"].default)
             value.setdefault(
                 "global_memory_char_limit", SCHEMAS["bots"].model_fields["global_memory_char_limit"].default

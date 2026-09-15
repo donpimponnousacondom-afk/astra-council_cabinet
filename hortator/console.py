@@ -82,6 +82,8 @@ SUMMARY_FIELDS = (
     "limit_bytes",
     "summary_tokens",
     "retained_summary_token_limit",
+    "compaction_max_tokens",
+    "compaction_output_policy",
     "task",
     "delay_ms",
     "tokenization_probes",

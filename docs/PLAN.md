@@ -1,5 +1,9 @@
 # Implementation and acceptance plan
 
+## Per-bot image input control (2026-09-15)
+
+The owner needs text-only and vision-enabled bots sharing one provider/model profile, without inferring upstream vision support. Add `bots.allow_images` (default true) and the modern **Receive image inputs** capability. Off skips automatic downloads for that bot and excludes even shared cached pixels from its requests; attachment metadata and written observations remain. The provider boundary rejects stray image parts. Profile image-count/byte budgets stay independent and positive; different positive budgets can use cloned profiles with the same upstream model. No existing bot configuration, context checkpoint or shared image cache is changed by installing this feature. Legacy UI remains frozen.
+
 ## Slash acknowledgement recovery and readable console time (2026-09-15)
 
 Follow-up tuning: the owner requested stronger boldness and contrast between
@@ -78,6 +82,12 @@ The prior frontend is independently bundled at `/legacy/` from `web/src/legacy/`
 The owner requested a review of warnings and errors after Dirac's compaction reached the application's existing 120-second deadline while Ollama was still producing output. A local total deadline now reports its exact configured duration, operation and request phase as `local_deadline`; it does not increment shared provider failures or open the circuit. HTTP connect/read/write timeouts retain transport attribution, while waiting for a local HTTP connection slot is a local-client capacity failure. Existing settings, partial-output withholding, private reasoning evidence, cancellation and retry scheduling remain authoritative.
 
 Warnings/errors explain their known effect: compaction retains the checkpoint; typing failures do not stop the turn; shell infrastructure errors differ from command exit codes; publication failures retain retry timing without claiming delivery. Discord callback failures include exception identity and redacted traceback. Folded incidents show operation/channel/cause before secondary metrics, keep notices visible, and separate repeated failures from different channels/sites. This is additive observability, not an automatic configuration change or replay mechanism. See [OPERATIONS.md](OPERATIONS.md#warning-and-error-diagnosis).
+
+## Explicit compaction allowance and provider benchmarking (2026-09-15)
+
+The owner encountered a provider-default 8,192-token completion boundary after requesting uncapped compaction. Keep default omission and the independent retained-text budget, but add optional per-profile `compaction_max_tokens` in the modern editor/API. It explicitly sends native `max_tokens` for reasoning plus summary; null uses the endpoint's default. Batch preparation reserves that output space, diagnostics name the sent policy/value, and older ignored JSON caps remain ignored. Normal replies and existing profiles are unchanged. Incomplete candidates still cannot advance the checkpoint. This opt-in supersedes the absolute prohibition on compaction output caps below.
+
+The standalone [Featherless tester](FEATHERLESS_TESTER.md) performs filtered model discovery, plan-aware context/concurrency checks, optional warm-up/status polling, streamed/buffered measurements and reusable prompt-filler experiments. It reads existing credentials without starting a council runtime or mutating bots/notes. Keep live benchmark evidence outside source Git; distinguish actual inference results, metadata availability signals and isolated mock verification. The owner may deliberately oversubscribe or overflow through explicit diagnostic flags, never defaults.
 
 ## Retained summary budgets independent of reasoning (2026-09-09)
 

@@ -1597,7 +1597,11 @@ function Catalog({
                 </div>
                 <div>
                   <dt>Compaction total-output cap</dt>
-                  <dd>Not sent · provider default</dd>
+                  <dd>
+                    {item.compaction_max_tokens == null
+                      ? "Not sent · provider default"
+                      : `max_tokens=${num(item.compaction_max_tokens)} · reasoning + text`}
+                  </dd>
                 </div>
                 <div>
                   <dt>Generation output cap</dt>

@@ -507,13 +507,14 @@ class ProviderPool:
         omitted_caps = []
         if purpose == "compaction":
             body.update(copy.deepcopy(profile.get("compaction_request_json", {})))
-            # Compaction budgets only the retained summary. These wire caps
-            # combine thinking and final text, so neither generation JSON
-            # nor compaction overrides may impose them on summarization.
+            # Never inherit generation caps or activate formerly ignored JSON.
+            # Only the explicit compaction field opts into a combined wire cap.
             for key in ("max_tokens", "max_completion_tokens", "max_output_tokens"):
                 if key in body:
                     omitted_caps.append(key)
                     body.pop(key)
+            if profile.get("compaction_max_tokens") is not None:
+                body["max_tokens"] = profile["compaction_max_tokens"]
         body.update(model=profile["model"], messages=messages, stream=profile["stream"])
         if not profile["stream"]:
             body.pop("stream_options", None)
@@ -533,7 +534,10 @@ class ProviderPool:
         }
         if purpose == "compaction":
             meta.update(
-                compaction_output_policy="provider_default",
+                compaction_output_policy="explicit_max_tokens"
+                if "max_tokens" in body
+                else "provider_default",
+                compaction_max_tokens=body.get("max_tokens"),
                 omitted_output_cap_fields=omitted_caps,
                 retained_summary_token_limit=profile["summary_tokens"],
                 summary_tokenizer="cl100k_base",
@@ -562,6 +566,11 @@ class ProviderPool:
             "reasoning": reasoning_settings(body, self.vault.redact),
             "profile_revision": profile["revision"],
         }
+        if purpose == "compaction":
+            request_settings.update(
+                compaction_output_policy=meta["compaction_output_policy"],
+                compaction_max_tokens=body.get("max_tokens"),
+            )
         self.store.emit(
             "request.started",
             {
@@ -593,7 +602,9 @@ class ProviderPool:
         try:
             record_diagnostics(self.store, self.vault, request_id, result, body, status="running")
             try:
-                body["messages"] = ImageCache(self.store).wire_messages(messages, profile)
+                body["messages"] = ImageCache(self.store).wire_messages(
+                    messages, profile, allow_images=bot.get("allow_images", True)
+                )
             except ControlError as exc:
                 raise ProviderError(str(exc), provider_fault=False) from exc
             # Total deadline covers streamed bodies as well as the connection, not just inactivity.

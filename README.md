@@ -71,6 +71,8 @@ Set **Bots → Edit bot → Capabilities → Private memory budget (characters p
 
 ## Fine control of providers and models
 
+For independent Featherless diagnostics, run `uv run python featherless_tester.py --filter qwen --limit 30`. It supports model selection, streamed/buffered timings, warm-up, reasoning and context-filler experiments without changing bot state. [Tester guide](docs/FEATHERLESS_TESTER.md).
+
 Set **Providers → Edit provider → User-Agent** to customize the outgoing client identifier. The field and Advanced HTTP headers edit the same value; it applies to discovery, generation and compaction. Blank uses the HTTP client's default. [Provider transport and discovery diagnostics](docs/OPERATIONS.md#provider-headers-and-discovery-errors) distinguish the provider's HTTP response from the dashboard API response.
 
 A provider stores transport settings and a shared encrypted credential. A model profile stores model identity, context settings, prices (optional), streaming switches, and exact non-secret request JSON. A bot references a profile and can override the provider key in its own credential box.
@@ -94,7 +96,7 @@ For example, a profile's **Model parameters** can be:
 
 This JSON is passed through without translating sampling or reasoning settings. Replace it with exactly what the chosen provider/model accepts; the example is not a promise that every model accepts those fields. Use `reasoning_effort`, `thinking`, or nested provider-specific structures as appropriate. **Advanced · compaction parameter overrides** edits `compaction_request_json` and previews effective reasoning fields for summaries. Non-secret provider headers and the credential `auth_header`/`auth_scheme` are configurable in full configuration JSON.
 
-The runtime owns `model`, `messages`, `tools`, `tool_choice`, `stream`, and single-choice generation. The stream switches live beside the JSON editor. Generation `max_tokens`/`max_completion_tokens` must fit the configured response reserve. **Retained summary limit (tokens)** controls only the finished summary kept after compaction, excluding private reasoning. Compaction omits combined output caps from its outgoing request; the provider's defaults and context limits apply. Oversized or incomplete candidates leave previous context intact. See [compaction budgets](docs/OPERATIONS.md#context-and-compaction).
+The runtime owns `model`, `messages`, `tools`, `tool_choice`, `stream`, and single-choice generation. The stream switches live beside the JSON editor. Generation `max_tokens`/`max_completion_tokens` must fit the configured response reserve. **Retained summary limit (tokens)** controls only the finished summary kept after compaction, excluding private reasoning. **Compaction output cap (max_tokens)** optionally sends a separate allowance for reasoning plus summary; blank uses the provider default, which may be smaller than desired. Oversized or incomplete candidates leave previous context intact. See [compaction budgets](docs/OPERATIONS.md#context-and-compaction).
 
 For a local OpenAI-compatible server, use its base URL (for example `http://127.0.0.1:11434/v1`), turn off **Endpoint requires an API key** if appropriate, and disable **Request stream usage data** if unsupported. In Docker, loopback refers to the container; use a reachable host/network address. HTTPS cloud endpoints can use shared or per-bot credentials.
 
