@@ -73,7 +73,7 @@ Set **Bots → Edit bot → Capabilities → Private memory budget (characters p
 
 ## Fine control of providers and models
 
-For independent Featherless diagnostics, run `uv run python featherless_tester.py --filter qwen --limit 30`. It supports model selection, streamed/buffered timings, warm-up, reasoning and context-filler experiments without changing bot state. [Tester guide](docs/FEATHERLESS_TESTER.md).
+For independent Featherless diagnostics, run `uv run python featherless_tester.py --filter qwen --limit 30`. It supports model selection, streamed/buffered timings, warm-up, reasoning and context-filler experiments without changing bot state. Add `--tools all --tool-suite baseline` to compare simulated tool calling and memory aliases with an HTML report. [Tester guide](docs/FEATHERLESS_TESTER.md).
 
 Set **Providers → Edit provider → User-Agent** to customize the outgoing client identifier. The field and Advanced HTTP headers edit the same value; it applies to discovery, generation and compaction. Blank uses the HTTP client's default. [Provider transport and discovery diagnostics](docs/OPERATIONS.md#provider-headers-and-discovery-errors) distinguish the provider's HTTP response from the dashboard API response.
 
