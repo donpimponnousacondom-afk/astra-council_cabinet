@@ -128,7 +128,7 @@ class Service:
     def public(self, kind, entity):
         value = dict(entity)
         if kind == "profiles":
-            for field in ("max_request_images", "max_request_image_mib"):
+            for field in ("max_request_images", "max_request_image_mib", "compaction_max_tokens"):
                 value.setdefault(field, SCHEMAS["profiles"].model_fields[field].default)
         if kind == "providers":
             for field in ("retry_count", "retry_delay_seconds"):

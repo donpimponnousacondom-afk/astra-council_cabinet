@@ -214,6 +214,9 @@ test("model table changes SSE immediately while preserving native vendor and com
   await dialog
     .getByLabel("Exact model identifier", { exact: true })
     .fill("fixture/model");
+  await dialog
+    .getByLabel("Compaction output cap (max_tokens)", { exact: true })
+    .fill("32768");
   await dialog.getByLabel("Images per request", { exact: true }).fill("256");
   await dialog
     .getByLabel("Combined image budget (MiB)", { exact: true })
@@ -252,6 +255,7 @@ test("model table changes SSE immediately while preserving native vendor and com
   expect(after.revision).toBe(before.revision + 1);
   expect(after.request_json).toEqual(parameters);
   expect(after.compaction_request_json).toEqual(compaction);
+  expect(after.compaction_max_tokens).toBe(32768);
   expect(after.provider_id).toBe(before.provider_id);
   expect(after.include_usage).toBe(before.include_usage);
   expect(after.max_request_images).toBe(256);
@@ -272,10 +276,16 @@ test("model table changes SSE immediately while preserving native vendor and com
     .getByRole("checkbox", { name: "SSE streaming", exact: true })
     .check();
   await dialog
+    .getByLabel("Compaction output cap (max_tokens)", { exact: true })
+    .fill("");
+  await dialog
     .getByRole("button", { name: "Save changes", exact: true })
     .click();
   await expect(dialog).toHaveCount(0);
   await expect(toggle).toBeChecked();
+  expect(
+    (await record(page, "profiles", "wb-sse-fixture")).compaction_max_tokens,
+  ).toBeNull();
   expect(
     (await record(page, "profiles", "wb-sse-fixture")).request_json,
   ).toEqual(parameters);

@@ -126,6 +126,12 @@ class Profile(Entity):
         ge=128,
         description="Maximum retained summary text tokens (cl100k_base); excludes private reasoning and is not sent as a provider output cap",
     )
+    compaction_max_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        strict=True,
+        description="Optional native max_tokens for compaction, including reasoning and summary. Null uses the provider default; retained summary_tokens remains separate.",
+    )
     keep_recent_messages: int = Field(default=12, ge=1, le=1000)
     request_json: dict[str, Any] = Field(default_factory=lambda: {"temperature": 0.8, "max_tokens": 2048})
     compaction_request_json: dict[str, Any] = Field(default_factory=dict)
@@ -148,6 +154,10 @@ class Profile(Entity):
 
     @model_validator(mode="after")
     def fits(self):
+        if self.compaction_max_tokens is not None and self.compaction_max_tokens >= self.context_window:
+            raise ValueError(
+                "Compaction max_tokens must be smaller than the context window to leave input space"
+            )
         if max(self.response_tokens, self.summary_tokens) >= self.context_window * 0.6:
             raise ValueError(
                 "Response reserve and retained summary limit must be less than 60% of the context window"
