@@ -1,5 +1,22 @@
 # Implementation and acceptance plan
 
+## Disclosed JPEG resizing and durable intake outcomes (2026-09-15)
+
+The owner selected a 64,000,000-pixel intake limit and proportional resizing only
+for JPEG/JPG images above it. Images already within that limit retain their exact
+bytes and dimensions. Only converted bytes are cached for a resized source;
+original dimensions/hash and an explicit model-facing resize notice preserve
+provenance. This supersedes the earlier blanket prohibition on resizing, without
+changing the 20 MiB input-file ceiling, per-model budgets or turn-scoped pixels.
+The JPEG decoder working raster and quality attempts remain bounded, off the
+event loop. Other supported formats remain validation-only. See [VISION.md](VISION.md).
+
+Reconnects and attachment edits reuse durable failed outcomes as well as ready
+images. A repeated permanent rejection must not redownload the same file or emit
+the same warning. A raised limit permits one new attempt; transport failures can
+recover through a refreshed authenticated Discord URL. Resized and unavailable
+inputs carry disclosure guidance rather than initiating an unsolicited bot reply.
+
 ## HTTP evidence and in-turn provider recovery (2026-09-14)
 
 The owner requested actual response evidence for web fetching/searching and full operational URLs with stable console ordering. Numeric HTTP status is independent of extracted-document readiness and parser outcomes; received errors retain bodies/headers instead of becoming generic `ControlError` text. Raw decoded response evidence remains paged and credential-protected. See [HTTP_EVIDENCE.md](HTTP_EVIDENCE.md).

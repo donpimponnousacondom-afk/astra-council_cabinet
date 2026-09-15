@@ -21,7 +21,7 @@ from .discord_text import CodeBlock, code_pages, model_message, preview, with_fo
 from .footer import footer_settings, render_footer
 from .timekeeping import council_timezone, present_times
 from .version import version_text
-from .vision import ImageCache, image_candidate, MAX_CAPTURE_IMAGES
+from .vision import ImageCache, image_candidate, MAX_CAPTURE_IMAGES, reuse_vision
 from .store import dumps
 from .discord_content import compose, from_message, saved_parts, embed_text, component_text
 
@@ -168,8 +168,7 @@ class CouncilClient(discord.Client):
             for value in payload.data["attachments"]:
                 item = {key: value.get(key) for key in ("id", "filename", "url", "size", "content_type")}
                 item["id"] = str(item["id"])
-                if prior.get(item["id"], {}).get("vision", {}).get("status") == "ready":
-                    item["vision"] = prior[item["id"]]["vision"]
+                item = reuse_vision(item, prior.get(item["id"]))
                 if image_candidate(item):
                     image_index += 1
                     if image_index <= MAX_CAPTURE_IMAGES:
@@ -179,6 +178,9 @@ class CouncilClient(discord.Client):
                             "status": "unavailable",
                             "error": f"Message exceeds the {MAX_CAPTURE_IMAGES}-image capture limit",
                         }
+                    self.manager.images.report_change(
+                        item, prior.get(item["id"]), bot_id=self.bot_id, message_id=str(payload.message_id)
+                    )
                 attachments.append(item)
             self.manager.store.execute(
                 "UPDATE messages SET attachments=? WHERE discord_id=?",
@@ -581,8 +583,7 @@ class DiscordManager:
                 "size": a.size,
                 "content_type": a.content_type,
             }
-            if prior.get(str(a.id), {}).get("vision", {}).get("status") == "ready":
-                attachment["vision"] = prior[str(a.id)]["vision"]
+            attachment = reuse_vision(attachment, prior.get(str(a.id)))
             if image_candidate(attachment):
                 image_index += 1
                 if image_index <= MAX_CAPTURE_IMAGES:
@@ -592,17 +593,9 @@ class DiscordManager:
                         "status": "unavailable",
                         "error": f"Message exceeds the {MAX_CAPTURE_IMAGES}-image capture limit",
                     }
-                if attachment.get("vision", {}).get("status") == "unavailable":
-                    self.store.emit(
-                        "attachment.image_unavailable",
-                        {
-                            "message_id": str(message.id),
-                            "attachment_id": str(a.id),
-                            "error": attachment["vision"]["error"],
-                        },
-                        bot_id=bot_id,
-                        level="warning",
-                    )
+                self.images.report_change(
+                    attachment, prior.get(str(a.id)), bot_id=bot_id, message_id=str(message.id)
+                )
             attachments.append(attachment)
         parts = from_message(
             message,

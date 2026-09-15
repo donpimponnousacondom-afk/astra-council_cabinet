@@ -430,7 +430,9 @@ class Workspaces:
                     warnings.simplefilter("error", Image.DecompressionBombWarning)
                     with Image.open(handle) as picture:
                         if picture.width * picture.height > MAX_PIXELS:
-                            raise ValueError("Image exceeds the 20 megapixel decoded limit")
+                            raise ValueError(
+                                f"Image exceeds the {MAX_PIXELS // 1_000_000} megapixel decoded limit"
+                            )
                         result.update(
                             width=picture.width,
                             height=picture.height,
@@ -743,7 +745,8 @@ class Workspaces:
                     return data, {
                         "cached": True,
                         "source": "observed Discord attachment",
-                        "original_preserved": True,
+                        "original_preserved": not bool(prior.get("transformation")),
+                        **{k: prior[k] for k in ("warning", "transformation") if k in prior},
                     }
                 except ValueError, OSError:
                     pass
@@ -774,7 +777,8 @@ class Workspaces:
             return self.images.read(vision), {
                 "cached": False,
                 "source": "observed Discord attachment",
-                "original_preserved": True,
+                "original_preserved": not bool(vision.get("transformation")),
+                **{k: vision[k] for k in ("warning", "transformation") if k in vision},
             }
         data = await self._download_attachment(attachment)
         latest = self.store.one(
