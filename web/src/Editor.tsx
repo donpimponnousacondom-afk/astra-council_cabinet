@@ -18,6 +18,7 @@ import { FooterEditor } from "./Footer";
 import { PricingEditor } from "./Pricing";
 import { GlobalMemoryPanel } from "./GlobalMemory";
 import { SlashCommandSetup } from "./SlashCommands";
+import { BotControl } from "./BotControl";
 import {
   DocumentBotSettings,
   DocumentPluginSettings,
@@ -466,6 +467,7 @@ export function Editor({
               ["global-memory", "Global notes"],
               ["footer", "Message footer"],
               ["discord", "Discord"],
+              ["control", "Control"],
             ].map(([id, label]) => (
               <button
                 type="button"
@@ -638,7 +640,7 @@ export function Editor({
                   <>
                     <Field
                       label="Personality / system instructions"
-                      hint="Appended to the immutable identity and shared council prompt."
+                      hint="Injected through the Personality layer when enabled below."
                     >
                       <textarea
                         rows={9}
@@ -648,7 +650,7 @@ export function Editor({
                     </Field>
                     {checkedList(
                       "prompt_ids",
-                      dashboard.prompts,
+                      dashboard.prompts.filter((p) => !p.runtime_layer),
                       "Shared prompt templates (applied in selected order)",
                     )}
                     <Field
@@ -667,10 +669,98 @@ export function Editor({
                       label="Inherited global prompt"
                     />
                     <Notice>
-                      Your exact snowflake, The Boss identity, time awareness,
-                      and the rule against publishing reasoning are included in
-                      every request by the runtime.
+                      Edit generated templates in Prompt library. The switches
+                      below control this bot's injected text and data; execution
+                      permissions and plugin limits are enforced independently.
+                      Tool schemas and actual assistant/tool exchanges remain
+                      protocol data. Disable their plugins to remove those
+                      tools.
                     </Notice>
+                    <fieldset className="prompt-layer-controls">
+                      <legend>Injected prompt layers</legend>
+                      <div className="inline-actions">
+                        <button
+                          type="button"
+                          onClick={() => set("disabled_prompt_layers", [])}
+                        >
+                          Enable generated layers
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            set(
+                              "disabled_prompt_layers",
+                              (dashboard.prompt_layers || []).map((p) => p.id),
+                            )
+                          }
+                        >
+                          Disable generated layers
+                        </button>
+                      </div>
+                      <p className="muted small-text">
+                        Checked layers apply when relevant. Blank templates
+                        inject nothing. Overrides use a template with the same
+                        placement. Disabling compaction input pauses compaction
+                        without erasing its checkpoint.
+                      </p>
+                      {(dashboard.prompt_layers || []).map((layer) => (
+                        <div className="prompt-layer-row" key={layer.id}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              aria-label={`Include ${layer.name}`}
+                              checked={
+                                !(draft.disabled_prompt_layers || []).includes(
+                                  layer.id,
+                                )
+                              }
+                              onChange={(e) =>
+                                set(
+                                  "disabled_prompt_layers",
+                                  e.target.checked
+                                    ? (
+                                        draft.disabled_prompt_layers || []
+                                      ).filter(
+                                        (key: string) => key !== layer.id,
+                                      )
+                                    : [
+                                        ...(draft.disabled_prompt_layers || []),
+                                        layer.id,
+                                      ],
+                                )
+                              }
+                            />
+                            <span>{layer.name}</span>
+                          </label>
+                          <select
+                            aria-label={`Template for ${layer.name}`}
+                            value={
+                              draft.prompt_layer_overrides?.[layer.id] || ""
+                            }
+                            onChange={(e) => {
+                              const overrides = {
+                                ...(draft.prompt_layer_overrides || {}),
+                              };
+                              if (e.target.value)
+                                overrides[layer.id] = e.target.value;
+                              else delete overrides[layer.id];
+                              set("prompt_layer_overrides", overrides);
+                            }}
+                          >
+                            <option value="">
+                              Default · automatic variant
+                            </option>
+                            {dashboard.prompts
+                              .filter((p) => p.runtime_layer === layer.id)
+                              .map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name} · {p.role || "system"}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      ))}
+                    </fieldset>
                   </>
                 )}
                 {tab === "tools" && (
@@ -842,6 +932,19 @@ export function Editor({
                     </Notice>
                   )}
                 </div>
+                {tab === "control" &&
+                  (entity ? (
+                    <BotControl
+                      key={entity.id}
+                      bot={
+                        dashboard.bots.find((b) => b.id === entity.id) || entity
+                      }
+                      dirty={dirty}
+                      onBusyChange={operationChanged}
+                    />
+                  ) : (
+                    <Notice>Save the bot before using live controls.</Notice>
+                  ))}
                 {tab === "footer" && (
                   <FooterEditor
                     draft={draft}
@@ -1254,9 +1357,44 @@ export function Editor({
             )}
             {kind === "prompts" && (
               <EditorSection id="instructions" title="System instructions">
+                <div className="form-grid">
+                  <Field
+                    label="Message role"
+                    hint="Controls the system/user role sent to the provider."
+                  >
+                    <select
+                      value={draft.role || "system"}
+                      onChange={(e) => set("role", e.target.value)}
+                    >
+                      <option value="system">System</option>
+                      <option value="user">User</option>
+                    </select>
+                  </Field>
+                  <Field
+                    label="Prompt placement"
+                    hint="Generated templates replace a specific layer; additional templates are selected in each bot's Prompts tab."
+                  >
+                    <select
+                      value={draft.runtime_layer || ""}
+                      disabled={(dashboard.prompt_layers || []).some((p) =>
+                        p.templates.some((t) => t.id === draft.id),
+                      )}
+                      onChange={(e) =>
+                        set("runtime_layer", e.target.value || null)
+                      }
+                    >
+                      <option value="">Additional shared instructions</option>
+                      {(dashboard.prompt_layers || []).map((p) => (
+                        <option value={p.id} key={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
                 <Field
                   label="System prompt"
-                  hint="Assign this template to any number of bots. Edits cancel affected active turns before the new prompt is used."
+                  hint="Edits cancel affected active turns before new text is used. Empty text omits this layer. Literal data placeholders are substituted once; no code is executed."
                 >
                   <textarea
                     rows={18}
@@ -1265,6 +1403,42 @@ export function Editor({
                     placeholder="Your shared instructions…"
                   />
                 </Field>
+                {draft.runtime_layer && (
+                  <details className="advanced">
+                    <summary>Built-in text and data placeholders</summary>
+                    <p className="muted small-text">
+                      Common data:{" "}
+                      {
+                        "{bot_name} {bot_id} {discord_user_id} {boss_id} {timezone}"
+                      }
+                      . Placement-specific data follows the built-in examples.
+                      Conversation input also supports {"{latest_message}"} (one
+                      record) and {"{latest_content}"} (text only). Unknown
+                      placeholders remain literal.
+                    </p>
+                    {(dashboard.prompt_layers || [])
+                      .find((p) => p.id === draft.runtime_layer)
+                      ?.templates.map((p) => (
+                        <div key={p.id}>
+                          <p>
+                            {p.name} · {p.condition}
+                          </p>
+                          <Code
+                            value={p.content}
+                            label={`Built-in ${p.name}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              set("content", p.content);
+                            }}
+                          >
+                            Use this built-in text
+                          </button>
+                        </div>
+                      ))}
+                  </details>
+                )}
               </EditorSection>
             )}
             {kind === "plugins" && (

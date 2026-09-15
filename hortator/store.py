@@ -104,6 +104,10 @@ class Store:
             "CREATE TABLE IF NOT EXISTS human_attention_claims (bot_id TEXT NOT NULL, message_id TEXT NOT NULL, "
             "turn_id TEXT NOT NULL, claimed_at REAL NOT NULL, PRIMARY KEY(bot_id,message_id))"
         )
+        self.execute(
+            "CREATE TABLE IF NOT EXISTS context_resets (bot_id TEXT NOT NULL, channel_id TEXT NOT NULL, "
+            "after_seq INTEGER NOT NULL, after_at REAL NOT NULL, PRIMARY KEY(bot_id,channel_id))"
+        )
         path.chmod(0o600)
 
     def rows(self, sql, args=()):
@@ -193,6 +197,28 @@ class Store:
             row["addressing"] = json.loads(row["addressing"])
             row["discord_parts"] = json.loads(row["discord_parts"])
         return rows
+
+    def context_boundary(self, bot_id, channel_id):
+        return self.one(
+            "SELECT * FROM context_resets WHERE bot_id=? AND channel_id IN (?, '*') "
+            "ORDER BY (channel_id=?) DESC LIMIT 1",
+            (bot_id, channel_id, channel_id),
+        )
+
+    def after_context_reset(self, bot_id, row):
+        boundary = self.context_boundary(bot_id, row["channel_id"])
+        return not boundary or (row["seq"] > boundary["after_seq"] and row["at"] > boundary["after_at"])
+
+    def filter_context_rows(self, bot_id, rows):
+        boundaries = {
+            channel: self.context_boundary(bot_id, channel) for channel in {r["channel_id"] for r in rows}
+        }
+        return [
+            row
+            for row in rows
+            if not (b := boundaries[row["channel_id"]])
+            or (row["seq"] > b["after_seq"] and row["at"] > b["after_at"])
+        ]
 
     def ingest(
         self,

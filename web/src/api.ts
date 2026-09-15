@@ -24,6 +24,12 @@ export type Dashboard = {
   providers: RecordData[];
   profiles: RecordData[];
   prompts: RecordData[];
+  prompt_layers?: {
+    id: string;
+    name: string;
+    templates: RecordData[];
+    placeholders: string[];
+  }[];
   plugins: RecordData[];
   rooms: RecordData[];
   settings: RecordData;

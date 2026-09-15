@@ -2,6 +2,10 @@
 
 All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The user handles PRs with GitHub **Squash and merge**; after a merge, update main with a fast-forward pull and create a fresh task branch. Never push to main or push any branch without an explicit request.
 
+## Prompt controls and a fresh conversation
+
+Use **Prompt library** to edit generated instruction/input wrappers and their system/user role. Use **Bots → bot → Prompts** to enable layers or choose a placement-specific template override. Existing settings stay enabled until changed. **Bots → bot → Control → Forget everything before now** cancels the target's active work, clears its summary and hides earlier messages, including delayed history. Type the stable bot ID and confirm. Memories survive; other bots are untouched. See [PROMPTS.md](PROMPTS.md) for minimal-context setup, placeholders, cutoff semantics and snapshot compatibility.
+
 ## Dashboard workbench
 
 Open **`http://127.0.0.1:8000/`** for the active desktop workbench. Inventories are compact lists; click column headings to sort, a record name to edit, or a bot's model/provider/context link to inspect the related record. Editors dock beside the inventory and have a **Maximize editor** control for long JSON, prompts and evidence. Settings still save through the existing API with revision checks; credential fields have their own write-only save buttons.

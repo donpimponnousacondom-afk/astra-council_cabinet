@@ -171,3 +171,15 @@ Slash ingress uses Discord's authenticated gateway, not a public HTTP interactio
 Provider retry fields: `retry_count` is a strict integer 0–10, default 3; `retry_delay_seconds` is 0–3600, default 10. Authenticated provider reads expose effective defaults for historical records. The ordinary revision-checked provider save accepts both fields. Request context and events link per-attempt evidence with `retry_group_id`, `attempt`, `max_attempts` and `previous_request_id`; retry warnings remain visible in the existing event/trajectory APIs. Circuit failure counts refer to exhausted logical requests. See [retry operations](OPERATIONS.md#provider-request-retries).
 
 Fetched-document descriptions now include `http_response`, with actual status/reason/header evidence and a paged original-response reference. The new metadata column defaults to `{}` for historical captures. No missing historical status/body is inferred. See [HTTP evidence](HTTP_EVIDENCE.md).
+
+## Prompt layers and conversation cutoff
+
+`GET /api/status` includes `prompt_layers` (placements, default templates/conditions and placeholder catalog). Prompt records add `role: "system" | "user"` and nullable `runtime_layer`; bot records add `disabled_prompt_layers: string[]` and `prompt_layer_overrides: {placement: prompt_id}`. Save through existing revision-checked configuration endpoints. Built-in placement identities cannot be reassigned/deleted; edit their content or disable a bot's layer. Overrides must reference the matching placement. Additional `prompt_ids` cannot refer to generated placements. See [PROMPTS.md](PROMPTS.md).
+
+The owner-only, CSRF-protected control operation is:
+
+```json
+{"action":"reset_context","kind":"bots","id":"ada","data":{"confirm_bot_id":"ada"}}
+```
+
+Optionally add `data.channel_id` for one existing context. Omitted means all channels, including future assignments. The server requires exact confirmation, refuses unknown fields and generates its own current-time cutoff. No memory-delete or caller-supplied cutoff parameter exists. The result contains `bot_id`, nullable `channel_id`, `after_seq`, `after_at` (epoch), and a consequence description. Bot status includes `context_resets`; context inspection includes `reset_boundary` and only messages eligible after it. Shared historical request evidence is unchanged. This operation is not exposed to model tools.

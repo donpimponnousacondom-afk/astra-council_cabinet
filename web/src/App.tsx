@@ -1358,7 +1358,7 @@ function Catalog({
       {
         id: "content",
         label: "Instructions",
-        width: "60%",
+        width: "50%",
         value: (e) => e.content,
         render: (e) => (
           <span className="clip" title={e.content}>
@@ -1368,10 +1368,12 @@ function Catalog({
       },
       {
         id: "grants",
-        label: "Bot grants",
-        width: "10%",
-        value: (e) => d.bots.filter((b) => b.prompt_ids.includes(e.id)).length,
-        render: (e) => d.bots.filter((b) => b.prompt_ids.includes(e.id)).length,
+        label: "Placement / role",
+        width: "25%",
+        value: (e) =>
+          `${e.runtime_layer || "Additional"} / ${e.role || "system"}`,
+        render: (e) =>
+          `${e.runtime_layer || "Additional"} / ${e.role || "system"}`,
       },
       {
         id: "revision",

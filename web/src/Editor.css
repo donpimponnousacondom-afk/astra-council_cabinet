@@ -508,3 +508,38 @@
   margin: 5px 0;
   font-size: 11px;
 }
+
+.prompt-layer-controls {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  padding: 10px;
+}
+.prompt-layer-row {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(190px, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  border-bottom: 1px solid var(--border);
+}
+.prompt-layer-row label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.prompt-layer-row input[type="checkbox"] {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+}
+.prompt-layer-row select {
+  min-width: 0;
+  width: 100%;
+}
+
+.bot-reset-panel .danger-text {
+  color: #f48771;
+}
+.bot-reset-panel {
+  max-width: 880px;
+}

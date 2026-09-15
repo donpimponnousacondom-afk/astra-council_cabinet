@@ -105,6 +105,14 @@ def for_viewer(store, row, bot_id=None):
     data = {**data, "targets": [dict(t) for t in data.get("targets", [])]}
     if row.get("reply_to"):
         reference = stored_reference(store, row["reply_to"], row["channel_id"]) or data.get("reply_target")
+        if reference and bot_id and store.context_boundary(bot_id, row["channel_id"]):
+            original = store.one(
+                "SELECT * FROM messages WHERE discord_id=? AND channel_id=?",
+                (row["reply_to"], row["channel_id"]),
+            )
+            if original is None or not store.after_context_reset(bot_id, original):
+                reference = {k: v for k, v in reference.items() if k not in ("preview", "preview_truncated")}
+                reference["preview_omitted"] = "Before this bot's clean-slate cutoff"
         data["reply_target"] = reference or {"message_id": row["reply_to"], "status": "unresolved"}
         if (
             reference

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from .footer import DEFAULT_FOOTER_TEMPLATE, footer_settings, validate_template
 from .memory_budget import DEFAULT_MEMORY_CHAR_LIMIT
+from .prompt_templates import LAYER_KEYS
 
 OWNER_ID = "1482143139828596916"
 KINDS = ("providers", "profiles", "bots", "prompts", "rooms", "plugins", "settings")
@@ -193,6 +194,17 @@ class Bot(Entity):
         default=DEFAULT_MEMORY_CHAR_LIMIT, ge=1, le=DEFAULT_MEMORY_CHAR_LIMIT, strict=True
     )
     prompt_ids: list[str] = Field(default_factory=list, max_length=30)
+    disabled_prompt_layers: list[str] = Field(default_factory=list, max_length=len(LAYER_KEYS))
+    prompt_layer_overrides: dict[str, str] = Field(default_factory=dict, max_length=len(LAYER_KEYS))
+
+    @field_validator("disabled_prompt_layers", "prompt_layer_overrides")
+    @classmethod
+    def known_prompt_layers(cls, value):
+        unknown = set(value) - set(LAYER_KEYS)
+        if unknown:
+            raise ValueError("Unknown prompt layers: " + ", ".join(sorted(unknown)))
+        return value
+
     persona: str = Field(
         default="Be curious, thoughtful, concise, and willing to disagree constructively.", max_length=60000
     )
@@ -236,6 +248,15 @@ class Bot(Entity):
 
 class Prompt(Entity):
     content: str = Field(default="", max_length=100000)
+    role: Literal["system", "user"] = "system"
+    runtime_layer: str | None = None
+
+    @field_validator("runtime_layer")
+    @classmethod
+    def known_layer(cls, value):
+        if value is not None and value not in LAYER_KEYS:
+            raise ValueError("Unknown prompt placement")
+        return value
 
 
 class Room(Entity):

@@ -587,6 +587,36 @@ class Snapshots:
             available = {
                 row[0] for row in source.execute("SELECT name FROM sqlite_master WHERE type='table'")
             }
+            if include_context:
+                # Restore the effective cutoff alongside checkpoints. Materialize a
+                # channel override so a newer all-channel reset cannot hide restored history.
+                if channel_id:
+                    boundary = (
+                        source.execute(
+                            "SELECT * FROM context_resets WHERE bot_id=? AND channel_id IN (?, '*') ORDER BY (channel_id=?) DESC LIMIT 1",
+                            (bot_id, channel_id, channel_id),
+                        ).fetchone()
+                        if "context_resets" in available
+                        else None
+                    )
+                    target.execute(
+                        "INSERT OR REPLACE INTO context_resets VALUES(?,?,?,?)",
+                        (
+                            bot_id,
+                            channel_id,
+                            boundary["after_seq"] if boundary else 0,
+                            boundary["after_at"] if boundary else 0,
+                        ),
+                    )
+                else:
+                    target.execute("DELETE FROM context_resets WHERE bot_id=?", (bot_id,))
+                    if "context_resets" in available:
+                        target.executemany(
+                            "INSERT INTO context_resets VALUES(?,?,?,?)",
+                            source.execute(
+                                "SELECT * FROM context_resets WHERE bot_id=?", (bot_id,)
+                            ).fetchall(),
+                        )
             if include_global_memory and "global_memories" in available:
                 tables.append("global_memories")
             for table in tables:
