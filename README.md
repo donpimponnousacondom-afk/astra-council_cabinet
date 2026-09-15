@@ -8,6 +8,8 @@ One Python process runs the Discord clients, scheduler, provider HTTP clients, F
 
 The root dashboard is a dense desktop workbench with Dark+ styling, sortable compact lists and docked/maximizable editors. **Ctrl-K** opens pages or records, **Ctrl-B** toggles navigation, **Ctrl-S** saves the active configuration editor, and **/** focuses the inventory filter. The previous dashboard remains at **`/legacy/`** as a frozen fallback while the owner evaluates workflow parity. Both use the same API and authentication; no settings or credentials are migrated. New features belong only to the workbench. See the [dashboard boundary and parity contract](docs/DASHBOARD.md) and [dashboard controls](docs/OPERATIONS.md#dashboard-workbench).
 
+Prompt library now exposes generated system/user templates, with per-bot layer switches and overrides. **Bots → Control → Forget everything before now** starts that bot with a fresh conversation while preserving its memories and other bots. See [prompt and clean-slate controls](docs/PROMPTS.md).
+
 ## Start locally
 
 Requires **Python 3.14** and [uv](https://docs.astral.sh/uv/); Node 22+ is used for the dashboard build. Run commands from the repository root, `/home/codexy/codex/astra-council_cabinet`:

@@ -152,25 +152,18 @@ def matches_definition(actual, expected):
 
 
 class SlashContexts(ContextBuilder):
+    def visible_rows(self, bot, rows):
+        # Each invocation supplies one fresh synthetic message, with no shared
+        # transcript sequence. Owner reset cancels the previous invocation.
+        return rows
+
     def __init__(self, store, pool, invocation, global_memory, application_emojis=None):
         super().__init__(store, pool, global_memory, application_emojis)
         self.invocation = invocation
 
     def layers(self, bot, channel_id):
-        return super().layers(bot, channel_id) + [
-            {
-                "id": "slash_invocation",
-                "content": "This is a fresh owner-initiated /prompt invocation. Only the supplied prompt is "
-                "available, not surrounding channel history or earlier slash conversations. Your private notes "
-                "are scoped to this bot's slash workspace for this Discord channel; global notes are your "
-                "separate cross-channel notebook when granted. Do not claim to see other channel messages. "
-                "Answer as ordinary assistant content; the runtime edits this interaction's response. "
-                "This grants no general permission to send elsewhere. The complete invocation has a hard "
-                "14-minute platform deadline even if a document/workspace tool advertises a longer budget. "
-                "Saved files survive cancellation, but work is never automatically resumed after that deadline. "
-                + dumps(self.invocation),
-            }
-        ]
+        item = self.prompt(bot, "slash_invocation", {"invocation": dumps(self.invocation)})
+        return super().layers(bot, channel_id) + ([item] if item else [])
 
     async def prepare(self, bot, profile, channel_id, turn_id, tools, force=False):
         # No messages are ingested into the ordinary transcript. In particular,
@@ -809,8 +802,11 @@ class DiscordSlash:
         bot = self.store.get("bots", bot_id)
         settings = self.store.get("settings", "global")
         profile, provider = main.configuration(bot) if bot else (None, None)
+        boundary = self.store.context_boundary(bot_id, f"slash:{bot_id}:{interaction.channel_id}")
         reason = (
-            "Snapshot maintenance or runtime shutdown is in progress; retry after resume"
+            "This slash request predates the owner's clean-slate cutoff; send a new /prompt"
+            if boundary and interaction.created_at.timestamp() <= boundary["after_at"]
+            else "Snapshot maintenance or runtime shutdown is in progress; retry after resume"
             if getattr(self.manager.service, "snapshot_maintenance", False)
             or main.closed
             or self.manager.background.closing

@@ -183,6 +183,46 @@ class ChatResponse:
         self.current = None
         self.choices_seen = False
         self.generated_bytes = 0
+        self.pending_surrogates = {}
+
+    def unicode_text(self, value, path, *, streamed=False):
+        """Join UTF-16 halves only within the same streamed text field."""
+        value = self.pending_surrogates.pop(path, "") + value
+        pending = ""
+        if streamed and value and 0xD800 <= ord(value[-1]) <= 0xDBFF:
+            pending, value = value[-1], value[:-1]
+        try:
+            if any(0xD800 <= ord(c) <= 0xDFFF for c in value):
+                value = value.encode("utf-16-le", "surrogatepass").decode("utf-16-le")
+                self.note("joined_surrogate_pairs")
+        except UnicodeError as exc:
+            raise ResponseFormatError(
+                path,
+                "Unicode scalar text or a complete UTF-16 surrogate pair",
+                value,
+                message=f"Invalid Unicode at {path}: unpaired UTF-16 surrogate; partial output withheld",
+            ) from exc
+        if pending:
+            self.pending_surrogates[path] = pending
+        if self.pending_surrogates:
+            self.trace["pending_unicode"] = {
+                key: f"U+{ord(char):04X}" for key, char in self.pending_surrogates.items()
+            }
+        else:
+            self.trace.pop("pending_unicode", None)
+        return value
+
+    def unicode_value(self, value, path):
+        if isinstance(value, str):
+            return self.unicode_text(value, path)
+        if isinstance(value, list):
+            return [self.unicode_value(v, f"{path}[{i}]") for i, v in enumerate(value)]
+        if isinstance(value, dict):
+            return {
+                self.unicode_text(k, path + ".key"): self.unicode_value(v, f"{path}.{k!a}")
+                for k, v in value.items()
+            }
+        return value
 
     def note(self, key):
         counts = self.trace.setdefault("compatibility", {})
@@ -202,7 +242,9 @@ class ChatResponse:
 
     def packet(self, packet, *, streamed, event="message"):
         if event == "error" and not isinstance(packet, dict):
-            raise UpstreamResponseError({"message": packet or "Provider sent an empty SSE error event"})
+            raise UpstreamResponseError(
+                self.unicode_value({"message": packet or "Provider sent an empty SSE error event"}, "error")
+            )
         if packet is None and streamed:
             self.note("null_packets")
             return
@@ -210,8 +252,8 @@ class ChatResponse:
         if packet.get("error") or event == "error":
             # Capture reported usage even when the same packet reports an error.
             if isinstance(packet.get("usage"), dict):
-                self.result.usage.update(packet["usage"])
-            raise UpstreamResponseError(packet.get("error") or packet)
+                self.result.usage.update(self.unicode_value(packet["usage"], "usage"))
+            raise UpstreamResponseError(self.unicode_value(packet.get("error") or packet, "error"))
         next_metadata = {
             **self.result.metadata,
             **{
@@ -224,6 +266,8 @@ class ChatResponse:
         # Bound retained metadata as a current snapshot: repeating the same keys
         # in 25,000 frames must not consume an accumulated payload allowance.
         next_usage = {**self.result.usage, **usage}
+        next_metadata = self.unicode_value(next_metadata, "metadata")
+        next_usage = self.unicode_value(next_usage, "usage")
         metadata_size = len(json.dumps([next_metadata, next_usage], ensure_ascii=False).encode("utf-8"))
         if metadata_size > METADATA_LIMIT:
             raise ResponseLimitError("response metadata", metadata_size, METADATA_LIMIT)
@@ -265,7 +309,9 @@ class ChatResponse:
             field = "delta" if streamed and "delta" in choice else "message"
             msg = object_value(choice.get(field), path + "." + field, nullable=streamed)
             self.message(msg, path + "." + field, streamed=streamed and field == "delta")
-            finish = string_value(choice.get("finish_reason"), path + ".finish_reason")
+            finish = self.unicode_text(
+                string_value(choice.get("finish_reason"), path + ".finish_reason"), path + ".finish_reason"
+            )
             if finish:
                 if self.result.finish_reason and finish != self.result.finish_reason:
                     raise ResponseFormatError(
@@ -285,18 +331,28 @@ class ChatResponse:
         return value
 
     def message(self, msg, path, *, streamed):
-        self.result.content += self.retain(assistant_text(msg.get("content"), path + ".content"))
+        self.result.content += self.retain(
+            self.unicode_text(
+                assistant_text(msg.get("content"), path + ".content"), "content", streamed=streamed
+            )
+        )
         reasoning_added = False
         for name in ("reasoning_content", "reasoning", "thinking"):
             reasoning = assistant_text(msg.get(name), path + "." + name)
             if reasoning and not reasoning_added:
-                self.result.reasoning_content += self.retain(reasoning)
+                self.result.reasoning_content += self.retain(
+                    self.unicode_text(reasoning, name, streamed=streamed)
+                )
                 reasoning_added = True
         details = array_value(msg.get("reasoning_details"), path + ".reasoning_details")
         for detail in details:
             if detail is not None:
                 self.result.reasoning_details.append(
-                    self.retain(object_value(detail, path + ".reasoning_details[]"))
+                    self.retain(
+                        self.unicode_value(
+                            object_value(detail, path + ".reasoning_details[]"), path + ".reasoning_details[]"
+                        )
+                    )
                 )
         tools = array_value(msg.get("tool_calls"), path + ".tool_calls")
         if len(tools) > 100:
@@ -308,7 +364,7 @@ class ChatResponse:
             call_path = f"{path}.tool_calls[{i}]"
             call = object_value(call, call_path)
             index = call.get("index") if streamed else i
-            call_id = string_value(call.get("id"), call_path + ".id")
+            call_id = self.unicode_text(string_value(call.get("id"), call_path + ".id"), call_path + ".id")
             if index is None:
                 matching = [k for k, v in self.calls.items() if call_id and v["id"] == call_id]
                 if matching:
@@ -335,10 +391,18 @@ class ChatResponse:
                 entry["id"] = call_id
             fn = object_value(call.get("function"), call_path + ".function", nullable=True)
             entry["function"]["name"] += self.retain(
-                string_value(fn.get("name"), call_path + ".function.name")
+                self.unicode_text(
+                    string_value(fn.get("name"), call_path + ".function.name"),
+                    f"tool_calls[{index}].function.name",
+                    streamed=streamed,
+                )
             )
             entry["function"]["arguments"] += self.retain(
-                string_value(fn.get("arguments"), call_path + ".function.arguments")
+                self.unicode_text(
+                    string_value(fn.get("arguments"), call_path + ".function.arguments"),
+                    f"tool_calls[{index}].function.arguments",
+                    streamed=streamed,
+                )
             )
         self.result.tool_calls = [self.calls[k] for k in sorted(self.calls)]
 
@@ -381,6 +445,14 @@ class ChatResponse:
         return False
 
     def finish(self):
+        if self.pending_surrogates:
+            path = next(iter(self.pending_surrogates))
+            raise ResponseFormatError(
+                path,
+                "complete Unicode surrogate pair",
+                self.pending_surrogates[path],
+                message=f"Incomplete Unicode at {path}: stream ended with an unmatched UTF-16 high surrogate; partial output withheld",
+            )
         if not self.choices_seen:
             raise ResponseFormatError(
                 "choices",
@@ -397,7 +469,9 @@ class ChatResponse:
             return {}
         # Keep offending data only in private diagnostics. Redact before slicing.
         try:
-            data = json.dumps(redact(json.loads(self.current.data)), ensure_ascii=False)
+            # Escaping preserves malformed code units without poisoning SQLite,
+            # UTF-8 console output or the authenticated diagnostic response.
+            data = json.dumps(redact(json.loads(self.current.data)), ensure_ascii=True)
         except ValueError, RecursionError:
             data = redact(self.current.data)
         return {

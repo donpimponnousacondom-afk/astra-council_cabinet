@@ -67,6 +67,7 @@ class Engine:
         self.closed = False
         self.delivery_waiting = {}
         self.human_superseded = set()
+        self.resetting = set()
 
     def start(self):
         self.task = self.background.spawn(self.loop(), name="council-scheduler")
@@ -81,6 +82,7 @@ class Engine:
         profile, provider = self.configuration(bot)
         return bool(
             settings["enabled"]
+            and bot["id"] not in self.resetting
             and (bot["enabled"] or manual)
             and profile
             and provider
@@ -153,20 +155,28 @@ class Engine:
                 or 0
             )
             unseen = any(
-                not human_directed_elsewhere(self.store, row, bot["id"])
+                self.store.after_context_reset(bot["id"], row)
+                and not human_directed_elsewhere(self.store, row, bot["id"])
                 for row in self.store.rows(
                     "SELECT * FROM messages WHERE channel_id=? AND seq>? AND deleted=0 AND (bot_id IS NULL OR bot_id<>?)",
                     (channel_id, context["last_seen"], bot["id"]),
                 )
             )
             if bot["role"] == "hortator":
-                unseen = bool(
-                    self.store.one(
-                        "SELECT 1 FROM messages WHERE channel_id=? AND seq>? AND author_id=? LIMIT 1",
+                unseen = any(
+                    self.store.after_context_reset(bot["id"], row)
+                    for row in self.store.rows(
+                        "SELECT * FROM messages WHERE channel_id=? AND seq>? AND author_id=?",
                         (channel_id, context["last_seen"], OWNER_ID),
                     )
                 )
             if not unseen and (not bot["evaluate_when_idle"] or bot["role"] == "hortator"):
+                continue
+            boundary = self.store.context_boundary(bot["id"], channel_id)
+            if boundary and not self.store.one(
+                "SELECT 1 FROM messages WHERE channel_id=? AND seq>? AND at>? LIMIT 1",
+                (channel_id, boundary["after_seq"], boundary["after_at"]),
+            ):
                 continue
             if latest:
                 candidates.append((not unseen, context["updated_at"], channel_id))
@@ -186,6 +196,7 @@ class Engine:
             row
             for row in rows
             if self.channel_allowed(bot, row["channel_id"])
+            and self.store.after_context_reset(bot["id"], row)
             and (bot["role"] != "hortator" or row["author_id"] == OWNER_ID)
         ]
 
@@ -585,7 +596,12 @@ class Engine:
                         reply_repairs += 1
                         # The original response remains in the request ledger. Avoid
                         # teaching the malformed wrapper back through the active prompt.
-                        extras.append({"role": "system", "content": REPLY_REPAIR})
+                        repair = self.contexts.prompt(bot, "reply_repair")
+                        if not repair:
+                            raise ControlError(
+                                "Model returned a tool-wrapped answer; reply repair prompt is disabled or empty, nothing posted"
+                            )
+                        extras.append({"role": repair["role"], "content": repair["content"]})
                         round_index += 1
                         continue
                     if result.content:

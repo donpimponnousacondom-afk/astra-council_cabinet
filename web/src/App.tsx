@@ -1082,6 +1082,20 @@ function ProfileStreamToggle({
   );
 }
 
+function promptGrants(d: Dashboard, prompt: RecordData): number {
+  return d.bots.filter((bot) => {
+    const layer = prompt.runtime_layer;
+    if (!layer) return bot.prompt_ids.includes(prompt.id);
+    if ((bot.disabled_prompt_layers || []).includes(layer)) return false;
+    const override = bot.prompt_layer_overrides?.[layer];
+    return override
+      ? override === prompt.id
+      : d.prompt_layers?.some((p) =>
+          p.templates.some((t) => t.id === prompt.id),
+        );
+  }).length;
+}
+
 function Catalog({
   kind,
   dashboard: d,
@@ -1358,7 +1372,7 @@ function Catalog({
       {
         id: "content",
         label: "Instructions",
-        width: "60%",
+        width: "50%",
         value: (e) => e.content,
         render: (e) => (
           <span className="clip" title={e.content}>
@@ -1367,11 +1381,24 @@ function Catalog({
         ),
       },
       {
+        id: "placement",
+        label: "Placement / role",
+        width: "25%",
+        value: (e) =>
+          `${e.runtime_layer || "Additional"} / ${e.role || "system"}`,
+        render: (e) =>
+          `${e.runtime_layer || "Additional"} / ${e.role || "system"}`,
+      },
+      {
         id: "grants",
         label: "Bot grants",
         width: "10%",
-        value: (e) => d.bots.filter((b) => b.prompt_ids.includes(e.id)).length,
-        render: (e) => d.bots.filter((b) => b.prompt_ids.includes(e.id)).length,
+        value: (e) => promptGrants(d, e),
+        render: (e) => (
+          <span title="Assigned or inheriting bots; conditional layers apply only when relevant.">
+            {promptGrants(d, e)}
+          </span>
+        ),
       },
       {
         id: "revision",

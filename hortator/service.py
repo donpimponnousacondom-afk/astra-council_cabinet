@@ -99,6 +99,14 @@ class Service:
             },
         )
 
+    def seed_prompt_templates(self):
+        from .prompt_templates import DEFAULT_PROMPTS
+
+        for prompt in DEFAULT_PROMPTS:
+            if not self.store.get("prompts", prompt["id"]):
+                value = {k: v for k, v in prompt.items() if k != "condition"}
+                self.store.put("prompts", SCHEMAS["prompts"].model_validate(value).model_dump())
+
     def seed_plugins(self):
         for name, spec in self.registry.specs.items():
             if not self.store.get("plugins", name):
@@ -166,6 +174,9 @@ class Service:
             value["active_turn"] = bool(self.engine and value["id"] in self.engine.tasks)
             value["contexts"] = self.store.rows(
                 "SELECT * FROM contexts WHERE bot_id=? ORDER BY updated_at DESC", (value["id"],)
+            )
+            value["context_resets"] = self.store.rows(
+                "SELECT * FROM context_resets WHERE bot_id=? ORDER BY after_at DESC", (value["id"],)
             )
             value["readiness"] = self.readiness(value)
             from .slash_commands import public_status as slash_public_status
@@ -247,8 +258,32 @@ class Service:
 
         if kind == "profiles":
             exists("providers", entity["provider_id"])
+        if kind == "prompts":
+            from .prompt_templates import DEFAULT_PROMPTS
+
+            default = next((p for p in DEFAULT_PROMPTS if p["id"] == entity["id"]), None)
+            if default and entity.get("runtime_layer") != default["runtime_layer"]:
+                raise ControlError("Built-in template placement is fixed; clone it for another placement")
+            for bot in self.store.list("bots"):
+                if entity["id"] in bot["prompt_ids"] and entity.get("runtime_layer"):
+                    raise ControlError(
+                        f"Remove {entity['id']} from bot {bot['id']}'s additional prompts before changing its placement"
+                    )
+                for key, prompt_id in bot.get("prompt_layer_overrides", {}).items():
+                    if prompt_id == entity["id"] and entity.get("runtime_layer") != key:
+                        raise ControlError(
+                            f"Bot {bot['id']} uses this prompt for {key}; remove that override before changing placement"
+                        )
         if kind == "bots":
             exists("profiles", entity["model_profile_id"])
+            for key, prompt_id in entity["prompt_layer_overrides"].items():
+                exists("prompts", prompt_id)
+                if self.store.get("prompts", prompt_id).get("runtime_layer") != key:
+                    raise ControlError(f"Prompt {prompt_id} is not a template for {key}")
+            for prompt_id in entity["prompt_ids"]:
+                prompt = self.store.get("prompts", prompt_id)
+                if prompt and prompt.get("runtime_layer"):
+                    raise ControlError(f"Select {prompt_id} as a layer override, not an additional prompt")
             self.registry.global_memory.validate_budget(entity["id"], entity["global_memory_char_limit"])
             largest = largest_channel_usage(self.store, entity["id"])
             if largest and largest["used"] > hard_limit(entity["memory_char_limit"]):
@@ -320,7 +355,21 @@ class Service:
             profiles = {p["id"] for p in self.store.list("profiles") if p["provider_id"] == entity_id}
             return [b["id"] for b in bots if b["model_profile_id"] in profiles]
         if kind == "prompts":
-            return [b["id"] for b in bots if entity_id in b["prompt_ids"]]
+            from .prompt_templates import DEFAULT_IDS
+
+            layer = (self.store.get("prompts", entity_id) or {}).get("runtime_layer")
+
+            return [
+                b["id"]
+                for b in bots
+                if (
+                    entity_id in DEFAULT_IDS
+                    and layer not in b.get("disabled_prompt_layers", [])
+                    and not b.get("prompt_layer_overrides", {}).get(layer)
+                )
+                or entity_id in b["prompt_ids"]
+                or entity_id in b.get("prompt_layer_overrides", {}).values()
+            ]
         if kind == "plugins":
             return [b["id"] for b in bots if entity_id in b["enabled_plugins"]]
         if kind == "rooms":
@@ -380,6 +429,12 @@ class Service:
         actor.require_owner()
         async with self.lock:
             deleted_entity = self.entity(kind, entity_id)
+            from .prompt_templates import DEFAULT_IDS
+
+            if kind == "prompts" and entity_id in DEFAULT_IDS:
+                raise ControlError(
+                    "Built-in prompt templates cannot be deleted; edit their text or disable their layer per bot"
+                )
             if kind in ("settings", "plugins"):
                 raise ControlError("This registry entry cannot be deleted; disable it instead")
             references = []
@@ -391,11 +446,17 @@ class Service:
                         "providers": ("provider_id",),
                         "profiles": ("model_profile_id",),
                         "rooms": ("room_ids",),
-                        "prompts": ("prompt_ids",),
+                        "prompts": ("prompt_ids", "prompt_layer_overrides"),
                     }.get(kind, ())
                     for field in fields:
                         value = row.get(field)
-                        if value == entity_id or isinstance(value, list) and entity_id in value:
+                        if (
+                            value == entity_id
+                            or isinstance(value, list)
+                            and entity_id in value
+                            or isinstance(value, dict)
+                            and entity_id in value.values()
+                        ):
                             references.append(f"{k}/{row['id']}")
             if references:
                 raise ControlError("Still referenced by: " + ", ".join(references), 409)
@@ -516,6 +577,8 @@ class Service:
         }
 
     def status(self):
+        from .prompt_templates import catalog
+
         return {
             "background_tasks": self.background.status() if hasattr(self, "background") else {},
             "version": self.version(),
@@ -528,6 +591,7 @@ class Service:
             "rooms": self.store.list("rooms"),
             "plugins": [self.public("plugins", p) for p in self.store.list("plugins")],
             "prompts": self.store.list("prompts"),
+            "prompt_layers": catalog(),
             "active_requests": self.store.rows(
                 "SELECT id,bot_id,model,purpose,started_at FROM requests WHERE status='running'"
             ),
@@ -592,10 +656,15 @@ class Service:
         value["memories"] = self.store.rows(
             "SELECT key,value,updated_at FROM memories WHERE bot_id=? AND channel_id=?", (bot_id, channel_id)
         )
-        value["messages"] = self.store.transcript(channel_id, after=value["checkpoint"], limit=500)
+        value["reset_boundary"] = self.store.context_boundary(bot_id, channel_id)
+        boundary = value["reset_boundary"] or {"after_seq": 0, "after_at": 0}
+        after = max(value["checkpoint"], boundary["after_seq"])
+        value["messages"] = self.store.filter_context_rows(
+            bot_id, self.store.transcript(channel_id, after=after, limit=500)
+        )
         value["message_count"] = self.store.one(
-            "SELECT count(*) AS n FROM messages WHERE channel_id=? AND seq>?",
-            (channel_id, value["checkpoint"]),
+            "SELECT count(*) AS n FROM messages WHERE channel_id=? AND seq>? AND at>?",
+            (channel_id, after, boundary["after_at"]),
         )["n"]
         value["compaction_events"] = [
             e
@@ -640,6 +709,12 @@ class Service:
         actor.require_owner()
         action = command.get("action")
         kind, target, data = command.get("kind"), command.get("id"), command.get("data", {})
+        if action == "reset_context":
+            from .context_reset import reset
+
+            if kind != "bots":
+                raise ControlError("Clean slate requires kind=bots and a bot ID")
+            return await reset(self, actor, target, data)
         if action in ("save", "create"):
             return await self.save(
                 actor, kind, target or data.get("id", uid("new_")), data, create=action == "create"

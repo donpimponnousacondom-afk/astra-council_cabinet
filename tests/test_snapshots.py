@@ -362,3 +362,21 @@ def test_selective_context_refuses_missing_or_divergent_message_anchors(snapshot
         )
     # The same snapshot's notes still restore without moving these checkpoints.
     manager.restore(newer["id"], fingerprint, scope="bot", bot_id="ada", channel_id="channel-a")
+
+
+def test_context_restore_restores_bot_cutoff_without_changing_other_bots(snapshot_data):
+    manager, directory, fingerprint = snapshot_data
+    with sqlite3.connect(directory / "council.sqlite3") as db:
+        db.execute("INSERT INTO context_resets VALUES('ada','*',0,10)")
+        db.execute("INSERT INTO context_resets VALUES('socrates','*',0,20)")
+    manifest = manager.capture("Before another reset")
+    with sqlite3.connect(directory / "council.sqlite3") as db:
+        db.execute("UPDATE context_resets SET after_at=50 WHERE bot_id='ada'")
+    manager.restore(
+        manifest["id"], fingerprint, scope="bot", bot_id="ada", channel_id="channel-a", include_context=True
+    )
+    with sqlite3.connect(directory / "council.sqlite3") as db:
+        rows = db.execute(
+            "SELECT bot_id,channel_id,after_at FROM context_resets ORDER BY bot_id,channel_id"
+        ).fetchall()
+    assert rows == [("ada", "*", 50), ("ada", "channel-a", 10), ("socrates", "*", 20)]

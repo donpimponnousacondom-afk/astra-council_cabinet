@@ -1,5 +1,11 @@
 # Implementation and acceptance plan
 
+## Operator-controlled prompts and per-bot history boundary (2026-09-15)
+
+Implemented editable persisted templates for runtime-generated instructions and system/user input wrappers, with per-bot layer switches/overrides. Defaults preserve current behavior; code-enforced permissions, tool grants and protocol results remain independent. The owner wants small-model experiments with minimal injection and no forced boilerplate. Compaction inputs cannot silently omit history. See [PROMPTS.md](PROMPTS.md).
+
+The owner clarified clean slate means moving one bot's conversation pointer to **now**, like joining without access to previous history. It preserves both kinds of memory, other bots and shared transcript evidence. A red Control-tab action requires confirmation, cancels/join active work and persists bot/channel cutoffs that exclude delayed historical intake and old reply previews. This is separate from recovery or memory deletion. No production reset is performed merely to test it.
+
 ## Per-bot image input control (2026-09-15)
 
 The owner needs text-only and vision-enabled bots sharing one provider/model profile, without inferring upstream vision support. Add `bots.allow_images` (default true) and the modern **Receive image inputs** capability. Off skips automatic downloads for that bot and excludes even shared cached pixels from its requests; attachment metadata and written observations remain. The provider boundary rejects stray image parts. Profile image-count/byte budgets stay independent and positive; different positive budgets can use cloned profiles with the same upstream model. No existing bot configuration, context checkpoint or shared image cache is changed by installing this feature. Legacy UI remains frozen.

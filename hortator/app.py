@@ -42,6 +42,7 @@ class Kernel:
         self.pool = ProviderPool(self.store, self.vault)
         self.service = Service(self.store, self.vault, self.pool)
         self.service.seed()
+        self.service.seed_prompt_templates()
         self.registry = Registry(self.store, self.vault, self.directory, self.service.inspect)
         self.service.registry = self.registry
         self.service.seed_plugins()
