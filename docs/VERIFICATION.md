@@ -2,6 +2,39 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
 
+## Image intake: 64 MP and disclosed JPEG resizing (2026-09-15)
+
+- Renamed the clean local placeholder to `hotfix/image_intake_limits`. The owner
+  explicitly selected proportional resizing above 64 MP after clarifying that
+  JPEG quality cannot reduce megapixels. Existing model/provider/bot settings are
+  preserved; no changes to the retired workspace or source pushes.
+- **240 regression tests passed** across image preprocessing, vision, Discord
+  intake, workspaces, context responsiveness/compaction, addressing, gateway
+  notifications, delivery, documents, security and slash ingress. **Two additional
+  workspace import cases passed** for fresh/cached resized images: actual reduced
+  dimensions, protected imports, source hash and `original_preserved: false` with
+  the resize notice. Ruff lint/format and whitespace checks passed. The two
+  existing dependency deprecation warnings remain.
+- Conversion fixtures cover baseline/progressive RGB, grayscale and CMYK JPEGs,
+  exact original-byte preservation within the ceiling, proportional resizing,
+  EXIF orientation, quality reduction without another resolution change, truncated
+  input refusal, converted-copy-only caching and model/console disclosure. Mocked
+  gateway history/edit observations and a new cache instance reuse a persisted
+  rejection with one download/warning. Refreshed URLs recover transport failures;
+  old 20 MP rejections get one attempt under the new policy.
+- A local check of the actual 8160 × 6120 JPEG (49,939,200 pixels; 1,794,998 bytes)
+  preserved its exact bytes and dimensions. A real Pillow conversion of a
+  synthetic 10,000 × 8,000 JPEG produced 8944 × 7155 (63,994,320 pixels), quality
+  90, 1,002,358 bytes; the output passed image validation. These checks exercised
+  the production ceiling, not just scaled test bounds. Evidence is local at
+  `/tmp/hortator-image-preprocessing-check.json`; the inspection copy is retained.
+  No live provider request or Discord test message was sent.
+- Deployment follows the source commit through the attached shared-Screen
+  `hortator-next-feature --refresh` workflow. Its external `logs/next-feature.json`
+  receipt verifies matching dashboard/server identities. A separate external
+  `logs/image-intake-deployment.json` records the settings comparison and live
+  cache check without storing credentials in source documents.
+
 ## Original web HTTP evidence and provider request retries (2026-09-14)
 
 - Branched the clean `dev/stable_all_sync_remote` checkout to `hotfix/http_evidence_provider_retries`. No source push or changes to the retired workspace. The owner's defaults are three additional attempts with ten seconds between eligible failures, separate from circuit recovery. Ordinary, slash and compaction calls share the request loop, retain completed tools, and obey cancellation/owning task deadlines.

@@ -327,6 +327,58 @@ async def test_real_large_image_cache_import_metadata_compress_copy_and_export(w
     workspaces.release_job(next_job["workspace_id"])
 
 
+@pytest.mark.parametrize("cached", [False, True])
+async def test_resized_attachment_import_discloses_replacement(workspaces, context, monkeypatch, cached):
+    import httpx
+    from hortator import vision
+
+    monkeypatch.setattr(vision, "MAX_PIXELS", 1200)
+    buffer = io.BytesIO()
+    with Image.new("RGB", (80, 60)) as picture:
+        picture.save(buffer, format="JPEG")
+    original = buffer.getvalue()
+    attachment = {
+        "id": "987",
+        "filename": "PHOTO.JPG",
+        "content_type": "image/jpeg",
+        "size": len(original),
+        "url": "https://cdn.discordapp.com/attachments/123/987/PHOTO.JPG",
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda r: httpx.Response(200, content=original, headers={"content-type": "image/jpeg"})
+        )
+    ) as client:
+        workspaces.images.client = client
+        if cached:
+            attachment = await workspaces.images.capture(attachment)
+        workspaces.store.ingest(
+            discord_id="456",
+            channel_id="123",
+            author_id="owner",
+            author_name="Owner",
+            content="import my image",
+            attachments=[attachment],
+        )
+        await call(workspaces, context, "start", task="imports")
+        imported = await call(
+            workspaces,
+            context,
+            "import_attachment",
+            task="imports",
+            path="PHOTO.JPG",
+            message_id="456",
+            attachment_id="987",
+        )
+    assert imported["cached"] is cached
+    assert imported["original_preserved"] is False
+    assert imported["original_protected"] is True
+    assert "IMAGE RESIZED" in imported["warning"]
+    assert imported["transformation"]["original_sha256"] == hashlib.sha256(original).hexdigest()
+    assert (imported["width"], imported["height"]) == (40, 30)
+    assert not workspaces.images.path(hashlib.sha256(original).hexdigest()).exists()
+
+
 async def test_attachment_scope_deleted_and_expired_recovery(workspaces, context):
     await call(workspaces, context, "start", task="imports")
     args = dict(task="imports", path="image.png", message_id="456", attachment_id="987")
