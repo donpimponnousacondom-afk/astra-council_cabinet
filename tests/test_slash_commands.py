@@ -131,7 +131,11 @@ async def test_public_default_and_explicit_private_response(kernel, private):
 
 
 async def test_tool_loop_isolated_prompt_notes_and_footer(kernel):
-    bot = enable(kernel, footer_enabled=True)
+    bot = enable(
+        kernel,
+        footer_enabled=True,
+        footer_template="TTFT: {{TTFT}} | R: {{REASONING_TOKENS}} | C: {{COMPLETION_TOKENS}} | T: {{TOTAL_TOKENS}}",
+    )
     ingest(kernel, content="Ordinary channel transcript must never leak into slash")
     scope = "slash:ada:987654321098765432"
     kernel.store.execute(
@@ -194,6 +198,14 @@ async def test_tool_loop_isolated_prompt_notes_and_footer(kernel):
     item.edit_original_response.assert_awaited_once()
     assert item.edit_original_response.call_args.kwargs["content"].startswith("A **useful** answer")
     assert "-# TTFT:" in item.edit_original_response.call_args.kwargs["content"]
+    final = kernel.store.one(
+        "SELECT response FROM requests WHERE bot_id='ada' ORDER BY started_at DESC LIMIT 1"
+    )
+    counts = json.loads(final["response"])["footer_tokens"]
+    assert (
+        f"R: none | C: {counts['completion']['value']} | T: {counts['total']['value']}"
+        in item.edit_original_response.call_args.kwargs["content"]
+    )
     assert item.edit_original_response.call_args.kwargs["allowed_mentions"].everyone is False
     for table in ("slash_invocations", "events", "requests", "outbox"):
         assert item.token not in json.dumps(kernel.store.rows(f"SELECT * FROM {table}"))

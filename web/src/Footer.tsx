@@ -23,6 +23,10 @@ export function FooterEditor({
   const examples: Record<string, string> = {
     TTFT: "1858ms",
     TPS: "477.7",
+    REASONING_TOKENS: "1200",
+    THINKING_TOKENS: "1200",
+    COMPLETION_TOKENS: "4777",
+    TOTAL_TOKENS: "12969",
     PROVIDER: provider?.name || "Provider",
     CONTEXT: `8192/${profile?.context_window || 131072}`,
     MODEL: profile?.model || "Selected model",
@@ -65,7 +69,17 @@ export function FooterEditor({
         className="footer-placeholders"
         aria-label="Insert footer placeholder"
       >
-        {["TTFT", "TPS", "PROVIDER", "CONTEXT", "MODEL", "BOT"].map((key) => (
+        {[
+          "TTFT",
+          "TPS",
+          "REASONING_TOKENS",
+          "COMPLETION_TOKENS",
+          "TOTAL_TOKENS",
+          "PROVIDER",
+          "CONTEXT",
+          "MODEL",
+          "BOT",
+        ].map((key) => (
           <button
             type="button"
             key={key}
@@ -117,6 +131,28 @@ export function FooterEditor({
           </dd>
         </div>
         <div>
+          <dt>REASONING_TOKENS / THINKING_TOKENS</dt>
+          <dd>
+            Reported reasoning count, or ~estimated tokens from returned
+            reasoning text. Missing count and text show none; 0 means the
+            provider explicitly reported zero. Both placeholders work.
+          </dd>
+        </div>
+        <div>
+          <dt>COMPLETION_TOKENS</dt>
+          <dd>
+            Total generated tokens, including reasoning and tool calls. Uses
+            reported usage or a ~text estimate.
+          </dd>
+        </div>
+        <div>
+          <dt>TOTAL_TOKENS</dt>
+          <dd>
+            Input plus completion, including reasoning once. Uses reported
+            total, otherwise sums reported counts or ~estimates missing counts.
+          </dd>
+        </div>
+        <div>
           <dt>CONTEXT</dt>
           <dd>
             Reported input tokens / configured context window for that request.
@@ -131,6 +167,12 @@ export function FooterEditor({
           <dd>The configured provider name / this bot’s display name.</dd>
         </div>
       </dl>
+      <Notice>
+        Token counts work with SSE on or off. Estimates use the same cl100k_base
+        tokenizer for every model, with no context-planning safety multiplier.
+        They count available text; unseen reasoning, image tokens and native
+        chat framing cannot be measured locally. Provider tokenizers may differ.
+      </Notice>
       <Notice>
         Missing measurements appear as —. Commands and incident notices have no
         model timing; buffered responses have no TTFT or streaming TPS. Earlier

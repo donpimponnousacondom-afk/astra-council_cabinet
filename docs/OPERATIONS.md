@@ -315,6 +315,9 @@ The default template is `TTFT: {{TTFT}} | TPS: {{TPS}}`. Discord receives a fina
 | --- | --- |
 | `{{TTFT}}` | Final generating request's time to first streamed token, rounded milliseconds including `ms` |
 | `{{TPS}}` | Approximate streaming output tokens/second, one decimal place |
+| `{{REASONING_TOKENS}}`, `{{THINKING_TOKENS}}` | Reported reasoning count; otherwise fixed-tokenizer estimate of returned reasoning text. `none` when neither is available; `0` only when explicitly reported |
+| `{{COMPLETION_TOKENS}}` | Generated tokens including reasoning and tool calls; reported usage preferred, otherwise an estimate of available text |
+| `{{TOTAL_TOKENS}}` | Input plus completion, including reasoning once; reported total preferred, otherwise summed counts with local estimates where needed |
 | `{{PROVIDER}}` | Configured provider display name |
 | `{{CONTEXT}}` | Provider-reported input tokens / configured context window, e.g. `8192/262144` |
 | `{{MODEL}}`, `{{MODEL SELECTED}}` | Selected model identifier for that request |
@@ -323,6 +326,12 @@ The default template is `TTFT: {{TTFT}} | TPS: {{TPS}}`. Discord receives a fina
 TTFT starts when the HTTP model request is sent, after the provider concurrency queue. The first non-empty reasoning/content/tool-argument delta counts, matching the existing trajectory metric. TPS is `output_tokens × 1000 / (duration_ms − ttft_ms)` when usage and a positive streaming interval are available. Reported completion tokens may include reasoning/tool arguments; this is an approximate generation rate, not a count of visible Discord words. Neither metric includes earlier tool/compaction requests or delivery cooldowns. Context uses measured input tokens, not a silently substituted estimate.
 
 Missing measurements show **`—`**. Buffered responses have no measured TTFT or streaming TPS. Deterministic commands, incident notices and forum starter messages have no generating request, so their timing fields are unknown; their provider/model fields describe the selected configuration. No old request's measurements are reused. Silence does not send a footer-only message.
+
+The three token-count placeholders work with **SSE on or off**, and describe only the final generating request, not all tool rounds or the entire turn. For example: `R: {{REASONING_TOKENS}} | C: {{COMPLETION_TOKENS}} | T: {{TOTAL_TOKENS}}`. Existing/default templates are not changed automatically. `!footer <bot> template ...` accepts these names and the thinking alias, as does the modern Message footer editor.
+
+Counts prefixed with **`~`** are estimates. Fallbacks always use `cl100k_base`, with no model-specific tokenizer, 15% context-planning multiplier or image reserve. Reasoning uses returned reasoning/thinking text, textual reasoning details or inline reasoning, selecting one representation to avoid double-counting mirrored fields. Opaque encrypted reasoning and short provider reasoning summaries cannot establish a full reasoning count. Explicit reported zero takes precedence over any text; absent/invalid counts with no full text show **`none`**, never an invented zero. Completion includes reasoning once; total adds input once. When both input and completion counts are reported, their sum needs no approximation marker.
+
+Unreported input is estimated from serialized textual messages and tool schemas, excluding image payloads and opaque replay fields. Local counts cannot include unseen reasoning, media token charges or the provider's native chat framing. Identical text has identical local counts across models and streaming modes, but actual upstream counts can differ with native tokenizers. Numeric values and their reported/derived/estimated source are stored in the request response's `footer_tokens` evidence. Raw usage, billing, context calibration, private reasoning access and TTFT/TPS semantics remain unchanged. Tokenization runs off the event loop and outside the recorded request duration. Commands without a generating request show `none` for reasoning and `—` for completion/total.
 
 Owner commands work while models are paused and use the same validated, audited configuration service as the dashboard:
 

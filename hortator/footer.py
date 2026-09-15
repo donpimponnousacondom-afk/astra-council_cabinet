@@ -1,5 +1,6 @@
 """Literal, bounded Discord diagnostic footers; never executable templates."""
 
+import json
 import math
 import re
 
@@ -7,7 +8,19 @@ from .discord_text import preview
 
 
 DEFAULT_FOOTER_TEMPLATE = "TTFT: {{TTFT}} | TPS: {{TPS}}"
-FOOTER_PLACEHOLDERS = ("TTFT", "TPS", "PROVIDER", "CONTEXT", "MODEL", "MODEL SELECTED", "BOT")
+FOOTER_PLACEHOLDERS = (
+    "TTFT",
+    "TPS",
+    "PROVIDER",
+    "CONTEXT",
+    "MODEL",
+    "MODEL SELECTED",
+    "BOT",
+    "REASONING_TOKENS",
+    "THINKING_TOKENS",
+    "COMPLETION_TOKENS",
+    "TOTAL_TOKENS",
+)
 MAX_FOOTER_UNITS = 500
 PLACEHOLDER = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
 
@@ -66,6 +79,24 @@ def render_footer(bot, profile=None, provider=None, request=None, *, redact=lamb
     if measurement(window):
         values["CONTEXT"] += f"/{window:.0f}"
     values["MODEL SELECTED"] = values["MODEL"]
+    counts = request.get("footer_tokens") or {}
+    if isinstance(counts, str):
+        counts = json.loads(counts)
+    for key, field in (
+        ("REASONING_TOKENS", "reasoning"),
+        ("COMPLETION_TOKENS", "completion"),
+        ("TOTAL_TOKENS", "total"),
+    ):
+        item = counts.get(field) or {}
+        value = item.get("value")
+        values[key] = (
+            ("~" if item.get("source") == "estimated" else "") + f"{value:.0f}"
+            if measurement(value)
+            else "none"
+            if field == "reasoning"
+            else "—"
+        )
+    values["THINKING_TOKENS"] = values["REASONING_TOKENS"]
 
     def substitute(match):
         # Redact before escaping/truncating so formatting cannot disguise a stored secret.
