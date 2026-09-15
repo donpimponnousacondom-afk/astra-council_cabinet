@@ -2,6 +2,35 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
 
+## Council inspector roster and complete result paging (2026-09-15)
+
+- Read-only diagnosis of turn `turn_2648490b3e424ac9b831`: event #32762's bot list
+  was truncated inside Ada's saved context. The stored result was also only the
+  first 50,000 serialized characters, so workspace paging could not recover the
+  roster. The turn used 32 tool calls, 11 missing-ID failures and 15 successful
+  inference requests in approximately 145 seconds; there was no provider failure.
+- Added a separate model-facing roster/status view, explicit bot configuration
+  versus context requests, exact-ID discovery feedback and native inspector
+  result paging. Complete redacted inspection evidence is saved before returning
+  a continuation, including the final bytes. Existing dashboard/API/command views,
+  configured grants, prompts, memories, checkpoints and credentials are preserved.
+- **192 tests passed** across council inspector, tool feedback, security, version,
+  reply protocol, agentic runtime, HTTP evidence, plugins, runtime and runtime
+  feedback. The new cases cover an oversized first-bot persona/summary, all roster
+  members, detailed configuration/context separation, exact multi-page Unicode
+  reconstruction, missing-ID repair, private evidence redaction, native handles
+  after prompt omission, complete validation and owner/bot/channel/turn/current
+  source-grant enforcement. These are isolated fixtures, not live model acceptance.
+  Ruff check/format and diff checks passed; two existing dependency deprecation
+  warnings remain.
+- Running the pure roster projection against the current read-only database
+  returned all eight bots in **2,861 serialized characters**. No inference or
+  Discord message was sent for validation, and no live notes were corrected.
+  Historical evidence already discarded by the old truncation is not recoverable.
+- Deployment uses the ordinary committed-source shared-Screen `--refresh` workflow;
+  its external `logs/next-feature.json` receipt records dashboard/server identity
+  verification after the build. No branch push is part of this task.
+
 ## Standalone simulated-tool laboratory (2026-09-15)
 
 - Extended only the standalone Featherless tester, its report generator and documentation/tests. Production prompts, plugins, bot configuration, notes and runtime remain unchanged. The new tool mode uses isolated JSON notebooks and fake web/email receipts; actual inference calls use the existing credential read-only.

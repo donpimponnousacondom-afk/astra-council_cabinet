@@ -34,6 +34,32 @@ the allowance and explicit feedback avoid needless failed rounds. Zero and
 negative budgets are invalid. Disable the memory plugin to stop its tool and
 automatic note injection; existing notes remain owner-inspectable.
 
+## Council inspector discovery and paging
+
+Start with `council_inspect {"resource":"bots"}`. It returns the compact configured
+roster: stable bot IDs, display names, role/enabled state, Discord application ID,
+room IDs/names/channels and assigned profile/model/provider. It does not enumerate
+human server members. Room names, model slugs and provider IDs are not bot IDs.
+Use an exact returned bot ID with `{"resource":"bots","id":"ada"}` for its
+configuration; use `{"resource":"context","id":"ada"}` (optionally channel_id)
+for saved conversation state. `status` is a compact overview; other named resources
+retain their explicit inspection functions. The dashboard/API responses are independent.
+
+Large inspection results are stored completely after credential redaction, with
+a `result_id` and `read_response` call instead of a chopped JSON prefix. Pass that
+call directly to **council_inspect**, for example
+`{"resource":"read_result","result_id":"<returned-id>","offset":0,"length":6000}`.
+Offsets/lengths count Unicode characters; length is 1–18,000. Follow the returned
+`next` until null; JSON may span pages. The inspector's own grant is sufficient;
+workspace is not a prerequisite. Rereads enforce original bot/channel/turn scope
+and every source tool's current grant, including when a page is read again.
+Working-set omission retains a native inspector reread handle.
+
+Missing IDs return actual available stable IDs (first 20 for a large inventory)
+and the resource-list call along with full usage. Do not guess aliases or retry
+the same nonexistent ID. Installation does not rewrite historical notes or repair
+the contents of results that older code already discarded.
+
 ## Complete validation feedback
 
 For parseable JSON, validation collects all detectable schema errors: missing required fields, wrong types, unknown fields, bounds and conditional operation requirements. The response contains all error paths/rules/messages and full usage with an example for the requested valid operation. Named JSON fields have **no positional order**. Strings are not silently converted into numbers, and a malformed call never partially invokes the handler.

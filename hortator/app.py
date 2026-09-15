@@ -43,7 +43,7 @@ class Kernel:
         self.service = Service(self.store, self.vault, self.pool)
         self.service.seed()
         self.service.seed_prompt_templates()
-        self.registry = Registry(self.store, self.vault, self.directory, self.service.inspect)
+        self.registry = Registry(self.store, self.vault, self.directory, self.service.inspect_model)
         self.service.registry = self.registry
         self.service.seed_plugins()
         self.engine = Engine(self.store, self.vault, self.pool, self.registry)

@@ -1,5 +1,23 @@
 # Implementation and acceptance plan
 
+## Complete council discovery and inspection (2026-09-15)
+
+The owner requested a fix after Hortator's roster lookup stopped inside Ada's
+saved context and led to repeated guessed bot IDs. The model-facing inspector
+now lists compact stable identities, room names/channels and profile/model/provider
+assignments. Status is also compact; bot configuration and conversation context
+are separate explicit requests. Dashboard/API and deterministic owner-command
+responses retain their existing fields. Unknown IDs include current stable IDs
+and the exact inventory call, without name coercion or invented matches.
+
+Inspection results above 60,000 serialized characters are saved in full before
+returning a small continuation handle. Native inspector `resource=read_result`
+pages the original evidence without workspace access. Preserve credential
+redaction, owner-only access, bot/channel/turn scope, transitive source grants,
+tool budgets and working-set continuation handles. Existing already-truncated
+historical results cannot be reconstructed; do not modify memories/configuration
+to conceal the earlier failure.
+
 ## Footer token counts (2026-09-15)
 
 The owner needs final-request reasoning, completion and total token counts, including buffered providers. Add literal `REASONING_TOKENS` (alias `THINKING_TOKENS`), `COMPLETION_TOKENS` and `TOTAL_TOKENS` footer placeholders, with modern editor insertion buttons and examples. Prefer actual upstream counts; otherwise use one deterministic cl100k_base text estimator and mark approximate values with `~`. Completion includes reasoning; total includes input plus completion. Missing reasoning is `none`; zero is reserved for an explicit reported zero. Never infer reasoning from hidden/encrypted payloads or count mirrored representations twice. Keep estimates separate from billing/calibration, raw usage and private text; retain numeric provenance in request response evidence. Saved templates and defaults stay unchanged. See [footer definitions](OPERATIONS.md#discord-message-footers).

@@ -55,6 +55,13 @@ Installed plugins run in the Python process and are **trusted code**, not an OS 
 
 ## Shared model-facing contract
 
+The `council_inspect` model callback is separate from the configuration API:
+bot lists/status are compact inventories and bot details omit conversation state.
+Explicit context queries remain available. Oversized inspection output is stored
+in full and paged natively with `resource: "read_result"`; never truncate it before
+recording evidence. Use the [inspector contract](TOOLS.md#council-inspector-discovery-and-paging)
+for identity resolution, scope/grant checks and continuation examples.
+
 The built-in `web_search` exposes Auto fallback, Brave, keyless DuckDuckGo and Both through `engine` and a per-engine `count` (1–10, default 5). Global/per-bot config validates these fields and the optional operator Brave `endpoint`; call arguments may override engine/count. Credential resolution stays in the existing vault path and the Brave key is never sent to DuckDuckGo. The plugin retains its credential box because Brave uses it; DuckDuckGo needs none. Engine events and structured partial results retain failure/provenance information; total failure includes usage and records `tool.failed`. Query-only calls remain compatible. See [WEB_SEARCH.md](WEB_SEARCH.md).
 
 Installed descriptions for search, memory and shell supersede obsolete seeded catalog text when read through the service, without rewriting operator configuration. Schemas can include complete top-level `examples`; shared usage prefers a schema-valid example for the selected operation. Memory explicitly requires operation even when key/value look like a write; shell explicitly requires `workspace.start` before running a task. Do not weaken validation or silently create missing resources to mask model mistakes.

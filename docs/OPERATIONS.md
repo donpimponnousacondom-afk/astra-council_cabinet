@@ -786,6 +786,23 @@ Use `/prompt text:<request>` for a public answer in that invocation's channel (t
 The owner-requested mobile report from September 10 is retained at `/home/codexy/.local/share/hortator/artifacts/publishing-system-report-2026-09-10.html` and [published under Hortator's guide site](https://council.zombiedawn.net/hortator/publishing-system-guide-2026-09-10/). It explains model tools, local snapshots, queued SSH delivery and remote audit for reuse in another project. This is a dated report, not a live configuration handover: some numeric limits have since changed. [DOCUMENTS.md](DOCUMENTS.md) and the automatic-remote-publishing section above are the maintained implementation references.
 
 
+## Council inspection troubleshooting
+
+Hortator can discover the complete configured roster with `council_inspect`
+`{"resource":"bots"}`. Model-facing lists/status are compact and exclude saved
+conversation summaries; detailed bot configuration and `resource=context` are
+separate calls. The dashboard and deterministic commands retain their existing
+views. Missing-ID errors list real stable IDs and the discovery call, so model,
+provider, room and human names should not be guessed as bot IDs.
+
+Large results now supply a native inspector `read_response` handle; follow its
+`next` pages without enabling workspace. Full credential-redacted evidence stays
+in SQLite under `tool_result_evidence` and therefore in normal consistent snapshots.
+No separate credential or new grant is needed. Older results marked `truncated`
+were already cut before storage; repeat the original read to inspect current
+state. This cannot reconstruct the exact earlier state or silently correct notes
+written about the old limitation. See [TOOLS](TOOLS.md#council-inspector-discovery-and-paging).
+
 ## Standalone Featherless benchmarks
 
 Run `uv run python featherless_tester.py --filter qwen --limit 30` from this repository for interactive model selection and settings. `--list` performs metadata discovery only; `--yes --mode both --workers 1` benchmarks with CLI settings, serially in streamed and buffered modes. The script reads the existing Featherless vault key or `FEATHERLESS_API_KEY`, never writes council configuration/context, and saves private evidence under the external data directory's `benchmarks/`. Keep account traffic from other bots/processes in mind. See [FEATHERLESS_TESTER.md](FEATHERLESS_TESTER.md) for warm-up, token filling, reasoning, concurrency and evidence definitions.

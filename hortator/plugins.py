@@ -354,20 +354,22 @@ class Registry:
                 {},
             )
         )
+        from .council_inspector import DESCRIPTION as INSPECT_DESCRIPTION
+
         self.register(
             PluginSpec(
                 "council_inspect",
                 "Council inspector",
-                "Read the running code version, council status, statistics, configuration, events, trajectory or context for The Boss. No mutations or credentials.",
+                INSPECT_DESCRIPTION,
                 schema(
                     {
                         "resource": {
                             "type": "string",
                             "enum": [
+                                "bots",
                                 "version",
                                 "status",
                                 "stats",
-                                "bots",
                                 "providers",
                                 "profiles",
                                 "prompts",
@@ -377,10 +379,19 @@ class Registry:
                                 "events",
                                 "turn",
                                 "context",
+                                "read_result",
                             ],
+                            "description": "bots lists the compact roster; resource plus id reads details. read_result pages saved evidence.",
                         },
-                        "id": {"type": "string", "minLength": 1},
+                        "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Exact stable ID from the selected resource's inventory, never a guessed display/model/human name. Required for context or turn.",
+                        },
                         "channel_id": STR,
+                        "result_id": {"type": "string", "minLength": 1},
+                        "offset": {"type": "integer", "minimum": 0},
+                        "length": {"type": "integer", "minimum": 1, "maximum": 18000},
                     },
                     ("resource",),
                 )
@@ -392,7 +403,18 @@ class Registry:
                                 "required": ["resource"],
                             },
                             "then": {"required": ["id"]},
-                        }
+                        },
+                        {
+                            "if": {
+                                "properties": {"resource": {"const": "read_result"}},
+                                "required": ["resource"],
+                            },
+                            "then": {
+                                "required": ["result_id"],
+                                "properties": {"id": False, "channel_id": False},
+                            },
+                            "else": {"properties": {"result_id": False, "offset": False, "length": False}},
+                        },
                     ],
                 },
                 self.council_inspect,
@@ -544,7 +566,30 @@ class Registry:
             )
             if search_failed:
                 result["usage"] = usage(name, spec.parameters, spec.description, args)
-            if name in {"web_fetch", "web_search"} and len(dumps(result)) > 60000:
+            source_result_id = (
+                args["result_id"]
+                if (
+                    name in ("workspace", "shell", "web_fetch", "web_search")
+                    and args.get("operation") == "read_result"
+                )
+                or (name == "council_inspect" and args.get("resource") == "read_result")
+                else None
+            )
+            inspector_paged = name == "council_inspect" and len(dumps(result)) > 60000
+            if inspector_paged:
+                full = self.evidence.record(context, name, call_id, result, source_result_id=source_result_id)
+                result = {
+                    "result_id": full["result_id"],
+                    "result_is_paged": True,
+                    "notice": "Full inspection saved without truncation. Follow read_response with council_inspect, then next until null. No workspace grant is needed.",
+                    "read_response": {
+                        "resource": "read_result",
+                        "result_id": full["result_id"],
+                        "offset": 0,
+                        "length": 6000,
+                    },
+                }
+            elif name in {"web_fetch", "web_search"} and len(dumps(result)) > 60000:
                 full = self.evidence.record(context, name, call_id, result)
                 result = {
                     "ok": result.get("ok", True),
@@ -570,16 +615,14 @@ class Registry:
                         else {}
                     ),
                 }
-            result = self.evidence.record(
-                context,
-                name,
-                call_id,
-                result,
-                source_result_id=args["result_id"]
-                if name in ("workspace", "shell", "web_fetch", "web_search")
-                and args.get("operation") == "read_result"
-                else None,
-            )
+            if not inspector_paged:
+                result = self.evidence.record(
+                    context,
+                    name,
+                    call_id,
+                    result,
+                    source_result_id=source_result_id,
+                )
             self.store.emit(
                 "tool.failed" if search_failed else "tool.completed",
                 {
@@ -772,6 +815,8 @@ class Registry:
         return result
 
     async def council_inspect(self, args, context, config, key):
+        if args["resource"] == "read_result":
+            return self.evidence.read(args, context, self.allowed)
         return self.inspect(args["resource"], args.get("id"), args.get("channel_id"))
 
     def resolve_artifact(self, artifact_id, context):
