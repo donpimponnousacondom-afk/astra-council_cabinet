@@ -1,5 +1,9 @@
 # Implementation and acceptance plan
 
+## Footer token counts (2026-09-15)
+
+The owner needs final-request reasoning, completion and total token counts, including buffered providers. Add literal `REASONING_TOKENS` (alias `THINKING_TOKENS`), `COMPLETION_TOKENS` and `TOTAL_TOKENS` footer placeholders, with modern editor insertion buttons and examples. Prefer actual upstream counts; otherwise use one deterministic cl100k_base text estimator and mark approximate values with `~`. Completion includes reasoning; total includes input plus completion. Missing reasoning is `none`; zero is reserved for an explicit reported zero. Never infer reasoning from hidden/encrypted payloads or count mirrored representations twice. Keep estimates separate from billing/calibration, raw usage and private text; retain numeric provenance in request response evidence. Saved templates and defaults stay unchanged. See [footer definitions](OPERATIONS.md#discord-message-footers).
+
 ## Operator-controlled prompts and per-bot history boundary (2026-09-15)
 
 Implemented editable persisted templates for runtime-generated instructions and system/user input wrappers, with per-bot layer switches/overrides. Defaults preserve current behavior; code-enforced permissions, tool grants and protocol results remain independent. The owner wants small-model experiments with minimal injection and no forced boilerplate. Compaction inputs cannot silently omit history. See [PROMPTS.md](PROMPTS.md).

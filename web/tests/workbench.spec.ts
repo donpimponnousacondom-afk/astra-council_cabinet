@@ -444,13 +444,32 @@ test("bot memory budget, silence and footer controls persist in a docked editor 
   await dialog
     .getByRole("checkbox", { name: "Show diagnostic footer", exact: true })
     .check();
-  const template =
+  const originalTemplate =
     "{{BOT}} | {{MODEL}} | {{PROVIDER}} | {{CONTEXT}} | {{TTFT}} | {{TPS}}";
-  await dialog.getByLabel("Footer template", { exact: true }).fill(template);
+  await dialog
+    .getByLabel("Footer template", { exact: true })
+    .fill(originalTemplate);
+  for (const token of [
+    "REASONING_TOKENS",
+    "COMPLETION_TOKENS",
+    "TOTAL_TOKENS",
+  ]) {
+    await dialog
+      .getByRole("button", { name: `{{${token}}}`, exact: true })
+      .click();
+  }
+  const template =
+    originalTemplate +
+    " | {{REASONING_TOKENS}} | {{COMPLETION_TOKENS}} | {{TOTAL_TOKENS}}";
+  await expect(
+    dialog.getByLabel("Footer template", { exact: true }),
+  ).toHaveValue(template);
   const preview = dialog.getByRole("region", {
     name: "Footer example preview",
   });
   await expect(preview).toContainText("1858ms | 477.7");
+  await expect(preview).toContainText("1200 | 4777 | 12969");
+  await expect(dialog).toContainText("Missing count and text show none");
   await expect(preview).not.toContainText("{{");
   await page.screenshot({
     path: testInfo.outputPath("modern-footer-editor.png"),

@@ -2,6 +2,13 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
 
+## Footer token counts (2026-09-15)
+
+- Added reasoning/thinking, completion and total placeholders to the existing per-bot footer configuration and modern editor. Reported counts take precedence; deterministic cl100k_base text estimates carry `~`. Missing reasoning is `none`, explicit upstream zero remains `0`. Estimates are separate from billing, context calibration and raw usage. No existing template, bot setting, prompt, memory or credential was changed.
+- **74 targeted backend tests passed** across token estimation, ordinary footer delivery and slash requests. Cases cover explicit zero versus absence, malformed counts, reported aliases, full reasoning fields/inline text, mirrored reasoning, opaque payloads, image-base64 exclusion, tool arguments, deterministic fallback counts, SSE/buffered responses, off-thread tokenization, private-text isolation, and selecting only the final request after completed tool rounds.
+- **114 provider/context regression tests passed**, covering parser behavior, retries, private diagnostics and responsiveness. Two existing FastAPI/Starlette dependency deprecation warnings remain unrelated.
+- **One Playwright workbench test passed** on isolated port 18332: insert all three placeholders, check sample values and the missing-reasoning explanation, save/reopen the bot, and preserve other bot/settings. Screenshot inspected; legacy sources unchanged. TypeScript/production build, Ruff/formatting and diff checks passed. These tests use controlled transports; no diagnostic provider call or Discord message was sent to validate the feature.
+
 ## Editable prompts, per-bot clean slate and Unicode responses (2026-09-15)
 
 - Branched the clean `feat/next_feature` checkout to `feat/prompt_layer_controls`, without pushing. Added persisted runtime prompt templates/roles, per-bot layer switches and overrides, actual assembly metadata, and modern-only library/editor controls. Existing prompts, bot settings, capabilities and provider JSON are preserved. Empty/all-disabled requests and incomplete compaction source wrappers fail explicitly without silently dropping history. See [PROMPTS.md](PROMPTS.md).

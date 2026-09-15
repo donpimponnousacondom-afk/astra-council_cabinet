@@ -244,7 +244,7 @@ class SlashEngine(Engine):
         paths = [self.registry.resolve_artifact(value, context) for value in artifact_ids]
         request = (
             self.store.one(
-                "SELECT model,input_tokens,output_tokens,ttft_ms,duration_ms FROM requests WHERE id=? AND bot_id=? AND turn_id=? AND status='completed'",
+                "SELECT model,input_tokens,output_tokens,ttft_ms,duration_ms,json_extract(response,'$.footer_tokens') AS footer_tokens FROM requests WHERE id=? AND bot_id=? AND turn_id=? AND status='completed'",
                 (request_id, bot["id"], context.turn_id),
             )
             if request_id

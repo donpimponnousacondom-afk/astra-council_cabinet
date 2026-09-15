@@ -162,10 +162,16 @@ async def test_footer_reserves_discord_budget_closes_code_and_preserves_attachme
 
 
 @pytest.mark.parametrize("terminal", ["content_parts", "content"])
+@pytest.mark.parametrize("token_footer", [False, True])
 async def test_final_request_footer_survives_tool_rounds_and_is_separate_from_canonical_answer(
-    kernel, terminal
+    kernel, terminal, token_footer
 ):
-    bot = configured(kernel, enabled_plugins=["memory"], footer_enabled=True)
+    template = (
+        "{{REASONING_TOKENS}} | {{COMPLETION_TOKENS}} | {{TOTAL_TOKENS}}"
+        if token_footer
+        else DEFAULT_FOOTER_TEMPLATE
+    )
+    bot = configured(kernel, enabled_plugins=["memory"], footer_enabled=True, footer_template=template)
     ingest(kernel)
     calls = 0
 
@@ -222,6 +228,8 @@ async def test_final_request_footer_survives_tool_rounds_and_is_separate_from_ca
     expected = (
         f"-# TTFT: {final['ttft_ms']:.0f}ms | TPS: {42000 / (final['duration_ms'] - final['ttft_ms']):.1f}"
     )
+    if token_footer:
+        expected = "-# none | 42 | 5720"
     assert channel.send.await_args.args[0] == "A considered answer\n" + expected
     outbox = kernel.store.one("SELECT * FROM outbox")
     assert outbox["status"] == "sent" and outbox["content"] == "A considered answer"

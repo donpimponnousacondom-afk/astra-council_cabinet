@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from .models import ControlError
+from .footer_tokens import measure_footer_tokens
 from .request_payload import encode_request
 from .diagnostics import record_diagnostics, reasoning_settings
 from .chat_response import (
@@ -307,6 +308,7 @@ class ProviderPool:
         self.active: dict[str, int] = {}
         self.probing: set[str] = set()
         self.changed = asyncio.Condition()
+        self.footer_token_slots = asyncio.Semaphore(2)
 
     @asynccontextmanager
     async def slot(self, provider):
@@ -717,10 +719,25 @@ class ProviderPool:
                         # Buffered responses have no measurable TTFT/TPS.
             response_state.finish()
             record_diagnostics(self.store, self.vault, request_id, result, body, status="completed")
+            duration = (time.perf_counter() - clock) * 1000
+            footer_tokens = None
+            if purpose == "generation":
+                # Numeric-only evidence. Counting cannot block gateway heartbeats
+                # or inflate the measured request duration/TPS, and never changes
+                # the provider-reported usage used by billing and context planning.
+                async with self.footer_token_slots:
+                    footer_tokens = await asyncio.to_thread(
+                        measure_footer_tokens,
+                        body,
+                        result.usage,
+                        result.content,
+                        result.reasoning_content,
+                        result.reasoning_details,
+                        result.tool_calls,
+                    )
             result.content = strip_reasoning(result.content)
             self.success(provider)
             metrics = normalized_usage(result.usage, profile)
-            duration = (time.perf_counter() - clock) * 1000
             self.store.execute(
                 """UPDATE requests SET ended_at=:ended_at,status='completed',ttft_ms=:ttft,
               first_visible_ms=:visible,duration_ms=:duration,input_tokens=:input_tokens,output_tokens=:output_tokens,
@@ -741,6 +758,7 @@ class ProviderPool:
                                 "finish_reason": result.finish_reason,
                                 "provider_metadata": result.metadata,
                                 "pricing": metrics["pricing"],
+                                "footer_tokens": footer_tokens,
                             }
                         )
                     ),
