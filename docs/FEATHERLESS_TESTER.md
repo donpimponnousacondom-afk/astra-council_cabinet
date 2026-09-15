@@ -143,6 +143,8 @@ uv run python featherless_report.py /absolute/path/to/benchmark-directory
 
 For an aggregate study, optional `selection.json` documents the roster and `findings.md` records interpretation. An `exclude-from-comparison.json` in a run directory can contain `{"reason":"Interrupted exploratory run with model-switch throttling"}`: its cases remain visible as operational evidence but do not affect the model/tool matrix. Never discard failed trials to improve a score; exclusions must identify a concrete protocol/setup problem and remain disclosed.
 
+Use `comparison.json` at the aggregate root to keep the main matrix and memory checks on a matched protocol: `{"runs":["primary-serial-low"],"description":"Matched low-effort SSE baseline"}`. Run paths are relative to that root. Tuning cases remain fully visible in the controlled-variant and individual-case tables; they are not pooled into the baseline score. Without this file, the matrix explicitly reports an aggregate across all non-excluded variants.
+
 Compare identical settings before attributing differences to tool names. A provider rejection, output-length stop or timeout is not proof that a model cannot call tools. Count repairs separately from success; record unsuccessful cases too. Reported native token counts are preferred; missing counts use fixed cl100k estimates with explicit provenance. An absent reasoning count is `none`, not a fabricated zero. High/max effort support depends on the actual template; record requested values and observed behavior without claiming an ignored setting worked.
 
 ## Measurements and evidence

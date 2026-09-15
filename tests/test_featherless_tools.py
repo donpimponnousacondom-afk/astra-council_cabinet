@@ -307,3 +307,38 @@ def test_report_counts_tokens_from_failed_attempts(tmp_path):
     assert "<td>13</td><td>17</td><td>4</td>" in report
     assert "13 (1/1 requests measured)" in report
     assert "<td>999.0</td>" not in report  # No complete timing sample.
+
+
+def test_report_matched_comparison_keeps_tuning_failures_visible(tmp_path):
+    from featherless_report import build_report
+
+    case = {
+        "case_id": "x",
+        "model": "m",
+        "case": "memory",
+        "mode": "sse",
+        "guidance": "runtime",
+        "schema": "runtime",
+        "success": True,
+        "failure": None,
+        "checks": {"state": True},
+        "argument_errors": 0,
+        "usage_calls": 0,
+        "calls": [],
+        "final": "green",
+        "metrics": [],
+        "requests": [],
+    }
+    for directory, successful in (("baseline", True), ("tuning", False)):
+        target = tmp_path / directory
+        target.mkdir()
+        (target / "case-result-x.json").write_text(
+            json.dumps(case | {"success": successful, "failure": None if successful else "output_limit"})
+        )
+    (tmp_path / "comparison.json").write_text(
+        json.dumps({"runs": ["baseline"], "description": "Matched baseline only"})
+    )
+    report = build_report(tmp_path).read_text()
+    matrix = report.split('id="matrix"', 1)[1].split("</table>", 1)[0]
+    assert ">1/1</td>" in matrix and ">1/2</td>" not in matrix
+    assert "Matched baseline only" in report and "tuning" in report and "output_limit" in report
