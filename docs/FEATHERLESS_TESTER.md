@@ -101,6 +101,8 @@ Tool mode completes one model's cases before switching models. Workers paralleli
 
 `--tool-guidance runtime` uses a hardcoded copy of the current default `runtime-tool-guidance` prompt in `featherless_tools.py`. It does not read or overwrite any saved bot prompt. `simple` uses the shorter text below; `none` omits this extra guidance. `--tool-prompt-file /path/to/guidance.txt` substitutes your own exact text. System and user text remain separately editable through `--system` and `--prompt`. Each case records the full input and guidance hash.
 
+`--tool-system-layout merged` (default) joins adjacent system instructions with blank lines, matching Hortator's context assembly. `separate` sends the system prompt, tool guidance and current-note fixture as separate system messages; it reproduces the initial laboratory trials and lets you check template sensitivity. The report identifies the actual layout and schema from recorded inputs, including earlier trials made before these options were explicit.
+
 Simple prompt suitable for a bot with `global_memory`:
 
 ```text

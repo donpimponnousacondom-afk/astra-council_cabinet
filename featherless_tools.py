@@ -311,6 +311,15 @@ async def run_case(tester, model, parameters, *, stream, name, enabled, prompt, 
             {"role": "user", "content": prompt},
         ]
     )
+    if options.tool_system_layout == "merged":
+        # Match Contexts.assemble: adjacent instruction layers share one role.
+        merged = []
+        for message in messages:
+            if merged and message["role"] == merged[-1]["role"] == "system":
+                merged[-1]["content"] += "\n\n" + message["content"]
+            else:
+                merged.append(copy.deepcopy(message))
+        messages = merged
     evidence.write(
         f"case-input-{case_id}.json",
         {
@@ -319,6 +328,7 @@ async def run_case(tester, model, parameters, *, stream, name, enabled, prompt, 
             "messages": messages,
             "tools": simulation.specs,
             "parameters": parameters,
+            "system_layout": options.tool_system_layout,
             "guidance_sha256": hashlib.sha256(guidance.encode()).hexdigest(),
             "baseline": initial,
         },
@@ -332,6 +342,7 @@ async def run_case(tester, model, parameters, *, stream, name, enabled, prompt, 
                     "model": model["id"],
                     "messages": messages,
                     "tools": simulation.specs,
+                    "tool_choice": options.tool_choice if round_index == 0 else "auto",
                 }
                 try:
                     template = await tester.api(
@@ -424,6 +435,7 @@ async def run_case(tester, model, parameters, *, stream, name, enabled, prompt, 
             "parameters": parameters,
             "guidance": options.tool_guidance,
             "schema": options.tool_schema,
+            "system_layout": options.tool_system_layout,
             "success": not failure and all(checks.values()),
             "failure": failure,
             "checks": checks,

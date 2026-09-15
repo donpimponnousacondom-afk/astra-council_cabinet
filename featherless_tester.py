@@ -783,6 +783,12 @@ def parser():
     )
     p.add_argument("--tool-guidance", choices=["runtime", "simple", "none"], default="runtime")
     p.add_argument(
+        "--tool-system-layout",
+        choices=["merged", "separate"],
+        default="merged",
+        help="Merge adjacent system layers like Hortator; separate reproduces early laboratory trials",
+    )
+    p.add_argument(
         "--tool-prompt-file", type=Path, help="Replace only the tester's tool guidance with editable text"
     )
     p.add_argument(

@@ -75,9 +75,12 @@ def test_alias_schema_only_name_changes_and_simple_still_requires_correct_operat
     assert wrapped.execute(call("memory", {}))["usage_only"]
 
 
-async def test_tool_loop_native_ids_reasoning_replay_and_per_case_baseline(tmp_path):
+@pytest.mark.parametrize("layout", ["merged", "separate"])
+async def test_tool_loop_native_ids_reasoning_replay_and_per_case_baseline(tmp_path, layout):
     evidence = probe.Evidence(tmp_path / "e")
-    opts = options(tools="memory", tool_suite="baseline", tool_guidance="simple", mode="json")
+    opts = options(
+        tools="memory", tool_suite="baseline", tool_guidance="simple", mode="json", tool_system_layout=layout
+    )
     inputs = []
     actions = [
         {"operation": "read"},
@@ -125,6 +128,10 @@ async def test_tool_loop_native_ids_reasoning_replay_and_per_case_baseline(tmp_p
     assert result["memory"] == {"project": "Orion", "test_note": "green"}
     assert result["requests"][0].endswith(".json")
     assert inputs[0]["tool_choice"] == "auto"
+    system = [m for m in inputs[0]["messages"] if m["role"] == "system"]
+    assert len(system) == (1 if layout == "merged" else 3)
+    assert lab.SIMPLE_TOOL_GUIDANCE in "\n\n".join(m["content"] for m in system)
+    assert "Current private notes" in system[-1]["content"]
     assert all(r["reasoning_count_source"] in ("estimated", "unavailable") for r in result["metrics"])
 
 
