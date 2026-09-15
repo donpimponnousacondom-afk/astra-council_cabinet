@@ -135,6 +135,8 @@ Fixtures are labelled simulated. A status value does not imply a real request or
 
 Report token totals include failed attempts and captured partial output; timing medians use completed responses. The stored `argument_errors` counter counts rejected calls, including unknown tool names and malformed JSON; inspect the trace for the actual cause. Missing reasoning stays distinct from explicit zero, and malformed Unicode code units are displayed as escapes instead of breaking the HTML export.
 
+Token totals/medians containing local estimates have a `~` prefix. Standalone no-tool controls and unlinked interrupted requests remain visible separately from scored tool workflows. The completed 2026-09-15 owner-approved 16-model study is in `$HORTATOR_DATA_DIR/benchmarks/20260915-tool-calling-study/`: start with `report.html` or `findings.md`; `study-summary.json` contains aggregate measurements. See VERIFICATION for the measured outcomes and limitations.
+
 Every tool run writes `report.html`, `case-input-*.json`, `case-result-*.json`, `memory-*.json` and the usual private request evidence. The report is self-contained and readable on mobile. It includes exact prompts/schemas, operation checks, argument repairs, native tool traces, TTFT/TPS, completion/reasoning counts and their provenance. Dedicated provider reasoning fields remain in adjacent private request files rather than the HTML. Malformed ordinary assistant content is shown as received and may contain reasoning markers; the report remains private evidence. Rebuild one run or aggregate several runs with:
 
 ```bash

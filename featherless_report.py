@@ -19,6 +19,14 @@ def median(values):
     return f"{statistics.median(values):.1f}" if values else "—"
 
 
+def token_sum(metrics, field, source, missing="—"):
+    measured = [m for m in metrics if m.get(field) is not None]
+    if not measured:
+        return missing
+    prefix = "~" if any(m.get(source) in {"estimated", "cl100k_base_estimate"} for m in measured) else ""
+    return prefix + str(sum(m[field] for m in measured))
+
+
 def load(path):
     return json.loads(path.read_text())
 
@@ -100,8 +108,8 @@ def build_report(root):
         attempts = [r for c in compared for r in c["metrics"]]
         metrics = [r for r in attempts if r.get("status") == "completed"]
         failures = Counter(c["failure"] for c in compared if not c["success"])
-        reasons = [r["reasoning_tokens"] for r in attempts if r.get("reasoning_tokens") is not None]
-        completions = [r["output_tokens"] for r in attempts if r.get("output_tokens") is not None]
+        reasoning_total = token_sum(attempts, "reasoning_tokens", "reasoning_count_source", "none")
+        completion_total = token_sum(attempts, "output_tokens", "output_count_source")
         tool_cells = []
         for name in (
             "web_fetch",
@@ -121,7 +129,7 @@ def build_report(root):
                 else "<td>—</td>"
             )
         rows.append(
-            f"<tr><th>{esc(model)}</th>{''.join(tool_cells)}<td>{median(r.get('ttft_ms') for r in metrics)}</td><td>{median(r.get('stream_tps') for r in metrics)}</td><td>{median(r.get('e2e_tps') for r in metrics)}</td><td>{sum(reasons) if reasons else 'none'}</td><td>{sum(completions) if completions else '—'}</td><td>{sum(r.get('visible_tokens_estimate') or 0 for r in attempts)}</td><td>{esc(dict(failures))}</td></tr>"
+            f"<tr><th>{esc(model)}</th>{''.join(tool_cells)}<td>{median(r.get('ttft_ms') for r in metrics)}</td><td>{median(r.get('stream_tps') for r in metrics)}</td><td>{median(r.get('e2e_tps') for r in metrics)}</td><td>{reasoning_total}</td><td>{completion_total}</td><td>{sum(r.get('visible_tokens_estimate') or 0 for r in attempts)}</td><td>{esc(dict(failures))}</td></tr>"
         )
         for name in ("global_memory", "memory", "remember", "notes", "annotations"):
             selected = [c for c in compared if c["case"] == name]
@@ -179,13 +187,15 @@ def build_report(root):
         attempts = [r for c in group for r in c["metrics"]]
         metrics = [r for r in attempts if r.get("status") == "completed"]
         reasons = [r["reasoning_tokens"] for r in attempts if r.get("reasoning_tokens") is not None]
+        reasoning_total = token_sum(attempts, "reasoning_tokens", "reasoning_count_source", "none")
+        reason_prefix = "~" if reasoning_total.startswith("~") else ""
         variant_rows.append(
             f"<tr><th>{esc(model)}</th><td>{esc(run)}</td><td>{esc(mode)} / {esc(guidance)} / {esc(schema)}</td>"
             f"<td>{esc(params)}</td><td>{sum(c['success'] for c in group)}/{len(group)}</td>"
             f"<td>{sum(c['argument_errors'] for c in group)}</td><td>{median(r.get('ttft_ms') for r in metrics)}</td>"
             f"<td>{median(r.get('stream_tps') for r in metrics)}</td><td>{median(r.get('e2e_tps') for r in metrics)}</td>"
-            f"<td>{sum(reasons) if reasons else 'none'} ({len(reasons)}/{len(attempts)} requests measured)</td>"
-            f"<td>{median(reasons) if reasons else 'none'}</td><td>{esc(dict(Counter(c['failure'] for c in group if not c['success'])))}</td></tr>"
+            f"<td>{reasoning_total} ({len(reasons)}/{len(attempts)} requests measured)</td>"
+            f"<td>{reason_prefix + median(reasons) if reasons else 'none'}</td><td>{esc(dict(Counter(c['failure'] for c in group if not c['success'])))}</td></tr>"
         )
     excluded_html = (
         (
@@ -217,12 +227,14 @@ def build_report(root):
     )
     linked_requests = {str(Path(p).resolve()) for c in cases for p in c.get("requests", []) if p}
     standalone_rows = []
+    observed_models = set(grouped)
     for path in sorted(root.rglob("request-*.json")):
         if str(path.resolve()) in linked_requests:
             continue
         request = load(path)
         if "model" not in request or "status" not in request:
             continue
+        observed_models.add(request["model"])
         evidence = {
             k: request.get(k)
             for k in (
@@ -264,10 +276,10 @@ def build_report(root):
     )
     document = f"""<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Featherless tool-calling benchmark</title><style>
-:root{{color-scheme:dark}}*{{box-sizing:border-box}}body{{margin:0;background:#15191f;color:#e2e8ef;font:15px/1.55 system-ui,sans-serif}}main{{max-width:1800px;margin:auto;padding:24px}}h1,h2{{color:#b5dcff}}.muted,small{{color:#b0bccb}}.panel,section{{background:#20262f;border:1px solid #364252;border-radius:8px;padding:18px;margin:18px 0}}.scroll{{overflow:auto}}table{{border-collapse:collapse;width:100%;font:13px/1.45 ui-monospace,monospace}}th,td{{border:1px solid #364252;padding:8px;text-align:left;vertical-align:top}}thead{{background:#263346}}th:first-child{{min-width:260px}}.good{{color:#a5e7a4}}.bad{{color:#ffa8a8}}.mixed{{color:#f3d794}}pre{{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;max-height:700px;overflow:auto}}pre.prose{{font:inherit;max-height:none}}details{{margin:8px 0}}summary{{cursor:pointer;color:#9ed1ff}}input{{width:100%;padding:12px;background:#141b24;color:inherit;border:1px solid #60748d}}a{{color:#91caff}}@media(max-width:700px){{main{{padding:10px}}h1{{font-size:24px}}section{{padding:12px}}}}@media print{{body{{background:white;color:black}}details{{display:block}}}}
-</style><main><h1>Featherless: native tool-calling study</h1><p class="muted">Generated {esc(datetime.now().astimezone().isoformat(timespec="seconds"))} · {len(grouped)} models · {len(cases)} cases · {sum(c["success"] for c in cases)} passes</p>
+:root{{color-scheme:dark}}*{{box-sizing:border-box}}body{{margin:0;overflow-wrap:anywhere;background:#15191f;color:#e2e8ef;font:15px/1.55 system-ui,sans-serif}}main{{max-width:1800px;margin:auto;padding:24px}}h1,h2{{color:#b5dcff}}.muted,small{{color:#b0bccb}}.panel,section{{background:#20262f;border:1px solid #364252;border-radius:8px;padding:18px;margin:18px 0}}.scroll{{overflow:auto}}table{{overflow-wrap:normal;border-collapse:collapse;width:100%;font:13px/1.45 ui-monospace,monospace}}th,td{{border:1px solid #364252;padding:8px;text-align:left;vertical-align:top}}thead{{background:#263346}}th:first-child{{min-width:260px}}.good{{color:#a5e7a4}}.bad{{color:#ffa8a8}}.mixed{{color:#f3d794}}pre{{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;max-height:700px;overflow:auto}}pre.prose{{font:inherit;max-height:none}}details{{margin:8px 0}}summary{{cursor:pointer;color:#9ed1ff}}input{{width:100%;padding:12px;background:#141b24;color:inherit;border:1px solid #60748d}}a{{color:#91caff}}@media(max-width:700px){{main{{padding:10px}}h1{{font-size:24px}}section{{padding:12px}}}}@media print{{body{{background:white;color:black}}details{{display:block}}}}
+</style><main><h1>Featherless: native tool-calling study</h1><p class="muted">Generated {esc(datetime.now().astimezone().isoformat(timespec="seconds"))} · {len(observed_models)} models · {len(cases)} tool cases across all protocols · {sum(c["success"] for c in cases)} complete workflows</p>
 <div class="panel"><b>All tools are simulated.</b> No email was sent, no URL fetched by a model tool, and no council memory changed. Every memory case starts from the same JSON baseline. PASS requires native structured calls, the requested operations/state and a final answer. Text resembling a call never executes.</div>{findings}{excluded_html}
-<section><h2>How to read these results</h2><ul><li>Matrix and memory-check scope: {esc(comparison_description)} Each cell is passed cases / attempted cases. All prompt, reasoning and transport variants remain in the separate variant and individual-case tables.</li><li>Memory tasks: read → write blue → replace with green → delete obsolete → read back → report green. All five aliases use identical schemas/descriptions apart from the function name.</li><li>HTTP, capacity and upstream-envelope failures are request failures, not proof the model cannot call a tool. Text-only pseudo-calls, argument errors, output-length stops and incorrect state are distinct.</li><li>TTFT is milliseconds; TPS is streaming tokens/second. E2E TPS includes full request latency and works without SSE. Timing medians use completed requests only. Token totals and reasoning medians include recorded usage/partial text from failed attempts too. Completion includes reasoning; visible text is a fixed cl100k estimate. These are not fixed-length speed tests.</li><li>Reasoning counts prefer reported usage; missing counts use returned text with fixed cl100k. none means unavailable, not zero. Native tokenizer counts and local estimates must not be treated as billing-equivalent. Per-request sources are shown in details.</li><li>Short, bounded smoke tests cannot prove universal reliability or that a failure is irreparable. Availability, warm-up, prompt wording, output cap and native thinking settings can affect results. A server-rendered template is evidence of rendering, not proof its inference/parser path is correct.</li></ul></section>
+<section><h2>How to read these results</h2><ul><li>Matrix and memory-check scope: {esc(comparison_description)} Each cell is passed cases / attempted cases. All prompt, reasoning and transport variants remain in the separate variant and individual-case tables.</li><li>Memory tasks: read → write blue → replace with green → delete obsolete → read back → report green. All five aliases use identical schemas/descriptions apart from the function name.</li><li>HTTP, capacity and upstream-envelope failures are request failures, not proof the model cannot call a tool. Text-only pseudo-calls, argument errors, output-length stops and incorrect state are distinct.</li><li>TTFT is milliseconds; TPS is streaming tokens/second. E2E TPS includes full request latency and works without SSE. Timing medians use completed requests only. Token totals and reasoning medians include recorded usage/partial text from failed attempts too. Completion includes reasoning; visible text is a fixed cl100k estimate. These are not fixed-length speed tests.</li><li>A ~ prefix means a token total or median includes local estimates. Reasoning counts prefer reported usage; missing counts use returned text with fixed cl100k. none means unavailable, not zero. Native tokenizer counts and local estimates must not be treated as billing-equivalent. Per-request sources are shown in details.</li><li>Short, bounded smoke tests cannot prove universal reliability or that a failure is irreparable. Availability, warm-up, prompt wording, output cap and native thinking settings can affect results. A server-rendered template is evidence of rendering, not proof its inference/parser path is correct.</li></ul></section>
 <label for="filter">Filter by model, tool, prompt variant or result</label><input id="filter" placeholder="e.g. gemma, annotations, upstream_error">
 <section><h2>Failure labels</h2><ul><li><b>text_instead_of_tool:</b> no native call executed; ordinary text may contain plausible JSON arguments.</li><li><b>task_incorrect:</b> calls executed, but an explicitly requested step, exact argument, final state or answer check was missing. This does not mean the tool syntax was invalid.</li><li><b>response_format:</b> the received response did not establish a valid complete message, including missing finish_reason. Partial text and successful earlier operations remain visible.</li><li><b>upstream_http / upstream_error:</b> the server rejected the request, including error envelopes carried inside HTTP 200. These do not measure the model's ability to call tools.</li><li><b>output_limit / tool_round_budget / local_deadline:</b> the configured experiment bound was reached; a larger bound is a different experiment, not evidence that the original task completed.</li></ul></section>
 <section><h2>Model/tool matrix and performance</h2><p>{esc(comparison_description)}</p><div class="scroll"><table id="matrix"><thead><tr><th>Model</th><th>Fetch</th><th>Search</th><th>Email</th><th>Global memory</th><th>Memory</th><th>Remember</th><th>Notes</th><th>Annotations</th><th>Median TTFT ms</th><th>Median TPS</th><th>Median E2E TPS</th><th>Reasoning tokens Σ</th><th>Completion tokens Σ</th><th>Visible estimate Σ</th><th>Failures</th></tr></thead><tbody>{"".join(rows)}</tbody></table></div></section>

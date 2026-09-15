@@ -299,7 +299,9 @@ def test_report_counts_tokens_from_failed_attempts(tmp_path):
             {
                 "status": "failed",
                 "reasoning_tokens": 13,
+                "reasoning_count_source": "estimated",
                 "output_tokens": 17,
+                "output_count_source": "cl100k_base_estimate",
                 "visible_tokens_estimate": 4,
                 "stream_tps": 999,
             }
@@ -307,8 +309,8 @@ def test_report_counts_tokens_from_failed_attempts(tmp_path):
     }
     (tmp_path / "case-result-f.json").write_text(json.dumps(case))
     report = build_report(tmp_path).read_text()
-    assert "<td>13</td><td>17</td><td>4</td>" in report
-    assert "13 (1/1 requests measured)" in report
+    assert "<td>~13</td><td>~17</td><td>4</td>" in report
+    assert "~13 (1/1 requests measured)" in report
     assert "<td>999.0</td>" not in report  # No complete timing sample.
 
 
