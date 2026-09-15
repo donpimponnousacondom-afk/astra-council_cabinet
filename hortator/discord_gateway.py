@@ -92,11 +92,19 @@ class CouncilClient(discord.Client):
         if self.stopping or self.manager.closed:
             return
         socket = getattr(getattr(self, "ws", None), "socket", None)
+        socket_error = (
+            socket.exception()
+            if socket is not None and callable(getattr(socket, "exception", None))
+            else None
+        )
         self.manager.gateway(
             self.bot_id,
             "reconnecting",
+            error=error_text(socket_error) if socket_error else None,
             source="disconnect_callback",
             close_code=getattr(socket, "close_code", None),
+            heartbeat_ms=self.latency * 1000 if math.isfinite(self.latency) else None,
+            phase="gateway_websocket",
         )
 
     async def on_resumed(self):
@@ -253,10 +261,10 @@ class DiscordManager:
         except httpx.HTTPError as exc:
             raise ControlError("Could not reach Discord to verify the token") from exc
 
-    def gateway(self, bot_id, status, error=None, *, source="supervisor", close_code=None):
+    def gateway(self, bot_id, status, error=None, *, source="supervisor", close_code=None, **diagnostics):
         previous = self.store.runtime(bot_id)
         now = time.time()
-        data = {"source": source, "previous_status": previous["gateway_status"]}
+        data = {"source": source, "previous_status": previous["gateway_status"], **diagnostics}
         if error:
             data["error"] = self.vault.redact(error)
         if close_code is not None:
@@ -286,13 +294,17 @@ class DiscordManager:
 
     async def run_client(self, bot, token):
         delay = 5
+        attempt = 0
         while not self.closed:
+            attempt += 1
             client = CouncilClient(self, bot["id"])
             self.clients[bot["id"]] = client
+            phase = "login"
             try:
                 self.gateway(bot["id"], "connecting")
                 async with client:
                     await client.login(token)
+                    phase = "application_identity"
                     info = await client.application_info()
                     if str(info.id) != bot["application_id"] or not client.user.bot:
                         self.gateway(bot["id"], "failed", "Stored token does not match this application")
@@ -300,7 +312,9 @@ class DiscordManager:
                     self.vault.put(f"bot/{bot['id']}/user_id", str(client.user.id))
                     # Populate rendering metadata before the gateway can admit
                     # the first model turn; discovery failure does not stop chat.
+                    phase = "application_emojis"
                     await self.emojis.sync(self, client)
+                    phase = "gateway_connect"
                     await client.connect(reconnect=True)
             except (discord.LoginFailure, discord.PrivilegedIntentsRequired) as exc:
                 self.gateway(
@@ -314,7 +328,15 @@ class DiscordManager:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self.gateway(bot["id"], "failed", f"{type(exc).__name__}: {exc}")
+                self.gateway(
+                    bot["id"],
+                    "failed",
+                    error_text(exc),
+                    phase=phase,
+                    attempt=attempt,
+                    retry_in_seconds=delay,
+                    reason="Discord client supervisor will recreate this connection; existing slash/provider work is not replayed",
+                )
             finally:
                 await client.close()
                 if self.clients.get(bot["id"]) is client:

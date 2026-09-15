@@ -10,6 +10,7 @@ import asyncio
 import io
 import time
 
+import aiohttp
 import discord
 
 from .concurrency import error_text
@@ -26,6 +27,21 @@ from .vision_turn import select_images
 PLUGIN_ID = "slash_commands"
 MAX_PROMPT_CHARS = 6000
 MAX_SECONDS = 14 * 60
+ACK_SECONDS = 2.9  # Discord invalidates an unacknowledged interaction at three seconds.
+ACK_ATTEMPTS = 3
+ACK_RETRY_DELAY = 0.1
+ACK_RECEIPT_SECONDS = 5
+ACK_RECEIPT_DELAY = 0.25
+
+
+def transient_discord_error(exc):
+    if isinstance(exc, discord.HTTPException):
+        return exc.status >= 500
+    if isinstance(exc, (aiohttp.ClientSSLError, aiohttp.InvalidURL)):
+        return False
+    return isinstance(exc, (OSError, TimeoutError, aiohttp.ClientConnectionError, aiohttp.ClientPayloadError))
+
+
 COMMAND = {
     "name": "prompt",
     "description": "Ask this assistant a question or request a task (owner only).",
@@ -276,11 +292,12 @@ class SlashEngine(Engine):
             turn_id=context.turn_id,
         )
         files = []
+        timer = asyncio.timeout(30)
         try:
             files = [discord.File(path) for path in paths]
             if attached:
                 files.append(discord.File(io.BytesIO(content.encode()), filename="full-response.txt"))
-            async with asyncio.timeout(30):
+            async with timer:
                 sent = await self.interaction.edit_original_response(
                     content=text,
                     attachments=files,
@@ -312,7 +329,11 @@ class SlashEngine(Engine):
                 {
                     "outbox_id": outbox_id,
                     "channel_id": self.invocation["channel_id"],
-                    "error": error,
+                    "interaction_id": str(self.interaction.id),
+                    "operation": "edit slash answer",
+                    "phase": "edit_original_response",
+                    **self.manager.slash.error_fields(exc, self.interaction, local_timeout=timer.expired()),
+                    **({"timeout_seconds": 30} if timer.expired() else {}),
                     "reason": "Interaction acceptance is unknown; no automatic resend"
                     if uncertain
                     else "Interaction response was rejected",
@@ -354,6 +375,243 @@ class DiscordSlash:
         if token:
             text = text.replace(token, "[REDACTED interaction token]")
         return self.manager.vault.redact(text)[:3000]
+
+    def error_fields(self, exc, interaction, *, local_timeout=False):
+        """Only selected exception facts: never serialize a token-bearing request/response."""
+        result = {
+            "error": self.safe_error(exc, interaction),
+            "error_origin": "local_deadline"
+            if local_timeout
+            else "discord_http"
+            if isinstance(exc, discord.HTTPException)
+            else "transport"
+            if transient_discord_error(exc)
+            else "local_client",
+        }
+        if isinstance(exc, discord.HTTPException):
+            result.update(http_status=exc.status, discord_code=exc.code)
+        causes, seen = [], set()
+        cause = exc
+        while cause is not None and id(cause) not in seen and len(causes) < 5:
+            seen.add(id(cause))
+            causes.append(self.safe_error(cause, interaction))
+            if isinstance(cause, OSError) and cause.errno is not None:
+                result["errno"] = cause.errno
+            cause = cause.__cause__ or cause.__context__
+        result["causes"] = causes
+        return result
+
+    def ack_event(self, bot_id, interaction, kind, *, level="info", **data):
+        state = self.store.runtime(bot_id)
+        self.store.emit(
+            "discord.slash_" + kind,
+            {
+                "operation": "acknowledge /prompt",
+                "interaction_id": str(interaction.id),
+                "channel_id": str(interaction.channel_id),
+                "application_id": str(interaction.application_id),
+                "interaction_age_ms": max(0, time.time() - interaction.created_at.timestamp()) * 1000,
+                "gateway_status": state["gateway_status"],
+                "heartbeat_ms": state.get("heartbeat_ms"),
+                **data,
+            },
+            bot_id=bot_id,
+            level=level,
+        )
+
+    async def acknowledge(self, bot_id, interaction, private):
+        # Never give a new attempt a fresh three-second window. Use monotonic
+        # time once the interaction's remaining lifetime has been calculated.
+        loop = asyncio.get_running_loop()
+        began = loop.time()
+        remaining = ACK_SECONDS - max(0, time.time() - interaction.created_at.timestamp())
+        deadline = began + max(0, remaining)
+        attempt, fields, uncertain = 0, {}, False
+        self.ack_event(
+            bot_id, interaction, "received", phase="acknowledge", remaining_ms=max(0, remaining) * 1000
+        )
+        try:
+            for candidate in range(1, ACK_ATTEMPTS + 1):
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    break
+                attempt = candidate
+                timer = asyncio.timeout_at(deadline)
+                try:
+                    async with timer:
+                        await interaction.response.defer(thinking=True, ephemeral=private)
+                    self.ack_event(
+                        bot_id,
+                        interaction,
+                        "acknowledged",
+                        phase="acknowledge",
+                        attempt=attempt,
+                        duration_ms=(loop.time() - began) * 1000,
+                    )
+                    return True
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    fields = self.error_fields(exc, interaction, local_timeout=timer.expired())
+                    retryable = transient_discord_error(exc)
+                    uncertain = (
+                        retryable
+                        or isinstance(exc, discord.InteractionResponded)
+                        or (isinstance(exc, discord.HTTPException) and exc.code == 40060)
+                    )
+                    if timer.expired():
+                        fields["timeout_seconds"] = ACK_SECONDS
+                        fields["error"] = (
+                            f"Local Discord acknowledgement wait expired after {ACK_SECONDS} seconds from interaction creation; remote acceptance is unknown"
+                        )
+                    if not retryable or attempt == ACK_ATTEMPTS or deadline - loop.time() <= ACK_RETRY_DELAY:
+                        break
+                    self.ack_event(
+                        bot_id,
+                        interaction,
+                        "ack_retry",
+                        level="warning",
+                        phase="acknowledge",
+                        attempt=attempt,
+                        max_attempts=ACK_ATTEMPTS,
+                        next_attempt=attempt + 1,
+                        retry_in_seconds=ACK_RETRY_DELAY,
+                        remaining_ms=max(0, deadline - loop.time()) * 1000,
+                        **fields,
+                        reason="Retrying only this interaction acknowledgement inside Discord's original three-second window; no model work has started",
+                    )
+                    await asyncio.sleep(ACK_RETRY_DELAY)
+            if uncertain:
+                self.ack_event(
+                    bot_id,
+                    interaction,
+                    "ack_checking",
+                    level="warning",
+                    phase="read_ack_receipt",
+                    attempt=attempt,
+                    **fields,
+                    reason="Checking the original response to determine whether Discord accepted the acknowledgement; not sending a new message",
+                )
+                if await self.recover_ack(bot_id, interaction, private):
+                    return True
+            if not fields:
+                fields = {
+                    "error_origin": "platform_deadline",
+                    "error": "Discord's initial three-second response window elapsed before acknowledgement could start",
+                    "timeout_seconds": ACK_SECONDS,
+                }
+            message = (
+                "Discord acknowledgement could not be confirmed; no model or tool work was started. "
+                "Invoke /prompt again. "
+                + fields.get(
+                    "error",
+                    "Discord's initial three-second response window elapsed before acknowledgement could start",
+                )
+            )
+            self.finish(str(interaction.id), "failed", message)
+            self.ack_event(
+                bot_id,
+                interaction,
+                "ack_failed",
+                level="error",
+                phase="acknowledge",
+                attempt=attempt,
+                max_attempts=ACK_ATTEMPTS,
+                duration_ms=(loop.time() - began) * 1000,
+                **fields,
+                reason=message,
+            )
+            return False
+        except asyncio.CancelledError:
+            self.finish(str(interaction.id), "cancelled", "Cancelled while acknowledging Discord")
+            self.ack_event(
+                bot_id,
+                interaction,
+                "ack_cancelled",
+                level="warning",
+                phase="acknowledge",
+                reason="Owner/runtime cancelled acknowledgement or receipt recovery; no model work started",
+            )
+            raise
+
+    async def recover_ack(self, bot_id, interaction, private):
+        for attempt in range(1, ACK_ATTEMPTS + 1):
+            remaining = MAX_SECONDS - max(0, time.time() - interaction.created_at.timestamp())
+            if remaining <= 0:
+                return False
+            seconds = min(ACK_RECEIPT_SECONDS, remaining)
+            timer = asyncio.timeout(seconds)
+            try:
+                async with timer:
+                    response = await interaction.original_response()
+                # A GET on this token-specific endpoint proves acceptance, but
+                # only a deferred placeholder of the expected visibility is ours
+                # to finish. Never overwrite an already-completed response.
+                flags = response.flags
+                app = getattr(response, "application_id", None)
+                metadata = getattr(response, "interaction_metadata", None)
+                if (
+                    not flags.loading
+                    or flags.ephemeral != private
+                    or app is not None
+                    and str(app) != str(interaction.application_id)
+                    or metadata is not None
+                    and str(metadata.id) != str(interaction.id)
+                ):
+                    self.ack_event(
+                        bot_id,
+                        interaction,
+                        "ack_receipt_mismatch",
+                        level="error",
+                        phase="read_ack_receipt",
+                        response_id=str(response.id),
+                        reason="Original response is not the expected deferred placeholder/visibility; no generation or overwrite",
+                    )
+                    return False
+                self.store.execute(
+                    "UPDATE slash_invocations SET response_id=? WHERE interaction_id=?",
+                    (str(response.id), str(interaction.id)),
+                )
+                self.ack_event(
+                    bot_id,
+                    interaction,
+                    "ack_recovered",
+                    phase="read_ack_receipt",
+                    attempt=attempt,
+                    response_id=str(response.id),
+                    reason="Discord confirmed the existing deferred response; continuing this invocation once",
+                )
+                return True
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                retryable = transient_discord_error(exc) or isinstance(exc, discord.NotFound)
+                retry = retryable and attempt < ACK_ATTEMPTS
+                fields = self.error_fields(exc, interaction, local_timeout=timer.expired())
+                if timer.expired():
+                    fields.update(
+                        timeout_seconds=seconds,
+                        error=f"Local Discord acknowledgement receipt lookup deadline exceeded: {seconds:g} seconds",
+                    )
+                self.ack_event(
+                    bot_id,
+                    interaction,
+                    "ack_receipt_retry" if retry else "ack_receipt_failed",
+                    level="warning",
+                    phase="read_ack_receipt",
+                    attempt=attempt,
+                    max_attempts=ACK_ATTEMPTS,
+                    next_attempt=attempt + 1 if retry else None,
+                    retry_in_seconds=ACK_RECEIPT_DELAY if retry else None,
+                    **fields,
+                    reason="Retrying read-only acknowledgement lookup"
+                    if retry
+                    else "Could not confirm Discord accepted the acknowledgement",
+                )
+                if not retry:
+                    return False
+                await asyncio.sleep(ACK_RECEIPT_DELAY)
+        return False
 
     def schedule_sync(self, client):
         bot_id = client.bot_id
@@ -452,8 +710,9 @@ class DiscordSlash:
             suffix = "\nFull diagnostics are available in Trajectory." + suffix
             message = markdown_preview(message, 2000 - len(suffix.encode("utf-16-le")) // 2 - 4)
         message += suffix
+        timer = asyncio.timeout(10)
         try:
-            async with asyncio.timeout(10):
+            async with timer:
                 if deferred:
                     await interaction.edit_original_response(
                         content=message, allowed_mentions=discord.AllowedMentions.none()
@@ -465,13 +724,22 @@ class DiscordSlash:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            claim = self.store.one(
+                "SELECT bot_id FROM slash_invocations WHERE interaction_id=?", (str(interaction.id),)
+            )
             self.store.emit(
                 "discord.slash_notice_failed",
                 {
                     "interaction_id": str(interaction.id),
-                    "error": self.safe_error(exc, interaction),
+                    "channel_id": str(interaction.channel_id),
+                    "operation": "deliver slash status notice",
+                    "phase": "edit_original_response" if deferred else "initial_response",
+                    **self.error_fields(exc, interaction, local_timeout=timer.expired()),
+                    **({"timeout_seconds": 10} if timer.expired() else {}),
                     "reason": "Interaction notice could not be delivered; no automatic resend",
                 },
+                bot_id=claim["bot_id"] if claim else None,
+                turn_id=trace,
                 level="warning",
             )
 
@@ -533,16 +801,7 @@ class DiscordSlash:
             ),
         )
         # Acknowledge first. Do not wait for a provider slot or model preparation.
-        try:
-            async with asyncio.timeout(2.5):
-                await interaction.response.defer(thinking=True, ephemeral=private)
-        except asyncio.CancelledError:
-            self.finish(invocation_id, "cancelled", "Cancelled while acknowledging Discord")
-            raise
-        except Exception as exc:
-            self.finish(
-                invocation_id, "failed", "Could not acknowledge Discord: " + self.safe_error(exc, interaction)
-            )
+        if not await self.acknowledge(bot_id, interaction, private):
             return
         main = self.manager.service.engine
         bot = self.store.get("bots", bot_id)

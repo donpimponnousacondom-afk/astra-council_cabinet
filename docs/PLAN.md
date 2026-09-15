@@ -1,5 +1,23 @@
 # Implementation and acceptance plan
 
+## Slash acknowledgement recovery and readable console time (2026-09-15)
+
+The owner requested recovery from sporadic Discord failures and stronger timestamp
+contrast. Provider retries already cover slash model calls; the missing recovery
+was the initial Discord acknowledgement. Replace its one-shot 2.5-second wait
+with up to three transient attempts inside one 2.9-second deadline, and reconcile
+uncertain acceptance by reading the existing deferred response. Discord's initial
+three-second requirement remains authoritative; no model/tool work starts without
+confirmed acknowledgement. Keep response visibility, duplicate claims, per-bot
+gates, cancellation and final-delivery uncertainty intact. Add operation/identity,
+HTTP/Discord codes, bounded causes and stage-specific retry/failure events, never
+interaction tokens. See [SLASH_COMMANDS.md](SLASH_COMMANDS.md).
+
+Use bright neutral ANSI white for console timestamps on gray terminal backgrounds;
+retain scope/severity colors, plain scrollback and no-color behavior. Gateway
+diagnostics include available socket exceptions and existing supervisor retry
+timing; they do not guess why a close occurred or blame inference providers.
+
 ## Disclosed JPEG resizing and durable intake outcomes (2026-09-15)
 
 The owner selected a 64,000,000-pixel intake limit and proportional resizing only

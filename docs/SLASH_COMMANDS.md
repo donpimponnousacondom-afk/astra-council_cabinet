@@ -45,6 +45,49 @@ The result is ordinary assistant text, not a council reply tool. Longer answers 
 
 The handler defers the interaction before starting model work. Discord requires an initial response within 3 seconds, and interaction tokens remain usable for 15 minutes. [Interaction response timing](https://docs.discord.com/developers/interactions/receiving-and-responding#responding-to-an-interaction).
 
+### Acknowledgement retries and recovery
+
+The local acknowledgement cutoff is **2.9 seconds from interaction creation**,
+replacing the former one-shot 2.5-second wait. Earlier gateway/handler delay is
+included; retries do not get another three seconds. Up to **three deferral calls**
+are allowed for quick connection/timeout/server failures, with 100 ms between
+attempts while time remains. discord.py also manages its own HTTP retries and
+rate limits inside this outer deadline; application attempt counts are not a
+count of every wire request. Authentication/permission/expired-interaction and
+local programming errors are not blindly retried.
+
+A missing acknowledgement response does not establish that Discord rejected it.
+After an uncertain timeout/connection failure, or Discord's **40060** already-
+acknowledged response, the runtime makes up to **three read-only lookups** of the
+original response (five seconds per lookup, 250 ms between retries). It continues
+only if Discord returns the expected deferred/loading placeholder with matching
+visibility and any supplied application/interaction identity. It does not post
+another message, change private/public visibility, overwrite a completed answer,
+or infer acceptance from a local exception. Receipt reads may follow the initial
+three-second window because they only check an acknowledgement already accepted
+by Discord. Cancellation and the existing 14-minute invocation deadline still
+apply. If acceptance cannot be confirmed, no inference or tool work starts; the
+owner must invoke `/prompt` again. Interaction claims prevent duplicate work.
+
+These initial-response retries are separate from **provider retries**, which
+already apply to ordinary turns, slash generation and compaction. A gateway
+reconnect does not itself rerun or abandon a provider/tool loop. Uncertain final
+answer delivery retains its existing outbox policy; this change does not replay
+completed model work or automatically resend an uncertain final answer.
+
+Console/dashboard events identify each stage: `discord.slash_received`,
+`discord.slash_ack_retry`, `discord.slash_acknowledged`, `discord.slash_ack_checking`,
+`discord.slash_ack_receipt_retry`, `discord.slash_ack_recovered` and final failure
+or cancellation. Evidence includes bot/channel/interaction identity, remaining
+acknowledgement time, actual HTTP status/Discord code and bounded exception causes
+when supplied. Local timeouts are labelled `local_deadline`; expired initial
+windows are `platform_deadline`. Gateway state/heartbeat are context, not proof
+that a reconnect caused a REST failure. Interaction tokens remain excluded at
+every depth. Final answer/status-notice failures also name their Discord REST
+operation and available HTTP/error-code evidence.
+
+### Task lifetime
+
 The local slash deadline is **14 minutes from interaction creation**, reserving time for a final status notice. The bot's ordinary document/workspace settings may allow 7,200 seconds; those do **not** extend the slash platform deadline. A shorter configured provider deadline still applies. At expiry the runtime cancels provider/tool work, preserves saved notes/files and request evidence, and reports the local cause. It does not queue an invisible continuation or automatically restart the request. Long-lived background slash jobs are not implemented.
 
 Slash and ordinary turns share one active slot per bot and the existing global concurrency/hourly/cost/circuit checks. A busy bot receives no second generation; the deferred response explains that the owner should retry when it is free. `!stop loki` through Hortator or the dashboard's normal stop control cancels its slash work as well. Snapshot maintenance refuses new ingress and joins active work before manipulating state.
