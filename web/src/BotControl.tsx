@@ -5,10 +5,12 @@ import { Field, Notice } from "./components";
 
 export function BotControl({
   bot,
+  rooms,
   dirty,
   onBusyChange,
 }: {
   bot: RecordData;
+  rooms: RecordData[];
   dirty: boolean;
   onBusyChange: (id: string, pending: boolean) => void;
 }) {
@@ -17,11 +19,21 @@ export function BotControl({
   const [receipt, setReceipt] = useState<RecordData | null>(null);
   const [error, setError] = useState("");
   const pending = useRef(false);
+  const channelName = (id: string): string =>
+    rooms.find((room) => room.channel_id === id)?.name || id;
+  const optionName = (id: string): string => {
+    const name = channelName(id);
+    const duplicate =
+      (bot.contexts || []).filter(
+        (c: RecordData) => channelName(c.channel_id) === name,
+      ).length > 1;
+    return duplicate ? `${name} · ${id}` : name;
+  };
   async function reset() {
     if (pending.current || dirty || confirmation !== bot.id) return;
     if (
       !window.confirm(
-        `Forget all messages before now for ${bot.name} in ${channel || "all channels"}? Active work will be cancelled and retained summaries cleared. Memories and other bots are unchanged. There is no undo button.`,
+        `Forget all messages before now for ${bot.name} in ${channel ? `${channelName(channel)} (${channel})` : "all channels"}? Active work will be cancelled and retained summaries cleared. Memories and other bots are unchanged. There is no undo button.`,
       )
     )
       return;
@@ -49,7 +61,9 @@ export function BotControl({
       {(bot.context_resets || []).map((boundary: RecordData) => (
         <p className="muted" key={boundary.channel_id}>
           History hidden before {dateLabel(boundary.after_at)} ·{" "}
-          {boundary.channel_id === "*" ? "all channels" : boundary.channel_id}
+          {boundary.channel_id === "*"
+            ? "all channels"
+            : optionName(boundary.channel_id)}
         </p>
       ))}
       <Notice>
@@ -64,12 +78,15 @@ export function BotControl({
         files, prompts, provider settings and credentials remain unchanged.
         Messages already sent cannot be recalled.
       </p>
-      <Field label="Reset scope">
+      <Field
+        label="Reset scope"
+        hint={channel ? `Channel ID: ${channel}` : undefined}
+      >
         <select value={channel} onChange={(e) => setChannel(e.target.value)}>
           <option value="">All channels, including future assignments</option>
           {(bot.contexts || []).map((c: RecordData) => (
             <option key={c.channel_id} value={c.channel_id}>
-              {c.channel_id}
+              {optionName(c.channel_id)}
             </option>
           ))}
         </select>

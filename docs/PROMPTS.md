@@ -49,7 +49,7 @@ Compaction source wrappers must include `{transcript}` and, when there is an exi
 
 ## Forget everything before now
 
-**Bots → bot → Control → Forget everything before now** sets a durable bot-specific history boundary at the current time. Default scope is all channels, including future assignments; an existing channel can be selected instead. Type the bot's stable ID and confirm the warning. Save/discard configuration drafts first. No snapshot restore is performed and no other bot is reset.
+**Bots → bot → Control → Forget everything before now** sets a durable bot-specific history boundary at the current time. Default scope is all channels, including future assignments; an existing channel can be selected instead. Channel choices use the configured **Rooms** name for the matching channel ID, with the raw ID as fallback and secondary detail. There are no Discord name lookups or cache dependencies. Type the bot's stable ID and confirm the warning. Save/discard configuration drafts first. No snapshot restore is performed and no other bot is reset.
 
 The action blocks new work for the target while cancelling/joining its active turn, then atomically clears the selected retained summaries/token estimates/compaction counters, advances the observed-message checkpoint and stores a sequence plus original-message-time cutoff. All senders' earlier messages are excluded. History backfilled later, edits, reconnects and process restarts cannot revive them. Replies keep recipient identity but omit pre-cutoff quoted previews. A pending slash acknowledgement from before an all-channel cutoff cannot start old work after the reset; newly invoked slash requests remain fresh.
 

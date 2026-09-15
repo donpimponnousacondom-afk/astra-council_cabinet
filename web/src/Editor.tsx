@@ -936,6 +936,7 @@ export function Editor({
                   (entity ? (
                     <BotControl
                       key={entity.id}
+                      rooms={dashboard.rooms}
                       bot={
                         dashboard.bots.find((b) => b.id === entity.id) || entity
                       }
