@@ -123,3 +123,27 @@ async def test_intentional_client_close_does_not_report_network_failure(kernel):
     cursor = kernel.store.emit("test.client_closed")["seq"]
     await client.on_disconnect()
     assert kernel.store.events(after=cursor) == []
+
+
+async def test_disconnect_preserves_socket_cause_and_latency_without_credentials(kernel):
+    client = CouncilClient(kernel.connector, "ada")
+    kernel.vault.put("test/socket", "SYNTHETIC_SOCKET_SECRET")
+    client.ws = SimpleNamespace(
+        latency=0.125,
+        socket=SimpleNamespace(
+            close_code=1006,
+            exception=lambda: ConnectionResetError("connection reset SYNTHETIC_SOCKET_SECRET"),
+        ),
+    )
+    try:
+        await client.on_disconnect()
+        event = kernel.store.events(limit=1)[0]
+        assert event["kind"] == "discord.reconnecting"
+        assert event["data"]["close_code"] == 1006
+        assert event["data"]["heartbeat_ms"] == 125
+        assert event["data"]["phase"] == "gateway_websocket"
+        assert "ConnectionResetError" in event["data"]["error"]
+        assert "SYNTHETIC_SOCKET_SECRET" not in str(event)
+    finally:
+        client.ws = None
+        await client.close()

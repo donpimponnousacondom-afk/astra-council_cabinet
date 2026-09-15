@@ -171,6 +171,11 @@ The agent can send commands through `screen -S hortator -p dashboard -X stuff` a
 
 ## Console inspection and filtering
 
+Timestamps use bright neutral ANSI white, without a background block, for
+contrast on gray as well as black terminal backgrounds (owner preference,
+2026-09-15). This applies to events, replays and console notices. Scope/severity
+colors and the plain `--no-color` output remain unchanged.
+
 The foreground `hortator serve` console receives the same redacted operational events persisted in SQLite, plus Python/Uvicorn warnings and errors. Lines include a local ISO 8601 timestamp with UTC offset, severity, scope, event kind/sequence and bot/provider identity when available. Request/turn details retain IDs for correlation with dashboard trajectories. The default is **INFO, all scopes enabled, details folded**. Healthy dashboard GETs are DEBUG; normal bot turns, provider requests, tools, compaction, deliveries and gateway changes remain visible. HTTP 4xx/5xx responses are warnings/errors. Console filters never change scheduling, grants, configuration, Discord notifications or event persistence.
 
 In the attached Screen window, press a key without Enter:
@@ -423,9 +428,24 @@ The controls cover `reasoning_effort`, `reasoning.effort`/`enabled`/`max_tokens`
 
 A send already accepted by Discord cannot be recalled by cancelling Python. If delivery is interrupted after dispatch and acceptance cannot be established, its outbox state is **unknown**. Unknown sends are not automatically resent. A gateway echo with a matching bot identity, channel and unique nonce can reconcile it to sent. On process startup, pending outputs become suppressed, in-progress sends become unknown, and unfinished requests/turns become interrupted. Inspect the timeline before deciding what to do next.
 
-Provider authentication, rate-limit, network and server failures affect the provider's failure streak/circuit. Errors from an individual bot’s overridden credential do not open the shared provider circuit. Model-specific HTTP 400/404/422 configuration errors remain attributed to the request/profile/bot and do not falsely open a provider-wide circuit. After the recovery delay, one completion probe is admitted; success closes the circuit. Every attempt is recorded, with no hidden automatic request retry loop. Rate-limit `Retry-After` delays are honored when numeric. Discord's library separately handles its REST rate limits.
+Provider authentication, rate-limit, network and server failures affect the provider's failure streak/circuit. Errors from an individual bot’s overridden credential do not open the shared provider circuit. Model-specific HTTP 400/404/422 configuration errors remain attributed to the request/profile/bot and do not falsely open a provider-wide circuit. After the recovery delay, one completion probe is admitted; success closes the circuit. Each failed inference request follows the configured request-retry policy before final circuit accounting; every attempt is recorded. Rate-limit `Retry-After` delays are honored when numeric. Discord's library separately handles its REST rate limits.
 
 Gateway status/heartbeat latency is separate from provider health. Three unhealthy gateway checks (15-second checks; finite latency below 30 seconds) cause a supervised reconnect. Invalid credentials or missing Message Content Intent show a specific failed state. Fix the Portal setting and use `!restart <bot-id>` (or `restart` via the API) to retry without replacing configuration. A successful `/models` discovery probe never erases completion-failure counters.
+
+Disconnect events now include a WebSocket exception and heartbeat latency when
+available; a close code alone still cannot establish a network/provider cause.
+Client supervisor failures show the failed login/identity/gateway phase and
+reconnect delay. The supervisor retains its existing 5–120 second backoff.
+
+Slash acknowledgement uses a shared **2.9-second initial window**, up to three
+quick transient deferral attempts, and up to three read-only receipt lookups if
+Discord acceptance is uncertain. It never gives each attempt a fresh window or
+extends Discord's three-second initial-response rule. Recovery continues model
+work only after confirming the expected existing deferred response. The `d`
+scope and `f` expanded events expose attempts, channel/interaction IDs, HTTP
+status, Discord code and exception causes without tokens. Final answer delivery
+uncertainty is still retained rather than blindly resent. See
+[slash recovery](SLASH_COMMANDS.md#acknowledgement-retries-and-recovery).
 
 Incident notifications are sent through Hortator to its configured reporting channel, grouped by incident kind and bot/provider with a five-minute repeat throttle. Discord reconnects have a **30-second grace period**: brief reconnect/resume pairs stay in the dashboard ledger without two chat messages. A sustained interruption reports elapsed time and the supplied cause/close code, or explicitly says Discord did not supply a reason. Recovery reports the interruption's duration; its throttle is separate from initial connection notices. Intentional client shutdown does not report a network failure. The ledger includes callback/watchdog source and previous state where available; missing metadata does not establish which side caused the interruption.
 

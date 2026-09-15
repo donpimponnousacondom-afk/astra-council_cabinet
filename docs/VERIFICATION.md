@@ -2,6 +2,42 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
 
+## Discord slash acknowledgement recovery and console contrast (2026-09-15)
+
+- Created `hotfix/discord_slash_recovery` from the clean post-merge placeholder
+  at `6444a7c` (image-intake PR #40). Read-only live inspection found six slash
+  invocations in the preceding day: four sent, two failed; one failed before a
+  turn was created because acknowledgement failed. This patch does not attribute
+  that REST failure to a gateway reconnect without evidence.
+- Implemented at most three transient deferral calls within one 2.9-second
+  creation-based deadline, replacing the former single 2.5-second wait. Uncertain
+  acceptance/Discord 40060 gets up to three bounded read-only original-response
+  lookups. Only a verified deferred placeholder with matching visibility/identity
+  permits model work. Existing provider retries, duplicate suppression, gates,
+  TaskGroup ownership, cancellation and uncertain final-delivery semantics remain.
+- Added staged acknowledgement/receipt diagnostics, HTTP/Discord codes, bounded
+  redacted exception chains, available socket-close causes/latency and existing
+  gateway supervisor retry delays. Slash final-answer/status-notice errors also
+  name their REST operation. Tokens and request objects are never serialized.
+  Console timestamps now use bright neutral ANSI white for gray backgrounds;
+  normal scrollback, no-color output and scope/severity controls remain.
+- **155 tests passed** across acknowledgement recovery, existing slash behavior,
+  gateway notifications, console, Discord intake/dispatch, concurrency, provider
+  retries and snapshots. New cases cover two quick failures then success, a real
+  2.55-second acknowledgement, local timeout then confirmed receipt, Discord
+  40060, three-attempt exhaustion, 401/403/expired/local refusals, stale initial
+  windows, receipt timeouts/mismatches, cancellation during all three wait stages,
+  and token-safe HTTP/socket cause evidence. One initial new-test assertion used
+  a positional Store.events limit; corrected to the existing keyword-only API
+  before the successful run. Two existing dependency deprecations remain.
+- Ruff lint/format and whitespace checks passed. Discord/provider requests use
+  controlled transports; no live test message or inference call was sent. The
+  source commit is deployed with `hortator-next-feature --refresh` in the existing
+  attached Screen. External `logs/discord-slash-recovery-deployment.json` records
+  matching startup/dashboard identities and configuration/credential comparisons;
+  credential hashes compare decrypted values so routine bot-ID re-encryption is
+  not mistaken for a credential change. No source push is performed.
+
 ## Image intake: 64 MP and disclosed JPEG resizing (2026-09-15)
 
 - Renamed the clean local placeholder to `hotfix/image_intake_limits`. The owner

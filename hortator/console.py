@@ -33,6 +33,7 @@ SCOPES = {
     "w": "dashboard",
 }
 COLORS = {"error": "91", "warning": "93", "info": "92", "debug": "90"}
+TIMESTAMP_COLOR = "97"  # Bright neutral text remains legible on gray terminal backgrounds.
 DETAIL_LEVELS = ("concise", "json", "evidence")
 EVIDENCE_PAGE_CHARS = 6000
 EVIDENCE_PAGE_LINES = 80
@@ -133,6 +134,13 @@ INCIDENT_FIELDS = (
     "handler",
     "name",
     "channel_id",
+    "interaction_id",
+    "discord_code",
+    "interaction_age_ms",
+    "remaining_ms",
+    "gateway_status",
+    "heartbeat_ms",
+    "errno",
     "error",
     "reason",
     "message",
@@ -555,7 +563,7 @@ class OperationalConsole(logging.Handler):
     def notice(self, text):
         stamp = local_timestamp(time.time(), self.timezone)
         self.write(
-            f"{self.paint(stamp, '90')} {self.paint('CONSOLE', '1;96')} {self.highlight(plain(safe_text(self.redact(text))))}"
+            f"{self.paint(stamp, TIMESTAMP_COLOR)} {self.paint('CONSOLE', '1;96')} {self.highlight(plain(safe_text(self.redact(text))))}"
         )
 
     def state(self):
@@ -1114,7 +1122,7 @@ class OperationalConsole(logging.Handler):
         summary = (
             self.paint(summary, COLORS[level]) if level in {"warning", "error"} else self.highlight(summary)
         )
-        line = f"{self.paint(stamp, '90')} {self.paint(level.upper().ljust(7), COLORS.get(level, '90'))} {self.paint(event['scope'].ljust(9), scope_color)} {self.paint(plain(event['kind']), '1;' + scope_color)}{self.paint(reference, '90')} {self.highlight(identity)} {summary} {self.paint(suffix, '90')}"
+        line = f"{self.paint(stamp, TIMESTAMP_COLOR)} {self.paint(level.upper().ljust(7), COLORS.get(level, '90'))} {self.paint(event['scope'].ljust(9), scope_color)} {self.paint(plain(event['kind']), '1;' + scope_color)}{self.paint(reference, '90')} {self.highlight(identity)} {summary} {self.paint(suffix, '90')}"
         self.write(line.rstrip())
         depth = (
             max(int(self.details), self.scope_depths.get(event["scope"], 0))
