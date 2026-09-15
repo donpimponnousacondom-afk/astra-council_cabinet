@@ -26,10 +26,11 @@ from .vision_turn import select_images
 
 PLUGIN_ID = "slash_commands"
 MAX_PROMPT_CHARS = 6000
-MAX_SECONDS = 14 * 60
+MAX_SECONDS = 14 * 60  # Whole slash task; reserve one minute before Discord's 15-minute token expiry.
 ACK_SECONDS = 2.9  # Discord invalidates an unacknowledged interaction at three seconds.
-ACK_ATTEMPTS = 3
-ACK_RETRY_DELAY = 0.1
+ACK_ATTEMPTS = 5
+ACK_RETRY_DELAY = 0.025  # 25 ms after a transient failure, never a per-request timeout.
+ACK_RECEIPT_ATTEMPTS = 3
 ACK_RECEIPT_SECONDS = 5
 ACK_RECEIPT_DELAY = 0.25
 
@@ -292,6 +293,7 @@ class SlashEngine(Engine):
             turn_id=context.turn_id,
         )
         files = []
+        # Only delivery of the finished answer/files, inside the overall slash deadline.
         timer = asyncio.timeout(30)
         try:
             files = [discord.File(path) for path in paths]
@@ -535,7 +537,7 @@ class DiscordSlash:
             raise
 
     async def recover_ack(self, bot_id, interaction, private):
-        for attempt in range(1, ACK_ATTEMPTS + 1):
+        for attempt in range(1, ACK_RECEIPT_ATTEMPTS + 1):
             remaining = MAX_SECONDS - max(0, time.time() - interaction.created_at.timestamp())
             if remaining <= 0:
                 return False
@@ -586,7 +588,7 @@ class DiscordSlash:
                 raise
             except Exception as exc:
                 retryable = transient_discord_error(exc) or isinstance(exc, discord.NotFound)
-                retry = retryable and attempt < ACK_ATTEMPTS
+                retry = retryable and attempt < ACK_RECEIPT_ATTEMPTS
                 fields = self.error_fields(exc, interaction, local_timeout=timer.expired())
                 if timer.expired():
                     fields.update(
@@ -600,7 +602,7 @@ class DiscordSlash:
                     level="warning",
                     phase="read_ack_receipt",
                     attempt=attempt,
-                    max_attempts=ACK_ATTEMPTS,
+                    max_attempts=ACK_RECEIPT_ATTEMPTS,
                     next_attempt=attempt + 1 if retry else None,
                     retry_in_seconds=ACK_RECEIPT_DELAY if retry else None,
                     **fields,

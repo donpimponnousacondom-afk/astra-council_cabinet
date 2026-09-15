@@ -171,10 +171,13 @@ The agent can send commands through `screen -S hortator -p dashboard -X stuff` a
 
 ## Console inspection and filtering
 
-Timestamps use bright neutral ANSI white, without a background block, for
-contrast on gray as well as black terminal backgrounds (owner preference,
-2026-09-15). This applies to events, replays and console notices. Scope/severity
-colors and the plain `--no-color` output remain unchanged.
+Timestamps use **bold soft blue** (ANSI 256-color 110), without a background block,
+for contrast on gray and black terminals. The owner rejected the interim white
+timestamps because they blended with body text (2026-09-15). Event scopes,
+severities and field labels are bold; labels use a muted teal and numeric values
+warm amber. Model/profile values are blue and URLs light cyan. Existing bot,
+provider and scope colors remain distinct. This applies to events, replays and
+console notices; plain `--no-color` text and field ordering are unchanged.
 
 The foreground `hortator serve` console receives the same redacted operational events persisted in SQLite, plus Python/Uvicorn warnings and errors. Lines include a local ISO 8601 timestamp with UTC offset, severity, scope, event kind/sequence and bot/provider identity when available. Request/turn details retain IDs for correlation with dashboard trajectories. The default is **INFO, all scopes enabled, details folded**. Healthy dashboard GETs are DEBUG; normal bot turns, provider requests, tools, compaction, deliveries and gateway changes remain visible. HTTP 4xx/5xx responses are warnings/errors. Console filters never change scheduling, grants, configuration, Discord notifications or event persistence.
 
@@ -437,10 +440,11 @@ available; a close code alone still cannot establish a network/provider cause.
 Client supervisor failures show the failed login/identity/gateway phase and
 reconnect delay. The supervisor retains its existing 5–120 second backoff.
 
-Slash acknowledgement uses a shared **2.9-second initial window**, up to three
+Slash acknowledgement uses a shared **2.9-second initial window**, up to five
 quick transient deferral attempts, and up to three read-only receipt lookups if
 Discord acceptance is uncertain. It never gives each attempt a fresh window or
-extends Discord's three-second initial-response rule. Recovery continues model
+extends Discord's three-second initial-response rule. Deferral retry gaps are
+25 ms after a failure, not per-request timeouts. Recovery continues model
 work only after confirming the expected existing deferred response. The `d`
 scope and `f` expanded events expose attempts, channel/interaction IDs, HTTP
 status, Discord code and exception causes without tokens. Final answer delivery

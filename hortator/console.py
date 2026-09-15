@@ -33,7 +33,10 @@ SCOPES = {
     "w": "dashboard",
 }
 COLORS = {"error": "91", "warning": "93", "info": "92", "debug": "90"}
-TIMESTAMP_COLOR = "97"  # Bright neutral text remains legible on gray terminal backgrounds.
+TIMESTAMP_COLOR = "1;38;5;110"  # Bold soft blue, distinct from body text on gray/black terminals.
+FIELD_COLOR = "1;38;5;109"
+SECONDARY_COLOR = "38;5;247"
+METRIC_COLOR = "1;38;5;180"
 DETAIL_LEVELS = ("concise", "json", "evidence")
 EVIDENCE_PAGE_CHARS = 6000
 EVIDENCE_PAGE_LINES = 80
@@ -48,8 +51,7 @@ SCOPE_COLORS = {
     "dashboard": "36",
 }
 CONSOLE_TOKENS = re.compile(
-    r"(?P<field>\b(?:bot|provider|enabled|gateway|status|profile|active_turn|failures|circuit_remaining|details|"
-    r"s:system|b:bots|p:providers|d:discord|t:tools|c:context|w:dashboard)=)(?P<value>[^\s|]+)"
+    r"(?P<field>\b[A-Za-z_][\w.:-]*=)(?P<value>[^\s|]+)"
     r"|(?P<scope>\b(?i:system|bots|providers|discord|tools|context|dashboard)\b)"
     r"|(?P<level>\b(?:ERROR|WARNING|INFO|DEBUG)\b)"
     r"|(?P<key>(?:^|(?<=\| ))(?:\+/-|f|r|e|i|0|\?|T|P|n|N|\[|\])(?=\s))"
@@ -526,25 +528,33 @@ class OperationalConsole(logging.Handler):
         def token(match):
             if match["field"]:
                 field, value = match["field"][:-1], match["value"]
-                label_color = SCOPE_COLORS.get(field.split(":")[-1], "90")
+                scope = SCOPE_COLORS.get(field.split(":")[-1])
+                label_color = "1;" + scope if scope else FIELD_COLOR
                 if value in {"on", "True", "online", "ready", "sent", "completed", "recovered"}:
                     color = "1;92"
                 elif value in {"off", "False", "failed", "error"}:
                     color = "1;91"
-                elif (
-                    value in {"offline", "unknown", "none", "folded", "silent", "cancelled", "suppressed"}
-                    or field == "profile"
-                ):
-                    color = "90"
+                elif value in {"offline", "unknown", "none", "folded", "silent", "cancelled", "suppressed"}:
+                    color = SECONDARY_COLOR
                 elif field == "failures":
                     color = "92" if value == "0" else "1;91"
                 elif field == "circuit_remaining":
                     color = "92" if value == "0s" else "1;93"
+                elif field in {"url", "requested_url"}:
+                    color = "38;5;117"
+                elif field in {"model", "profile", "task", "operation"}:
+                    color = "38;5;110"
+                elif re.fullmatch(r"-?\d+(?:\.\d+)?(?:ms|s)?", value):
+                    color = METRIC_COLOR
                 else:
-                    color = {"bot": "1;95", "provider": "1;96"}.get(field, "1;93")
-                return self.paint(field, label_color) + self.paint("=", "90") + self.paint(value, color)
+                    color = {"bot": "1;95", "provider": "1;96"}.get(field, "38;5;252")
+                return (
+                    self.paint(field, label_color)
+                    + self.paint("=", SECONDARY_COLOR)
+                    + self.paint(value, color)
+                )
             if match["scope"]:
-                return self.paint(match[0], SCOPE_COLORS[match[0].lower()])
+                return self.paint(match[0], "1;" + SCOPE_COLORS[match[0].lower()])
             if match["level"]:
                 return self.paint(match[0], "1;" + COLORS[match[0].lower()])
             return self.paint(match[0], "1;93")
@@ -1122,7 +1132,7 @@ class OperationalConsole(logging.Handler):
         summary = (
             self.paint(summary, COLORS[level]) if level in {"warning", "error"} else self.highlight(summary)
         )
-        line = f"{self.paint(stamp, TIMESTAMP_COLOR)} {self.paint(level.upper().ljust(7), COLORS.get(level, '90'))} {self.paint(event['scope'].ljust(9), scope_color)} {self.paint(plain(event['kind']), '1;' + scope_color)}{self.paint(reference, '90')} {self.highlight(identity)} {summary} {self.paint(suffix, '90')}"
+        line = f"{self.paint(stamp, TIMESTAMP_COLOR)} {self.paint(level.upper().ljust(7), '1;' + COLORS.get(level, '90'))} {self.paint(event['scope'].ljust(9), '1;' + scope_color)} {self.paint(plain(event['kind']), '1;' + scope_color)}{self.paint(reference, SECONDARY_COLOR)} {self.highlight(identity)} {summary} {self.paint(suffix, SECONDARY_COLOR)}"
         self.write(line.rstrip())
         depth = (
             max(int(self.details), self.scope_depths.get(event["scope"], 0))
