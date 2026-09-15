@@ -177,7 +177,7 @@ def test_report_escapes_model_output_and_excludes_private_reasoning(tmp_path):
         "argument_errors": 0,
         "usage_calls": 0,
         "calls": [],
-        "final": "<img src=x onerror=alert(1)>",
+        "final": "<img src=x onerror=alert(1)>\ud83d",
         "metrics": [],
         "requests": [],
     }
@@ -187,6 +187,7 @@ def test_report_escapes_model_output_and_excludes_private_reasoning(tmp_path):
     )
     report = build_report(tmp_path).read_text()
     assert "<img src=x" not in report and "&lt;img src=x" in report
+    assert r"\ud83d" in report
     assert "NEVER_EMBED_THIS_REASONING" not in report
     assert "text_instead_of_tool" in report
 
@@ -271,3 +272,38 @@ def test_report_discloses_excluded_cases_without_counting_them(tmp_path):
     report = build_report(tmp_path).read_text()
     assert "EXCLUDED: Invalid test schedule" in report
     assert "Disclosed exclusions" in report and ">0/1</td>" not in report
+
+
+def test_report_counts_tokens_from_failed_attempts(tmp_path):
+    from featherless_report import build_report
+
+    case = {
+        "case_id": "f",
+        "model": "m",
+        "case": "memory",
+        "mode": "sse",
+        "guidance": "runtime",
+        "schema": "runtime",
+        "success": False,
+        "failure": "response_format",
+        "checks": {},
+        "argument_errors": 0,
+        "usage_calls": 0,
+        "calls": [],
+        "final": "",
+        "requests": [],
+        "metrics": [
+            {
+                "status": "failed",
+                "reasoning_tokens": 13,
+                "output_tokens": 17,
+                "visible_tokens_estimate": 4,
+                "stream_tps": 999,
+            }
+        ],
+    }
+    (tmp_path / "case-result-f.json").write_text(json.dumps(case))
+    report = build_report(tmp_path).read_text()
+    assert "<td>13</td><td>17</td><td>4</td>" in report
+    assert "13 (1/1 requests measured)" in report
+    assert "<td>999.0</td>" not in report  # No complete timing sample.

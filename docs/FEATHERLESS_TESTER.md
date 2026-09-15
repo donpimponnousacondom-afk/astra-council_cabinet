@@ -133,6 +133,8 @@ Fixtures are labelled simulated. A status value does not imply a real request or
 
 ### Tool reports
 
+Report token totals include failed attempts and captured partial output; timing medians use completed responses. Missing reasoning stays distinct from explicit zero, and malformed Unicode code units are displayed as escapes instead of breaking the HTML export.
+
 Every tool run writes `report.html`, `case-input-*.json`, `case-result-*.json`, `memory-*.json` and the usual private request evidence. The report is self-contained and readable on mobile. It includes exact prompts/schemas, operation checks, argument repairs, native tool traces, TTFT/TPS, completion/reasoning counts and their provenance. Provider reasoning text remains in adjacent private request files rather than the HTML. Rebuild one run or aggregate several runs with:
 
 ```bash
