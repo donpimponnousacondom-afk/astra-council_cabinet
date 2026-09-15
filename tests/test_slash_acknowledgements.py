@@ -43,29 +43,30 @@ def events(kernel, kind):
     ]
 
 
-async def test_two_connection_failures_retry_ack_not_model_or_tools(kernel):
+@pytest.mark.parametrize("failures", [2, 4])
+async def test_connection_failures_retry_ack_not_model_or_tools(kernel, failures):
     bot = enable(kernel)
     await install_client(kernel, lambda _: completion("done"))
     item = interaction(bot, private=False)
-    item.response.defer.side_effect = [
-        OSError(errno.ECONNREFUSED, "refused"),
-        aiohttp.ServerDisconnectedError(),
-        None,
-    ]
+    item.response.defer.side_effect = (
+        [OSError(errno.ECONNREFUSED, "refused")]
+        + [aiohttp.ServerDisconnectedError() for _ in range(failures - 1)]
+        + [None]
+    )
     await kernel.connector.slash.receive("ada", item)
     await settle(kernel)
-    assert item.response.defer.await_count == 3
+    assert item.response.defer.await_count == failures + 1
     assert all(
         c.kwargs == {"thinking": True, "ephemeral": False} for c in item.response.defer.await_args_list
     )
     assert kernel.store.one("SELECT count(*) AS n FROM requests")["n"] == 1
     assert kernel.store.one("SELECT status FROM slash_invocations")["status"] == "sent"
     retries = events(kernel, "discord.slash_ack_retry")
-    assert [r["data"]["attempt"] for r in retries] == [1, 2]
+    assert [r["data"]["attempt"] for r in retries] == list(range(1, failures + 1))
     assert all(r["level"] == "warning" and r["bot_id"] == "ada" for r in retries)
     assert retries[0]["data"]["errno"] == errno.ECONNREFUSED
     await kernel.connector.slash.receive("ada", item)
-    assert item.response.defer.await_count == 3
+    assert item.response.defer.await_count == failures + 1
 
 
 async def test_lost_ack_response_recovered_by_get_after_local_deadline(kernel, monkeypatch):
@@ -158,12 +159,13 @@ async def test_nontransient_refusal_never_retries_or_runs_provider(kernel, error
     assert "no model or tool work was started" in data["reason"]
 
 
-async def test_three_attempts_and_three_missing_receipts_stop_without_work(kernel):
+async def test_five_attempts_and_three_missing_receipts_stop_without_work(kernel):
     item = interaction(enable(kernel))
     item.response.defer.side_effect = OSError("unreachable")
     item.original_response = AsyncMock(side_effect=http_error(404, 10015))
     await kernel.connector.slash.receive("ada", item)
-    assert item.response.defer.await_count == item.original_response.await_count == 3
+    assert item.response.defer.await_count == 5
+    assert item.original_response.await_count == 3
     assert len(events(kernel, "discord.slash_ack_failed")) == 1
     assert not kernel.store.rows("SELECT * FROM requests")
     assert not kernel.store.rows("SELECT * FROM outbox")

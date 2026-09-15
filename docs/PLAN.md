@@ -2,6 +2,18 @@
 
 ## Slash acknowledgement recovery and readable console time (2026-09-15)
 
+Follow-up tuning: the owner requested stronger boldness and contrast between
+timestamp/body rather than white timestamps. Use bold soft blue for time, bold
+teal field labels and warm amber metrics while preserving existing scope colors.
+For quicker transient recovery, use five deferral calls with 25 ms gaps inside
+the same initial deadline; read-only receipt recovery stays at three lookups.
+The 30-second final delivery timeout and 14-minute whole-task limit are separate
+from acknowledgement retries and remain unchanged. See the timeout table in
+[SLASH_COMMANDS.md](SLASH_COMMANDS.md#task-lifetime).
+
+The initial implementation below used three calls/100 ms gaps and white time
+text; this follow-up supersedes those presentation and retry defaults.
+
 The owner requested recovery from sporadic Discord failures and stronger timestamp
 contrast. Provider retries already cover slash model calls; the missing recovery
 was the initial Discord acknowledgement. Replace its one-shot 2.5-second wait

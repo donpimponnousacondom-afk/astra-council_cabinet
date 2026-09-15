@@ -2,6 +2,36 @@
 
 Entries below are dated observations, starting on 2026-09-07; their branch, runtime and deployment statements describe that check, not current state. Inspect actual Git, Screen, startup version and backup metadata when resuming work. Automated provider/Discord tests use controlled transports and synthetic credentials. Read-only live checks and bounded live completion diagnostics are identified separately; both keep configured credentials in memory without exposing them.
 
+## Console emphasis and eager acknowledgement retry tuning (2026-09-15)
+
+- Continued the user's clean `dev/fine_tuning_discord_and_logging` branch after
+  PR #41. The stated faster retry edit was not present in the checkout; it still
+  had three calls/100 ms gaps. After requesting the intended values and proceeding
+  with the stated assumption, changed deferral recovery to five calls/25 ms gaps
+  while retaining the single 2.9-second window. Receipt recovery now has its own
+  three-attempt constant so deferral tuning does not increase receipt polling.
+- The owner rejected white timestamps and requested bolder color contrast.
+  Timestamps are now bold soft blue, labels/scopes/severities bold, generic field
+  labels teal and numeric metrics warm amber. Existing semantic scope/identity
+  colors remain; model/profile values are blue and URLs light cyan. No changes to
+  log text, field order, rounding, filtering or terminal/credential protection.
+- Added inline explanations and a documentation table distinguishing initial
+  acknowledgement, retry gaps, receipt lookup, final-answer delivery and total
+  slash lifetime. The 30-second final Discord edit/upload timeout and 14-minute
+  whole-task deadline were not changed; Discord's response token expires at
+  15 minutes.
+- **79 tests passed** across console, slash acknowledgement recovery, slash
+  behavior and gateway notifications. Recovery coverage now includes four
+  failures then success with exactly one model request, five failed deferrals
+  followed by only three receipt reads, and duplicate-input suppression. Existing
+  timeout/cancellation/identity/visibility/token-redaction tests remain passing.
+  Ruff lint/format and whitespace checks passed. Network/Discord tests are mocked;
+  no live test invocation was sent.
+- Deployment uses the existing shared-Screen refresh after the source commit.
+  External `logs/discord-tuning-deployment.json` records matching frontend/runtime
+  identities, unchanged configuration/credential hashes and the actual timestamp
+  color sequence in Screen. No source push is performed.
+
 ## Discord slash acknowledgement recovery and console contrast (2026-09-15)
 
 - Created `hotfix/discord_slash_recovery` from the clean post-merge placeholder

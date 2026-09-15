@@ -49,8 +49,8 @@ The handler defers the interaction before starting model work. Discord requires 
 
 The local acknowledgement cutoff is **2.9 seconds from interaction creation**,
 replacing the former one-shot 2.5-second wait. Earlier gateway/handler delay is
-included; retries do not get another three seconds. Up to **three deferral calls**
-are allowed for quick connection/timeout/server failures, with 100 ms between
+included; retries do not get another three seconds. Up to **five deferral calls**
+are allowed for quick connection/timeout/server failures, with 25 ms between
 attempts while time remains. discord.py also manages its own HTTP retries and
 rate limits inside this outer deadline; application attempt counts are not a
 count of every wire request. Authentication/permission/expired-interaction and
@@ -87,6 +87,21 @@ every depth. Final answer/status-notice failures also name their Discord REST
 operation and available HTTP/error-code evidence.
 
 ### Task lifetime
+
+These are separate clocks, not interchangeable retry delays:
+
+| Setting | What it limits |
+| --- | --- |
+| `ACK_SECONDS = 2.9` | The entire initial acknowledgement window, including time already elapsed since creation; Discord requires acknowledgement within three seconds. |
+| `ACK_RETRY_DELAY = 0.025` | 25 ms between quick transient acknowledgement failures, with at most five calls inside the same window. It does not cancel a pending call every 25 ms. |
+| `ACK_RECEIPT_SECONDS = 5` | Each read-only lookup of a possibly accepted acknowledgement; separately limited to three lookups. |
+| `asyncio.timeout(30)` in `SlashEngine.deliver` | Final delivery of the already-generated answer/files through `edit_original_response`, including uploads, HTTP waiting and library retries. It is not an inference timeout. |
+| `MAX_SECONDS = 14 * 60` | The whole slash invocation, including acknowledgement, provider/tool work and answer delivery; reserves a minute before Discord's 15-minute token expiry. |
+| `asyncio.timeout(10)` in `notice` | A final status/cancellation/failure notice. |
+
+The shortest applicable deadline wins. Expiry of the final-delivery timeout leaves
+the outbox uncertain because Discord may already have accepted the edit. Saved
+work/evidence are retained; the runtime does not blindly send another answer.
 
 The local slash deadline is **14 minutes from interaction creation**, reserving time for a final status notice. The bot's ordinary document/workspace settings may allow 7,200 seconds; those do **not** extend the slash platform deadline. A shorter configured provider deadline still applies. At expiry the runtime cancels provider/tool work, preserves saved notes/files and request evidence, and reports the local cause. It does not queue an invisible continuation or automatically restart the request. Long-lived background slash jobs are not implemented.
 
