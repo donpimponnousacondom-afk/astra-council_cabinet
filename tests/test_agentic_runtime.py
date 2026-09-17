@@ -245,6 +245,45 @@ async def test_shell_argument_errors_are_complete_without_executing(kernel):
     assert not kernel.registry.agentic.runner.inspect()
 
 
+async def test_shell_configured_deadlines_and_model_schema_share_600_second_limit(kernel, monkeypatch):
+    context = grant(kernel, "workspace", "shell", plugin_config={"shell": {"timeout_seconds": 600}})
+    spec = kernel.registry.spec_for("shell", context)
+    assert spec.parameters["properties"]["timeout_seconds"]["maximum"] == 600
+    assert "Current command time limit: 600 seconds" in spec.description
+    calls = []
+    original_timeout = asyncio.timeout
+
+    def timeout(seconds):
+        calls.append(seconds)
+        return original_timeout(seconds)
+
+    monkeypatch.setattr("hortator.plugins.asyncio.timeout", timeout)
+    run = AsyncMock(return_value={"status": "succeeded"})
+    monkeypatch.setattr(kernel.registry.agentic.runner, "run", run)
+    result = await kernel.registry.call(
+        "shell",
+        {"operation": "run", "task": "long-job", "command": "true", "timeout_seconds": 600},
+        context,
+        "long-deadline",
+    )
+    assert result["status"] == "succeeded"
+    assert run.await_args.kwargs["timeout_seconds"] == 600
+    assert run.await_args.kwargs["configuration"]["timeout_seconds"] == 600
+    assert calls == [630]
+    invalid = await kernel.registry.call(
+        "shell",
+        {"operation": "run", "task": "long-job", "command": "true", "timeout_seconds": 601},
+        context,
+        "too-long",
+    )
+    assert invalid["executed"] is False and run.await_count == 1
+    # A different bot sharing the global plugin retains its default limit.
+    other = ToolContext({**context.bot, "id": "other", "plugin_config": {}}, context.channel_id, "other")
+    assert (
+        kernel.registry.spec_for("shell", other).parameters["properties"]["timeout_seconds"]["maximum"] == 90
+    )
+
+
 def test_prompt_minimization_preserves_original_objects_and_complete_tool_pairs(kernel):
     extras = []
     for index in range(30):

@@ -1234,3 +1234,61 @@ test("interactive panels have an independent keyless capability and native previ
   await capability.uncheck();
   await expect(preview).toHaveCount(0);
 });
+
+test("shell command ceiling saves 600 seconds with automatic archive guidance", async ({
+  page,
+}) => {
+  await navigate(page, "Plugins");
+  await page
+    .getByRole("button", { name: "Edit Isolated Bash", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  const timeout = dialog.getByLabel("Command time limit (seconds)", {
+    exact: true,
+  });
+  await expect(timeout).toHaveAttribute("max", "600");
+  const count = dialog.getByLabel(
+    "Recent jobs per bot (older records archived)",
+    { exact: true },
+  );
+  await expect(count).toHaveValue("200");
+  await expect(
+    dialog.getByText(/Older completed records are automatically archived/),
+  ).toBeVisible();
+  await timeout.fill("601");
+  expect(
+    await timeout.evaluate(
+      (element: HTMLInputElement) => element.validity.rangeOverflow,
+    ),
+  ).toBe(true);
+  await timeout.fill("600");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const plugin = await record(page, "plugins", "shell");
+  expect(plugin.config.timeout_seconds).toBe(600);
+  expect(plugin.config.max_jobs_per_bot).toBe(200);
+  await page
+    .getByRole("button", { name: "Edit Isolated Bash", exact: true })
+    .click();
+  await expect(timeout).toHaveValue("600");
+  await dialog
+    .getByRole("button", { name: "Close dialog", exact: true })
+    .click();
+  const csrf = (await (await page.request.get("/api/auth/session")).json())
+    .csrf;
+  const invalid = await page.request.post("/api/control", {
+    headers: { "X-CSRF-Token": csrf },
+    data: {
+      action: "save",
+      kind: "plugins",
+      id: "shell",
+      data: { config: { ...plugin.config, timeout_seconds: 601 } },
+    },
+  });
+  expect(invalid.status()).toBe(400);
+  expect((await record(page, "plugins", "shell")).config.timeout_seconds).toBe(
+    600,
+  );
+});

@@ -481,6 +481,30 @@ class Registry:
 
     def spec_for(self, name, context):
         spec = self.specs[name]
+        if name == "shell":
+            from .shell_runner import limits
+
+            config = limits(
+                {
+                    **self.store.get("plugins", name)["config"],
+                    **context.bot["plugin_config"].get(name, {}),
+                }
+            )
+            seconds = config["timeout_seconds"]
+            return replace(
+                spec,
+                description=spec.description + f" Current command time limit: {seconds} seconds.",
+                parameters={
+                    **spec.parameters,
+                    "properties": {
+                        **spec.parameters["properties"],
+                        "timeout_seconds": {
+                            **spec.parameters["properties"]["timeout_seconds"],
+                            "maximum": seconds,
+                        },
+                    },
+                },
+            )
         if name == "global_memory":
             return self.global_memory.spec_for(context)
         if name == "memory":
@@ -539,7 +563,14 @@ class Registry:
             key = self.vault.get(f"bot/{context.bot['id']}/plugin:{name}") or self.vault.get(
                 f"plugin/{name}/api_key"
             )
-            async with asyncio.timeout(120):
+            tool_timeout = 120
+            if name == "shell" and args.get("operation") == "run":
+                from .shell_runner import limits
+
+                # Worker deadline + host export/cleanup allowance. Other tools
+                # retain their existing timeout; owner/task cancellation wins.
+                tool_timeout = max(120, limits(config)["timeout_seconds"] + 30)
+            async with asyncio.timeout(tool_timeout):
                 if (
                     name in ("web_fetch", "web_search", "workspace", "shell")
                     and args.get("operation") == "read_result"

@@ -61,7 +61,7 @@ The trusted supervisor is namespace PID 1. It reads stdout and stderr concurrent
 
 | Setting | Default | Enforcement |
 | --- | --- | --- |
-| `timeout_seconds` | 90 seconds | Worker wall deadline; host allows at most 10 additional seconds for setup/export before terminating the namespace; registry's 120-second deadline remains |
+| `timeout_seconds` | 90 seconds (configurable 0.1–600) | Worker wall deadline; host allows 10 additional seconds for export/cleanup; the registry allows the larger of 120 seconds and the configured command limit + 30 seconds. Outer turn/task cancellation remains authoritative |
 | `output_bytes` | 1 MiB | Combined stdout/stderr ceiling; both stream logs together cannot exceed it; exceeding output stops the job |
 | `memory_bytes_per_process` | 2 GiB | Hard `RLIMIT_AS` for each worker/model process; a process cannot raise the limit |
 | `process_limit` | 16 | Hard `RLIMIT_NPROC`, including supervisor/Bash/threads; real fork exhaustion is tested |
@@ -71,7 +71,7 @@ The trusted supervisor is namespace PID 1. It reads stdout and stderr concurrent
 | `package_entries` | 50,000 | Monitored independently during execution; configurable 1,000–100,000 |
 | File/directory count | Workspace `max_files` | Checked during execution at roughly 50 ms intervals and strictly on final copy-back |
 | `retention_days` | 7 days | Expired inactive logs removed when admitting a new job; metadata retains an explicit expiration marker |
-| `max_jobs_per_bot` | 200 | Admission stops at the saved job-count ceiling; no silent deletion of job history |
+| `max_jobs_per_bot` | 200 recent records | Before admitting another job, automatically archive the oldest final records outside running turns; archived history no longer consumes these slots |
 | `job_storage_bytes_per_bot` | 100 MiB | New jobs reserve their complete output allowance against retained log bytes |
 
 There is one concurrent model shell job globally. The memory field is **per process**, not an aggregate resident-memory setting: 16 × 2 GiB gives an upper bound of 32 GiB of summed process virtual address space, with separately bounded tmpfs data and kernel overhead. Linux resource-limit accounting can refuse forks earlier on a host sharing UID counts; the runner does not raise its limit to compensate. File descriptors, locked memory, core dumps and CPU seconds also receive hard limits. [Linux resource-limit definitions](https://man7.org/linux/man-pages/man2/getrlimit.2.html)
@@ -88,7 +88,17 @@ Cancellation first closes the supervisor's parent-control pipe and targets names
 
 On restart, persisted `running` jobs become `interrupted`, stale staging directories are removed, and commands are never replayed. Persisted PIDs are never signalled during recovery. A crash during final atomic workspace commit can leave the committed files ahead of job metadata; inspect the workspace and retained evidence before retrying an irreversible transformation. No network or publication side effect is authorized through this runner.
 
-Jobs live under external `$HORTATOR_DATA_DIR/jobs/`, with 0700 directories and 0600 metadata/logs. Backup and restore this directory with workspaces and the database. Stop the runtime for a consistent complete snapshot. Active jobs and outputs referenced by a running turn are protected from retention cleanup. At a count quota, the operator may archive old completed job directories after stopping the runtime and verifying that no running turn refers to them; deleting logs alone does not free the saved-metadata count. Missing/expired IDs produce a useful error. Never put these stores in Git.
+Jobs live under external `$HORTATOR_DATA_DIR/jobs/`, with 0700 directories and 0600 metadata/logs. Backup and restore this directory with workspaces and the database. Stop the runtime for a consistent complete snapshot. Active jobs and outputs referenced by a running turn are protected from retention cleanup. At the recent-record count limit, admission automatically archives the oldest eligible metadata without deleting history. See the archival policy below. Missing/expired IDs produce a useful error. Never put these stores in Git.
+
+## Automatic archival and longer commands
+
+`max_jobs_per_bot` is a recent-record limit, not a lifetime execution budget. When admission needs a slot, the oldest final records outside active jobs/running turns move atomically from `jobs/<job_id>/meta.json` to private `jobs/archive/<job_id>.json`. This includes succeeded, failed, cancelled, interrupted and other terminal jobs. IDs, ownership, statuses and original metadata survive; `job.archived` records the transition at INFO. A crash leaves the complete metadata in one location, and subsequent lookup discovers it there. No archive count ceiling is imposed. If every candidate is still protected, admission gives the counts and reason without starting a command.
+
+Archived metadata stays indefinitely, is included in normal `jobs/` backups, and resolves through existing job/output inspection by ID even outside the recent list. Recent lists include the archive marker. Original stdout/stderr stay at `jobs/<job_id>/` until the configured log retention makes them eligible for removal on a subsequent admission for that bot. After those logs expire, only the archived metadata remains. Archival does not reset age, discard unexpired logs, change workspace files or clear database/trajectory evidence. The independent output-byte quota counts both recent and archived retained logs; archival cannot bypass it. Empty expired archive log directories are removed so ordinary admissions do not rescan lifetime archive metadata. Full historical enumeration happens only on owner inspection.
+
+In **Plugins → Isolated Bash → Working limits**, edit **Recent jobs per bot (older records archived)**, **Job log retention (days)** and **Command time limit (seconds)**. Per-bot `plugin_config.shell` overrides remain available. The command limit accepts up to 600 seconds; existing settings/default 90 are preserved. The model's tool schema and usage show its effective configured ceiling, and a call can only shorten it. Shell run gets a matching longer registry deadline; read/status and other tools keep 120 seconds. This does not extend the parent work-task or slash deadline, and operator cancellation still cancels/joins the sandbox.
+
+Archives are runtime data outside source Git. Older code will not inspect the new archive directory; keep matching code/data snapshots when rolling back. There is no database schema migration or automatic removal of audit history. Monitor disk usage separately; record archival solves count exhaustion, not disk exhaustion.
 
 ## Dated local verification
 

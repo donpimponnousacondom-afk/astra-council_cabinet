@@ -109,7 +109,7 @@ async def test_every_registered_model_tool_returns_usage_without_executing_its_h
         assert result["usage_only"] is True, name
         assert result["executed"] is False
         assert result["usage"]["tool"] == name
-        assert result["usage"]["parameters"] == kernel.registry.specs[name].parameters
+        assert result["usage"]["parameters"] == kernel.registry.spec_for(name, context).parameters
         handler.assert_not_awaited()
 
 
