@@ -162,7 +162,9 @@ class SlashContexts(ContextBuilder):
         self.invocation = invocation
 
     def layers(self, bot, channel_id):
-        item = self.prompt(bot, "slash_invocation", {"invocation": dumps(self.invocation)})
+        item = self.prompt(
+            bot, self.invocation.get("kind", "slash") + "_invocation", {"invocation": dumps(self.invocation)}
+        )
         return super().layers(bot, channel_id) + ([item] if item else [])
 
     async def prepare(self, bot, profile, channel_id, turn_id, tools, force=False):
@@ -190,7 +192,7 @@ class SlashContexts(ContextBuilder):
                             "user_id": bot["application_id"],
                             "bot_id": bot["id"],
                             "name": bot["name"],
-                            "via": ["slash"],
+                            "via": [self.invocation.get("kind", "slash")],
                         }
                     ],
                 },
@@ -202,7 +204,7 @@ class SlashContexts(ContextBuilder):
         meta.update(checkpoint=0, calibration_factor=1)
         if meta["estimated_tokens"] + profile["response_tokens"] >= profile["context_window"]:
             raise ControlError(
-                "Slash prompt and granted notes/tools exceed the model context budget; shorten the prompt or notes"
+                "Interaction input and granted notes/tools exceed the model context budget; shorten the prompt or notes"
             )
         return rows, "", 0, meta
 
@@ -217,11 +219,11 @@ class SlashEngine(Engine):
         self.contexts = SlashContexts(
             self.store, self.pool, invocation, main.registry.global_memory, main.registry.application_emojis
         )
-        self.scope = f"slash:{invocation['bot_id']}:{invocation['channel_id']}"
+        self.scope = f"{invocation['kind']}:{invocation['bot_id']}:{invocation['channel_id']}"
 
     def channel_allowed(self, bot, channel_id):
         current = self.store.get("bots", bot["id"])
-        return channel_id == self.scope and granted(self.store, current)
+        return channel_id == self.scope and self.manager.slash.invocation_granted(current, self.invocation)
 
     def attention(self, *args, **kwargs):
         return []
@@ -233,13 +235,13 @@ class SlashEngine(Engine):
         self, bot, profile, provider, context, content, reply_to, artifact_ids, *, request_id=None, **kwargs
     ):
         if not self.valid(bot, profile, provider) or not self.channel_allowed(bot, context.channel_id):
-            raise ControlError("Slash permission or configuration changed; answer withheld")
+            raise ControlError("Interaction permission or configuration changed; answer withheld")
         content = self.vault.redact(strip_reasoning(content))
         if not content or len(content) > 12000:
-            raise ControlError("Slash answer must contain 1–12,000 visible characters")
+            raise ControlError("Interaction answer must contain 1–12,000 visible characters")
         if reply_to:
             raise ControlError(
-                "Slash answers use their interaction response; Discord message reply targets are unavailable"
+                "Interaction answers use their response; Discord message reply targets are unavailable"
             )
         paths = [self.registry.resolve_artifact(value, context) for value in artifact_ids]
         request = (
@@ -266,7 +268,7 @@ class SlashEngine(Engine):
                 time.time(),
                 dumps(
                     {
-                        "kind": "slash",
+                        "kind": self.invocation["kind"],
                         "interaction_id": str(self.interaction.id),
                         "private": self.invocation["private"],
                     }
@@ -279,12 +281,13 @@ class SlashEngine(Engine):
                 "outbox_id": outbox_id,
                 "content": content,
                 "footer": footer,
-                "routing": "slash",
+                "routing": self.invocation["kind"],
                 "channel_id": self.invocation["channel_id"],
             },
             bot_id=bot["id"],
             turn_id=context.turn_id,
         )
+        panel = self.registry.panels.prepared(context)
         files = []
         # Only delivery of the finished answer/files, inside the overall slash deadline.
         timer = asyncio.timeout(30)
@@ -292,23 +295,35 @@ class SlashEngine(Engine):
             files = [discord.File(path) for path in paths]
             if attached:
                 files.append(discord.File(io.BytesIO(content.encode()), filename="full-response.txt"))
+            presentation = {}
+            if panel:
+                from .discord_panels import panel_view
+
+                presentation = {
+                    "view": panel_view(panel, text, [file.filename for file in files]),
+                    "embeds": [],
+                }
+                self.registry.panels.dispatch(panel, outbox_id)
             async with timer:
                 sent = await self.interaction.edit_original_response(
-                    content=text,
+                    content=None if panel else text,
                     attachments=files,
+                    **presentation,
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
             self.store.execute(
                 "UPDATE outbox SET status='sent',discord_id=?,sent_at=? WHERE id=?",
                 (str(sent.id), time.time(), outbox_id),
             )
+            if panel:
+                self.registry.panels.bind(panel, sent.id, content)
             self.store.execute(
                 "UPDATE slash_invocations SET response_id=? WHERE interaction_id=?",
                 (str(sent.id), str(self.interaction.id)),
             )
             self.store.emit(
                 "delivery.sent",
-                {"outbox_id": outbox_id, "discord_id": str(sent.id), "routing": "slash"},
+                {"outbox_id": outbox_id, "discord_id": str(sent.id), "routing": self.invocation["kind"]},
                 bot_id=bot["id"],
                 turn_id=context.turn_id,
             )
@@ -325,7 +340,7 @@ class SlashEngine(Engine):
                     "outbox_id": outbox_id,
                     "channel_id": self.invocation["channel_id"],
                     "interaction_id": str(self.interaction.id),
-                    "operation": "edit slash answer",
+                    "operation": "edit " + self.invocation["kind"] + " answer",
                     "phase": "edit_original_response",
                     **self.manager.slash.error_fields(exc, self.interaction, local_timeout=timer.expired()),
                     **({"timeout_seconds": 30} if timer.expired() else {}),
@@ -399,9 +414,13 @@ class DiscordSlash:
     def ack_event(self, bot_id, interaction, kind, *, level="info", **data):
         state = self.store.runtime(bot_id)
         self.store.emit(
-            "discord.slash_" + kind,
+            "discord."
+            + ("panel_" if interaction.type == discord.InteractionType.component else "slash_")
+            + kind,
             {
-                "operation": "acknowledge /prompt",
+                "operation": "acknowledge panel action"
+                if interaction.type == discord.InteractionType.component
+                else "acknowledge /prompt",
                 "interaction_id": str(interaction.id),
                 "channel_id": str(interaction.channel_id),
                 "application_id": str(interaction.application_id),
@@ -738,7 +757,68 @@ class DiscordSlash:
                 level="warning",
             )
 
+    def invocation_granted(self, bot, invocation):
+        if not bot or invocation.get("application_id", bot["application_id"]) != bot["application_id"]:
+            return False
+        if invocation["kind"] == "slash":
+            return granted(self.store, bot)
+        from .discord_panels import granted as panel_granted
+
+        if not panel_granted(self.store, bot):
+            return False
+        panel = self.store.one(
+            "SELECT * FROM discord_panels WHERE id=? AND bot_id=?", (invocation.get("panel_id"), bot["id"])
+        )
+        if (
+            not panel
+            or panel["status"] != "active"
+            or panel["expires_at"] <= time.time()
+            or panel["application_id"] != bot["application_id"]
+            or panel["channel_id"] != invocation["channel_id"]
+        ):
+            return False
+        return bot["role"] != "hortator" or self.manager.service.engine.channel_allowed(
+            bot, invocation["channel_id"]
+        )
+
+    async def receive_panel(self, bot_id, interaction):
+        try:
+            row, prompt, label = self.manager.service.engine.registry.panels.resolve_click(
+                bot_id, interaction
+            )
+            invocation = {
+                "kind": "panel",
+                "panel_id": row["id"],
+                "action_label": label,
+                "channel_id": str(interaction.channel_id),
+            }
+            bot = self.store.get("bots", bot_id)
+            if not self.invocation_granted(bot, invocation):
+                raise ControlError("This panel is no longer permitted in this channel")
+            if getattr(self.manager.service, "snapshot_maintenance", False) or self.manager.closed:
+                raise ControlError("Snapshot maintenance or shutdown is in progress; retry after resume")
+        except ControlError as exc:
+            self.store.emit(
+                "discord.panel_rejected",
+                {
+                    "interaction_id": str(interaction.id),
+                    "channel_id": str(interaction.channel_id),
+                    "reason": str(exc),
+                },
+                bot_id=bot_id,
+                level="warning",
+            )
+            await self.notice(interaction, str(exc))
+            return
+        await self.start_invocation(bot_id, interaction, prompt, bool(row["private"]), invocation)
+
     async def receive(self, bot_id, interaction):
+        if interaction.type == discord.InteractionType.component:
+            if isinstance(interaction.data, dict) and str(interaction.data.get("custom_id", "")).startswith(
+                "hcp:"
+            ):
+                await self.receive_panel(bot_id, interaction)
+            return
         if interaction.type != discord.InteractionType.application_command or not isinstance(
             interaction.data, dict
         ):
@@ -777,6 +857,17 @@ class DiscordSlash:
         except ControlError as exc:
             await self.notice(interaction, str(exc))
             return
+        await self.start_invocation(bot_id, interaction, prompt, private, {"kind": "slash"})
+
+    async def start_invocation(self, bot_id, interaction, prompt, private, source):
+        # All admission, acknowledgement and execution rules are shared.
+        bot = self.store.get("bots", bot_id)
+        kind = source["kind"]
+        source = {
+            **source,
+            "channel_id": str(interaction.channel_id),
+            "application_id": str(interaction.application_id),
+        }
         invocation_id = str(interaction.id)
         if self.store.one("SELECT 1 FROM slash_invocations WHERE interaction_id=?", (invocation_id,)):
             return  # Never replay model work or respond twice to one interaction.
@@ -802,16 +893,16 @@ class DiscordSlash:
         bot = self.store.get("bots", bot_id)
         settings = self.store.get("settings", "global")
         profile, provider = main.configuration(bot) if bot else (None, None)
-        boundary = self.store.context_boundary(bot_id, f"slash:{bot_id}:{interaction.channel_id}")
+        boundary = self.store.context_boundary(bot_id, f"{kind}:{bot_id}:{interaction.channel_id}")
         reason = (
-            "This slash request predates the owner's clean-slate cutoff; send a new /prompt"
+            "This interaction predates the owner's clean-slate cutoff; submit a fresh request"
             if boundary and interaction.created_at.timestamp() <= boundary["after_at"]
             else "Snapshot maintenance or runtime shutdown is in progress; retry after resume"
             if getattr(self.manager.service, "snapshot_maintenance", False)
             or main.closed
             or self.manager.background.closing
-            else "Slash commands were disabled while acknowledging this request"
-            if not granted(self.store, bot)
+            else "This interaction capability was disabled while acknowledging the request"
+            if not self.invocation_granted(bot, source)
             else "Council, bot or provider is paused"
             if not main.available(bot)
             else "This bot is already busy; retry after its current turn finishes"
@@ -829,7 +920,7 @@ class DiscordSlash:
             await self.notice(interaction, reason, deferred=True)
             return
         invocation = {
-            "kind": "slash",
+            **source,
             "interaction_id": invocation_id,
             "bot_id": bot_id,
             "channel_id": str(interaction.channel_id),
@@ -838,7 +929,7 @@ class DiscordSlash:
         }
         bot = {**bot, "invocation": invocation}
         turn_id = uid("turn_")
-        scope = f"slash:{bot_id}:{interaction.channel_id}"
+        scope = f"{kind}:{bot_id}:{interaction.channel_id}"
         self.store.execute(
             "INSERT INTO turns(id,bot_id,channel_id,profile_id,provider_id,model,started_at,status,trigger,revision) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (
@@ -850,7 +941,7 @@ class DiscordSlash:
                 profile["model"],
                 time.time(),
                 "running",
-                "slash_prompt",
+                "slash_prompt" if kind == "slash" else "panel_action",
                 bot["revision"],
             ),
         )
@@ -863,7 +954,12 @@ class DiscordSlash:
             {
                 "channel_id": scope,
                 "source_channel_id": str(interaction.channel_id),
-                "trigger": "slash_prompt",
+                "trigger": "slash_prompt" if kind == "slash" else "panel_action",
+                **(
+                    {"panel_id": source["panel_id"], "action_label": source["action_label"]}
+                    if kind == "panel"
+                    else {}
+                ),
                 "interaction_id": invocation_id,
                 "profile_id": profile["id"],
                 "provider_id": provider["id"],
@@ -876,7 +972,7 @@ class DiscordSlash:
         )
         task = self.manager.background.spawn(
             self.execute(interaction, invocation, bot, profile, provider, turn_id),
-            name=f"slash:{bot_id}:{turn_id}",
+            name=f"{kind}:{bot_id}:{turn_id}",
             bot_id=bot_id,
             turn_id=turn_id,
         )
@@ -914,13 +1010,13 @@ class DiscordSlash:
             async with asyncio.timeout(max(0, MAX_SECONDS - elapsed)):
                 await runner.run(bot, profile, provider, runner.scope, turn_id, False)
         except TimeoutError:
-            error = f"Local slash invocation deadline exceeded: {MAX_SECONDS} seconds. Work stopped; saved files and notes remain. Nothing will automatically resume."
+            error = f"Local {invocation['kind']} invocation deadline exceeded: {MAX_SECONDS} seconds. Work stopped; saved files and notes remain. Nothing will automatically resume."
             self.store.execute(
                 "UPDATE turns SET status='failed',error=?,ended_at=? WHERE id=?",
                 (error, time.time(), turn_id),
             )
             self.store.emit(
-                "discord.slash_deadline",
+                "discord." + invocation["kind"] + "_deadline",
                 {"error": error, "interaction_id": invocation["interaction_id"], "seconds": MAX_SECONDS},
                 bot_id=bot["id"],
                 turn_id=turn_id,
@@ -951,7 +1047,7 @@ class DiscordSlash:
                 (error, time.time(), turn_id),
             )
             self.store.emit(
-                "discord.slash_failed",
+                "discord." + invocation["kind"] + "_failed",
                 {"error": error, "interaction_id": invocation["interaction_id"]},
                 bot_id=bot["id"],
                 turn_id=turn_id,

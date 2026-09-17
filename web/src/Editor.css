@@ -543,3 +543,35 @@
 .bot-reset-panel {
   max-width: 880px;
 }
+
+/* Native Discord container preview; scoped to the optional capability. */
+.discord-panel-preview {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid #53472a;
+  border-left: 3px solid #d6a447;
+  background: #242321;
+  color: #d4d4d4;
+}
+.discord-panel-preview strong {
+  color: #e9c777;
+}
+.discord-panel-preview p {
+  margin: 7px 0;
+}
+.discord-panel-preview small {
+  display: block;
+  color: #b9b7af;
+  line-height: 1.5;
+}
+.discord-panel-preview-actions {
+  display: flex;
+  gap: 6px;
+  margin: 9px 0;
+}
+.discord-panel-preview-actions span {
+  padding: 4px 8px;
+  border: 1px solid #605236;
+  border-radius: 3px;
+  background: #353128;
+}

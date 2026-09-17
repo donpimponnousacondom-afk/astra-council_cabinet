@@ -818,6 +818,45 @@ export function Editor({
                       "Bot capabilities",
                     )}
                     <SlashCommandSetup bot={entity} draft={draft} />
+                    {(draft.enabled_plugins || []).includes(
+                      "discord_panel",
+                    ) && (
+                      <section
+                        className="discord-panel-preview"
+                        aria-label="Interactive panel preview"
+                      >
+                        <strong>👑 Interactive Discord panels</strong>
+                        <p>
+                          Real buttons and dropdowns, styled by the bot. Each
+                          owner click starts a new task with the usual tools,
+                          provider retries and a 14-minute deadline. Panels
+                          survive restarts; no surrounding channel history is
+                          read.
+                        </p>
+                        <div
+                          className="discord-panel-preview-actions"
+                          aria-hidden="true"
+                        >
+                          <span>Search &amp; brief</span>
+                          <span>Export report</span>
+                          <span>Choose a task ▾</span>
+                        </div>
+                        <small>
+                          Preview only. Ask the bot to prepare a panel; buttons
+                          become live when its answer is delivered. Default
+                          lifetime: 7 days. Disable this capability to reject
+                          all clicks. Image generation and /prompt are separate
+                          grants.
+                        </small>
+                      </section>
+                    )}
+                    <Notice>
+                      Long answers automatically attach their full text; there
+                      is no attachment toggle. Documents &amp; local sites can
+                      export a saved file for discord_attach. Workspace is a
+                      separate optional file tool; generated/exported files are
+                      called artifacts, not a plugin.
+                    </Notice>
                     {numeric(
                       "memory_char_limit",
                       "Private memory budget (characters per channel)",

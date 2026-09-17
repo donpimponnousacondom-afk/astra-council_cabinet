@@ -259,6 +259,7 @@ class Registry:
         from .documents import DocumentSites, DEFAULTS, DESCRIPTION, PARAMETERS
 
         self.documents = DocumentSites(store, directory, vault)
+        self.documents.export_artifact = self.artifact
         self.specs: dict[str, PluginSpec] = {}
         self.register(
             PluginSpec(
@@ -445,6 +446,9 @@ class Registry:
         from .slash_commands import register as register_slash
 
         register_slash(self)
+        from .discord_panels import register as register_panels
+
+        register_panels(self)
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
             entry.load()(self)
 
