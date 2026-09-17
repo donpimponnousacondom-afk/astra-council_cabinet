@@ -40,14 +40,21 @@ DEFAULTS = {
 CONFIG_SCHEMA = {
     "type": "object",
     "properties": {
-        "timeout_seconds": {"type": "number", "minimum": 0.1, "maximum": 90},
+        "timeout_seconds": {"type": "number", "minimum": 0.1, "maximum": 600},
         "output_bytes": {"type": "integer", "minimum": 1024, "maximum": 4_194_304},
         "memory_bytes_per_process": {"type": "integer", "minimum": 67_108_864, "maximum": 4_294_967_296},
         "process_limit": {"type": "integer", "minimum": 4, "maximum": 32},
         "package_bytes": {"type": "integer", "minimum": 67_108_864, "maximum": 4_294_967_296},
         "package_entries": {"type": "integer", "minimum": 1000, "maximum": 100_000},
         "retention_days": {"type": "integer", "minimum": 1, "maximum": 30},
-        "max_jobs_per_bot": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "max_jobs_per_bot": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "Recent job records per bot. Older completed records are automatically archived, "
+            "remain inspectable, and no longer consume slots. Active jobs/running turns are protected. "
+            "Archived output still follows log retention and the separate output byte quota.",
+        },
         "job_storage_bytes_per_bot": {"type": "integer", "minimum": 1_048_576, "maximum": 1_073_741_824},
     },
     "additionalProperties": False,
@@ -88,7 +95,7 @@ def limits(configuration=None):
         raise ControlError("Shell configuration must be an object")
     result = {**DEFAULTS, **(configuration or {})}
     bounds = {
-        "timeout_seconds": (0.1, 90),
+        "timeout_seconds": (0.1, 600),
         "output_bytes": (1024, 4_194_304),
         "memory_bytes_per_process": (67_108_864, 4_294_967_296),
         "process_limit": (4, 32),
@@ -157,6 +164,11 @@ class ShellRunner:
         if self.root.is_symlink() or not self.root.is_dir():
             raise ControlError("Job storage must be a real private directory, not a symlink")
         os.chmod(self.root, 0o700)
+        self.archive = self.root / "archive"
+        self.archive.mkdir(exist_ok=True, mode=0o700)
+        if self.archive.is_symlink() or not self.archive.is_dir():
+            raise ControlError("Job archive must be a real private directory, not a symlink")
+        os.chmod(self.archive, 0o700)
         self.workspaces = workspaces
         self.active: dict[str, _Active] = {}
         self._toolchain = None
@@ -181,7 +193,7 @@ class ShellRunner:
             shutil.rmtree(path.parent / ".execution", ignore_errors=True)
 
     def _save(self, metadata):
-        _private_json(self.root / metadata["job_id"] / "meta.json", metadata)
+        _private_json(self._safe_job(metadata["job_id"]), metadata)
 
     def _event(self, metadata, kind, **extra):
         if self.workspaces is None or metadata.get("job_id") == "probe":
@@ -199,7 +211,14 @@ class ShellRunner:
         )
         self.workspaces.store.emit(
             kind,
-            {**{name: metadata[name] for name in fields if name in metadata}, **extra},
+            {
+                **{
+                    name: metadata[name]
+                    for name in fields
+                    if name in metadata and not (kind == "job.archived" and name == "error")
+                },
+                **extra,
+            },
             bot_id=metadata["bot_id"],
             turn_id=metadata["turn_id"],
             level="warning" if kind == "job.failed" else "info",
@@ -210,24 +229,39 @@ class ShellRunner:
             raise ControlError("Invalid job storage ID")
         if self.root.is_symlink():
             raise ControlError("Job storage root became a symlink")
+        if self.archive.is_symlink() or not self.archive.is_dir():
+            raise ControlError("Job archive is missing or unsafe")
         directory = self.root / job_id
-        if directory.is_symlink() or not directory.is_dir():
+        archived = self.archive / f"{job_id}.json"
+        if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
             raise ControlError("Job storage directory is missing or unsafe")
-        for name in ("meta.json", "stdout.log", "stderr.log"):
-            path = directory / name
+        metadata = directory / "meta.json"
+        if archived.exists() or archived.is_symlink():
+            if metadata.exists() or metadata.is_symlink():
+                raise ControlError(
+                    "Job has both recent and archived metadata; inspect storage before retrying"
+                )
+            metadata = archived
+        elif not directory.is_dir():
+            raise ControlError("Job storage directory is missing or unsafe")
+        for path in (metadata, directory / "stdout.log", directory / "stderr.log"):
             if path.exists() or path.is_symlink():
                 info = path.lstat()
                 if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                     raise ControlError("Job metadata/output must be private regular files without links")
+        return metadata
 
     def _load(self, job_id):
-        if not re.fullmatch(r"job_[a-f0-9]{32}", job_id):
+        if not isinstance(job_id, str) or not re.fullmatch(r"job_[a-f0-9]{32}", job_id):
             raise ControlError("Invalid job ID")
-        self._safe_job(job_id)
+        path = self._safe_job(job_id)
         if job_id in self.active:
-            return dict(self.active[job_id].metadata)
+            return {**self.active[job_id].metadata, "archived": False}
         try:
-            return json.loads((self.root / job_id / "meta.json").read_text())
+            metadata = json.loads(path.read_text())
+            if metadata.get("job_id") != job_id:
+                raise ControlError("Job metadata identity does not match its storage ID")
+            return {**metadata, "archived": path.parent == self.archive}
         except FileNotFoundError as error:
             raise ControlError("Job is missing or expired; run a new command if needed") from error
 
@@ -280,9 +314,11 @@ class ShellRunner:
 
     def inspect(self, bot_id=None, channel_id=None, limit=50):
         result = []
-        for path in self.root.glob("job_*/meta.json"):
-            self._safe_job(path.parent.name)
-            metadata = json.loads(path.read_text())
+        # Historical enumeration is owner-requested, never part of job admission.
+        ids = [path.parent.name for path in self.root.glob("job_*/meta.json")]
+        ids.extend(path.stem for path in self.archive.glob("job_*.json"))
+        for job_id in ids:
+            metadata = self._load(job_id)
             if bot_id is not None and metadata["bot_id"] != bot_id:
                 continue
             if channel_id is not None and metadata["channel_id"] != channel_id:
@@ -291,38 +327,89 @@ class ShellRunner:
         return sorted(result, key=lambda row: row["started_at"], reverse=True)[: min(100, max(1, limit))]
 
     def _reserve(self, bot_id, config):
-        jobs = []
-        for path in self.root.glob("job_*/meta.json"):
-            self._safe_job(path.parent.name)
-            job = json.loads(path.read_text())
-            if job.get("job_id") != path.parent.name:
-                raise ControlError("Job metadata identity does not match its storage directory")
-            jobs.append(job)
+        # Only recent records and retained log directories are scanned here.
+        # Expired archive metadata never adds work to subsequent admissions.
+        jobs = [self._load(path.name) for path in self.root.glob("job_*")]
         jobs = [job for job in jobs if job["bot_id"] == bot_id]
         cutoff = time.time() - config["retention_days"] * 86_400
         stored = 0
+        protected_ids = set()
         for job in jobs:
             path = self.root / job["job_id"]
             self._safe_job(job["job_id"])
             turn_running = self.workspaces.store.one("SELECT status FROM turns WHERE id=?", (job["turn_id"],))
             protected = job["job_id"] in self.active or (turn_running and turn_running["status"] == "running")
-            if job["started_at"] < cutoff and not protected:
+            if protected or job["status"] not in FINAL_STATES:
+                protected_ids.add(job["job_id"])
+            if job["started_at"] < cutoff and job["job_id"] not in protected_ids:
                 for stream in ("stdout", "stderr"):
                     (path / f"{stream}.log").unlink(missing_ok=True)
                 job["output_expired"] = True
                 self._save(job)
+                if job["archived"]:
+                    self._remove_empty_log_directory(path)
             else:
                 stored += sum(
                     (path / f"{stream}.log").stat().st_size
                     for stream in ("stdout", "stderr")
                     if (path / f"{stream}.log").exists()
                 )
-        if len(jobs) >= config["max_jobs_per_bot"]:
-            raise ControlError(
-                "Saved job count quota reached; operator must archive/remove old inactive jobs"
-            )
         if stored + config["output_bytes"] > config["job_storage_bytes_per_bot"]:
-            raise ControlError("Job output storage quota reached; lower output_bytes or archive expired jobs")
+            raise ControlError(
+                f"Shell output storage quota reached: {stored} retained bytes + "
+                f"{config['output_bytes']} reserved bytes exceed {config['job_storage_bytes_per_bot']} bytes. "
+                "Archiving records does not discard logs. Adjust output allowance, storage or log retention; "
+                "the command was not started."
+            )
+        recent = [job for job in jobs if not job["archived"]]
+        needed = max(0, len(recent) - config["max_jobs_per_bot"] + 1)
+        eligible = sorted(
+            (job for job in recent if job["job_id"] not in protected_ids),
+            key=lambda job: (job["started_at"], job["job_id"]),
+        )
+        if needed > len(eligible):
+            raise ControlError(
+                f"Recent shell job count quota reached ({len(recent)}/{config['max_jobs_per_bot']}): "
+                f"only {len(eligible)} records can be archived, {needed} required. "
+                "Remaining records are active, belong to running turns, or lack a final status. "
+                "Wait for those turns to end or increase the recent-job limit; the command was not started."
+            )
+        for job in eligible[:needed]:
+            self._archive_job(job)
+
+    @staticmethod
+    def _remove_empty_log_directory(path):
+        # Unknown files are not disposable. Normally only stdout/stderr remain
+        # after archival; after log expiry the directory is empty.
+        if not any(path.iterdir()):
+            path.rmdir()
+
+    def _archive_job(self, job):
+        source = self._safe_job(job["job_id"])
+        destination = self.archive / f"{job['job_id']}.json"
+        if source.parent == self.archive or destination.exists() or destination.is_symlink():
+            raise ControlError("Shell job archive already exists; existing history was not overwritten")
+        # Same filesystem, single runtime, no awaits: a crash leaves the complete
+        # record at either location. Stable IDs and original output paths survive.
+        descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        source.rename(destination)
+        for directory in (self.archive, source.parent):
+            descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        self._remove_empty_log_directory(source.parent)
+        self._event(
+            job,
+            "job.archived",
+            archived=True,
+            reason="Recent-job slot freed; metadata retained, output log retention unchanged",
+        )
 
     @staticmethod
     def _discover_toolchain():

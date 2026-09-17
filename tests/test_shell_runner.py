@@ -59,6 +59,27 @@ async def test_real_pipeline_scripts_cwd_and_nonzero_exit_persist(sandbox):
     assert not list(runner.root.glob("job_*/.execution"))
 
 
+async def test_real_command_accepts_600_second_budget_without_changing_default(sandbox, monkeypatch):
+    runner, _, context = sandbox
+    calls = []
+    original_timeout = asyncio.timeout
+
+    def timeout(seconds):
+        calls.append(seconds)
+        return original_timeout(seconds)
+
+    monkeypatch.setattr("hortator.shell_runner.asyncio.timeout", timeout)
+    job = await runner.run(
+        context, command="printf long-budget", timeout_seconds=600, configuration={"timeout_seconds": 600}
+    )
+    assert job["stdout"]["text"] == "long-budget"
+    assert runner.status(context, job["job_id"])["limits"]["timeout_seconds"] == 600
+    assert 610 in calls  # Worker budget plus existing host export allowance.
+    assert validate_config()["timeout_seconds"] == 90
+    with pytest.raises(ControlError, match="timeout_seconds"):
+        validate_config({"timeout_seconds": 601})
+
+
 async def test_real_stdout_stderr_concurrent_byte_paging_and_limit(sandbox):
     runner, _, context = sandbox
     job = await runner.run(
@@ -335,7 +356,7 @@ async def test_real_workspace_byte_and_export_file_limits(sandbox, monkeypatch):
     assert result["workspace_committed"]
 
 
-async def test_job_retention_preserves_running_turn_and_quota_is_explicit(sandbox):
+async def test_job_retention_preserves_running_turn_and_archives_completed_history(sandbox):
     runner, workspace, context = sandbox
     job = await runner.run(context, command="echo retained-output")
     metadata = runner._load(job["job_id"])
@@ -359,16 +380,20 @@ async def test_job_retention_preserves_running_turn_and_quota_is_explicit(sandbo
     )
     await runner.run(context, command="true")
     assert runner.read(context, job["job_id"])["text"] == "retained-output\n"
+    with pytest.raises(ControlError, match="count quota.*|Recent shell job count"):
+        await runner.run(context, command="echo should-not-run", configuration={"max_jobs_per_bot": 1})
     workspace.store.execute("UPDATE turns SET status='completed' WHERE id=?", (context.turn_id,))
     await runner.run(context, command="true")
     with pytest.raises(ControlError, match="expired"):
         runner.read(context, job["job_id"])
-    with pytest.raises(ControlError, match="count quota"):
-        await runner.run(context, command="echo should-not-run", configuration={"max_jobs_per_bot": 1})
+    completed = await runner.run(context, command="echo admitted", configuration={"max_jobs_per_bot": 1})
+    assert completed["stdout"]["text"] == "admitted\n"
+    assert runner.status(context, job["job_id"])["archived"]
     assert not workspace._active
     kinds = [event["kind"] for event in workspace.store.events(limit=100)]
     assert "job.started" in kinds and "job.completed" in kinds
-    assert len([kind for kind in kinds if kind == "job.progress"]) == 3
+    assert "job.archived" in kinds
+    assert len([kind for kind in kinds if kind == "job.progress"]) == 4
 
 
 async def test_job_storage_rejects_symlinks_and_hardlinks(sandbox, tmp_path):

@@ -27,7 +27,7 @@ const labels: Record<string, string> = {
   process_limit: "Processes per job",
   package_bytes: "Disposable package storage per job (bytes)",
   package_entries: "Disposable package entries per job",
-  max_jobs_per_bot: "Saved jobs per bot",
+  max_jobs_per_bot: "Recent jobs per bot (older records archived)",
   job_storage_bytes_per_bot: "Job output storage per bot (bytes)",
 };
 
@@ -257,7 +257,8 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
                     </span>
                     {item.url && <span>{item.url}</span>}
                     <span>
-                      {item.status || "Saved"} ·{" "}
+                      {item.status || "Saved"}
+                      {item.archived ? " · Archived" : ""} ·{" "}
                       {num(
                         kind === "jobs"
                           ? (item.stdout_bytes ?? 0) + (item.stderr_bytes ?? 0)

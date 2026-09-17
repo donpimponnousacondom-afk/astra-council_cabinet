@@ -1,5 +1,9 @@
 # Implementation and acceptance plan
 
+## Shell history archival and command limits (2026-09-17)
+
+The owner rejected repeatedly increasing a lifetime saved-job ceiling. Keep the configured 200-record default as a recent-history budget and automatically archive older eligible final metadata when admission needs room. Preserve IDs, scoped reads, audit evidence, output retention and backups; active jobs/running turns remain protected. Archive metadata has no count ceiling and is excluded from ordinary admission scans after logs expire. No command or workspace is replayed or deleted. The owner also requested command ceilings of at least 600 seconds: allow 600 in global/per-bot configuration, advertise the effective limit to the model and extend only shell.run's registry allowance. Existing 90-second settings and outer task deadlines remain unchanged. See [SHELL_RUNNER](SHELL_RUNNER.md).
+
 ## Complete council discovery and inspection (2026-09-15)
 
 The owner requested a fix after Hortator's roster lookup stopped inside Ada's
