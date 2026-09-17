@@ -822,3 +822,11 @@ Eligible failures: connection/read/write/protocol interruptions, incomplete stre
 ## Web HTTP response evidence
 
 See [HTTP_EVIDENCE.md](HTTP_EVIDENCE.md) for status/body/header capture, original-response pagination, long-URL console behavior and the distinction between received HTTP errors and local transport/parsing failures. The default console no longer shows floating-point timing noise or call IDs; expanded evidence and the ledger retain them. It uses one metadata ordering across severity, messages last, and unshortened web destination URLs. These changes do not enable unrestricted host networking, expose credentials or alter Discord permissions.
+
+## Interactive Discord panels
+
+Enable **Plugins → Interactive Discord panels**, then the matching per-bot **Capabilities** checkbox. Ask the bot to prepare a card with labeled action prompts and finish its normal answer. Buttons/dropdowns start a fresh, owner-only task; the bot replies separately. They share provider retries, cancellation and the 14-minute interaction deadline, and persist across runtime restarts. `/prompt` is independently optional. The new editable **Interactive panel invocation guidance** prompt explains the fresh-context boundary.
+
+Use Trajectory's `panel_action` turns and `discord.panel_*` events to diagnose clicks. The bot's `discord_panel` list/status tools inspect its records; disable revokes one panel, and the dashboard capability toggle blocks all its callbacks. Old messages remain visible. Default lifetime is seven days, configurable per panel up to thirty. Unknown/expired/unconfirmed panels give a refusal, not a model call. See [DISCORD_PANELS.md](DISCORD_PANELS.md) for usage and lifecycle.
+
+Long answer attachments remain automatic. Document-enabled bots can now export site/path into an artifact and then call `discord_attach`; no workspace or image-generation grant is necessary. Those grants must not be enabled as a side effect of panel setup.

@@ -1063,6 +1063,9 @@ class Engine:
                 self.store.emit(
                     "delivery.sending", {"outbox_id": outbox_id}, bot_id=bot["id"], turn_id=context.turn_id
                 )
+                panel = self.registry.panels.prepared(context) if not routing else None
+                if panel:
+                    self.registry.panels.dispatch(panel, outbox_id)
                 discord_id = await self.transport.send(
                     bot,
                     destination,
@@ -1071,6 +1074,7 @@ class Engine:
                     paths,
                     nonce=outbox_id,
                     footer=footer,
+                    **({"panel": panel} if panel else {}),
                     **(
                         {
                             "strict_reply": True,
@@ -1087,6 +1091,8 @@ class Engine:
                     "UPDATE outbox SET status='sent',sent_at=?,discord_id=? WHERE id=?",
                     (sent, discord_id, outbox_id),
                 )
+                if panel:
+                    self.registry.panels.bind(panel, discord_id, content)
                 self.store.execute("UPDATE bot_runtime SET last_sent=? WHERE bot_id=?", (sent, bot["id"]))
                 self.room_last[destination] = sent
                 self.store.ingest(

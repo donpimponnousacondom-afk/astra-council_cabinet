@@ -31,6 +31,7 @@ OPERATIONS = [
     "edit",
     "list",
     "read",
+    "export",
     "write",
     "append",
     "replace",
@@ -133,6 +134,7 @@ REQUIRED = {
     "status": ["site"],
     "history": ["site"],
     "read": ["site", "path"],
+    "export": ["site", "path"],
     "write": ["site", "path", "content"],
     "append": ["site", "path", "content", "expected_revision"],
     "replace": ["site", "path", "old_text", "new_text", "expected_revision"],
@@ -168,6 +170,7 @@ DESCRIPTION = (
     "create requires a new site slug; start/edit only resume an existing site, never create it. "
     "One successful create/start/edit may open the turn's extended task budget. "
     "Write separate HTML/CSS/JS/SVG assets. read returns bounded pages with a pinned next_read cursor; "
+    "export with site/path and optional revision makes a current-turn attachment artifact; pass its artifact_id to discord_attach before your final text answer. It does not publish or require workspace/image generation. "
     "append/replace/restore require expected_revision and retain all history. list/status/history inspect your work. "
     "When auto_publish is enabled, each save publishes locally and queues automatic remote sync; publish also queues explicitly. "
     "Only remote_status=delivered with delivery_current=true confirms the current site is remotely live. "
@@ -918,6 +921,27 @@ class DocumentSites:
             return self.describe(site, config)
         if operation == "read":
             return self._read_page(site, args)
+        if operation == "export":
+            path = safe_path(args["path"])
+            revision = args.get("revision", site["revision"])
+            entry = self._manifest(site, revision).get(path)
+            if not entry:
+                raise ControlError("File not found in this site's selected revision; use status/read first")
+            data, mime = self._read_entry(bot_id, entry)
+            result = self.export_artifact(data, mime, PurePosixPath(path).suffix, context)
+            self.store.emit(
+                "document.exported",
+                {"site": slug, "path": path, "revision": revision, **result},
+                bot_id=bot_id,
+                turn_id=context.turn_id,
+            )
+            return {
+                **result,
+                "site": slug,
+                "path": path,
+                "revision": revision,
+                "next": "Call discord_attach with this artifact_id in artifact_ids, then answer with ordinary text. No Discord send or publication has occurred.",
+            }
         if operation == "history":
             return self._history(site, args)
         if operation == "publish":

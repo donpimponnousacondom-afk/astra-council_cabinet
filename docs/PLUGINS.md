@@ -79,3 +79,7 @@ The keyless `global_memory` plugin owns a distinct table keyed only by stable bo
 `PluginSpec.model_tool` defaults true. Ingress-only capabilities may set it false: they remain configurable plugin grants, but are absent from all model schemas and rejected through both parsed and raw model call paths. Registering a plugin must not itself enable an existing bot or start remote application installation.
 
 `slash_commands` is the first built-in ingress capability (`model_tool=False`). Its keyless global/per-bot grants enable a gateway-owned owner command rather than a tool available to the model. Narrow gateway hooks handle registration/invocation through existing TaskGroup ownership, and a specialized executor reuses the provider/tool loop. Disabling it preserves ordinary assigned-room chat and revokes invocation authority immediately. No bulk command-tree overwrite is allowed; unowned `/prompt` collisions are refused. See [SLASH_COMMANDS.md](SLASH_COMMANDS.md).
+
+## Interactive Discord panels
+
+The optional keyless `discord_panel` tool stages gold-accented native cards with real button/dropdown callbacks. Enable globally and per bot; callbacks are owner-only and share the existing interaction task runner without requiring `slash_commands`. No attachment grant is added: long answers remain automatic attachments. `document_site.export` produces an artifact for `discord_attach` without workspace/image generation. See [DISCORD_PANELS.md](DISCORD_PANELS.md) for operations, callback identity, persistence and limits.

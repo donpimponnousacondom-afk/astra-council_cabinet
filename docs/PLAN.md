@@ -419,3 +419,7 @@ configuration reductions when existing channel usage exceeds the new budget
 including its headroom. Saved bot settings use the existing revision/cancellation
 path; old records receive defaults without a data migration. Context/token
 budgets remain independent.
+
+## 2026-09-17 — Native interactive panels, separate capability
+
+The owner requested real interactive Loki panels and preservation of automatic attachment behavior. Implement `discord_panel` as an independent opt-in keyless tool, staging Components V2 around ordinary assistant answers. Buttons/dropdowns resolve saved opaque IDs and start exact-owner tasks through the existing slash interaction runner, with shared retries/admission/cancellation and fresh panel-scoped context. Definitions persist in SQLite and activate only after confirmed delivery. Source panel messages are retained; callbacks never execute model-supplied code. Hortator keeps its control-channel boundary. Add single-file `document_site.export` into existing artifact/discord_attach ownership so document-only companions can send their work. Workspace and image generation remain separate; Loki's image-generation grant stays off. No attachment checkbox is introduced. Current scope excludes modals and editing existing Discord panels in place; see DISCORD_PANELS.

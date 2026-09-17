@@ -106,3 +106,9 @@ The optional `global_memory` tool mirrors channel memory's `read`, `write` (same
 ### Original web HTTP evidence
 
 `web_fetch` and `web_search` retain actual HTTP response status, headers and body independently of local extraction errors. Follow returned `read_response` arguments with the originating tool to page stored evidence without another network request. Both support `operation: "read_result"` plus `result_id`, `offset`, `length`; omit search query/engine when reading a search result. Fetch also supports `read_response` with a retained `document_id` across turns in its bot/channel. Empty calls and complete validation feedback remain unchanged. See [HTTP_EVIDENCE.md](HTTP_EVIDENCE.md). A received 202 is not proof the upstream task completed; a received 404 is not proof the connection failed.
+
+## Native Discord panels and document attachments
+
+`discord_panel` is a separate optional tool pack: `prepare`, `cancel`, `list`, `status`, `disable`. Preparation needs title and buttons and/or select_options; every action needs label and prompt. It only stages the next normal assistant answer. Owner clicks run real new tasks with the usual retries, budgets and diagnostics. `{}` and complete argument-error feedback follow the same shared contract as every other plugin. See [DISCORD_PANELS.md](DISCORD_PANELS.md).
+
+`document_site.export` takes site/path and optionally a pinned revision, verifies an owned saved file and returns a current-turn artifact for `discord_attach`. It neither edits nor publishes. Workspace export and image generation remain separate optional artifact producers. Automatic full-answer attachments need no plugin and no checkbox.

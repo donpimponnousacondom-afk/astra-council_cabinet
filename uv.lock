@@ -446,7 +446,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.11,<4" },
     { name = "cryptography", specifier = ">=44,<49" },
-    { name = "discord-py", specifier = ">=2.5,<3" },
+    { name = "discord-py", specifier = ">=2.7,<3" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "jsonschema", specifier = ">=4.23,<5" },

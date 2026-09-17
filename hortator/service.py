@@ -194,7 +194,19 @@ class Service:
         elif kind == "plugins":
             value["key_configured"] = bool(self.vault.get(f"plugin/{value['id']}/api_key"))
             spec = self.registry.specs.get(value["id"])
-            if value["id"] in ("shell", "web_search", "memory", "global_memory", "council_inspect") and spec:
+            if (
+                value["id"]
+                in (
+                    "shell",
+                    "web_search",
+                    "memory",
+                    "global_memory",
+                    "council_inspect",
+                    "document_site",
+                    "discord_panel",
+                )
+                and spec
+            ):
                 # Display the installed contract, not obsolete seeded descriptions.
                 value["description"] = spec.description
             value["schema"] = spec.parameters if spec else None
@@ -204,6 +216,7 @@ class Service:
                 "memory",
                 "global_memory",
                 "slash_commands",
+                "discord_panel",
                 "council_inspect",
                 "discord_send",
                 "document_site",

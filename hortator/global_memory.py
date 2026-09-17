@@ -218,7 +218,7 @@ class GlobalMemory:
         invocation = context.bot.get("invocation", {})
         source_channel_id = (
             invocation.get("channel_id", context.channel_id)
-            if invocation.get("kind") == "slash"
+            if invocation.get("kind") in ("slash", "panel")
             else context.channel_id
         )
         return self._apply(args, context.bot, source_channel_id=source_channel_id, turn_id=context.turn_id)

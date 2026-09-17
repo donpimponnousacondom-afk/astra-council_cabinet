@@ -133,7 +133,7 @@ class CouncilClient(discord.Client):
         # explicit lifetime owner and cannot outlive SQLite/provider clients.
         self.manager.background.spawn(
             self.manager.slash.receive(self.bot_id, interaction),
-            name=f"slash-intake:{self.bot_id}:{interaction.id}",
+            name=f"{'panel' if interaction.type == discord.InteractionType.component else 'slash'}-intake:{self.bot_id}:{interaction.id}",
             bot_id=self.bot_id,
         )
 
@@ -1128,6 +1128,7 @@ class DiscordManager:
         footer=None,
         strict_reply=False,
         destination_guard=None,
+        panel=None,
     ):
         client = self.clients.get(bot["id"])
         if not client or not client.is_ready():
@@ -1156,12 +1157,18 @@ class DiscordManager:
                     # The grant was revoked before channel.send was attempted.
                     # This is a definite refusal, not an ambiguous network send.
                     raise DeliveryError(str(exc)) from exc
+            presentation = {}
+            if panel:
+                from .discord_panels import panel_view
+
+                presentation["view"] = panel_view(panel, message, [file.filename for file in files])
             async with asyncio.timeout(60):
                 sent = await channel.send(
-                    message,
+                    None if panel else message,
                     files=files,
                     reference=reference,
                     nonce=nonce,
+                    **presentation,
                     mention_author=False,
                     allowed_mentions=discord.AllowedMentions.none(),
                 )

@@ -166,6 +166,14 @@ DEFAULT_PROMPTS = [
         "condition": "Slash turns only",
     },
     {
+        "id": "runtime-panel-invocation",
+        "name": "Interactive panel invocation guidance",
+        "runtime_layer": "panel_invocation",
+        "role": "system",
+        "content": "The owner clicked one of your saved Discord panel actions. This starts a fresh task: only the selected action and saved panel answer are supplied, not surrounding channel history or previous interactions. Private notes/workspaces are scoped to this bot’s panel tasks in this channel; global notes remain the separate cross-channel notebook. Execute the requested task with your granted tools and answer as ordinary assistant content. The original panel remains unchanged. You may prepare a new panel around this answer. The entire task has a hard 14-minute platform deadline; saved files survive cancellation, but work never automatically resumes. {invocation}",
+        "condition": "Interactive panel turns only",
+    },
+    {
         "id": "runtime-reply-repair",
         "name": "Malformed answer repair",
         "runtime_layer": "reply_repair",

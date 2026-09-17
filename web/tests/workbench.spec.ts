@@ -1201,3 +1201,36 @@ test("per-bot credentials keep their selected destination and remain write-only 
     .getByRole("button", { name: "Close dialog", exact: true })
     .click();
 });
+
+test("interactive panels have an independent keyless capability and native preview", async ({
+  page,
+}, testInfo) => {
+  await navigate(page, "Bots");
+  await page.getByRole("button", { name: "Edit Ada", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Ada", exact: true });
+  await dialog
+    .getByRole("button", { name: "Capabilities", exact: true })
+    .click();
+  const capability = dialog.getByRole("checkbox", {
+    name: "Interactive Discord panels",
+  });
+  await expect(capability).not.toBeChecked();
+  await capability.check();
+  const preview = dialog.getByRole("region", {
+    name: "Interactive panel preview",
+  });
+  await expect(preview).toBeVisible();
+  await expect(preview).toContainText("14-minute deadline");
+  await expect(
+    dialog.getByText("Long answers automatically attach their full text", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await preview.screenshot({
+    path: testInfo.outputPath("discord-panel-preview.png"),
+  });
+  // The preview is presentation only; no fake live buttons or new artifact grant.
+  await expect(preview.getByRole("button")).toHaveCount(0);
+  await capability.uncheck();
+  await expect(preview).toHaveCount(0);
+});
