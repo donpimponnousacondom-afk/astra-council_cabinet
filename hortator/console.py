@@ -196,6 +196,8 @@ DISPLAY_FIELDS = (
     "next_attempt",
     "retry_in_seconds",
 )
+# Append metrics after all established fields; never insert into the old prefix.
+COMPLETION_FIELDS = ("reasoning_tokens", "total_tokens", "tps")
 
 
 def is_web_event(event):
@@ -1113,10 +1115,29 @@ class OperationalConsole(logging.Handler):
         incident = level in {"warning", "error"}
         keys = tuple(dict.fromkeys(DISPLAY_FIELDS + SUMMARY_FIELDS + INCIDENT_FIELDS))
         keys = [k for k in keys if k not in MESSAGE_FIELDS and k != "call_id"]
+        keys += list(COMPLETION_FIELDS)
         keys += list(MESSAGE_FIELDS)
         fields = []
         for key in keys:
             value = data.get(key)
+            if event["kind"] == "request.completed" and key in COMPLETION_FIELDS:
+                # Reported usage stays intact in the ledger. The display can use
+                # explicitly marked text estimates, never private reasoning text.
+                count_key = {"reasoning_tokens": "reasoning", "total_tokens": "total"}.get(key)
+                count = (data.get("token_counts") or {}).get(count_key, {})
+                if count:
+                    value = count.get("value")
+                    value = (
+                        "none"
+                        if value is None
+                        else f"{'~' if count.get('source') == 'estimated' else ''}{value}"
+                    )
+                elif key == "tps" and key in data:
+                    value = (
+                        "none"
+                        if value is None
+                        else f"{'~' if data.get('tps_source') == 'estimated' else ''}{value:.1f}"
+                    )
             if value is None or value == "":
                 continue
             if key.endswith("_ms") and isinstance(value, (int, float)):
@@ -1125,9 +1146,9 @@ class OperationalConsole(logging.Handler):
         summary = " · ".join(fields)
         if incident and not summary:
             summary = "No diagnostic summary recorded; press f to inspect event fields"
-        # Web destinations are operational evidence, never an ellipsized preview.
+        # Web destinations and per-request metrics must remain visible in full.
         limit = 640 if incident else 320
-        if not is_web_event(event) and len(summary) > limit:
+        if not is_web_event(event) and event["kind"] != "request.completed" and len(summary) > limit:
             summary = summary[: limit - 3] + "…"
         reference = f" #{event['seq']}" if event.get("seq") else ""
         scope_color = SCOPE_COLORS.get(event["scope"], "97")

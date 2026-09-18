@@ -720,21 +720,27 @@ class ProviderPool:
             response_state.finish()
             record_diagnostics(self.store, self.vault, request_id, result, body, status="completed")
             duration = (time.perf_counter() - clock) * 1000
-            footer_tokens = None
-            if purpose == "generation":
-                # Numeric-only evidence. Counting cannot block gateway heartbeats
-                # or inflate the measured request duration/TPS, and never changes
-                # the provider-reported usage used by billing and context planning.
-                async with self.footer_token_slots:
-                    footer_tokens = await asyncio.to_thread(
-                        measure_footer_tokens,
-                        body,
-                        result.usage,
-                        result.content,
-                        result.reasoning_content,
-                        result.reasoning_details,
-                        result.tool_calls,
-                    )
+            # Reuse the footer's numeric-only counting for each completed request,
+            # including compaction and tool-call rounds. Keep raw billing counts
+            # separate, and do not change the footer's final-request selection.
+            # Counting stays off the event loop and outside measured duration/TPS.
+            async with self.footer_token_slots:
+                token_counts = await asyncio.to_thread(
+                    measure_footer_tokens,
+                    body,
+                    result.usage,
+                    result.content,
+                    result.reasoning_content,
+                    result.reasoning_details,
+                    result.tool_calls,
+                )
+            footer_tokens = token_counts if purpose == "generation" else None
+            completion_count = token_counts["completion"]["value"]
+            tps = (
+                completion_count * 1000 / (duration - ttft)
+                if ttft is not None and duration > ttft and completion_count > 0
+                else None
+            )
             result.content = strip_reasoning(result.content)
             self.success(provider)
             metrics = normalized_usage(result.usage, profile)
@@ -778,6 +784,10 @@ class ProviderPool:
                     "duration_ms": duration,
                     "ttft_ms": ttft,
                     "finish_reason": result.finish_reason,
+                    "token_counts": token_counts,
+                    "total_tokens": token_counts["total"]["value"],
+                    "tps": tps,
+                    "tps_source": token_counts["completion"]["source"] if tps is not None else "unavailable",
                 },
                 bot_id=bot["id"],
                 turn_id=turn_id,

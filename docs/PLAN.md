@@ -1,5 +1,9 @@
 # Implementation and acceptance plan
 
+## Per-request console token metrics (2026-09-18)
+
+The owner wants reasoning counts, total tokens and TPS for every completed provider request, including tool-call rounds and compaction, without changing the Discord footer. Append these metrics after established console fields and preserve the message-last rule. Keep completion lines fully visible, explicit missing-versus-zero reasoning, marked fixed-tokenizer estimates and numeric provenance. Reuse existing generation measurements; perform any compaction estimation off the event loop and outside measured duration. Never aggregate rounds or alter raw usage, billing, provider settings or footer behavior. See [console metric definitions](OPERATIONS.md#console-inspection-and-filtering).
+
 ## Shell history archival and command limits (2026-09-17)
 
 The owner rejected repeatedly increasing a lifetime saved-job ceiling. Keep the configured 200-record default as a recent-history budget and automatically archive older eligible final metadata when admission needs room. Preserve IDs, scoped reads, audit evidence, output retention and backups; active jobs/running turns remain protected. Archive metadata has no count ceiling and is excluded from ordinary admission scans after logs expire. No command or workspace is replayed or deleted. The owner also requested command ceilings of at least 600 seconds: allow 600 in global/per-bot configuration, advertise the effective limit to the model and extend only shell.run's registry allowance. Existing 90-second settings and outer task deadlines remain unchanged. See [SHELL_RUNNER](SHELL_RUNNER.md).

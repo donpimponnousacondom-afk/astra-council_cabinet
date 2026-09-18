@@ -1,5 +1,12 @@
 # Verification record
 
+## Provider completion metrics in the console (2026-09-18)
+
+- Continued the clean active `hotfix/compactation` branch. Each completed provider request now records numeric diagnostic counts/TPS and appends `reasoning_tokens`, `total_tokens`, `tps` to its console line after established fields. Completion lines retain their full suffix instead of the old 320-character preview. No footer code/template/selection, bot/profile configuration, raw billing counts, delivery or provider request parameters changed.
+- **243 focused backend tests passed**, including 19 new cases covering generation/compaction, streamed/buffered responses, reported zero versus missing reasoning, fixed-tokenizer estimates, separate tool-call/final-answer counts, private-text exclusion and exact append-only console ordering across severities. Existing console/HTTP evidence, provider retries/streaming/diagnostics, footer and compaction tests passed. Two existing dependency deprecation warnings remain. Ruff checks and formatting passed. These tests use isolated state and controlled HTTP transports, not paid live inference.
+- Read-only live evidence from events **#38859 / #38865**: the first request reported 8,805 output tokens, including 8,745 reasoning tokens (47,985.4 ms total, 3,054.7 ms TTFT, calculated 196.0 TPS); the second reported 1,977 output tokens, including 1,915 reasoning tokens (15,167.2 ms total, 4,162.4 ms TTFT, calculated 179.7 TPS). Neither count is a turn aggregate. No running turns/requests were present at the pre-deployment check.
+- Deployment uses the committed-source shared-Screen refresh, rebuilding the dashboard stamp without changing its source. The external `$HORTATOR_DATA_DIR/logs/next-feature.json` receipt identifies the resulting server/dashboard commit; no live provider or Discord task is injected just to test metrics.
+
 ## Automatic shell job archival and 600-second command ceilings (2026-09-17)
 
 - Branched the clean current checkout to `hotfix/automatic_shell_job_archival`. The observed failure was Hortator's lifetime total of 200 saved shell records, all terminal; expiry removed only logs. Replaced that lifetime admission gate with oldest-eligible automatic metadata archival. Archived IDs remain readable with unchanged ownership; active jobs/running turns, workspace files and original trajectory evidence are preserved. Retained log age/byte quotas remain separate. No provider, bot, memory or credential configuration was changed.
