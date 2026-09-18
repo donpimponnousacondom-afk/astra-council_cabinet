@@ -1,5 +1,17 @@
 # Implementation and acceptance plan
 
+## One-shot bot trigger (2026-09-18)
+
+The owner requested a compact Trigger button beside Start/Pause to replace manually
+cycling activation for an immediate turn. Trigger uses the ordinary model/tool
+loop and existing context, preserving configuration. It works with timer-off
+bots; a paused bot temporarily connects for its single turn and remains paused
+afterwards. Active bots restart their usual interval when the turn settles.
+Configured silence remains possible. Busy/recovery/budget refusals never queue
+later work, and provider request retries remain within the same turn. Global and
+provider pauses remain authoritative. This feature is separate from slash ingress,
+context resets, synthetic human messages and persistent scheduling settings.
+
 ## Opt-in Discord reasoning viewer (2026-09-18)
 
 The owner approved eight scoped points: an independent per-bot plugin; automatic

@@ -27,6 +27,93 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible();
 });
 
+test("Trigger starts one turn beside Start/Pause without changing saved activation", async ({
+  page,
+}, testInfo) => {
+  let active = false;
+  let enabled = false;
+  const actions: string[] = [];
+  await page.route("**/api/status", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.settings.enabled = true;
+    const bot = body.bots.find((item: any) => item.id === "ada");
+    Object.assign(bot, {
+      enabled,
+      active_turn: active,
+      readiness: [],
+      interval_seconds: 0,
+    });
+    bot.runtime.gateway_status = "online";
+    bot.runtime.error = null;
+    const profile = body.profiles.find(
+      (item: any) => item.id === bot.model_profile_id,
+    );
+    body.providers.find(
+      (item: any) => item.id === profile.provider_id,
+    ).enabled = true;
+    await route.fulfill({ json: body });
+  });
+  await page.route("**/api/control", async (route) => {
+    const command = route.request().postDataJSON();
+    expect(command.kind).toBe("bots");
+    expect(command.id).toBe("ada");
+    actions.push(command.action);
+    if (command.action === "trigger") active = true;
+    else if (command.action === "stop") active = false;
+    else throw new Error("Trigger must never toggle saved activation");
+    await route.fulfill({
+      json: { turn_id: "fixture-turn", single_shot: true },
+    });
+  });
+  await page.getByRole("button", { name: "Refresh dashboard" }).click();
+  await navigate(page, "Bots");
+  const row = page
+    .getByRole("table", { name: "Bots", exact: true })
+    .getByRole("row")
+    .filter({
+      has: page.getByRole("button", { name: "Edit Ada", exact: true }),
+    });
+  const trigger = row.getByRole("button", { name: "Trigger Ada once" });
+  await expect(row.getByRole("button", { name: "Activate Ada" })).toBeVisible();
+  await expect(trigger).toBeEnabled();
+  await trigger.click();
+  await expect(row).toContainText("Thinking");
+  await expect(trigger).toBeDisabled();
+  await expect(
+    page.getByText(
+      "One turn triggered. The bot's pause state and configuration are unchanged.",
+    ),
+  ).toBeVisible();
+  await row.getByRole("button", { name: "Pause Ada" }).click();
+  await expect(row).toContainText("Paused");
+  await expect(trigger).toBeEnabled();
+  expect(actions).toEqual(["trigger", "stop"]);
+  enabled = true;
+  await page.getByRole("button", { name: "Refresh dashboard" }).click();
+  await expect(row).toContainText("Timer off");
+  await expect(row.getByRole("button", { name: "Pause Ada" })).toBeVisible();
+  await expect(trigger).toBeEnabled();
+  const triggerBounds = await trigger.boundingBox();
+  const pauseBounds = await row
+    .getByRole("button", { name: "Pause Ada" })
+    .boundingBox();
+  expect(Math.abs(triggerBounds!.y - pauseBounds!.y)).toBeLessThan(2);
+  const actionCell = await row.getByRole("cell").last().boundingBox();
+  for (const button of await row
+    .getByRole("cell")
+    .last()
+    .getByRole("button")
+    .all()) {
+    const bounds = await button.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(actionCell!.x);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(
+      actionCell!.x + actionCell!.width,
+    );
+  }
+  await page.screenshot({ path: testInfo.outputPath("trigger-button.png") });
+});
+
 test("modern navigation keeps every operational page and compact source identities", async ({
   page,
 }, testInfo) => {

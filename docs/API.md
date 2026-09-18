@@ -70,6 +70,16 @@ Bots include `footer_enabled` (effective default: true for Hortator, false for c
 
 Control request shape:
 
+One-shot example: `{"action":"trigger","kind":"bots","id":"ada","data":{}}`.
+Optional `data.channel_id` selects an existing allowed conversation; otherwise
+normal context selection is used with explicit idle evaluation. Returns
+`{"turn_id":"turn_...","single_shot":true}` after admission, not a delivery
+receipt. Existing owner/session/CSRF gates apply. Trigger preserves saved bot
+activation/configuration, can run a paused bot once, and rejects busy/full slots,
+provider recovery waits, global/provider pauses, usage limits and invalid scopes
+without queuing work. No context returns an explicit setup error. See
+[Trigger behavior](OPERATIONS.md#dashboard-workbench).
+
 ```json
 {
   "action": "save",
@@ -79,7 +89,7 @@ Control request shape:
 }
 ```
 
-Actions: `create`, `save`, `delete`, `start`, `stop`, `clone`, `probe`, `reset_circuit`, `restart`, `compact`, `memory`, `thread`. `start`/`stop` with `id: "all"` updates the global switch. `clone` defaults to profiles and accepts a new `id`/`name` in `data`. `compact` takes a bot ID and optional `data.channel_id`; `memory` takes `channel_id`, `key`, and `value`; `thread` takes a room ID and `data.name`. `probe` and `reset_circuit` take a provider ID. `restart` takes a bot ID.
+Actions: `create`, `save`, `delete`, `start`, `stop`, `clone`, `probe`, `reset_circuit`, `restart`, `trigger`, `compact`, `memory`, `thread`. `start`/`stop` with `id: "all"` updates the global switch. `clone` defaults to profiles and accepts a new `id`/`name` in `data`. `compact` takes a bot ID and optional `data.channel_id`; `memory` takes `channel_id`, `key`, and `value`; `thread` takes a room ID and `data.name`. `probe` and `reset_circuit` take a provider ID. `restart` takes a bot ID.
 
 `probe` is **model discovery** (`GET` to the provider's `/models`). Its successful result contains `provider_id`, `latency_ms`, `models`, `authentication_verified: false` and an explanatory `note`. A public catalog cannot establish credential validity, generation, account limits or tool support; discovery does not reset completion health.
 

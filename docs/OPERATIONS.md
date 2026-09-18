@@ -8,6 +8,24 @@ Use **Prompt library** to edit generated instruction/input wrappers and their sy
 
 ## Dashboard workbench
 
+In **Bots**, **Trigger** beside Start/Pause requests one turn immediately using the
+bot's current context, prompts, model and tools. It skips the wake timer, the
+new-message/idle gate and personal send cooldown; configured silence remains an
+available decision. A paused bot temporarily connects, waits up to 30 seconds for
+Discord/history readiness before inference, runs once and stays paused. A running
+bot returns to its configured cadence after that turn. Timer `0` remains off.
+Saved configuration and revisions are not changed. The usual room spacing,
+global/provider pause, provider recovery waits, concurrency and usage limits apply.
+
+Trigger selects pending human attention first, otherwise the ordinary allowed
+context ordering with idle evaluation permitted for this explicit action. It
+requires an existing eligible conversation; a new bot must first connect and
+observe its room. No fake message or new prompt is inserted. Busy clicks are
+refused rather than queued. The button is disabled during a turn; **Pause** can
+cancel even a trial of an already-paused bot. Trajectory records `manual_trigger`.
+Failed trials of paused or timer-off bots do not start autonomous recovery turns;
+configured provider-request retries still apply within the one turn.
+
 Open **`http://127.0.0.1:8000/`** for the active desktop workbench. Inventories are compact lists; click column headings to sort, a record name to edit, or a bot's model/provider/context link to inspect the related record. Editors dock beside the inventory and have a **Maximize editor** control for long JSON, prompts and evidence. Settings still save through the existing API with revision checks; credential fields have their own write-only save buttons.
 
 | Key | Workbench action |
