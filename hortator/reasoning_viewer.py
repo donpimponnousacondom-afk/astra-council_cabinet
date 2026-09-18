@@ -21,6 +21,7 @@ from .timekeeping import council_timezone, local_timestamp
 
 PLUGIN_ID = "reasoning_viewer"
 PREFIX = "hrv:"
+PAGE_ACTIONS = {"page", "previous_round", "next_round", "previous_page", "next_page"}
 DESCRIPTION = (
     "Automatically add a REASONING button when an answer's generation requests contain readable "
     "provider reasoning. Only the configured human owner can read it, privately, with separate "
@@ -136,16 +137,17 @@ def answer_view(binding):
 def reader_view(session_id, index, page, rounds, pages):
     view = discord.ui.View(timeout=None)
     for label, action, target, disabled, row in (
-        ("Previous round", "page", (max(0, index - 1), 0), index == 0, 0),
-        ("Next round", "page", (min(rounds - 1, index + 1), 0), index == rounds - 1, 0),
-        ("Previous page", "page", (index, max(0, page - 1)), page == 0, 1),
-        ("Next page", "page", (index, min(pages - 1, page + 1)), page == pages - 1, 1),
+        ("Previous round", "previous_round", (max(0, index - 1), 0), index == 0, 0),
+        ("Next round", "next_round", (min(rounds - 1, index + 1), 0), index == rounds - 1, 0),
+        ("Previous page", "previous_page", (index, max(0, page - 1)), page == 0, 1),
+        ("Next page", "next_page", (index, min(pages - 1, page + 1)), page == pages - 1, 1),
         ("Download text", "download", (index, 0), False, 1),
     ):
         view.add_item(
             discord.ui.Button(
                 label=label,
                 style=discord.ButtonStyle.secondary,
+                # Even disabled controls targeting the same page need unique IDs.
                 custom_id=f"{PREFIX}{session_id}:{action}:{target[0]}:{target[1]}",
                 disabled=disabled,
                 row=row,
@@ -227,10 +229,13 @@ class ReasoningViewer:
         parts = str(interaction.data.get("custom_id", "")).split(":")
         if len(parts) not in (3, 5) or parts[0] != "hrv" or interaction.data.get("component_type") != 2:
             raise ControlError("Unknown reasoning control")
+        # Accept original page handles after restart, while new controls distinguish
+        # direction as well as destination to satisfy Discord's uniqueness rule.
+        action = "page" if parts[2] in PAGE_ACTIONS else parts[2]
         session = None
-        if len(parts) == 3 and parts[2] == "open":
+        if len(parts) == 3 and action == "open":
             binding_id, index, page = parts[1], None, 0
-        elif len(parts) == 5 and parts[2] in ("page", "download"):
+        elif len(parts) == 5 and action in ("page", "download"):
             session = self.store.one("SELECT * FROM reasoning_views WHERE id=?", (parts[1],))
             if not session or not all(p.isascii() and p.isdecimal() and len(p) <= 9 for p in parts[3:]):
                 raise ControlError("Unknown reasoning page")
@@ -274,7 +279,7 @@ class ReasoningViewer:
         )
         if not request:
             raise ControlError("The selected request is no longer available in saved diagnostics")
-        return binding, session, request, index, page, len(ids), parts[2]
+        return binding, session, request, index, page, len(ids), action
 
     def event(self, bot_id, interaction, kind, *, level="info", **data):
         self.store.emit(
@@ -290,8 +295,36 @@ class ReasoningViewer:
             level=level,
         )
 
+    async def notice(self, manager, bot_id, interaction, message, *, deferred):
+        """Finish a failed private read with plain text, never the rejected controls."""
+        try:
+            async with asyncio.timeout(10):
+                if deferred:
+                    await interaction.edit_original_response(
+                        content=message,
+                        view=None,
+                        attachments=[],
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                else:
+                    await interaction.response.send_message(
+                        message, ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
+                    )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self.event(
+                bot_id,
+                interaction,
+                "notice_failed",
+                level="warning",
+                **manager.slash.error_fields(exc, interaction),
+                reason="Private reasoning failure notice could not be delivered; dismiss the pending viewer and click REASONING again. Saved reasoning is unchanged.",
+            )
+
     async def receive(self, manager, bot_id, interaction):
         deferred, files = False, []
+        phase = "validate_reasoning_control"
         try:
             if manager.closed or getattr(manager.service, "snapshot_maintenance", False):
                 raise ControlError("Snapshot maintenance or shutdown is in progress; retry after resume")
@@ -312,8 +345,10 @@ class ReasoningViewer:
             if not await manager.slash.acknowledge(bot_id, interaction, True, existing_message_id=existing):
                 return
             deferred = True
+            phase = "read_saved_reasoning"
             binding, _, request, index, page, rounds, action = self.resolve(bot_id, interaction)
             row = self.store.one("SELECT body FROM request_diagnostics WHERE request_id=?", (request["id"],))
+            phase = "prepare_reasoning_view"
             async with asyncio.timeout(30), self.slots:
                 while True:
                     secrets = tuple(v for k, v in self.vault.values.items() if not k.endswith("/user_id"))
@@ -360,6 +395,7 @@ class ReasoningViewer:
                     f"{status} · Page {page + 1}/{pages}\n{content}"
                 )
                 view = reader_view(session["id"], index, page, rounds, pages)
+            phase = "edit_reasoning_response"
             async with asyncio.timeout(30):
                 sent = await interaction.edit_original_response(
                     content=text,
@@ -367,6 +403,7 @@ class ReasoningViewer:
                     attachments=files,
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
+            phase = "save_reasoning_receipt"
             if action == "open":
                 self.store.execute(
                     "UPDATE reasoning_views SET message_id=? WHERE id=?", (str(sent.id), session["id"])
@@ -384,16 +421,27 @@ class ReasoningViewer:
             raise
         except ControlError as exc:
             self.event(bot_id, interaction, "rejected", level="warning", reason=str(exc))
-            await manager.slash.notice(interaction, str(exc), deferred=deferred)
+            await self.notice(manager, bot_id, interaction, str(exc), deferred=deferred)
         except Exception as exc:
+            explanation = "The saved reasoning could not be displayed"
+            if isinstance(exc, discord.HTTPException) and exc.code == 50035:
+                explanation = "Discord rejected the reasoning viewer's message layout"
+                if "custom id cannot be duplicated" in exc.text.lower():
+                    explanation += " because navigation buttons shared an ID"
+            message = (
+                explanation + ". Saved reasoning is unchanged; no model call was made. "
+                "Click REASONING again to retry the saved-data viewer."
+            )
             self.event(
                 bot_id,
                 interaction,
                 "failed",
                 level="warning",
                 **manager.slash.error_fields(exc, interaction),
-                reason="Saved reasoning could not be displayed; no inference was started or response replayed",
+                phase=phase,
+                reason=message,
             )
+            await self.notice(manager, bot_id, interaction, message, deferred=deferred)
         finally:
             for file in files:
                 file.close()

@@ -70,6 +70,14 @@ only for the exact saved private viewer. Existing slash acknowledgement settings
 and model execution behavior are unchanged. Uncertain answer delivery does not
 create an active viewer binding or trigger a resend.
 
+Navigation IDs distinguish button direction even when multiple disabled controls
+point at the same destination. Earlier saved page handles remain readable. If
+rendering fails after acknowledgement, the viewer attempts one plain private
+failure notice with its controls/files cleared, replacing the loading placeholder.
+If Discord also rejects that notice, a separate `discord.reasoning_notice_failed`
+warning explains the remaining placeholder. Dismiss it and click the original
+REASONING button again; saved traces are unchanged and no inference is repeated.
+
 `discord.reasoning_*` events record acknowledgements, reads, refusals and failures
 with identifiers only. They do not include reasoning text or download contents.
 Long capture parsing, paging and encoding run on detached worker data with two

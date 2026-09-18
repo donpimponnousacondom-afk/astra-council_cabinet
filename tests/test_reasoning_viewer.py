@@ -12,7 +12,7 @@ from test_provider import install_client
 from test_runtime import settle
 from test_slash_commands import interaction, enable as enable_slash
 from hortator.plugins import ToolContext
-from hortator.reasoning_viewer import ReasoningViewer, answer_view, captured_text, page_capture
+from hortator.reasoning_viewer import ReasoningViewer, answer_view, captured_text, page_capture, reader_view
 from hortator.slash_commands import ACK_RETRY_DELAY
 
 CHANNEL = "222222222222222222"
@@ -103,7 +103,15 @@ def click(bot, custom, *, message=MESSAGE, ephemeral=False, iid="987654321012345
         author=SimpleNamespace(id=int(bot["application_id"])),
         flags=SimpleNamespace(ephemeral=ephemeral),
     )
-    item.edit_original_response.return_value = SimpleNamespace(id=int(PRIVATE if not ephemeral else message))
+
+    async def validate_response(**kwargs):
+        if kwargs.get("view"):
+            controls = [c for row in kwargs["view"].to_components() for c in row["components"]]
+            ids = [c["custom_id"] for c in controls]
+            assert len(ids) == len(set(ids)), "Discord rejects duplicate IDs, including disabled buttons"
+        return SimpleNamespace(id=int(PRIVATE if not ephemeral else message))
+
+    item.edit_original_response.side_effect = validate_response
     return item
 
 
@@ -396,6 +404,96 @@ def test_capture_prefers_full_text_excludes_encrypted_and_pages_unicode_lossless
     _, pages = page_capture(raw, 0)
     content = "".join(page_capture(raw, p)[0][4:-4] for p in range(pages))
     assert content == "🐱" * 10000
+
+
+async def test_serialized_navigation_ids_are_unique_at_every_boundary():
+    for rounds in (1, 2, 3):
+        for pages in (1, 2, 3):
+            for index in range(rounds):
+                for page in range(pages):
+                    payload = reader_view("view_test", index, page, rounds, pages).to_components()
+                    ids = [c["custom_id"] for row in payload for c in row["components"]]
+                    assert len(ids) == len(set(ids)) == 5
+                    assert all(1 <= len(identity) <= 100 for identity in ids)
+
+
+@pytest.mark.parametrize(
+    "label,expected_round,expected_page",
+    [("Previous round", 1, 1), ("Next round", 3, 1), ("Previous page", 2, 1), ("Next page", 2, 3)],
+)
+async def test_emitted_navigation_handles_read_the_expected_private_page(
+    kernel, label, expected_round, expected_page
+):
+    bot = enable(kernel)
+    for at, identity in enumerate(("req-early", "req-middle", "req-final"), 1):
+        request(kernel, identity, text="Saved thought " * 400, at=at)
+    row = await binding(kernel, bot)
+    await open_view(kernel, bot, row)
+    session = kernel.store.one("SELECT * FROM reasoning_views")
+    middle = click(bot, f"hrv:{session['id']}:page:1:1", message=PRIVATE, ephemeral=True)
+    await kernel.connector.slash.receive(bot["id"], middle)
+    payload = middle.edit_original_response.await_args.kwargs["view"].to_components()
+    control = next(c for row in payload for c in row["components"] if c["label"] == label)
+    assert not control["disabled"]
+    item = click(bot, control["custom_id"], message=PRIVATE, ephemeral=True)
+    await kernel.connector.slash.receive(bot["id"], item)
+    item.response.defer.assert_awaited_once_with(ephemeral=True, thinking=False)
+    body = item.edit_original_response.await_args.kwargs
+    assert f"Request {expected_round}/3" in body["content"]
+    assert f"Page {expected_page}/" in body["content"]
+    assert not kernel.store.rows("SELECT * FROM turns")
+
+
+@pytest.mark.parametrize("failure", ["duplicate_ids", "connection"])
+async def test_failed_view_replaces_thinking_with_plain_private_notice(kernel, failure):
+    bot = enable(kernel)
+    request(kernel)
+    row = await binding(kernel, bot)
+    item = click(bot, f"hrv:{row['id']}:open")
+    error = (
+        discord.HTTPException(
+            SimpleNamespace(status=400, reason="Bad Request"),
+            {"code": 50035, "message": "Invalid Form Body: Component custom id cannot be duplicated"},
+        )
+        if failure == "duplicate_ids"
+        else OSError("connection reset")
+    )
+    item.edit_original_response.side_effect = [error, SimpleNamespace(id=int(PRIVATE))]
+    await kernel.connector.slash.receive(bot["id"], item)
+    item.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
+    assert item.edit_original_response.await_count == 2
+    notice = item.edit_original_response.await_args.kwargs
+    assert notice["view"] is None and notice["attachments"] == []
+    assert not notice["allowed_mentions"].everyone
+    assert "Saved reasoning is unchanged" in notice["content"]
+    assert "Click REASONING again" in notice["content"]
+    assert "Saved final reasoning" not in notice["content"]
+    if failure == "duplicate_ids":
+        assert "navigation buttons shared an ID" in notice["content"]
+    event = json.loads(
+        kernel.store.one("SELECT data FROM events WHERE kind='discord.reasoning_failed'")["data"]
+    )
+    assert event["phase"] == "edit_reasoning_response"
+    assert event["reason"] == notice["content"]
+    assert kernel.store.one("SELECT message_id FROM reasoning_views")["message_id"] is None
+    assert not kernel.store.rows("SELECT * FROM turns")
+
+
+async def test_failed_private_notice_is_logged_without_retries_or_public_fallback(kernel):
+    bot = enable(kernel)
+    request(kernel)
+    row = await binding(kernel, bot)
+    item = click(bot, f"hrv:{row['id']}:open")
+    item.followup = SimpleNamespace(send=AsyncMock())
+    item.edit_original_response.side_effect = OSError("connection reset")
+    await kernel.connector.slash.receive(bot["id"], item)
+    assert item.edit_original_response.await_count == 2
+    item.response.send_message.assert_not_awaited()
+    item.followup.send.assert_not_awaited()
+    event = kernel.store.one("SELECT bot_id,data FROM events WHERE kind='discord.reasoning_notice_failed'")
+    assert event["bot_id"] == bot["id"]
+    assert "dismiss the pending viewer" in json.loads(event["data"])["reason"]
+    assert "Saved final reasoning" not in event["data"]
 
 
 @pytest.mark.parametrize("receipt_ok", [True, False])
