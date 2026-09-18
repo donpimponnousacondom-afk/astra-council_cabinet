@@ -175,6 +175,14 @@ The agent can send commands through `screen -S hortator -p dashboard -X stuff` a
 
 ## Console inspection and filtering
 
+For private inspection from Discord, enable **Plugins → Reasoning viewer** and
+the desired bot's **Capabilities → Reasoning viewer**. New answers with readable
+captured reasoning receive a button; only the configured human owner can open
+its private paged viewer or download. The final generating request is selected
+first; earlier requests remain separate. Disabling the grant blocks existing
+buttons without deleting evidence. No provider calls are made and the footer is
+unchanged. See [Reasoning viewer](REASONING_VIEWER.md).
+
 Timestamps use **bold soft blue** (ANSI 256-color 110), without a background block,
 for contrast on gray and black terminals. The owner rejected the interim white
 timestamps because they blended with body text (2026-09-15). Event scopes,

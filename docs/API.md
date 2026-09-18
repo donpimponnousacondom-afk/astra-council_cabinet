@@ -1,5 +1,12 @@
 # Control API and Discord command parity
 
+The optional `reasoning_viewer` plugin uses the existing global plugin enablement
+and per-bot `enabled_plugins` fields. It is keyless and `model_tool=False`; no new
+HTTP endpoint exposes diagnostics. Discord callback bindings live in the
+`reasoning_bindings` and `reasoning_views` tables, with application/message/request
+ownership and no interaction tokens. Only the configured human owner may read
+through confirmed private interactions. See [REASONING_VIEWER](REASONING_VIEWER.md).
+
 All endpoints except `/api/health` and login require the dashboard session. Log in at `POST /api/auth/login` with `{"password":"..."}`; retain the HttpOnly cookie and returned `csrf`. Send `X-CSRF-Token` for POST/PUT operations. There is no API key in a URL and no unauthenticated public control endpoint.
 
 `GET /api/status` includes `background_tasks: {running: [task_name, ...], failed: {task_name: redacted_error, ...}}`. The failure inventory retains up to 50 unexpected task exits for the current process; ordinary provider/turn failures remain in their existing ledgers. `runtime.task_failed` supplies the bounded redacted traceback. See [CONCURRENCY.md](CONCURRENCY.md).

@@ -449,6 +449,9 @@ class Registry:
         from .discord_panels import register as register_panels
 
         register_panels(self)
+        from .reasoning_viewer import register as register_reasoning_viewer
+
+        register_reasoning_viewer(self)
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
             entry.load()(self)
 

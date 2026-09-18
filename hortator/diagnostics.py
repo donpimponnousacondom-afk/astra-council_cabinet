@@ -1,4 +1,4 @@
-"""Operator-only provider evidence; never part of model inspection or Discord exports."""
+"""Operator-only provider evidence; the opt-in reasoning viewer is the sole Discord reader."""
 
 from __future__ import annotations
 

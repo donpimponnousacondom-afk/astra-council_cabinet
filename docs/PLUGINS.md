@@ -83,3 +83,11 @@ The keyless `global_memory` plugin owns a distinct table keyed only by stable bo
 ## Interactive Discord panels
 
 The optional keyless `discord_panel` tool stages gold-accented native cards with real button/dropdown callbacks. Enable globally and per bot; callbacks are owner-only and share the existing interaction task runner without requiring `slash_commands`. No attachment grant is added: long answers remain automatic attachments. `document_site.export` produces an artifact for `discord_attach` without workspace/image generation. See [DISCORD_PANELS.md](DISCORD_PANELS.md) for operations, callback identity, persistence and limits.
+
+The separate keyless `reasoning_viewer` presentation capability is also
+`model_tool=False`. It automatically adds an owner-only REASONING control to new
+answers with readable diagnostic captures. Clicks read saved data privately;
+they never use the inference/tool runner or consume a turn. It composes with
+`discord_panel` and works without that tool's grant. Global/per-bot switches are
+off by default. See [REASONING_VIEWER](REASONING_VIEWER.md) for durable ownership,
+pagination, downloads, revocation and the narrow Discord diagnostic exception.

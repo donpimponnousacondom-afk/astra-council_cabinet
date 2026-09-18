@@ -1,5 +1,18 @@
 # Implementation and acceptance plan
 
+## Opt-in Discord reasoning viewer (2026-09-18)
+
+The owner approved eight scoped points: an independent per-bot plugin; automatic
+buttons only when readable captured reasoning exists; direct saved-data reads;
+final-request-first viewing with separate earlier requests; exact-owner private
+responses; pages and text downloads with credential masking; persistent message
+bindings supporting ordinary/slash/panel/file answers and immediate revocation;
+and focused coverage of permissions, restarts, long captures and presentation
+coexistence. This is an explicit narrow exception to private diagnostics staying
+off Discord. Do not expose reasoning to models or public channels, add inference
+calls, change footers, or infer hidden text from token counts. See
+[REASONING_VIEWER](REASONING_VIEWER.md) for the implemented contract.
+
 ## Per-request console token metrics (2026-09-18)
 
 The owner wants reasoning counts, total tokens and TPS for every completed provider request, including tool-call rounds and compaction, without changing the Discord footer. Append these metrics after established console fields and preserve the message-last rule. Keep completion lines fully visible, explicit missing-versus-zero reasoning, marked fixed-tokenizer estimates and numeric provenance. Reuse existing generation measurements; perform any compaction estimation off the event loop and outside measured duration. Never aggregate rounds or alter raw usage, billing, provider settings or footer behavior. See [console metric definitions](OPERATIONS.md#console-inspection-and-filtering).

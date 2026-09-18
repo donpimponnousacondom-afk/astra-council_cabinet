@@ -1235,6 +1235,53 @@ test("interactive panels have an independent keyless capability and native previ
   await expect(preview).toHaveCount(0);
 });
 
+test("reasoning viewer is opt-in per bot and saves independently of panels", async ({
+  page,
+}) => {
+  await navigate(page, "Bots");
+  await page.getByRole("button", { name: "Edit Ada", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Ada", exact: true });
+  await dialog
+    .getByRole("button", { name: "Capabilities", exact: true })
+    .click();
+  const toggle = dialog.getByRole("checkbox", { name: "Reasoning viewer" });
+  await expect(toggle).not.toBeChecked();
+  const before = await record(page, "bots", "ada");
+  await toggle.check();
+  await expect(
+    dialog.getByText("REASONING appears automatically", { exact: false }),
+  ).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const saved = await record(page, "bots", "ada");
+  expect(saved.enabled_plugins).toEqual([
+    ...before.enabled_plugins,
+    "reasoning_viewer",
+  ]);
+  expect(saved.footer_template).toEqual(before.footer_template);
+  expect((await record(page, "plugins", "reasoning_viewer")).enabled).toBe(
+    false,
+  );
+  expect((await record(page, "plugins", "reasoning_viewer")).keyless).toBe(
+    true,
+  );
+  await page.getByRole("button", { name: "Edit Ada", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Capabilities", exact: true })
+    .click();
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  expect((await record(page, "bots", "ada")).enabled_plugins).toEqual(
+    before.enabled_plugins,
+  );
+});
+
 test("shell command ceiling saves 600 seconds with automatic archive guidance", async ({
   page,
 }) => {
