@@ -1066,6 +1066,13 @@ class Engine:
                 panel = self.registry.panels.prepared(context) if not routing else None
                 if panel:
                     self.registry.panels.dispatch(panel, outbox_id)
+                reasoning = (
+                    await self.registry.reasoning_viewer.prepare(
+                        bot, context.turn_id, request_id, outbox_id, destination
+                    )
+                    if not routing
+                    else None
+                )
                 discord_id = await self.transport.send(
                     bot,
                     destination,
@@ -1075,6 +1082,7 @@ class Engine:
                     nonce=outbox_id,
                     footer=footer,
                     **({"panel": panel} if panel else {}),
+                    **({"reasoning": reasoning} if reasoning else {}),
                     **(
                         {
                             "strict_reply": True,
@@ -1093,6 +1101,8 @@ class Engine:
                 )
                 if panel:
                     self.registry.panels.bind(panel, discord_id, content)
+                if reasoning:
+                    self.registry.reasoning_viewer.bind(reasoning, discord_id)
                 self.store.execute("UPDATE bot_runtime SET last_sent=? WHERE bot_id=?", (sent, bot["id"]))
                 self.room_last[destination] = sent
                 self.store.ingest(

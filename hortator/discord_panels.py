@@ -97,7 +97,7 @@ def register(registry):
     )
 
 
-def panel_view(panel, text, filenames):
+def panel_view(panel, text, filenames, *, reasoning=None):
     """Render bounded Components V2, explicitly including every attachment."""
     definition = json.loads(panel["definition"])
     items = [discord.ui.TextDisplay("## " + definition["title"])]
@@ -136,6 +136,11 @@ def panel_view(panel, text, filenames):
     items.append(
         discord.ui.TextDisplay("-# Owner controls · Each click starts a new task · 14-minute task limit")
     )
+    if reasoning:
+        from .reasoning_viewer import button
+
+        items.append(discord.ui.ActionRow(button(reasoning)))
+        items.append(discord.ui.TextDisplay("-# REASONING reads saved diagnostics privately; no new task."))
     view = discord.ui.LayoutView(timeout=None).add_item(
         discord.ui.Container(*items, accent_colour=int(definition.get("accent_color", "#D6A447")[1:], 16))
     )

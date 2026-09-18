@@ -204,6 +204,7 @@ class Service:
                     "council_inspect",
                     "document_site",
                     "discord_panel",
+                    "reasoning_viewer",
                 )
                 and spec
             ):
@@ -217,6 +218,7 @@ class Service:
                 "global_memory",
                 "slash_commands",
                 "discord_panel",
+                "reasoning_viewer",
                 "council_inspect",
                 "discord_send",
                 "document_site",

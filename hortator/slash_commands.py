@@ -288,6 +288,9 @@ class SlashEngine(Engine):
             turn_id=context.turn_id,
         )
         panel = self.registry.panels.prepared(context)
+        reasoning = await self.registry.reasoning_viewer.prepare(
+            bot, context.turn_id, request_id, outbox_id, self.invocation["channel_id"]
+        )
         files = []
         # Only delivery of the finished answer/files, inside the overall slash deadline.
         timer = asyncio.timeout(30)
@@ -300,10 +303,14 @@ class SlashEngine(Engine):
                 from .discord_panels import panel_view
 
                 presentation = {
-                    "view": panel_view(panel, text, [file.filename for file in files]),
+                    "view": panel_view(panel, text, [file.filename for file in files], reasoning=reasoning),
                     "embeds": [],
                 }
                 self.registry.panels.dispatch(panel, outbox_id)
+            elif reasoning:
+                from .reasoning_viewer import answer_view
+
+                presentation["view"] = answer_view(reasoning)
             async with timer:
                 sent = await self.interaction.edit_original_response(
                     content=None if panel else text,
@@ -317,6 +324,8 @@ class SlashEngine(Engine):
             )
             if panel:
                 self.registry.panels.bind(panel, sent.id, content)
+            if reasoning:
+                self.registry.reasoning_viewer.bind(reasoning, sent.id)
             self.store.execute(
                 "UPDATE slash_invocations SET response_id=? WHERE interaction_id=?",
                 (str(sent.id), str(self.interaction.id)),
@@ -413,12 +422,23 @@ class DiscordSlash:
 
     def ack_event(self, bot_id, interaction, kind, *, level="info", **data):
         state = self.store.runtime(bot_id)
+        reasoning = isinstance(interaction.data, dict) and str(
+            interaction.data.get("custom_id", "")
+        ).startswith("hrv:")
         self.store.emit(
             "discord."
-            + ("panel_" if interaction.type == discord.InteractionType.component else "slash_")
+            + (
+                "reasoning_"
+                if reasoning
+                else "panel_"
+                if interaction.type == discord.InteractionType.component
+                else "slash_"
+            )
             + kind,
             {
-                "operation": "acknowledge panel action"
+                "operation": "acknowledge reasoning view"
+                if reasoning
+                else "acknowledge panel action"
                 if interaction.type == discord.InteractionType.component
                 else "acknowledge /prompt",
                 "interaction_id": str(interaction.id),
@@ -433,7 +453,7 @@ class DiscordSlash:
             level=level,
         )
 
-    async def acknowledge(self, bot_id, interaction, private):
+    async def acknowledge(self, bot_id, interaction, private, *, existing_message_id=None):
         # Never give a new attempt a fresh three-second window. Use monotonic
         # time once the interaction's remaining lifetime has been calculated.
         loop = asyncio.get_running_loop()
@@ -453,7 +473,9 @@ class DiscordSlash:
                 timer = asyncio.timeout_at(deadline)
                 try:
                     async with timer:
-                        await interaction.response.defer(thinking=True, ephemeral=private)
+                        await interaction.response.defer(
+                            thinking=existing_message_id is None, ephemeral=private
+                        )
                     self.ack_event(
                         bot_id,
                         interaction,
@@ -506,7 +528,9 @@ class DiscordSlash:
                     **fields,
                     reason="Checking the original response to determine whether Discord accepted the acknowledgement; not sending a new message",
                 )
-                if await self.recover_ack(bot_id, interaction, private):
+                if await self.recover_ack(
+                    bot_id, interaction, private, existing_message_id=existing_message_id
+                ):
                     return True
             if not fields:
                 fields = {
@@ -516,7 +540,11 @@ class DiscordSlash:
                 }
             message = (
                 "Discord acknowledgement could not be confirmed; no model or tool work was started. "
-                "Invoke /prompt again. "
+                + (
+                    "Click REASONING again. "
+                    if str((interaction.data or {}).get("custom_id", "")).startswith("hrv:")
+                    else "Invoke /prompt again. "
+                )
                 + fields.get(
                     "error",
                     "Discord's initial three-second response window elapsed before acknowledgement could start",
@@ -548,7 +576,7 @@ class DiscordSlash:
             )
             raise
 
-    async def recover_ack(self, bot_id, interaction, private):
+    async def recover_ack(self, bot_id, interaction, private, *, existing_message_id=None):
         for attempt in range(1, ACK_RECEIPT_ATTEMPTS + 1):
             remaining = MAX_SECONDS - max(0, time.time() - interaction.created_at.timestamp())
             if remaining <= 0:
@@ -560,16 +588,20 @@ class DiscordSlash:
                     response = await interaction.original_response()
                 # A GET on this token-specific endpoint proves acceptance, but
                 # only a deferred placeholder of the expected visibility is ours
-                # to finish. Never overwrite an already-completed response.
+                # to finish. A read-only reasoning page may instead update its
+                # authenticated, exact saved private viewer; never another answer.
                 flags = response.flags
                 app = getattr(response, "application_id", None)
                 metadata = getattr(response, "interaction_metadata", None)
                 if (
-                    not flags.loading
+                    (flags.loading if existing_message_id is not None else not flags.loading)
                     or flags.ephemeral != private
+                    or existing_message_id is not None
+                    and str(response.id) != existing_message_id
                     or app is not None
                     and str(app) != str(interaction.application_id)
-                    or metadata is not None
+                    or existing_message_id is None
+                    and metadata is not None
                     and str(metadata.id) != str(interaction.id)
                 ):
                     self.ack_event(
@@ -579,7 +611,9 @@ class DiscordSlash:
                         level="error",
                         phase="read_ack_receipt",
                         response_id=str(response.id),
-                        reason="Original response is not the expected deferred placeholder/visibility; no generation or overwrite",
+                        reason="Original response does not match the saved private reasoning viewer; no overwrite"
+                        if existing_message_id is not None
+                        else "Original response is not the expected deferred placeholder/visibility; no generation or overwrite",
                     )
                     return False
                 self.store.execute(
@@ -593,7 +627,9 @@ class DiscordSlash:
                     phase="read_ack_receipt",
                     attempt=attempt,
                     response_id=str(response.id),
-                    reason="Discord confirmed the existing deferred response; continuing this invocation once",
+                    reason="Discord confirmed the saved private reasoning viewer; continuing the read-only update"
+                    if existing_message_id is not None
+                    else "Discord confirmed the existing deferred response; continuing this invocation once",
                 )
                 return True
             except asyncio.CancelledError:
@@ -814,6 +850,13 @@ class DiscordSlash:
 
     async def receive(self, bot_id, interaction):
         if interaction.type == discord.InteractionType.component:
+            if isinstance(interaction.data, dict) and str(interaction.data.get("custom_id", "")).startswith(
+                "hrv:"
+            ):
+                await self.manager.service.engine.registry.reasoning_viewer.receive(
+                    self.manager, bot_id, interaction
+                )
+                return
             if isinstance(interaction.data, dict) and str(interaction.data.get("custom_id", "")).startswith(
                 "hcp:"
             ):

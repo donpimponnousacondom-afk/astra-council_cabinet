@@ -1129,6 +1129,7 @@ class DiscordManager:
         strict_reply=False,
         destination_guard=None,
         panel=None,
+        reasoning=None,
     ):
         client = self.clients.get(bot["id"])
         if not client or not client.is_ready():
@@ -1161,7 +1162,13 @@ class DiscordManager:
             if panel:
                 from .discord_panels import panel_view
 
-                presentation["view"] = panel_view(panel, message, [file.filename for file in files])
+                presentation["view"] = panel_view(
+                    panel, message, [file.filename for file in files], reasoning=reasoning
+                )
+            elif reasoning:
+                from .reasoning_viewer import answer_view
+
+                presentation["view"] = answer_view(reasoning)
             async with asyncio.timeout(60):
                 sent = await channel.send(
                     None if panel else message,

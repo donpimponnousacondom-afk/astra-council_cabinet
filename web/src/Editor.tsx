@@ -819,6 +819,18 @@ export function Editor({
                     )}
                     <SlashCommandSetup bot={entity} draft={draft} />
                     {(draft.enabled_plugins || []).includes(
+                      "reasoning_viewer",
+                    ) && (
+                      <Notice>
+                        REASONING appears automatically when an answer has saved
+                        readable reasoning. Only you, the configured owner, can
+                        open the private viewer. Browse requests and pages or
+                        download the text without model calls. Disabling blocks
+                        old buttons too; saved diagnostics and footers stay
+                        unchanged.
+                      </Notice>
+                    )}
+                    {(draft.enabled_plugins || []).includes(
                       "discord_panel",
                     ) && (
                       <section
