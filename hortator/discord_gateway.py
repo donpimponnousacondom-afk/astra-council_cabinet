@@ -348,6 +348,32 @@ class DiscordManager:
             await asyncio.sleep(delay)
             delay = min(120, delay * 2)
 
+    def needed(self, bot):
+        return bot["enabled"] or bot["role"] == "hortator" or bot["id"] in self.service.engine.single_shots
+
+    async def prepare_single_shot(self, bot):
+        """The existing supervisor owns any temporary paused-bot connection."""
+        timer = asyncio.timeout(30)
+        try:
+            async with timer:
+                while not self.closed:
+                    client = self.clients.get(bot["id"])
+                    state = self.store.runtime(bot["id"])
+                    if client and client.is_ready() and state["gateway_status"] == "online":
+                        backfill = client.backfill_task
+                        if backfill:
+                            await asyncio.shield(backfill)
+                        if client.is_ready():
+                            return
+                    await asyncio.sleep(0.1)
+                raise ControlError("Cannot trigger while Discord is shutting down")
+        except TimeoutError as exc:
+            if timer.expired():
+                raise ControlError(
+                    "Trigger waited 30 seconds for Discord connection/history readiness; no inference was started"
+                ) from exc
+            raise
+
     async def supervise(self):
         while not self.closed:
             try:
@@ -355,7 +381,7 @@ class DiscordManager:
                 for bot in self.store.list("bots"):
                     token = self.vault.get(f"bot/{bot['id']}/token")
                     # The deterministic control plane stays online even when Hortator's model is paused.
-                    if token and bot["application_id"] and (bot["enabled"] or bot["role"] == "hortator"):
+                    if token and bot["application_id"] and self.needed(bot):
                         fingerprint = hashlib.sha256((token + bot["application_id"]).encode()).hexdigest()
                         desired[bot["id"]] = fingerprint
                         existing = self.runners.get(bot["id"])

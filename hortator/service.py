@@ -783,6 +783,18 @@ class Service:
             if not channel_id:
                 raise ControlError("Choose a channel with an existing context")
             result = {"turn_id": self.engine.launch(bot, channel_id, compact_only=True)}
+        elif action == "trigger":
+            if kind != "bots":
+                raise ControlError("Trigger requires kind=bots and a bot ID")
+            if not isinstance(data, dict) or set(data) - {"channel_id"}:
+                raise ControlError("Trigger accepts only an optional channel_id")
+            if "channel_id" in data and (not isinstance(data["channel_id"], str) or not data["channel_id"]):
+                raise ControlError("Trigger channel_id must be a nonempty string")
+            bot = self.entity("bots", target)
+            issues = self.readiness(bot)
+            if issues:
+                raise ControlError("Bot setup is incomplete: " + "; ".join(issues))
+            result = {"turn_id": self.engine.trigger(bot, data.get("channel_id")), "single_shot": True}
         elif action == "memory":
             self.entity("bots", target)
             channel_id, key, value = (

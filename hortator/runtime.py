@@ -68,6 +68,7 @@ class Engine:
         self.delivery_waiting = {}
         self.human_superseded = set()
         self.resetting = set()
+        self.single_shots = {}
 
     def start(self):
         self.task = self.background.spawn(self.loop(), name="council-scheduler")
@@ -93,7 +94,7 @@ class Engine:
         current = self.store.get("bots", bot["id"])
         return bool(
             current
-            and self.available(current, manual=manual)
+            and self.available(current, manual=manual or self.is_single_shot(bot))
             and current["revision"] == bot["revision"]
             and self.store.get("profiles", profile["id"])["revision"] == profile["revision"]
             and self.store.get("providers", provider["id"])["revision"] == provider["revision"]
@@ -139,7 +140,12 @@ class Engine:
             or channel["parent_id"] == settings["control_channel_id"]
         )
 
-    def pick_channel(self, bot):
+    def is_single_shot(self, bot):
+        return bool(
+            bot.get("_single_shot_turn") and self.single_shots.get(bot["id"]) == bot["_single_shot_turn"]
+        )
+
+    def pick_channel(self, bot, *, force=False):
         contexts = self.store.rows(
             "SELECT * FROM contexts WHERE bot_id=? ORDER BY updated_at ASC", (bot["id"],)
         )
@@ -170,7 +176,7 @@ class Engine:
                         (channel_id, context["last_seen"], OWNER_ID),
                     )
                 )
-            if not unseen and (not bot["evaluate_when_idle"] or bot["role"] == "hortator"):
+            if not force and not unseen and (not bot["evaluate_when_idle"] or bot["role"] == "hortator"):
                 continue
             boundary = self.store.context_boundary(bot["id"], channel_id)
             if boundary and not self.store.one(
@@ -311,14 +317,48 @@ class Engine:
                 )
             await asyncio.sleep(0.5)
 
-    def launch(self, bot, channel_id, *, compact_only=False, human_directed=False):
+    def trigger(self, bot, channel_id=None):
+        """Owner-requested one-shot admission; no configuration toggles or queued replay."""
+        settings = self.store.get("settings", "global")
+        if self.closed or not self.available(bot, manual=True):
+            raise ControlError("Council or provider is paused, or the bot is being reset", 409)
+        if bot["id"] in self.tasks:
+            raise ControlError("Bot already has an active turn; Trigger was not queued", 409)
+        if len(self.tasks) >= settings["max_concurrent_turns"]:
+            raise ControlError("Council turn slots are full; Trigger was not queued", 409)
+        now = time.time()
+        profile, provider = self.configuration(bot)
+        retry_at = max(
+            self.store.runtime(bot["id"])["retry_until"],
+            self.store.health(provider["id"])["circuit_until"],
+        )
+        if retry_at > now:
+            raise ControlError(
+                f"Provider/bot recovery wait is active for {retry_at - now:.1f}s; try later", 409
+            )
+        error = self.budget_error(bot)
+        if error:
+            raise ControlError(error, 409)
+        attention = self.attention(bot)
+        channel_id = channel_id or (
+            attention[0]["channel_id"] if attention else self.pick_channel(bot, force=True)
+        )
+        if not channel_id:
+            raise ControlError(
+                "No eligible conversation context; start the bot and let it observe a room first"
+            )
+        return self.launch(bot, channel_id, single_shot=True, human_directed=True)
+
+    def launch(self, bot, channel_id, *, compact_only=False, human_directed=False, single_shot=False):
         if bot["id"] in self.tasks:
             raise ControlError("Bot already has an active turn", 409)
-        if not self.available(bot, manual=compact_only):
+        if not self.available(bot, manual=compact_only or single_shot):
             raise ControlError("Council, bot or provider is paused")
         if not self.channel_allowed(bot, channel_id):
             raise ControlError("Channel is outside this bot's configured scope")
         turn_id = uid("turn_")
+        if single_shot:
+            bot = {**bot, "_single_shot_turn": turn_id}
         profile, provider = self.configuration(bot)
         activation = self.claim_attention(bot, channel_id, turn_id) if human_directed else None
         if activation:
@@ -336,6 +376,8 @@ class Engine:
                 "running",
                 "manual_compaction"
                 if compact_only
+                else "manual_trigger"
+                if single_shot
                 else activation["kind"]
                 if activation
                 else "owner_message"
@@ -357,6 +399,11 @@ class Engine:
                 "profile_id": profile["id"],
                 "provider_id": provider["id"],
                 "model": profile["model"],
+                **(
+                    {"trigger": "manual_trigger", "return_to_paused": not bot["enabled"]}
+                    if single_shot
+                    else {}
+                ),
             },
             bot_id=bot["id"],
             turn_id=turn_id,
@@ -368,11 +415,28 @@ class Engine:
             turn_id=turn_id,
         )
         self.tasks[bot["id"]] = task
-        task.add_done_callback(
-            lambda completed: (
-                self.tasks.pop(bot["id"], None) if self.tasks.get(bot["id"]) is completed else None
-            )
-        )
+        if single_shot:
+            self.single_shots[bot["id"]] = turn_id
+
+        def finished(completed):
+            if self.tasks.get(bot["id"]) is completed:
+                self.tasks.pop(bot["id"], None)
+            if self.single_shots.get(bot["id"]) == turn_id:
+                self.single_shots.pop(bot["id"], None)
+                # Cancellation can arrive before run_turn enters its finalizer.
+                state = self.store.one("SELECT status FROM turns WHERE id=?", (turn_id,))
+                if state and state["status"] == "running":
+                    status = "cancelled" if completed.cancelled() else "failed"
+                    error = "Trigger stopped before normal turn completion"
+                    self.store.execute(
+                        "UPDATE turns SET status=?,error=?,ended_at=? WHERE id=?",
+                        (status, error, time.time(), turn_id),
+                    )
+                    self.store.emit(
+                        "turn.ended", {"status": status, "error": error}, bot_id=bot["id"], turn_id=turn_id
+                    )
+
+        task.add_done_callback(finished)
         return turn_id
 
     async def show_typing(self, bot, channel_id, turn_id):
@@ -404,6 +468,10 @@ class Engine:
         typing_task = None
         context = ToolContext(bot, channel_id, turn_id, owner_verified=bot["role"] == "hortator")
         try:
+            if self.is_single_shot(bot):
+                await self.transport.prepare_single_shot(bot)
+                if not self.valid(bot, profile, provider) or not self.channel_allowed(bot, channel_id):
+                    raise asyncio.CancelledError()
             if getattr(self.transport, "typing", None):
                 typing_task = group.create_task(
                     self.show_typing(bot, channel_id, turn_id), name=f"typing:{bot['id']}:{turn_id}"
@@ -423,7 +491,8 @@ class Engine:
             )
             if activation:
                 bot = {**bot, "activation": activation}
-                self.store.execute("UPDATE turns SET trigger=? WHERE id=?", (activation["kind"], turn_id))
+                if not self.is_single_shot(bot):
+                    self.store.execute("UPDATE turns SET trigger=? WHERE id=?", (activation["kind"], turn_id))
             extras = []
             round_index, round_limit = 0, bot["max_tool_rounds"]
             calls_limit = bot["max_calls_per_round"]
@@ -1005,7 +1074,7 @@ class Engine:
             # bot may be responding to a human while this draft waits its cadence.
             wait = (
                 0
-                if priority
+                if priority or self.is_single_shot(bot)
                 else self.store.runtime(bot["id"])["last_sent"] + bot["cooldown_seconds"] - time.time()
             )
             if wait > 0:

@@ -113,7 +113,9 @@ type Notify = (text: string, error?: boolean) => void;
 
 function botStatus(bot: RecordData, d: Dashboard): [string, string] {
   if (bot.readiness?.length) return ["Draft", "neutral"];
-  if (!d.settings.enabled || !bot.enabled) return ["Paused", "amber"];
+  if (!d.settings.enabled) return ["Paused", "amber"];
+  if (bot.active_turn) return ["Thinking", "violet"];
+  if (!bot.enabled) return ["Paused", "amber"];
   const profile = d.profiles.find((p) => p.id === bot.model_profile_id);
   const provider = d.providers.find((p) => p.id === profile?.provider_id);
   if (!provider?.enabled) return ["Provider paused", "amber"];
@@ -123,7 +125,6 @@ function botStatus(bot: RecordData, d: Dashboard): [string, string] {
       bot.runtime.gateway_status === "failed" ? "red" : "neutral",
     ];
   if (provider.health.circuit_until > d.now) return ["Circuit open", "red"];
-  if (bot.active_turn) return ["Thinking", "violet"];
   if (bot.runtime.error) return ["Attention", "red"];
   return ["Listening", "green"];
 }
@@ -357,7 +358,9 @@ export default function App() {
           ? "Paused. Active work has been cancelled."
           : action === "start"
             ? "Activation enabled."
-            : "Council updated.",
+            : action === "trigger"
+              ? "One turn triggered. The bot's pause state and configuration are unchanged."
+              : "Council updated.",
       );
       return result;
     } catch (err) {
@@ -895,9 +898,11 @@ function BotTable({
             <small className="cell-secondary">
               {b.active_turn
                 ? "Turn in progress"
-                : b.enabled && !b.readiness.length && d.settings.enabled
-                  ? `Next ${Math.max(0, Math.ceil(b.runtime.next_at - d.now))}s`
-                  : b.runtime.gateway_status}
+                : b.enabled && b.interval_seconds === 0
+                  ? "Timer off"
+                  : b.enabled && !b.readiness.length && d.settings.enabled
+                    ? `Next ${Math.max(0, Math.ceil(b.runtime.next_at - d.now))}s`
+                    : b.runtime.gateway_status}
             </small>
           </div>
         );
@@ -906,7 +911,6 @@ function BotTable({
     {
       id: "model",
       label: "Model / profile",
-      width: "22%",
       value: (b) => profile(b)?.model || "",
       render: (b) => (
         <button
@@ -986,7 +990,7 @@ function BotTable({
     {
       id: "actions",
       label: "Actions",
-      width: "14%",
+      width: "200px",
       render: (b) => (
         <div className="row-actions">
           <IconAction
@@ -1006,15 +1010,41 @@ function BotTable({
               Set up
             </button>
           ) : (
-            <button
-              className="button small"
-              disabled={busy}
-              aria-label={`${b.enabled ? "Pause" : "Activate"} ${b.name}`}
-              onClick={() => act(b.enabled ? "stop" : "start", "bots", b.id)}
-            >
-              {b.enabled ? <Pause size={12} /> : <Play size={12} />}
-              {b.enabled ? "Pause" : "Start"}
-            </button>
+            <>
+              <button
+                className="button small"
+                disabled={busy}
+                aria-label={`${b.enabled || b.active_turn ? "Pause" : "Activate"} ${b.name}`}
+                onClick={() =>
+                  act(
+                    b.enabled || b.active_turn ? "stop" : "start",
+                    "bots",
+                    b.id,
+                  )
+                }
+              >
+                {b.enabled || b.active_turn ? (
+                  <Pause size={12} />
+                ) : (
+                  <Play size={12} />
+                )}
+                {b.enabled || b.active_turn ? "Pause" : "Start"}
+              </button>
+              <button
+                className="button small"
+                disabled={
+                  busy ||
+                  !!b.active_turn ||
+                  !d.settings.enabled ||
+                  !provider(b)?.enabled
+                }
+                aria-label={`Trigger ${b.name} once`}
+                title="Run one turn now using existing context and tools. Keeps the current pause state; skips the wake timer and personal send cooldown. Silence remains allowed if configured."
+                onClick={() => act("trigger", "bots", b.id)}
+              >
+                <Zap size={12} /> Trigger
+              </button>
+            </>
           )}
         </div>
       ),
