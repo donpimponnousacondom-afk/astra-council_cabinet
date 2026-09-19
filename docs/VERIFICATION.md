@@ -1,5 +1,11 @@
 # Verification record
 
+## Shared image-guidance wording (2026-09-19)
+
+- Branched clean, fast-forwarded main `28d5e66` to `feat/image_guidance_wording` before editing. Replaced only the default `runtime-image-guidance` text with the owner's approved four paragraphs. The same shared prompt now distinguishes current image access from earlier attributed observations and discourages routine disclaimers or permanent memory rules derived from temporary absence. Image transport, selection, expiry, budgets and other prompt templates are unchanged.
+- Saved the matching live shared prompt through the authenticated, revision-checked control API, then read it back and verified exact content and unchanged remaining fields (revision 2). No active turns were present at the save check. Previous prompt-only recovery copy: external `logs/image-guidance-before-20260919.json`, mode 0600; this is not a full application snapshot. All bots retain their existing layer switches/overrides, including the two experimental bots whose image-guidance layer was already disabled. No bot memories, summaries, credentials or per-bot settings were changed.
+- **62 existing tests passed** across editable prompt layers, vision and per-bot image controls. Ruff check/format and diff checks passed. No new model call, Discord message or synthetic conversation was launched; wording quality and self-maintained memory behavior remain for the owner's natural-use observation. Source deployment uses the committed-source shared-Screen refresh and its external matching-version receipt, with no push.
+
 ## One-shot dashboard bot trigger (2026-09-18)
 
 - Created `feat/bot_single_shot` from clean, fast-forwarded main `f118f18` after verifying the preceding work was merged. Added **Trigger** beside Start/Pause in the modern bot table and owner-authenticated `trigger` control. One turn uses existing context/configuration, bypasses the wake/idle gate and personal send cooldown, and preserves configured silence, provider retries, room spacing, grants, budgets and concurrency. Paused bots temporarily connect through the existing owned supervisor and remain paused afterward; timer-off bots stay timer-off. Repeated busy clicks are refused, not queued.
