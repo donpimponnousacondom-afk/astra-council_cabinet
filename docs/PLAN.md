@@ -1,5 +1,15 @@
 # Implementation and acceptance plan
 
+## Shared image-guidance wording (2026-09-19)
+
+The owner approved one shared rephrasing for every bot, with no Loki-specific
+override. The prompt separates current visual inspection from earlier attributed
+observations and discourages repetitive availability disclaimers or permanent
+capability/memory rules derived from a temporary missing image. This is a wording
+change only: image intake, selection, expiry, quotas and layer switches remain
+unchanged. Bot-managed memory cleanup continues independently; behavioral
+acceptance will come from the owner's ordinary conversations over time.
+
 ## One-shot bot trigger (2026-09-18)
 
 The owner requested a compact Trigger button beside Start/Pause to replace manually

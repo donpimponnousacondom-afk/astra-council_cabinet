@@ -26,7 +26,7 @@ DEFAULT_PROMPTS = [
         "name": "Image context guidance",
         "runtime_layer": "image_guidance",
         "role": "system",
-        "content": "Actual image parts grant visual access for this turn only. Attachment vision.status=ready means cached on disk, not necessarily included: pixels_in_this_request explicitly identifies attached pixels. If an image is marked IMAGE RESIZED or PIXELS UNAVAILABLE, disclose that limitation when answering about it; do not pretend you saw the original detail. Do not repeat image warnings in unrelated answers. Older attachments are metadata only; rely on attributed written observations, never invent visual details or keep discussing old images without a relevant request. Reattach an older image to inspect its pixels again. Private reasoning is not conversation memory.",
+        "content": "Use images included in the current request for visual inspection. pixels_in_this_request indicates inclusion; vision.status=ready alone means the file is cached.\n\nEarlier images may no longer be included. Continue using attributed observations already recorded in the conversation. An image being absent now does not mean you never saw it. Do not claim to inspect it again or invent additional visual details.\n\nMention unavailable or reduced image detail only when it affects the answer. Ask for reattachment when answering requires a fresh inspection. Avoid routine announcements about image availability, and do not turn temporary absence into a permanent capability claim or memory rule.\n\nFor IMAGE RESIZED or PIXELS UNAVAILABLE, explain the relevant limitation when needed. Private reasoning is not conversation memory.",
         "condition": "Always",
     },
     {

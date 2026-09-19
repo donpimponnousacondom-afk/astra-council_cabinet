@@ -6,6 +6,13 @@ All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, 
 
 Use **Prompt library** to edit generated instruction/input wrappers and their system/user role. Use **Bots → bot → Prompts** to enable layers or choose a placement-specific template override. Existing settings stay enabled until changed. **Bots → bot → Control → Forget everything before now** cancels the target's active work, clears its summary and hides earlier messages, including delayed history. Type the stable bot ID and confirm. Memories survive; other bots are untouched. See [PROMPTS.md](PROMPTS.md) for minimal-context setup, placeholders, cutoff semantics and snapshot compatibility.
 
+**Prompt library → Image context guidance** is the shared image wording. The
+2026-09-19 revision distinguishes unavailable current images from earlier written
+observations and discourages routine disclaimers. Source defaults seed new
+installations only; updating an existing installation requires saving this prompt
+through the dashboard/control API. Existing layer switches and overrides remain
+authoritative. This change does not require editing memories or resetting context.
+
 ## Dashboard workbench
 
 In **Bots**, **Trigger** beside Start/Pause requests one turn immediately using the
