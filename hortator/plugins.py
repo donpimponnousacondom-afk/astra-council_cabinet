@@ -808,18 +808,19 @@ class Registry:
         name = args.get("key", "").strip()
         if not name:
             raise ControlError("A memory key is required")
+        previous = self.store.one(
+            "SELECT value FROM memories WHERE bot_id=? AND channel_id=? AND key=?", (*scope, name)
+        )
         if args["operation"] == "delete":
+            affected = len(previous["value"]) if previous else 0
             self.store.execute(
                 "DELETE FROM memories WHERE bot_id=? AND channel_id=? AND key=?", (*scope, name)
             )
         else:
             value = self.vault.redact(args.get("value", ""))
+            affected = len(value)
             if len(value) > NOTE_CHAR_LIMIT:
                 raise ControlError(f"Each memory note allows at most {NOTE_CHAR_LIMIT:,} characters")
-            previous = self.store.one(
-                "SELECT value FROM memories WHERE bot_id=? AND channel_id=? AND key=?",
-                (*scope, name),
-            )
             attempted = budget["used_chars"] - (len(previous["value"]) if previous else 0) + len(value)
             shrinking = attempted < budget["used_chars"]
             if (attempted > budget["hard_limit_chars"] and not shrinking) or (
@@ -834,7 +835,21 @@ class Registry:
                 (*scope, name, value, time.time()),
             )
         budget = budget_for(self.store, context.bot, context.channel_id)
+        metrics = {"units_affected": affected, "unit_total": budget["used_chars"], "unit": "characters"}
         result = {"saved": True, "key": name, "budget": budget}
+        self.store.emit(
+            "memory.changed",
+            {
+                "key": name,
+                "operation": args["operation"],
+                "channel_id": context.channel_id,
+                "actor": "operator" if context.turn_id == "operator" else "model",
+                **budget,
+                **metrics,
+            },
+            bot_id=context.bot["id"],
+            turn_id=context.turn_id,
+        )
         if budget["must_consolidate"]:
             result["warning"] = describe_budget(budget)
             self.store.emit(
@@ -845,6 +860,7 @@ class Registry:
                     "operation": args["operation"],
                     "message": "Note change saved. " + result["warning"],
                     **budget,
+                    **metrics,
                 },
                 bot_id=context.bot["id"],
                 turn_id=context.turn_id,

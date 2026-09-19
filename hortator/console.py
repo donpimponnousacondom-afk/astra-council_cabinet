@@ -198,6 +198,7 @@ DISPLAY_FIELDS = (
 )
 # Append metrics after all established fields; never insert into the old prefix.
 COMPLETION_FIELDS = ("reasoning_tokens", "total_tokens", "tps")
+MEMORY_FIELDS = ("units_affected", "unit_total")
 
 
 def is_web_event(event):
@@ -1116,6 +1117,7 @@ class OperationalConsole(logging.Handler):
         keys = tuple(dict.fromkeys(DISPLAY_FIELDS + SUMMARY_FIELDS + INCIDENT_FIELDS))
         keys = [k for k in keys if k not in MESSAGE_FIELDS and k != "call_id"]
         keys += list(COMPLETION_FIELDS)
+        keys += list(MEMORY_FIELDS)
         keys += list(MESSAGE_FIELDS)
         fields = []
         for key in keys:

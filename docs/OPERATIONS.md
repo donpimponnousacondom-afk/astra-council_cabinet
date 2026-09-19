@@ -218,6 +218,22 @@ console notices; plain `--no-color` text and field ordering are unchanged.
 
 The foreground `hortator serve` console receives the same redacted operational events persisted in SQLite, plus Python/Uvicorn warnings and errors. Lines include a local ISO 8601 timestamp with UTC offset, severity, scope, event kind/sequence and bot/provider identity when available. Request/turn details retain IDs for correlation with dashboard trajectories. The default is **INFO, all scopes enabled, details folded**. Healthy dashboard GETs are DEBUG; normal bot turns, provider requests, tools, compaction, deliveries and gateway changes remain visible. HTTP 4xx/5xx responses are warnings/errors. Console filters never change scheduling, grants, configuration, Discord notifications or event persistence.
 
+Memory mutations emit **`global_memory.changed`** or **`memory.changed`** in the
+context scope. The console appends **`units_affected`**, then **`unit_total`**, after
+existing fields and before any message. Units are stored Unicode characters,
+matching quota accounting (not tokens, UTF-8 bytes or key lengths). A write,
+including replacing/editing a note, counts the full saved replacement; a deletion
+counts the removed note's length. This measures the payload handled, not net
+growth or a character diff. Deleting a missing key reports zero. Counts reflect
+credential-redacted stored text. `unit_total` is the post-operation global notebook
+total for that bot, or the affected bot/channel total for private memory. Expanded
+evidence also records `unit: "characters"`, scope and existing budget fields.
+
+For example: `operation=delete · units_affected=3393 · unit_total=39299`.
+Successful over-budget changes include the same counts in their budget warning.
+Model and owner edits share this accounting; reads, usage discovery and rejected
+writes do not emit successful memory-change events or invent affected counts.
+
 Every `request.completed` line appends **`reasoning_tokens`, `total_tokens`, `tps`** after the existing fields, including `finish_reason`. This covers individual tool-call responses, final answers and compaction; counts are never accumulated across rounds. Completion lines are not clipped by the ordinary console preview limit. Existing field order, TTFT and message-last formatting remain intact. For example, a suffix can read `finish_reason=tool_calls · reasoning_tokens=1200 · total_tokens=206240 · tps=179.6`.
 
 `output_tokens` is still the provider-reported completion count, which includes reasoning; `total_tokens` includes input plus completion once. The new diagnostic counts prefer reported usage, otherwise reuse the fixed `cl100k_base` text estimates described under [footers](#discord-message-footers), marked **`~`**. Missing reasoning is **`none`**, while **`0`** requires an explicit upstream zero. Streaming TPS is completion tokens divided by seconds from the first token to the end of the request, displayed with one decimal; a missing completion count uses the marked text estimate. Buffered responses or unavailable timing show **`tps=none`**. Raw counts/billing remain unchanged; event `token_counts` and `tps_source` retain numeric provenance for dashboard inspection. Reasoning text remains private. The Discord footer and its final-request-only timing/count behavior are unchanged.
