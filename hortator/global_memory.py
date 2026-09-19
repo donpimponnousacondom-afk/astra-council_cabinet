@@ -239,9 +239,11 @@ class GlobalMemory:
             "SELECT value,source_channel_id FROM global_memories WHERE bot_id=? AND key=?", (bot["id"], name)
         )
         if args["operation"] == "delete":
+            affected = len(previous["value"]) if previous else 0
             self.store.execute("DELETE FROM global_memories WHERE bot_id=? AND key=?", (bot["id"], name))
         else:
             value = self.vault.redact(args["value"])
+            affected = len(value)
             if len(value) > NOTE_CHAR_LIMIT:
                 raise ControlError(f"Each global memory note allows at most {NOTE_CHAR_LIMIT:,} characters")
             attempted = budget["used_chars"] - (len(previous["value"]) if previous else 0) + len(value)
@@ -264,6 +266,7 @@ class GlobalMemory:
                 (bot["id"], name, value, source, time.time()),
             )
         budget = self.budget_for(bot)
+        metrics = {"units_affected": affected, "unit_total": budget["used_chars"], "unit": "characters"}
         result = {"saved": True, "key": name, "scope": "bot", "budget": budget}
         self.store.emit(
             "global_memory.changed",
@@ -273,6 +276,7 @@ class GlobalMemory:
                 "source_channel_id": source_channel_id,
                 "actor": "model" if turn_id else "operator",
                 **budget,
+                **metrics,
             },
             bot_id=bot["id"],
             turn_id=turn_id,
@@ -287,6 +291,7 @@ class GlobalMemory:
                     "operation": args["operation"],
                     "message": "Note change saved. " + result["warning"],
                     **budget,
+                    **metrics,
                 },
                 bot_id=bot["id"],
                 turn_id=turn_id,

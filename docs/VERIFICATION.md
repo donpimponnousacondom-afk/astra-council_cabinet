@@ -1,5 +1,11 @@
 # Verification record
 
+## Global and channel memory mutation counters (2026-09-19)
+
+- Created `hotfix/memory_change_metrics` from clean, fast-forwarded main `bb0904c` after the prior PR was merged. Global memory events now append `units_affected` and `unit_total`; private channel mutations now emit the equivalent `memory.changed` event. Successful budget warnings carry the same counters. Console fields preserve their existing order and append these metrics before messages, for all severities. Writes/replacements count the full saved note, deletions the removed note, and totals use the affected notebook's post-change stored Unicode character count. Expanded evidence identifies the unit as characters.
+- **78 tests passed** across memory metrics, channel budgets, global memory and integration, and console behavior (two existing dependency deprecation warnings). Six new parameterized cases cover model/operator mutations in both scopes, Unicode/NUL character accounting, shrinking and equal-length replacement, deletion of existing/missing keys, successful headroom warnings, rejected writes, silent reads/usage discovery, credential-redacted storage and exact append-only field order across INFO/WARNING/ERROR. Ruff check/format and diff checks passed.
+- No live notes, quotas, prompts, bot/provider settings, schema or tool-return contracts were changed. No live memory operation, provider call or Discord message was injected for testing. Pre-deployment read-only checks found no active turns/requests. Deployment uses committed-source shared-Screen `--refresh`; its external `logs/next-feature.json` receipt records matching dashboard/server identity. No push is performed.
+
 ## Shared image-guidance wording (2026-09-19)
 
 - Branched clean, fast-forwarded main `28d5e66` to `feat/image_guidance_wording` before editing. Replaced only the default `runtime-image-guidance` text with the owner's approved four paragraphs. The same shared prompt now distinguishes current image access from earlier attributed observations and discourages routine disclaimers or permanent memory rules derived from temporary absence. Image transport, selection, expiry, budgets and other prompt templates are unchanged.

@@ -1,5 +1,15 @@
 # Implementation and acceptance plan
 
+## Memory mutation observability (2026-09-19)
+
+Both global and channel memory mutations expose `units_affected` and `unit_total`
+in ordinary context console lines and persisted events. Units match the stored
+character quotas. Writes/replacements count the saved note; deletions count the
+removed note; the total is measured after mutation in that notebook's scope.
+Existing log fields keep their order, with the new counters appended before
+messages. Reads need no new events. No quota, memory content, prompt, model-facing
+result or tool behavior changes are part of this work.
+
 ## Shared image-guidance wording (2026-09-19)
 
 The owner approved one shared rephrasing for every bot, with no Loki-specific
