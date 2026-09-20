@@ -52,6 +52,14 @@ Private diagnostics include `request_id`, `provider_id`, `model`, ISO `request_s
 
 Message/context transcript rows expose `addressing` as a JSON object: `author_kind`, whether it was observed live, structured mention/reply `targets`, and any resolved `reply_target`. Legacy rows may have no captured addressing. Model request transcripts add per-viewer `audience` (`you`, `other_participant`, `channel`, `unresolved_reply`) and `addressed_to_you`, resolving stored same-channel reply authors where possible. This metadata comes from Discord identities, never message-text assertions. A reply preview is bounded to 600 characters and is untrusted quoted content.
 
+Live role matches add `role_mention` to the receiving bot target's `via` and its
+matched `role_ids`. They use the existing human-mention activation path without
+a configuration switch. Each gateway verifies only its own cached self-member
+roles; shared-message deduplication retains all verified targets. Internal
+`role_observers` records first live observations (including nonmatches) to prevent
+duplicate creates from reinterpreting old role membership; it is omitted from
+model-facing transcripts. History cannot introduce live role targets.
+
 Transcript rows also expose `discord_parts` with normalized `content`, `embeds` and `components` source strings; old uncaptured rows default to `{}`. The existing `content` field is their composed model-visible text. Partial Discord edits replace only supplied sources and produce an idempotent `message.edited` event with a `historical` flag. App/webhook addressing retains Discord-supplied `application_id`/`webhook_id` when present; these never establish human authority. `is_boss` excludes bot/webhook attribution even if an author ID were made to resemble the owner in a fixture.
 
 The owner-only keyless `discord_send` plugin uses normal global/per-bot grants, has no extra credential field, and is off by default. Its targets/send/status schema is in the plugin catalog; no unauthenticated cross-channel send endpoint exists. Outbox rows include `routing` JSON (default `{}`), with private source/target/guild/room/mode and argument fingerprint. A per-turn delivery key derives one durable outbox ID. Confirmed receipts contain `status: sent`, `delivery_id`, target channel, mode, message ID and Discord URL; failed/uncertain receipts contain no claimed URL and are not retried. Routed target transcripts carry bot-authored `addressing.routing` mode/source-bot metadata. See [operations](OPERATIONS.md#hortator-control-scope-and-cross-channel-posts) and the [tool contract](TOOLS.md).

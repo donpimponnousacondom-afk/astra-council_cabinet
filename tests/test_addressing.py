@@ -203,9 +203,14 @@ async def test_human_reply_replaces_own_stale_cooldown_draft_without_duplicate_d
 
 
 @pytest.mark.parametrize("barrier", ["paused", "offline", "provider_circuit", "retry_after", "hourly_budget"])
-async def test_human_priority_preserves_runtime_and_budget_barriers(kernel, barrier):
+@pytest.mark.parametrize("role_ping", [False, True])
+async def test_human_priority_preserves_runtime_and_budget_barriers(kernel, barrier, role_ping):
     ada, _ = pair(kernel)
-    await receive(kernel, message(555555555555555555, mentions=[ada]))
+    msg = message(555555555555555555, mentions=[] if role_ping else [ada])
+    if role_ping:
+        msg.role_mentions = [NS(id=666666666666666666)]
+        msg.guild.me = NS(id=int(ada["application_id"]), roles=msg.role_mentions)
+    await receive(kernel, msg)
     if barrier == "paused":
         kernel.store.put("bots", {**ada, "enabled": False})
     elif barrier == "offline":

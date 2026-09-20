@@ -33,7 +33,54 @@ def stored_reference(store, message_id, channel_id):
     }
 
 
-async def capture(store, vault, message, *, historical=False):
+def own_role_mention(message, known, receiving_bot_id):
+    """Resolve only this gateway client's roles, never other guild members."""
+    guild = getattr(message, "guild", None)
+    member = getattr(guild, "me", None)
+    identity = known.get(str(member.id)) if member else None
+    if not identity or identity["bot_id"] != receiving_bot_id:
+        return None
+    mentioned = {str(role.id) for role in getattr(message, "role_mentions", []) if role.id != guild.id}
+    if not mentioned:
+        return None
+    own_roles = {str(role.id) for role in member.roles}
+    return {
+        **identity,
+        "via": ["role_mention"],
+        "role_ids": sorted(mentioned & own_roles),
+    }
+
+
+def merge_live_roles(existing, incoming):
+    """Deduplicated shared messages accumulate each client's first live observation.
+
+    History cannot add a live target, and repeated creates cannot reinterpret an
+    old message after the bot's roles change. Other addressing stays untouched.
+    """
+    if not existing.get("live") or not incoming.get("live"):
+        return existing
+    observers = set(incoming.get("role_observers", [])) - set(existing.get("role_observers", []))
+    if not observers:
+        return existing
+    targets = [dict(target) for target in existing.get("targets", [])]
+    for target in incoming.get("targets", []):
+        if target.get("bot_id") not in observers or "role_mention" not in target.get("via", []):
+            continue
+        prior = next((item for item in targets if item["user_id"] == target["user_id"]), None)
+        if prior is None:
+            targets.append({**target, "via": ["role_mention"]})
+        else:
+            prior["via"] = list(dict.fromkeys([*prior["via"], "role_mention"]))
+            prior["role_ids"] = target["role_ids"]
+    return {
+        **existing,
+        "role_observers": [*existing.get("role_observers", []), *sorted(observers)],
+        "targets": targets,
+        "directed": existing.get("directed", False) or bool(targets),
+    }
+
+
+async def capture(store, vault, message, *, historical=False, receiving_bot_id=None):
     known = identities(store, vault)
     author = str(message.author.id)
     kind = "webhook" if message.webhook_id else "bot" if message.author.bot or author in known else "human"
@@ -44,6 +91,14 @@ async def capture(store, vault, message, *, historical=False):
             **known.get(user_id, {"user_id": user_id, "name": user.display_name, "bot_id": None}),
             "via": ["mention"],
         }
+    # Discord sends accessible messages to each client, not just mentions. Match
+    # its structured role mentions against this client's cached self member.
+    # Current membership cannot establish who belonged to a role in old history.
+    role_target = None if historical else own_role_mention(message, known, receiving_bot_id)
+    if role_target and role_target["role_ids"]:
+        target = targets.setdefault(role_target["user_id"], {**role_target, "via": []})
+        target["via"].append("role_mention")
+        target["role_ids"] = role_target["role_ids"]
     ref = getattr(message, "reference", None)
     reply_id = str(ref.message_id) if ref and ref.message_id else None
     reply = None
@@ -94,6 +149,7 @@ async def capture(store, vault, message, *, historical=False):
         "live": not historical,
         "directed": bool(reply_id or targets),
         "targets": list(targets.values()),
+        **({"role_observers": [receiving_bot_id]} if role_target else {}),
         "reply_target": reply or ({"message_id": reply_id, "status": "unresolved"} if reply_id else None),
     }
 
@@ -135,6 +191,7 @@ def for_viewer(store, row, bot_id=None):
     data["addressed_to_you"] = addressed if data["targets"] else None
     data.setdefault("author_kind", "bot" if row.get("bot_id") else "unknown")
     data.pop("live", None)
+    data.pop("role_observers", None)
     return data
 
 

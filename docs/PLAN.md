@@ -1,5 +1,18 @@
 # Implementation and acceptance plan
 
+## Role mentions use ordinary human-ping activation (2026-09-20)
+
+The owner approved role pings without a plugin, toggle or dashboard change. Each
+receiving Discord client compares authenticated role mentions with its own cached
+self-member roles and contributes only its own verified match. The shared message
+accumulates these independent observations, so the first gateway receipt cannot
+hide later recipients. No global membership scan, extra member intent or REST
+lookup is introduced. Genuine live human matches enter the existing ping path,
+including timer-off bots and personal cooldown bypass; all permission, pause,
+budget, concurrency and Hortator owner/scope checks remain in force. Historical
+replay, bot/webhook traffic, duplicate receipts and plain role-like text cannot
+grant priority. Role membership updates apply to subsequent new messages.
+
 ## Memory mutation observability (2026-09-19)
 
 Both global and channel memory mutations expose `units_affected` and `unit_total`

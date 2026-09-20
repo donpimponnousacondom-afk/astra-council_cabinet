@@ -1,5 +1,33 @@
 # Verification record
 
+## Role mentions activate matching receiving bots (2026-09-20)
+
+- Read-only diagnosis of live message `1551088751583830058` / event `46357`:
+  Loki received the human `@syndicate` message in its granted `chaos` room, but
+  addressing had no targets. Its interval was zero. Intake only captured user
+  mentions/replies; no provider failure caused the missed activation. Discord.py
+  already supplies structured role mentions and caches the client's own guild
+  member. No privileged member intent or additional network lookup is needed.
+- Created `hotfix/role_mention_wakeup` from clean, fast-forwarded main `79ce858`.
+  Each receiving client matches its own verified self-member roles and merges
+  that first live observation into the shared message. The existing human-ping
+  scheduler supplies priority, reply targeting and once-only claims. No dashboard
+  switch, global guild/member routing, schema migration or configuration change.
+- **161 tests passed** across role mentions, addressing, disabled timers, Discord
+  intake/dispatch, clean-slate boundaries, runtime, concurrency and security (two
+  existing dependency deprecation warnings). New fixtures exercise both client
+  receipt orders, two matching bots, concurrent attachment capture, direct/reply
+  overlap, membership changes, duplicates/history, missing/wrong self identity,
+  bot/webhook/text/everyone exclusion, room/Hortator scope and scheduling barriers.
+  Ruff check/format and diff checks passed. These are controlled transports and
+  isolated state, not live Discord/provider acceptance.
+- Pre-deployment read-only checks found no running turns/requests. No live role,
+  bot/provider setting, memory, prompt or historical message was edited for testing.
+  Deployment uses the committed-source shared-Screen `--refresh` workflow; its
+  external `logs/next-feature.json` receipt records matching server/dashboard
+  identity. The owner's next fresh role ping is the live acceptance check. No
+  branch is pushed by this task.
+
 ## Global and channel memory mutation counters (2026-09-19)
 
 - Created `hotfix/memory_change_metrics` from clean, fast-forwarded main `bb0904c` after the prior PR was merged. Global memory events now append `units_affected` and `unit_total`; private channel mutations now emit the equivalent `memory.changed` event. Successful budget warnings carry the same counters. Console fields preserve their existing order and append these metrics before messages, for all severities. Writes/replacements count the full saved note, deletions the removed note, and totals use the affected notebook's post-change stored Unicode character count. Expanded evidence identifies the unit as characters.

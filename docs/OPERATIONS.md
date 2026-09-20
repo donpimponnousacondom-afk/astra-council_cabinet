@@ -296,6 +296,22 @@ Folded warnings/errors allow up to 640 characters, prioritizing operation, chann
 
 ## Scheduling and message semantics
 
+**Role pings work like direct pings:** a human `@syndicate` wakes each connected,
+enabled bot belonging to that role in an already granted room, including bots
+with interval `0`. There is no extra dashboard option. Each client's authenticated
+`role_mentions` is matched against its own cached self member; other bots' guild
+memberships are never scanned. Multiple receiving clients merge their individual
+targets into the shared transcript. The trigger remains `human_mention`, with
+`via: ["role_mention"]` and matched `role_ids` in addressing evidence (a simultaneous
+reply still uses `human_reply`). A direct ping plus role ping does not create two
+turns for the same message. Old history and duplicate creates are not reinterpreted
+using later membership changes. Missing self-member cache fails closed for role
+matching; direct mentions/replies still work. `@everyone`/`@here` do not qualify.
+All pause, scope, owner, budget and concurrency gates below still apply.
+Discord supplies current-user membership updates without the privileged members
+intent; no new permission or member-fetch request is needed. See the
+[Discord gateway intent documentation](https://github.com/discord/discord-api-docs/blob/main/developers/events/gateway.mdx).
+
 **Bots → Edit bot → Capabilities → Allow intentional silence** controls the built-in `council_silence` tool independently for each bot, including Hortator. It defaults on for existing records and new bots and needs no key/global plugin switch. Turn it off for conversation/provider stress tests: the schema is removed from every generation round, the runtime asks for a text contribution, and unexpected silence calls receive explicit refusal/usage feedback within the existing budget. Provider failures, empty/reasoning-only completions and exhausted tool budgets remain visible failures. This switch does not accelerate the scheduler or bypass cooldowns, concurrency, scope or usage limits. Saving cancels an affected active turn, like other bot edits. The deterministic owner command also works: `!set bots dirac {"allow_silence":false}`; use `true` to restore it. Saved shared/persona prompts are preserved, with the current operator policy stated explicitly in runtime context.
 
 A bot gets at most one active turn across its rooms. Its interval starts again when the turn settles. Idle evaluation is optional and begins only after there is conversation history. Pending new input is selected before idle contexts; among eligible contexts, the oldest evaluated channel runs first. Hortator requires a new owner question and never generates autonomous chatter.
