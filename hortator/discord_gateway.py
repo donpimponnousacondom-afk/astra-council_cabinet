@@ -614,9 +614,11 @@ class DiscordManager:
             ),
             None,
         )
-        from .addressing import capture
+        from .addressing import capture, merge_live_roles
 
-        addressing = await capture(self.store, self.vault, message, historical=historical)
+        addressing = await capture(
+            self.store, self.vault, message, historical=historical, receiving_bot_id=bot_id
+        )
         attachments = []
         previous = self.store.one(
             "SELECT attachments,deleted,discord_parts FROM messages WHERE discord_id=?", (str(message.id),)
@@ -685,6 +687,21 @@ class DiscordManager:
                 "UPDATE messages SET addressing=? WHERE discord_id=? AND addressing='{}'",
                 (dumps(self.vault.redact({**addressing, "live": False})), str(message.id)),
             )
+        if addressing.get("role_observers"):
+            # Another client may insert this message during awaited attachment
+            # capture. Merge into the latest row even if `previous` was absent;
+            # no await separates this read/update on the store's owner thread.
+            current = self.store.one(
+                "SELECT addressing,deleted FROM messages WHERE discord_id=?", (str(message.id),)
+            )
+            if current and not current["deleted"]:
+                saved = json.loads(current["addressing"])
+                merged = merge_live_roles(saved, addressing)
+                if merged != saved:
+                    self.store.execute(
+                        "UPDATE messages SET addressing=? WHERE discord_id=?",
+                        (dumps(self.vault.redact(merged)), str(message.id)),
+                    )
         self.store.context(bot_id, str(message.channel.id))
         self.store.runtime(bot_id)
 
