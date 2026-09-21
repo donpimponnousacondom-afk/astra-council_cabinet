@@ -1,5 +1,17 @@
 # Implementation and acceptance plan
 
+## Consistent alphabetical dashboard inventories (2026-09-21)
+
+The owner requested automatic grouping of similarly named entries everywhere
+they choose configuration records. Modern bot/provider/profile/prompt/plugin/room
+lists and their selectors use the same displayed-name A–Z ordering, ignoring case
+and sorting embedded numbers naturally. Stable IDs break equal-name ties. Quick
+Open, prompt-layer/template choices, command names and auxiliary channel/restore
+selectors follow the same rule. Configuration tables start with their Name column
+ascending and keep their other explicit sort controls. Presentation copies do not
+rewrite saved records, prompt composition, chronology or legacy behavior; selected
+IDs and unsaved drafts survive polling and reordering.
+
 ## Role mentions use ordinary human-ping activation (2026-09-20)
 
 The owner approved role pings without a plugin, toggle or dashboard change. Each

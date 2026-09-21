@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { control, dateLabel } from "./api";
 import type { RecordData } from "./api";
 import { Field, Notice } from "./components";
+import { alphabetical } from "./ordering";
 
 export function BotControl({
   bot,
@@ -84,7 +85,11 @@ export function BotControl({
       >
         <select value={channel} onChange={(e) => setChannel(e.target.value)}>
           <option value="">All channels, including future assignments</option>
-          {(bot.contexts || []).map((c: RecordData) => (
+          {alphabetical<RecordData>(
+            bot.contexts || [],
+            (c) => optionName(c.channel_id),
+            (c) => c.channel_id,
+          ).map((c) => (
             <option key={c.channel_id} value={c.channel_id}>
               {optionName(c.channel_id)}
             </option>

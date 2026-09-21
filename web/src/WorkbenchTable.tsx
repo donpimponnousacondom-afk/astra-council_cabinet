@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import type { RecordData } from "./api";
+import { compareLabels } from "./ordering";
 
 export type Column = {
   id: string;
@@ -17,15 +18,17 @@ export function WorkbenchTable({
   label,
   selected,
   rowClass,
+  defaultSort,
 }: {
   rows: RecordData[];
   columns: Column[];
   label: string;
   selected?: string;
   rowClass?: (row: RecordData) => string;
+  defaultSort?: string;
 }) {
   const [sort, setSort] = useState<{ id: string; descending: boolean } | null>(
-    null,
+    defaultSort ? { id: defaultSort, descending: false } : null,
   );
   const column = columns.find((c) => c.id === sort?.id);
   const ordered = column?.value
@@ -35,10 +38,7 @@ export function WorkbenchTable({
         const result =
           typeof x === "number" && typeof y === "number"
             ? x - y
-            : String(x).localeCompare(String(y), undefined, {
-                numeric: true,
-                sensitivity: "base",
-              });
+            : compareLabels(String(x), String(y));
         return sort?.descending ? -result : result;
       })
     : rows;

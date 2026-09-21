@@ -3,6 +3,7 @@ import { api, dateLabel, num } from "./api";
 import type { Dashboard, RecordData } from "./api";
 import { Badge, Code, Field, Notice } from "./components";
 import { WorkbenchTable } from "./WorkbenchTable";
+import { alphabetical } from "./ordering";
 import "./Snapshots.css";
 
 type Catalog = {
@@ -132,8 +133,8 @@ export function Snapshots({
   const current =
     selected &&
     (catalog?.snapshots.find((s) => s.id === selected.id) || selected);
-  const availableBots = (current?.bots || []).filter((b: RecordData) =>
-    dashboard.bots.some((live) => live.id === b.id),
+  const availableBots = dashboard.bots.filter((b) =>
+    current?.bots?.some((saved: RecordData) => saved.id === b.id),
   );
   const channels: string[] =
     current?.bots?.find((b: RecordData) => b.id === bot)?.channels || [];
@@ -349,7 +350,7 @@ export function Snapshots({
                     onChange={(e) => setChannel(e.target.value)}
                   >
                     <option value="">All channels for this bot</option>
-                    {channels.map((c) => (
+                    {alphabetical(channels, (c) => c).map((c) => (
                       <option key={c} value={c}>
                         {c}
                       </option>

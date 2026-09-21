@@ -1,5 +1,29 @@
 # Verification record
 
+## Alphabetical configuration lists and selectors (2026-09-21)
+
+- Created `hotfix/dashboard_alphabetical_order` from clean, fast-forwarded main
+  `9809553`. Added a shared, nonmutating frontend comparator for displayed names:
+  case-insensitive English collation, natural numbers and stable-ID tie breaks.
+  All six configuration inventories, their entity selectors and overview lists,
+  Quick Open, prompt-layer/template choices, command names and channel/restore
+  selectors use it. Configuration tables show Name ascending initially and retain
+  manual column sorting. Special options and chronological records stay in their
+  intended positions. No Python, runtime configuration or legacy source change.
+- **24 existing Playwright checks passed** on isolated port 18361 using the build
+  at `/tmp/hortator-alphabetical-web`: workbench, loading/draft behavior, prompt
+  controls and snapshots. Updated the existing sort/keyboard assertions to match
+  the new defaults. TypeScript/Vite build, targeted Prettier and diff checks pass.
+- A separate browser inspection intercepted only the fixture's status response
+  with scrambled IDs/names. Bots, providers, profiles, prompts, plugins and rooms
+  all displayed `Alpha`, `LOKI - 1`, `loki - 2`, `LOKI - 10`, `Zeta`, in that order.
+  The bot's model-profile picker matched, and selecting an ID then reversing API
+  order on refresh retained the draft selection. No save was sent. The diagnostic
+  screenshot is external at `/tmp/hortator-alphabetical-picker.png`.
+- Deployment uses the source commit followed by the shared-Screen `--refresh`
+  build/restart and its external matching-version receipt. No live bot/provider
+  settings, notes or conversations were changed for testing; no branch is pushed.
+
 ## Role mentions activate matching receiving bots (2026-09-20)
 
 - Read-only diagnosis of live message `1551088751583830058` / event `46357`:

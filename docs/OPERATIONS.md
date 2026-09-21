@@ -15,6 +15,14 @@ authoritative. This change does not require editing memories or resetting contex
 
 ## Dashboard workbench
 
+Configuration lists and entity dropdowns default to **name A–Z**, ignoring case:
+all `LOKI - …` profiles stay together even when their IDs or creation order differ.
+Numbers sort naturally (`LOKI 2` before `LOKI 10`); equal names use stable IDs as a
+tie breaker. Quick Open and prompt choices use the same rule. Select/Default/All
+options remain pinned. Column headings still switch table sorting; a fresh
+inventory opens with Name ascending. Refreshing keeps the selected record and
+unsaved editor fields. Events, turns and snapshot history keep chronological order.
+
 In **Bots**, **Trigger** beside Start/Pause requests one turn immediately using the
 bot's current context, prompts, model and tools. It skips the wake timer, the
 new-message/idle gate and personal send cooldown; configured silence remains an

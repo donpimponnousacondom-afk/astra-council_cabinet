@@ -258,7 +258,6 @@ for (const viewport of [
     await navigate(page, "Bots");
     const table = page.getByRole("table", { name: "Bots", exact: true });
     const sort = table.getByRole("button", { name: "Bot / ID", exact: true });
-    await sort.click();
     await expect(table.locator("thead th").first()).toHaveAttribute(
       "aria-sort",
       "ascending",
@@ -979,12 +978,15 @@ test("quick open keeps keyboard focus inside the palette and follows arrow selec
   });
   await expect(input).toBeFocused();
   const selected = palette.getByRole("option", { selected: true });
-  await expect(selected).toContainText("Overview");
+  const options = palette.getByRole("option");
+  await expect(options.nth(0)).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowDown");
-  await expect(selected).toContainText("Trajectory");
+  await expect(options.nth(1)).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowDown");
-  await expect(selected).toContainText("Analytics");
+  await expect(options.nth(2)).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowUp");
+  await expect(options.nth(1)).toHaveAttribute("aria-selected", "true");
+  await input.fill("Trajectory");
   await expect(selected).toContainText("Trajectory");
   for (const key of ["Tab", "Tab", "Shift+Tab"]) {
     await page.keyboard.press(key);
