@@ -19,6 +19,7 @@ import { PricingEditor } from "./Pricing";
 import { GlobalMemoryPanel } from "./GlobalMemory";
 import { SlashCommandSetup } from "./SlashCommands";
 import { BotControl } from "./BotControl";
+import { alphabetical } from "./ordering";
 import {
   DocumentBotSettings,
   DocumentPluginSettings,
@@ -2128,7 +2129,10 @@ export function ContextPanel({
                   disabled={!!pendingAction}
                   onChange={(e) => changeChannel(e.target.value)}
                 >
-                  {bot.contexts.map((c: RecordData) => (
+                  {alphabetical<RecordData>(
+                    bot.contexts,
+                    (c) => c.channel_id,
+                  ).map((c) => (
                     <option key={c.channel_id} value={c.channel_id}>
                       {c.channel_id}
                     </option>

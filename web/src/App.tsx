@@ -49,6 +49,7 @@ import { Snapshots } from "./Snapshots";
 import { reasoningSummary } from "./Reasoning";
 import { WorkbenchTable } from "./WorkbenchTable";
 import type { Column } from "./WorkbenchTable";
+import { alphabetical, orderDashboard } from "./ordering";
 
 const navigation: {
   id: Page;
@@ -225,7 +226,7 @@ export default function App() {
         schemaCache.current = loadedSchemas;
         setSchemas(loadedSchemas);
         setCouncilTimezone(data.settings.timezone);
-        setDashboard(data);
+        setDashboard(orderDashboard(data));
         setStats(metrics);
         setEvents(ledger);
         setLoadError("");
@@ -1060,6 +1061,7 @@ function BotTable({
       </div>
       <WorkbenchTable
         label="Bots"
+        defaultSort="name"
         rows={rows}
         columns={columns}
         selected={selected}
@@ -1599,6 +1601,7 @@ function Catalog({
       </div>
       <WorkbenchTable
         label={kind}
+        defaultSort="name"
         columns={columns}
         rows={rows}
         selected={selected}
@@ -1786,7 +1789,9 @@ function Commands() {
   const [query, setQuery] = useState("");
   useEffect(() => {
     api("/api/commands")
-      .then(setCommands)
+      .then((items: RecordData[]) =>
+        setCommands(alphabetical(items, (item) => item.command)),
+      )
       .catch((e) => setError(e.message));
   }, []);
   return (
@@ -1910,31 +1915,35 @@ function QuickOpen({
     [selected, setSelected] = useState(0);
   const actions = useMemo(
     () =>
-      [
-        ...navigation.map((n) => ({
-          id: n.id,
-          label: n.label,
-          group: "Page",
-          run: () => navigate(n.id),
-        })),
-        ...(
-          [
-            "bots",
-            "providers",
-            "profiles",
-            "prompts",
-            "plugins",
-            "rooms",
-          ] as Kind[]
-        ).flatMap((kind) =>
-          (dashboard[kind] as RecordData[]).map((e) => ({
-            id: `${kind}:${e.id}`,
-            label: e.name,
-            group: `${kind} / ${e.id}`,
-            run: () => edit(kind, e),
+      alphabetical(
+        [
+          ...navigation.map((n) => ({
+            id: n.id,
+            label: n.label,
+            group: "Page",
+            run: () => navigate(n.id),
           })),
-        ),
-      ]
+          ...(
+            [
+              "bots",
+              "providers",
+              "profiles",
+              "prompts",
+              "plugins",
+              "rooms",
+            ] as Kind[]
+          ).flatMap((kind) =>
+            (dashboard[kind] as RecordData[]).map((e) => ({
+              id: `${kind}:${e.id}`,
+              label: e.name,
+              group: `${kind} / ${e.id}`,
+              run: () => edit(kind, e),
+            })),
+          ),
+        ],
+        (action) => action.label,
+        (action) => action.id,
+      )
         .filter((e) =>
           `${e.label} ${e.group}`.toLowerCase().includes(query.toLowerCase()),
         )
