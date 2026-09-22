@@ -9,10 +9,12 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import traceback
 
 from .concurrency import cancel_and_wait, error_text
 from .models import ControlError
 from .store import dumps, uid
+from .timekeeping import council_timezone, local_timestamp
 
 ACTIVE = ("queued", "running")
 RESULT_LIMIT = 2 * 1024 * 1024
@@ -68,6 +70,18 @@ class BackgroundJobs:
     def get(self, job_id):
         return self.store.one("SELECT * FROM background_jobs WHERE id=?", (job_id,))
 
+    def inventory(self, *, bot_id=None, plugin=None):
+        rows = self.store.rows(
+            "SELECT id,plugin,bot_id,channel_id,created_at,updated_at,deadline,state,error,notification,"
+            "continuation_turn_id,origin_turn_id,json_extract(result,'$.metrics') AS metrics_json "
+            "FROM background_jobs WHERE (? IS NULL OR bot_id=?) AND (? IS NULL OR plugin=?) "
+            "ORDER BY created_at DESC LIMIT 50",
+            (bot_id, bot_id, plugin, plugin),
+        )
+        for row in rows:
+            row["metrics"] = json.loads(row.pop("metrics_json") or "null")
+        return self.registry.vault.redact(rows)
+
     def check(self, job):
         from .plugins import ToolContext
 
@@ -86,6 +100,7 @@ class BackgroundJobs:
         return bot
 
     def submit(self, context, plugin, submission_id, payload, *, seconds, notify=True):
+        payload = self.registry.vault.redact(payload)
         existing = self.store.one(
             "SELECT * FROM background_jobs WHERE bot_id=? AND channel_id=? AND plugin=? AND submission_id=?",
             (context.bot["id"], context.channel_id, plugin, submission_id),
@@ -150,6 +165,7 @@ class BackgroundJobs:
         self.tasks[job["id"]] = self.background.spawn(
             self.run(job), name=f"background-job:{job['id']}", bot_id=job["bot_id"]
         )
+        self.tasks[job["id"]].add_done_callback(lambda _: self.tasks.pop(job["id"], None))
         return self.status(self.get(job["id"]))
 
     def emit(self, job, state, **fields):
@@ -161,7 +177,7 @@ class BackgroundJobs:
             level="warning" if state in ("failed", "cancelled", "interrupted") else "info",
         )
 
-    def finish(self, job, state, *, result=None, error=None):
+    def finish(self, job, state, *, result=None, error=None, **diagnostics):
         self.store.execute(
             "UPDATE background_jobs SET state=?,result=?,error=?,updated_at=?,notification=? WHERE id=?",
             (
@@ -173,7 +189,7 @@ class BackgroundJobs:
                 job["id"],
             ),
         )
-        self.emit(job, state, error=self.store.redact(error) if error else None)
+        self.emit(job, state, error=self.store.redact(error) if error else None, **diagnostics)
 
     async def run(self, job):
         try:
@@ -205,7 +221,12 @@ class BackgroundJobs:
                 error=f"Background job total deadline exceeded: {job['deadline'] - job['created_at']:g} seconds",
             )
         except Exception as exc:
-            self.finish(job, "failed", error=error_text(exc))
+            self.finish(
+                job,
+                "failed",
+                error=error_text(exc),
+                traceback=self.store.redact("".join(traceback.format_exception(exc)))[:12000],
+            )
         finally:
             self.tasks.pop(job["id"], None)
 
@@ -229,7 +250,7 @@ class BackgroundJobs:
             "elapsed_seconds": round(
                 (time.time() if job["state"] in ACTIVE else job["updated_at"]) - job["created_at"], 1
             ),
-            "deadline": job["deadline"],
+            "deadline": local_timestamp(job["deadline"], council_timezone(self.store)),
             "notification": job.get("notification", "none"),
             "notify_on_completion": bool(job["notify"]),
             "poll_after_seconds": 10 if job["state"] in ACTIVE else None,
@@ -238,6 +259,8 @@ class BackgroundJobs:
         }
 
     def pending(self, bot):
+        if self.closed:
+            return None
         for job in self.store.rows(
             "SELECT * FROM background_jobs WHERE bot_id=? AND notification='pending' ORDER BY created_at",
             (bot["id"],),
@@ -272,18 +295,25 @@ class BackgroundJobs:
             **self.status(job),
             "assignment": payload.get("task", ""),
             "origin_turn_id": job["origin_turn_id"],
-            "instruction": "A delegated background job has settled. Read its saved result, then report findings or the actual failure to the user. Use current conversation context; do not restart the job.",
         }
 
     async def cancel(self, bot_ids, reason):
         bot_ids = set(bot_ids)
         selected = [
-            job for job in self.store.rows("SELECT * FROM background_jobs") if job["bot_id"] in bot_ids
+            job
+            for job in self.store.rows(
+                "SELECT id,bot_id,channel_id,plugin,origin_turn_id,notify FROM background_jobs "
+                "WHERE state IN ('queued','running') OR notification='pending'"
+            )
+            if job["bot_id"] in bot_ids
         ]
         tasks = [self.tasks[job["id"]] for job in selected if job["id"] in self.tasks]
         await cancel_and_wait(*tasks)
         for job in selected:
-            if self.get(job["id"])["state"] in ACTIVE:
+            current = self.get(job["id"])
+            if not current:
+                continue
+            if current["state"] in ACTIVE:
                 self.finish(job, "cancelled", error=reason)
             self.store.execute(
                 "UPDATE background_jobs SET notification='revoked' WHERE id=? AND notification='pending'",

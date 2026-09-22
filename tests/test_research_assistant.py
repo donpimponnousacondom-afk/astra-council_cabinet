@@ -174,3 +174,33 @@ async def test_operator_configuration_validates_ranges(kernel, owner):
         await kernel.service.save(owner, "plugins", ID, {"config": {"max_output_tokens": 0}})
     with pytest.raises(ControlError):
         await kernel.service.save(owner, "bots", "ada", {"plugin_config": {ID: {"profile_id": "absent"}}})
+    with pytest.raises(ControlError, match="Still referenced"):
+        await kernel.service.delete(owner, "profiles", "research")
+
+
+async def test_research_uses_selected_provider_key_and_marks_partial_reports(kernel):
+    context = setup(kernel, stream=False)
+    kernel.vault.put("bot/ada/provider_key", "MAIN-BOT-SECRET")
+    kernel.vault.put("provider/openrouter/api_key", "RESEARCH-PROVIDER-SECRET")
+
+    def respond(request):
+        assert request.headers["authorization"] == "Bearer RESEARCH-PROVIDER-SECRET"
+        assert "MAIN-BOT-SECRET" not in str(request.headers)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "Partial report"}, "finish_reason": "length"}],
+                "usage": {"prompt_tokens": 20, "completion_tokens": 12},
+            },
+        )
+
+    await install_client(kernel, respond)
+    schema = kernel.registry.spec_for(ID, context)
+    assert schema.parameters["properties"]["max_output_tokens"]["maximum"] == 16384
+    response = await call(kernel, context, **start())
+    await finish(kernel)
+    job = kernel.jobs.get(response["job_id"])
+    assert job["state"] == "completed", job["error"]
+    report = json.loads(job["result"])
+    assert not report["complete"] and report["finish_reason"] == "length"
+    assert report["metrics"]["search_cost"] is None

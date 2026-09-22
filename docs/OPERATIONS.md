@@ -1,5 +1,26 @@
 # Operations
 
+## Experimental background research
+
+Enable **Plugins → Sub-agent researcher · experimental**, select a dedicated MiMo
+research profile/provider (with native Web Search enabled upstream), and grant
+the plugin under **Bots → Capabilities**. Existing bots keep their own model.
+The global editor configures the research output ceiling, total deadline,
+keyword limit, editable system prompt and default completion notification.
+**Bots → Control → Background jobs** inspects saved assignments, report pages,
+timing/token metrics and cancellation; the plugin editor shows all researcher
+jobs. No plugin-specific credential is required: the selected provider supplies
+its own key, never the conversational bot's key override.
+
+Workers continue after the submitting turn ends, without a typing indicator.
+Completion queues one ordinary scoped follow-up, including timer-zero bots;
+pauses, grants, human-message priority, provider concurrency and budgets still
+apply. Slash/panel invocations are not supported by this first version. See
+[RESEARCH_ASSISTANT](RESEARCH_ASSISTANT.md) and [BACKGROUND_JOBS](BACKGROUND_JOBS.md)
+for request examples, retention, shutdown/restart behavior and billing limits.
+New installations leave this capability disabled. No live bot grants or model
+settings change merely by installing it.
+
 All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The user handles PRs with GitHub **Squash and merge**; after a merge, update main with a fast-forward pull and create a fresh task branch. Never push to main or push any branch without an explicit request.
 
 ## Prompt controls and a fresh conversation

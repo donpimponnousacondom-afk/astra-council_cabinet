@@ -335,7 +335,7 @@ class ProviderPool:
                 self.changed.notify_all()
 
     def key(self, provider, bot_id):
-        return self.vault.get(f"bot/{bot_id}/provider_key") or self.vault.get(
+        return (self.vault.get(f"bot/{bot_id}/provider_key") if bot_id else None) or self.vault.get(
             f"provider/{provider['id']}/api_key"
         )
 
@@ -409,7 +409,9 @@ class ProviderPool:
             level="error",
         )
 
-    async def complete(self, *, bot, profile, messages, tools, turn_id, context, purpose="generation"):
+    async def complete(
+        self, *, bot, profile, messages, tools, turn_id, context, purpose="generation", use_bot_key=True
+    ):
         provider = self.store.get("providers", profile["provider_id"])
         if not provider:
             raise ProviderError("Provider no longer exists", provider_fault=False)
@@ -445,6 +447,7 @@ class ProviderPool:
                         # previous inference/backoff is not queue latency.
                         queued=queued if attempt == 1 else time.perf_counter(),
                         retry_available=attempt <= retries,
+                        use_bot_key=use_bot_key,
                     )
                 except ProviderError as exc:
                     if attempt > retries or not retryable(exc):
@@ -490,7 +493,19 @@ class ProviderPool:
                         raise
 
     async def _attempt(
-        self, *, bot, profile, messages, tools, turn_id, context, purpose, provider, queued, retry_available
+        self,
+        *,
+        bot,
+        profile,
+        messages,
+        tools,
+        turn_id,
+        context,
+        purpose,
+        provider,
+        queued,
+        retry_available,
+        use_bot_key=True,
     ):
         limit = bot.get("daily_cost_limit")
         if limit is not None:
@@ -504,7 +519,9 @@ class ProviderPool:
                     "Daily model cost threshold reached or a completed request has unknown cost",
                     provider_fault=False,
                 )
-        headers = self.headers(provider, bot["id"])
+        credential_bot_id = bot["id"] if use_bot_key else None
+        private_key = bool(use_bot_key and self.vault.get(f"bot/{bot['id']}/provider_key"))
+        headers = self.headers(provider, credential_bot_id)
         body = copy.deepcopy(profile["request_json"])
         omitted_caps = []
         if purpose == "compaction":
@@ -653,10 +670,7 @@ class ProviderPool:
                             f"HTTP {response.status_code}: {self.vault.redact(raw)[:2000]}",
                             http_status=response.status_code,
                             retry_after=min(max(retry, 0), 3600),
-                            provider_fault=(
-                                response.status_code in (401, 403, 429)
-                                and not self.vault.get(f"bot/{bot['id']}/provider_key")
-                            )
+                            provider_fault=(response.status_code in (401, 403, 429) and not private_key)
                             or response.status_code >= 500,
                         )
                     content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
@@ -800,9 +814,7 @@ class ProviderPool:
                 raise
             if isinstance(error, UpstreamResponseError):
                 error_data = error.envelope
-                exc = envelope_error(
-                    error_data, private_key=bool(self.vault.get(f"bot/{bot['id']}/provider_key"))
-                )
+                exc = envelope_error(error_data, private_key=private_key)
                 exc.details["origin"] = "upstream_error"
             elif isinstance(error, ResponseLimitError):
                 exc = ProviderError(

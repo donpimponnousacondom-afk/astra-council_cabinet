@@ -6,6 +6,7 @@ import asyncio
 import copy
 import json
 import time
+from dataclasses import replace
 
 from .models import ControlError
 from .prompt_templates import render
@@ -147,6 +148,21 @@ class ResearchAssistant:
         ):
             raise ControlError("Research model profile/provider changed or was disabled")
 
+    def spec_for(self, context):
+        config = self.configuration(context.bot)
+        schema = copy.deepcopy(PARAMETERS)
+        schema["properties"]["max_output_tokens"]["maximum"] = config["max_output_tokens"]
+        return replace(
+            self.registry.specs[ID],
+            parameters=schema,
+            description=DESCRIPTION
+            + (
+                f" Current output ceiling: {config['max_output_tokens']} tokens; "
+                f"total deadline: {config['timeout_seconds']} seconds; "
+                f"default completion notification: {config['notify_on_completion']}."
+            ),
+        )
+
     async def call(self, args, context, config, key):
         validate_config(config, self.store)
         operation = args["operation"]
@@ -261,6 +277,7 @@ class ResearchAssistant:
             tools=tools,
             turn_id=job["origin_turn_id"],
             purpose="research",
+            use_bot_key=False,
             context={"job_id": job["id"], "channel_id": job["channel_id"], "estimated_tokens": estimated},
         )
         self.jobs.check(job)

@@ -8,7 +8,8 @@ other tool grants. It cannot call local tools or launch further agents.
 
 Enable **Plugins → Sub-agent researcher · experimental** and grant it under
 **Bots → Capabilities**. Select a separate research model profile whose provider
-contains the MiMo endpoint and credential. Provider credential overrides, request
+contains the MiMo endpoint and credential. The main bot's provider-key override
+is deliberately not sent to the research provider. Provider request
 retries, concurrency, health, timeout, pricing and private diagnostics use their
 existing contracts. The plugin has no separate secret box. Nothing enables or
 changes an existing bot/profile on installation.
@@ -77,3 +78,8 @@ Disabling the plugin removes its model tool and revokes/cancels work while keepi
 saved evidence. Its adapter, configuration UI and registration can be removed
 without removing the reusable background service. Existing search/fetch tools,
 main model profiles, memory and Discord footers retain their existing behavior.
+
+Inspect saved work in **Bots → bot → Control → Background jobs**, or in the
+researcher plugin editor. The owner can page reports/metrics and cancel an active
+job or its pending follow-up. Dashboard inspection does not consume the bot's
+notification. Research configuration and existing bot settings remain separate.

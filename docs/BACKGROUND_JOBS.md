@@ -31,3 +31,17 @@ handlers are unavailable and cannot trigger model work.
 
 This feature does not automatically offload existing synchronous tools or change
 the lifetime, tool limits or delivery behavior of ordinary turns.
+
+The completion instruction is an editable Prompt library template, with the
+usual per-bot `background_completion` layer switch/override. Normal generations
+do not receive it. Job payloads/results are credential-redacted; provider private
+reasoning remains in its existing diagnostics store. No worker sends Discord
+messages directly or holds a typing indicator after its parent turn ends.
+
+The additive SQLite table is created by Kernel before services start. Full
+application snapshots include it; a restored runtime does not replay active paid
+requests. Clean shutdown cancels/joins workers and revokes pending notifications;
+a crash can leave an interrupted receipt for a single failure follow-up. Saved
+reports remain available until ordinary retention cleanup. Code rollback leaves
+the extra table unused; full snapshot compatibility still requires matching
+source/schema as documented in SNAPSHOTS.

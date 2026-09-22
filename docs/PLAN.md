@@ -1,5 +1,29 @@
 # Implementation and acceptance plan
 
+## Reusable background jobs and optional researcher (2026-09-22)
+
+Owner approved real background execution independent of the experimental plugin:
+turns may acknowledge/defer, remain available for new messages, then receive one
+completion activation from saved state. Implemented in three linear stages:
+generic durable job ownership/notifications, MiMo native-search adapter, modern
+dashboard configuration/inspection and regression checks. No general multi-agent
+framework or automatic offloading of existing tools was added.
+
+The researcher uses a separately selected model profile and provider key, explicit
+per-assignment output tokens beneath an operator ceiling, bounded queue/workers,
+scoped status/wait/read/cancel and saved sources/search errors/usage/TTFT/TPS.
+It receives only the supplied assignment and editable research system prompt.
+Private reasoning stays in diagnostics. Completion uses fresh ordinary context,
+preserves human priority and cannot recursively submit another job. Disabling
+the plugin cancels work but leaves the reusable service and saved evidence.
+
+First-version boundaries: ordinary assigned channels/Hortator owner scope only;
+no slash/panel deferred delivery or paused one-shot submissions. Clean shutdown
+cancels workers; crashes retain interrupted receipts without replaying paid
+requests. Existing provider limits still apply when research shares a provider.
+Enablement and live MiMo acceptance remain explicit operator testing. See
+[RESEARCH_ASSISTANT](RESEARCH_ASSISTANT.md) and [BACKGROUND_JOBS](BACKGROUND_JOBS.md).
+
 ## Consistent alphabetical dashboard inventories (2026-09-21)
 
 The owner requested automatic grouping of similarly named entries everywhere

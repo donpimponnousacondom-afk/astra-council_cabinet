@@ -487,6 +487,8 @@ class Registry:
 
     def spec_for(self, name, context):
         spec = self.specs[name]
+        if name == "research_assistant":
+            return self.research.spec_for(context)
         if name == "shell":
             from .shell_runner import limits
 

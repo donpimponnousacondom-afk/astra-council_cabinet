@@ -377,6 +377,46 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
     async def snapshots(actor=Depends(authenticated)):
         return await app.state.snapshots.catalog()
 
+    @app.get("/api/background-jobs")
+    async def background_jobs(
+        bot_id: str | None = None, plugin: str | None = None, actor=Depends(authenticated), k=Depends(kernel)
+    ):
+        actor.require_owner()
+        return k.jobs.inventory(bot_id=bot_id, plugin=plugin)
+
+    @app.get("/api/background-jobs/{job_id}")
+    async def background_job(
+        job_id: str,
+        offset: int = Query(0, ge=0),
+        length: int = Query(6000, ge=1, le=18000),
+        actor=Depends(authenticated),
+        k=Depends(kernel),
+    ):
+        actor.require_owner()
+        job = k.jobs.get(job_id)
+        if not job:
+            raise ControlError("Background job not found", 404)
+        text = job["result"] or ""
+        return k.vault.redact(
+            {
+                **k.jobs.status(job),
+                "assignment": json.loads(job["payload"]).get("task", ""),
+                "content": text[offset : offset + length],
+                "offset": offset,
+                "total_chars": len(text),
+                "next_offset": offset + length if offset + length < len(text) else None,
+            }
+        )
+
+    @app.post("/api/background-jobs/{job_id}/cancel")
+    async def cancel_background_job(job_id: str, actor=Depends(authenticated), k=Depends(kernel)):
+        actor.require_owner()
+        job = k.jobs.get(job_id)
+        if not job:
+            raise ControlError("Background job not found", 404)
+        await k.jobs.cancel_job(job, "Cancelled by dashboard owner")
+        return k.jobs.status(k.jobs.get(job_id))
+
     @app.post("/api/snapshots")
     async def capture_snapshot(body: SnapshotBody, actor=Depends(authenticated)):
         return await app.state.snapshots.request("capture", body.model_dump())

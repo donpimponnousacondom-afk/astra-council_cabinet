@@ -271,8 +271,9 @@ class Engine:
             if not self.available(bot):
                 continue
             completed_job = self.jobs.pending(bot) if self.jobs and not attention else None
-            # Keep observing input, but only explicit human attention may start
-            # a scheduler turn with the timer off. Do not change pick_channel:
+            # Keep observing input. Only human attention or a settled background
+            # job starts a timer-off scheduler turn.
+            # Do not change pick_channel:
             # owner-requested compaction also uses it to select a context.
             if bot["interval_seconds"] == 0 and not attention and not completed_job:
                 continue
@@ -1279,8 +1280,7 @@ class Engine:
             raise
 
     async def cancel(self, bot_ids, reason):
-        if self.jobs:
-            await self.jobs.cancel(bot_ids, reason)
+        bot_ids = list(bot_ids)
         tasks = []
         for bot_id in bot_ids:
             task = self.tasks.get(bot_id)
@@ -1291,6 +1291,8 @@ class Engine:
                 "UPDATE outbox SET status='suppressed',error=? WHERE bot_id=? AND status='pending'",
                 (reason, bot_id),
             )
+        if self.jobs:
+            await self.jobs.cancel(bot_ids, reason)
         if tasks:
             await cancel_and_wait(*tasks)
 

@@ -205,6 +205,7 @@ class Service:
                     "document_site",
                     "discord_panel",
                     "reasoning_viewer",
+                    "research_assistant",
                 )
                 and spec
             ):
@@ -489,6 +490,16 @@ class Service:
             if kind in ("settings", "plugins"):
                 raise ControlError("This registry entry cannot be deleted; disable it instead")
             references = []
+            if kind == "profiles":
+                plugin = self.store.get("plugins", "research_assistant") or {}
+                if plugin.get("config", {}).get("profile_id") == entity_id:
+                    references.append("plugins/research_assistant")
+                for row in self.store.list("bots"):
+                    if (
+                        row.get("plugin_config", {}).get("research_assistant", {}).get("profile_id")
+                        == entity_id
+                    ):
+                        references.append(f"bots/{row['id']}/research_assistant")
             for k in ("bots", "profiles"):
                 for row in self.store.list(k):
                     if k == kind and row["id"] == entity_id:
