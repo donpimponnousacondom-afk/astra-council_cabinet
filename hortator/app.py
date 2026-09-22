@@ -53,6 +53,7 @@ class Kernel:
         self.registry.jobs = self.jobs
         self.engine.jobs = self.jobs
         self.jobs.engine = self.engine
+        self.registry.research.bind(self.jobs, self.pool)
         self.connector = DiscordManager(self.service)
         self.service.connector = self.connector
         self.engine.transport = self.connector

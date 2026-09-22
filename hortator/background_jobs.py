@@ -290,6 +290,17 @@ class BackgroundJobs:
                 (job["id"],),
             )
 
+    async def cancel_job(self, job, reason):
+        task = self.tasks.get(job["id"])
+        if task:
+            await cancel_and_wait(task)
+        if self.get(job["id"])["state"] in ACTIVE:
+            self.finish(job, "cancelled", error=reason)
+        self.store.execute(
+            "UPDATE background_jobs SET notification='revoked' WHERE id=? AND notification='pending'",
+            (job["id"],),
+        )
+
     async def close(self):
         self.closed = True
         await self.cancel(

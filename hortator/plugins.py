@@ -452,6 +452,9 @@ class Registry:
         from .reasoning_viewer import register as register_reasoning_viewer
 
         register_reasoning_viewer(self)
+        from .research_assistant import ResearchAssistant
+
+        self.research = ResearchAssistant(self)
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
             entry.load()(self)
 

@@ -1,0 +1,79 @@
+# Sub-agent researcher (experimental)
+
+`research_assistant` delegates one self-contained assignment to an independently
+selected MiMo model using its native web-search tool. The main bot can use any
+provider/model. The researcher receives only its configured system prompt and
+the supplied assignment, never an automatic copy of conversation, memories or
+other tool grants. It cannot call local tools or launch further agents.
+
+Enable **Plugins → Sub-agent researcher · experimental** and grant it under
+**Bots → Capabilities**. Select a separate research model profile whose provider
+contains the MiMo endpoint and credential. Provider credential overrides, request
+retries, concurrency, health, timeout, pricing and private diagnostics use their
+existing contracts. The plugin has no separate secret box. Nothing enables or
+changes an existing bot/profile on installation.
+
+The native request uses `/chat/completions`, `tools: [{type: "web_search",
+force_search: true, max_keyword: 1, limit: 1}]`. The operator can choose one to
+three keyword expansions. The selected profile supplies exact reasoning JSON and
+streaming mode. Each job explicitly sends `max_completion_tokens`, replacing
+inherited output-cap fields on the wire copy only. It bounds reasoning plus
+visible output; upstream search-context tokens are separately billable. There is
+no inherited conversation summary or automatic compaction of research inputs.
+
+Configuration defaults: no selected profile, 16,384 output-token ceiling,
+600-second total deadline (including queue/retries, configurable 1–7,200), one
+keyword, automatic completion follow-up enabled. The system prompt is editable;
+`{now}` uses the council timezone. Per-bot plugin JSON overrides use the usual
+shallow merge and validation. Profile changes cancel affected work. Sharing a
+provider with the main bot also shares its concurrency limit; use an independent
+provider when research must not occupy the bot's only inference slot.
+
+```json
+{"operation":"start","submission_id":"official-prices-sept","task":"Compare official prices. Cite URLs and dates; flag contradictions.","max_output_tokens":4096}
+{"operation":"status","job_id":"bg_RETURNED_ID"}
+{"operation":"wait","job_id":"bg_RETURNED_ID","seconds":10}
+{"operation":"read_result","job_id":"bg_RETURNED_ID","offset":0,"length":6000}
+{"operation":"list"}
+{"operation":"cancel","job_id":"bg_RETURNED_ID"}
+```
+
+Empty arguments return full usage without starting work. `start` returns at once;
+the bot may answer/choose silence and end its typing indicator. Worker completion
+or failure queues one normal contextual follow-up, with human-directed messages
+taking priority. Reading a finished job before its notification is claimed
+consumes that notification, avoiding an unnecessary extra turn. `wait` is bounded
+to 20 seconds, counts as a tool call, and cancellation of the wait does not cancel
+the worker. A repeated submission ID with the same assignment recovers its job;
+different arguments require a new ID. This is local deduplication, not a promise
+that an upstream retry cannot bill another search.
+
+This first version starts jobs only in assigned conversational channels or
+Hortator's existing owner scope. Slash/panel invocations and paused one-shot
+turns are explicitly rejected; expiring interaction tokens are never persisted
+or reused for later unsolicited follow-ups. No Discord sends originate directly
+from a worker. See [background jobs](BACKGROUND_JOBS.md) for lifecycle, retention,
+snapshots, completion claiming and cancellation.
+
+`read_result` pages the complete saved JSON by Unicode-character offsets. The
+report is labelled a researcher synthesis, with preserved native source
+annotations, search errors, usage, finish reason and `complete` flag. A partial
+or filtered completion is not advertised as complete. Absence of citation/usage
+metadata cannot prove a search succeeded. Provider reasoning is retained only
+in authenticated diagnostics, never returned through this tool.
+
+Metrics include per-request TTFT/TPS (unknown for buffered responses), elapsed
+job time, token counts with provenance, inference cost when known and native
+search-use counts. Search cost remains unknown rather than silently zero. Native
+search and model tokens may both be charged; do not assume the Token Plan or
+MiMo Code promotional search allowance covers an arbitrary bot integration.
+
+Official references checked 2026-09-22:
+- https://mimo.mi.com/docs/en-US/api/chat/openai-api
+- https://mimo.mi.com/docs/en-US/quick-start/usage-guide/text-generation/tool-calling/web-search
+- https://mimo.mi.com/docs/en-US/price/pay-as-you-go
+
+Disabling the plugin removes its model tool and revokes/cancels work while keeping
+saved evidence. Its adapter, configuration UI and registration can be removed
+without removing the reusable background service. Existing search/fetch tools,
+main model profiles, memory and Discord footers retain their existing behavior.

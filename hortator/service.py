@@ -214,6 +214,7 @@ class Service:
             value["installed"] = bool(spec)
             value["capability_type"] = "tool" if not spec or spec.model_tool else "input"
             value["keyless"] = value["id"] in (
+                "research_assistant",
                 "memory",
                 "global_memory",
                 "slash_commands",
@@ -259,6 +260,29 @@ class Service:
         from .agentic import validate_configuration
 
         validate_configuration(self.registry, kind, entity)
+        from .research_assistant import (
+            ID as research_id,
+            validate_config as validate_research,
+            DEFAULTS as research_defaults,
+        )
+
+        if kind == "plugins" and entity["id"] == research_id:
+            validate_research(entity["config"], self.store)
+            for bot in self.store.list("bots"):
+                validate_research(
+                    {
+                        **research_defaults,
+                        **entity["config"],
+                        **bot.get("plugin_config", {}).get(research_id, {}),
+                    },
+                    self.store,
+                )
+        elif kind == "bots" and research_id in entity.get("plugin_config", {}):
+            base = self.store.get("plugins", research_id) or {}
+            validate_research(
+                {**research_defaults, **base.get("config", {}), **entity["plugin_config"][research_id]},
+                self.store,
+            )
         if kind == "plugins" and entity["id"] == "web_search":
             from .web_search import validate_config
 
@@ -363,13 +387,24 @@ class Service:
 
     def affected(self, kind, entity_id):
         bots = self.store.list("bots")
+        job_bots = set()
+        if kind in ("profiles", "providers") and self.engine and self.engine.jobs:
+            field = "profile_id" if kind == "profiles" else "provider_id"
+            job_bots = {
+                row["bot_id"]
+                for row in self.store.rows(
+                    "SELECT bot_id FROM background_jobs WHERE (state IN ('queued','running') OR notification='pending') "
+                    "AND json_extract(payload,?)=?",
+                    ("$." + field, entity_id),
+                )
+            }
         if kind == "bots":
             return [entity_id]
         if kind == "profiles":
-            return [b["id"] for b in bots if b["model_profile_id"] == entity_id]
+            return [b["id"] for b in bots if b["model_profile_id"] == entity_id or b["id"] in job_bots]
         if kind == "providers":
             profiles = {p["id"] for p in self.store.list("profiles") if p["provider_id"] == entity_id}
-            return [b["id"] for b in bots if b["model_profile_id"] in profiles]
+            return [b["id"] for b in bots if b["model_profile_id"] in profiles or b["id"] in job_bots]
         if kind == "prompts":
             from .prompt_templates import DEFAULT_IDS
 
