@@ -19,6 +19,7 @@ import { PricingEditor } from "./Pricing";
 import { GlobalMemoryPanel } from "./GlobalMemory";
 import { SlashCommandSetup } from "./SlashCommands";
 import { BotControl } from "./BotControl";
+import { BackgroundJobsPanel, ResearchSettings } from "./ResearchAssistant";
 import { alphabetical } from "./ordering";
 import {
   DocumentBotSettings,
@@ -986,15 +987,22 @@ export function Editor({
                 </div>
                 {tab === "control" &&
                   (entity ? (
-                    <BotControl
-                      key={entity.id}
-                      rooms={dashboard.rooms}
-                      bot={
-                        dashboard.bots.find((b) => b.id === entity.id) || entity
-                      }
-                      dirty={dirty}
-                      onBusyChange={operationChanged}
-                    />
+                    <>
+                      <BotControl
+                        key={entity.id}
+                        rooms={dashboard.rooms}
+                        bot={
+                          dashboard.bots.find((b) => b.id === entity.id) ||
+                          entity
+                        }
+                        dirty={dirty}
+                        onBusyChange={operationChanged}
+                      />
+                      <BackgroundJobsPanel
+                        key={`jobs-${entity.id}`}
+                        botId={entity.id}
+                      />
+                    </>
                   ) : (
                     <Notice>Save the bot before using live controls.</Notice>
                   ))}
@@ -1575,6 +1583,16 @@ export function Editor({
                       return a rate limit or challenge, which is reported
                       explicitly.
                     </Notice>
+                  </>
+                )}
+                {draft.id === "research_assistant" && (
+                  <>
+                    <ResearchSettings
+                      config={draft.config || {}}
+                      profiles={dashboard.profiles}
+                      onChange={(value) => set("config", value)}
+                    />
+                    <BackgroundJobsPanel plugin="research_assistant" />
                   </>
                 )}
                 {draft.id === "document_site" && (

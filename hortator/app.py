@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .concurrency import BackgroundTasks
+from .background_jobs import BackgroundJobs
 from . import __version__
 from .discord_gateway import COMMANDS, DiscordManager
 from .models import ControlError, OWNER_ID, SCHEMAS
@@ -48,6 +49,11 @@ class Kernel:
         self.service.seed_plugins()
         self.engine = Engine(self.store, self.vault, self.pool, self.registry)
         self.service.engine = self.engine
+        self.jobs = BackgroundJobs(self.store, self.registry)
+        self.registry.jobs = self.jobs
+        self.engine.jobs = self.jobs
+        self.jobs.engine = self.engine
+        self.registry.research.bind(self.jobs, self.pool)
         self.connector = DiscordManager(self.service)
         self.service.connector = self.connector
         self.engine.transport = self.connector
@@ -57,7 +63,7 @@ class Kernel:
         self.publishing = PublishingWorker(self.store, self.vault, self.directory, self.registry.documents)
         self.background = BackgroundTasks(self.store)
         self.service.background = self.background
-        for component in (self.connector, self.engine, self.publishing):
+        for component in (self.connector, self.engine, self.publishing, self.jobs):
             component.background = self.background
 
     def start(self):
@@ -65,6 +71,7 @@ class Kernel:
             raise RuntimeError("Open Kernel.lifetime() before starting runtime services")
         self.started = True
         self.store.recover()
+        self.jobs.recover()
         self.connector.start()
         self.engine.start()
         self.publishing.start()
@@ -107,7 +114,7 @@ class Kernel:
         if self.closed:
             return
         errors = []
-        for component in (self.publishing, self.engine, self.registry.agentic, self.connector):
+        for component in (self.publishing, self.jobs, self.engine, self.registry.agentic, self.connector):
             try:
                 await component.close()
             except Exception as error:
@@ -369,6 +376,46 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
     @app.get("/api/snapshots")
     async def snapshots(actor=Depends(authenticated)):
         return await app.state.snapshots.catalog()
+
+    @app.get("/api/background-jobs")
+    async def background_jobs(
+        bot_id: str | None = None, plugin: str | None = None, actor=Depends(authenticated), k=Depends(kernel)
+    ):
+        actor.require_owner()
+        return k.jobs.inventory(bot_id=bot_id, plugin=plugin)
+
+    @app.get("/api/background-jobs/{job_id}")
+    async def background_job(
+        job_id: str,
+        offset: int = Query(0, ge=0),
+        length: int = Query(6000, ge=1, le=18000),
+        actor=Depends(authenticated),
+        k=Depends(kernel),
+    ):
+        actor.require_owner()
+        job = k.jobs.get(job_id)
+        if not job:
+            raise ControlError("Background job not found", 404)
+        text = job["result"] or ""
+        return k.vault.redact(
+            {
+                **k.jobs.status(job),
+                "assignment": json.loads(job["payload"]).get("task", ""),
+                "content": text[offset : offset + length],
+                "offset": offset,
+                "total_chars": len(text),
+                "next_offset": offset + length if offset + length < len(text) else None,
+            }
+        )
+
+    @app.post("/api/background-jobs/{job_id}/cancel")
+    async def cancel_background_job(job_id: str, actor=Depends(authenticated), k=Depends(kernel)):
+        actor.require_owner()
+        job = k.jobs.get(job_id)
+        if not job:
+            raise ControlError("Background job not found", 404)
+        await k.jobs.cancel_job(job, "Cancelled by dashboard owner")
+        return k.jobs.status(k.jobs.get(job_id))
 
     @app.post("/api/snapshots")
     async def capture_snapshot(body: SnapshotBody, actor=Depends(authenticated)):

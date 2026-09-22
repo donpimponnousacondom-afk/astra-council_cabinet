@@ -452,6 +452,9 @@ class Registry:
         from .reasoning_viewer import register as register_reasoning_viewer
 
         register_reasoning_viewer(self)
+        from .research_assistant import ResearchAssistant
+
+        self.research = ResearchAssistant(self)
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
             entry.load()(self)
 
@@ -484,6 +487,8 @@ class Registry:
 
     def spec_for(self, name, context):
         spec = self.specs[name]
+        if name == "research_assistant":
+            return self.research.spec_for(context)
         if name == "shell":
             from .shell_runner import limits
 

@@ -197,6 +197,8 @@ class ContextBuilder:
             values["task_budget"] = bot["active_task_budget"]
         if bot.get("activation"):
             values["activation"] = bot["activation"]
+        if bot.get("background_completion"):
+            values["background_completion"] = bot["background_completion"]
         if self.application_emojis is not None:
             values["application_emojis"] = self.application_emojis.prompt(bot)
         custom = render(bot["dynamic_prompt"], values)
@@ -205,9 +207,16 @@ class ContextBuilder:
             dynamic_prompt=custom,
             silence_action=" or call council_silence alone" if bot.get("allow_silence", True) else "",
         )
-        return [
+        layers = [
             item for key in ("runtime_facts", "dynamic_prompt") if (item := self.prompt(bot, key, values))
         ]
+        if bot.get("background_completion"):
+            item = self.prompt(
+                bot, "background_completion", {"background_job": dumps(bot["background_completion"])}
+            )
+            if item:
+                layers.append(item)
+        return layers
 
     def dynamic(self, bot, profile, channel_id, round_index, estimated):
         return "\n".join(

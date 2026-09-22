@@ -1,5 +1,46 @@
 # Verification record
 
+## Background research service and optional MiMo adapter (2026-09-22)
+
+- Renamed the clean prepared `feat/next_feature` at `0f5faf1` (equal to
+  main/origin/main) to `feat/sub_agent_researcher`. Linear stages are generic
+  jobs/continuations (`30118ee`), optional research adapter (`fe02a92`), then
+  dashboard/owner API and boundary refinements. No push or merge is performed.
+- **506 backend checks passed** across jobs, research, provider transport/SSE/
+  retries, concurrency, addressing, timer-zero/single-shot turns, clean slate,
+  prompts, snapshots, ordinary/agentic turns, tools, security, footer/metrics,
+  reasoning viewer and slash handling. Fifteen focused job/research tests passed
+  again after the final shutdown/diagnostic refinements. Two existing TestClient
+  dependency deprecation warnings remain.
+- **One pre-existing slash test fails:** `test_five_attempts_and_three_missing_receipts_stop_without_work`
+  expects five deferrals; both merged baseline `0f5faf1` and this branch contain
+  `ACK_ATTEMPTS=30`, `ACK_RETRY_DELAY=0.090`. Neither slash source nor that test was
+  changed by this feature. The mismatch with the older five-attempt contract is
+  recorded, not silently resolved during background-job work.
+- Coverage uses isolated SQLite fixtures and mocked HTTP/Discord transports:
+  detached work, timer-zero completion exactly once, human priority, failed
+  follow-up consumption, cancellation before/after worker entry, clean-slate
+  revocation, interrupted recovery, scoped pagination, retention, auth/CSRF,
+  native streaming/buffered annotations/errors/usage, output caps/incomplete
+  reports, identical retry bodies, selected-provider credential isolation and
+  cancellation on secondary profile edits. No live MiMo or Discord call validates
+  the new capability yet; live bot/profile/plugin settings were not edited.
+- **23 modern browser checks passed** across workbench, prompts, snapshots and
+  the new researcher settings/job inspector on isolated port 18362 with build
+  `/tmp/hortator-research-web`. The new test saves the profile, prompt and caps
+  through the fixture API without enabling the plugin/changing Ada; synthetic
+  job responses verify paging display and owner cancellation. Two initial test
+  selectors were corrected to use the existing section button/collapsible result
+  panel. Legacy sources remain untouched. TypeScript/Vite build, Ruff formatting/
+  lint, targeted Prettier and diff checks pass.
+- Deployment procedure: stop/join the existing foreground runtime in shared
+  Screen, save a complete external pre-schema backup at
+  `/home/codexy/.local/share/hortator-backups/20260922-before-background-research`,
+  then rebuild/restart the committed branch using `hortator-next-feature --refresh`.
+  Its external `logs/next-feature.json` receipt records actual startup/dashboard
+  identity. The experimental plugin starts disabled; owner enablement and live
+  search validation remain pending. The generic job service survives its removal.
+
 ## Alphabetical configuration lists and selectors (2026-09-21)
 
 - Created `hotfix/dashboard_alphabetical_order` from clean, fast-forwarded main

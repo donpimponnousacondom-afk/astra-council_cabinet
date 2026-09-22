@@ -2,6 +2,16 @@
 
 Plugins are ordinary installed Python packages with an `hortator.plugins` entry point. The runtime loads these trusted local packages at startup; it never installs or executes code named by a model or Discord message.
 
+The optional **Sub-agent researcher · experimental** exposes `research_assistant`
+and is disabled by default. It delegates to a separately configured MiMo profile
+without changing the conversational model or existing web tools. The reusable
+`registry.jobs` service is bound by Kernel before tool execution; trusted plugins
+may register a handler plus current-scope/configuration checker and submit work
+under Kernel TaskGroup ownership. Workers persist status/results and queue one
+ordinary completion turn, rather than posting Discord messages themselves.
+See [RESEARCH_ASSISTANT](RESEARCH_ASSISTANT.md) for setup/tool calls and
+[BACKGROUND_JOBS](BACKGROUND_JOBS.md) for lifecycle, quotas and revocation.
+
 Async plugin work must follow [CONCURRENCY.md](CONCURRENCY.md): related children belong to a scoped TaskGroup, cancellation propagates after cleanup, and errors are never abandoned. Move expensive pure preparation off the event loop using detached values; keep SQLite/vault access on its owner thread. Built-in model-facing timestamp metadata uses the configured council zone, with raw content/evidence preserved. Future plugins should follow the same presentation convention.
 
 Engine terminal/file-preparation tools remain reserved IDs rather than ordinary registry plugins. The per-bot **Capabilities → Allow intentional silence** checkbox controls `council_silence` through `bots.allow_silence` (default true). It needs no credential/global switch; false removes its schema and prevents a successful silence decision. The ordinary engine budget, complete argument feedback and active-turn cancellation still apply. Do not register a second silence plugin or silently re-enable it from an extension.

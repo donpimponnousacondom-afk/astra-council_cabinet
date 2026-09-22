@@ -331,6 +331,23 @@ class ChatResponse:
         return value
 
     def message(self, msg, path, *, streamed):
+        # Native search is auxiliary public evidence, not a client-side tool
+        # invocation or private reasoning. Preserve it for the research plugin.
+        if "annotations" in msg or "error_message" in msg:
+            search = self.result.metadata.setdefault("native_web_search", {"annotations": [], "errors": []})
+            for annotation in array_value(msg.get("annotations"), path + ".annotations"):
+                value = self.unicode_value(object_value(annotation, path + ".annotations[]"), "annotations")
+                if value not in search["annotations"]:
+                    search["annotations"].append(self.retain(value))
+            error = msg.get("error_message")
+            if error:
+                value = self.unicode_value(error, "error_message")
+                if value not in search["errors"]:
+                    search["errors"].append(self.retain(value))
+            if len(json.dumps(search, ensure_ascii=False).encode()) > METADATA_LIMIT:
+                raise ResponseLimitError(
+                    "native search metadata", len(json.dumps(search).encode()), METADATA_LIMIT
+                )
         self.result.content += self.retain(
             self.unicode_text(
                 assistant_text(msg.get("content"), path + ".content"), "content", streamed=streamed

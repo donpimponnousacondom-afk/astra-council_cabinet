@@ -69,6 +69,7 @@ class Engine:
         self.human_superseded = set()
         self.resetting = set()
         self.single_shots = {}
+        self.jobs = None
 
     def start(self):
         self.task = self.background.spawn(self.loop(), name="council-scheduler")
@@ -269,23 +270,29 @@ class Engine:
                 continue
             if not self.available(bot):
                 continue
-            # Keep observing input, but only explicit human attention may start
-            # a scheduler turn with the timer off. Do not change pick_channel:
+            completed_job = self.jobs.pending(bot) if self.jobs and not attention else None
+            # Keep observing input. Only human attention or a settled background
+            # job starts a timer-off scheduler turn.
+            # Do not change pick_channel:
             # owner-requested compaction also uses it to select a context.
-            if bot["interval_seconds"] == 0 and not attention:
+            if bot["interval_seconds"] == 0 and not attention and not completed_job:
                 continue
             state = self.store.runtime(bot["id"])
             if (
                 state["gateway_status"] != "online"
                 or state["retry_until"] > now
-                or (state["next_at"] > now and not attention)
+                or (state["next_at"] > now and not attention and not completed_job)
             ):
                 continue
             profile, provider = self.configuration(bot)
             health = self.store.health(provider["id"])
             if health["circuit_until"] > now:
                 continue
-            channel_id = attention[0]["channel_id"] if attention else self.pick_channel(bot)
+            channel_id = (
+                attention[0]["channel_id"]
+                if attention
+                else (completed_job["channel_id"] if completed_job else self.pick_channel(bot))
+            )
             if not channel_id:
                 continue
             error = self.budget_error(bot)
@@ -301,7 +308,7 @@ class Engine:
                     level="warning",
                 )
                 continue
-            self.launch(bot, channel_id, human_directed=bool(attention))
+            self.launch(bot, channel_id, human_directed=bool(attention), completed_job=completed_job)
 
     async def loop(self):
         while not self.closed:
@@ -349,7 +356,16 @@ class Engine:
             )
         return self.launch(bot, channel_id, single_shot=True, human_directed=True)
 
-    def launch(self, bot, channel_id, *, compact_only=False, human_directed=False, single_shot=False):
+    def launch(
+        self,
+        bot,
+        channel_id,
+        *,
+        compact_only=False,
+        human_directed=False,
+        single_shot=False,
+        completed_job=None,
+    ):
         if bot["id"] in self.tasks:
             raise ControlError("Bot already has an active turn", 409)
         if not self.available(bot, manual=compact_only or single_shot):
@@ -357,6 +373,11 @@ class Engine:
         if not self.channel_allowed(bot, channel_id):
             raise ControlError("Channel is outside this bot's configured scope")
         turn_id = uid("turn_")
+        if completed_job:
+            self.jobs.check(completed_job)
+            if not self.jobs.claim(completed_job, turn_id):
+                raise ControlError("Background completion was already consumed", 409)
+            bot = {**bot, "background_completion": self.jobs.notification(completed_job)}
         if single_shot:
             bot = {**bot, "_single_shot_turn": turn_id}
         profile, provider = self.configuration(bot)
@@ -380,6 +401,8 @@ class Engine:
                 if single_shot
                 else activation["kind"]
                 if activation
+                else "background_completion"
+                if completed_job
                 else "owner_message"
                 if bot["role"] == "hortator"
                 else "timer",
@@ -402,6 +425,11 @@ class Engine:
                 **(
                     {"trigger": "manual_trigger", "return_to_paused": not bot["enabled"]}
                     if single_shot
+                    else {}
+                ),
+                **(
+                    {"trigger": "background_completion", "job_id": completed_job["id"]}
+                    if completed_job
                     else {}
                 ),
             },
@@ -502,6 +530,9 @@ class Engine:
             task_plugin = None
             task_seconds = None
             reply_to, artifact_ids = activation["message_id"] if activation else None, []
+            if not reply_to and bot.get("background_completion"):
+                origin_job = self.jobs.get(bot["background_completion"]["job_id"]) if self.jobs else None
+                reply_to = origin_job["reply_to"] if origin_job else None
             reply_repairs = 0
 
             async def budgeted(awaitable):
@@ -1249,6 +1280,7 @@ class Engine:
             raise
 
     async def cancel(self, bot_ids, reason):
+        bot_ids = list(bot_ids)
         tasks = []
         for bot_id in bot_ids:
             task = self.tasks.get(bot_id)
@@ -1259,6 +1291,8 @@ class Engine:
                 "UPDATE outbox SET status='suppressed',error=? WHERE bot_id=? AND status='pending'",
                 (reason, bot_id),
             )
+        if self.jobs:
+            await self.jobs.cancel(bot_ids, reason)
         if tasks:
             await cancel_and_wait(*tasks)
 
