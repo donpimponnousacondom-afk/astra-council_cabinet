@@ -46,7 +46,21 @@ The existing `document_task_*` defaults and successful document-start behavior a
 
 Before every provider request, the runtime counts the assembled prompt, including schemas, fixed conversation, summary, current tool exchanges and trusted remaining-budget facts. Older large result bodies may be replaced by explicit references, then entire completed call/result pairs may leave the active prompt. Retained assistant continuation fields/signatures remain unchanged. The newest bounded result is retained whenever it fits. No helper model or unmetered summary request is used.
 
+Successful search results first page duplicated raw HTTP previews/headers when
+the tool working set exceeds its budget, preserving extracted entries and their
+source URLs. Within a call/result group, large bodies are replaced individually
+and minimization stops as soon as the remaining group fits; one oversized result
+must not automatically hide its smaller siblings. No budget or saved evidence
+is changed by this projection.
+
 References explicitly state that omitted text is **not in the active prompt and has not been summarized**. They retain bounded recent progress, file/document/job handles and a unique `result_id`. Save durable notes through granted workspace or memory operations. To reread an original result, any granted workspace/web-fetch/shell pack supports `{"operation":"read_result","result_id":"result_…","offset":0,"length":2000}`. Its offsets count Unicode characters in the original serialized JSON. Fetch/file/job handles can instead reread their native content.
+
+When an omitted result was itself a `read_result` page, its recovery arguments
+point to `source_result_id` at the original `range.start`, not at the new page's
+evidence wrapper. The page's receipt remains available as `page_result_id`.
+Repeated recovery therefore returns the same source range without nesting JSON
+wrappers. Council inspection preserves its native `resource: "read_result"`
+arguments; all existing scope and transitive-grant checks still apply.
 
 Complete redacted tool results are immutable in SQLite `tool_result_evidence`, alongside the original event and request trajectory. Final start-result evidence includes the budget metadata actually presented to the model. Reused provider call IDs receive distinct result IDs. Evidence reads enforce the original bot, channel and turn, and recheck all original source grants, including through chains of reread pages. Previously sent provider-request evidence is never rewritten. Evidence shares the existing trajectory retention; it does not expire when a fetched snapshot or job log expires.
 

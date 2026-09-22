@@ -1,5 +1,24 @@
 # Implementation and acceptance plan
 
+## Search result retention and reread recovery (2026-09-22)
+
+The owner requested investigation of Loki's search complaints, authorized a fix
+and restart if warranted, and asked for a note to revisit tomorrow. Saved HTTP
+and request evidence confirmed successful searches followed by overly aggressive
+tool-context omission and rereads through nested result wrappers. The optional
+researcher was disabled and did not cause this behavior.
+
+Keep the existing tool-context budget. Page duplicated successful-search HTTP
+fields before hiding extracted results, stop minimizing a batch when it fits,
+and preserve the original source/offset in omitted-page recovery instructions.
+Do not rewrite Loki's configuration or memories about past search failures.
+
+**Owner follow-up:** ask Loki for two brief searches in one turn and check that
+it can use the returned titles/snippets directly. Explicit paging remains valid
+under pressure. Offline replay and fixtures validate the fix; a fresh live bot
+answer remains the acceptance check. Researcher enablement/testing is separate.
+See the [verification record](VERIFICATION.md).
+
 ## Reusable background jobs and optional researcher (2026-09-22)
 
 Owner approved real background execution independent of the experimental plugin:
