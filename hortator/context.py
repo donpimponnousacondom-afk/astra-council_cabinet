@@ -197,6 +197,8 @@ class ContextBuilder:
             values["task_budget"] = bot["active_task_budget"]
         if bot.get("activation"):
             values["activation"] = bot["activation"]
+        if bot.get("background_completion"):
+            values["background_completion"] = bot["background_completion"]
         if self.application_emojis is not None:
             values["application_emojis"] = self.application_emojis.prompt(bot)
         custom = render(bot["dynamic_prompt"], values)

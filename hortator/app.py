@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .concurrency import BackgroundTasks
+from .background_jobs import BackgroundJobs
 from . import __version__
 from .discord_gateway import COMMANDS, DiscordManager
 from .models import ControlError, OWNER_ID, SCHEMAS
@@ -48,6 +49,10 @@ class Kernel:
         self.service.seed_plugins()
         self.engine = Engine(self.store, self.vault, self.pool, self.registry)
         self.service.engine = self.engine
+        self.jobs = BackgroundJobs(self.store, self.registry)
+        self.registry.jobs = self.jobs
+        self.engine.jobs = self.jobs
+        self.jobs.engine = self.engine
         self.connector = DiscordManager(self.service)
         self.service.connector = self.connector
         self.engine.transport = self.connector
@@ -57,7 +62,7 @@ class Kernel:
         self.publishing = PublishingWorker(self.store, self.vault, self.directory, self.registry.documents)
         self.background = BackgroundTasks(self.store)
         self.service.background = self.background
-        for component in (self.connector, self.engine, self.publishing):
+        for component in (self.connector, self.engine, self.publishing, self.jobs):
             component.background = self.background
 
     def start(self):
@@ -65,6 +70,7 @@ class Kernel:
             raise RuntimeError("Open Kernel.lifetime() before starting runtime services")
         self.started = True
         self.store.recover()
+        self.jobs.recover()
         self.connector.start()
         self.engine.start()
         self.publishing.start()
@@ -107,7 +113,7 @@ class Kernel:
         if self.closed:
             return
         errors = []
-        for component in (self.publishing, self.engine, self.registry.agentic, self.connector):
+        for component in (self.publishing, self.jobs, self.engine, self.registry.agentic, self.connector):
             try:
                 await component.close()
             except Exception as error:
