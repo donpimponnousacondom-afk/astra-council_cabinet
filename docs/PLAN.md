@@ -9,10 +9,12 @@ word count/research rounds. Also clarify the existing single outstanding job
 rule, including unread completions. Saved settings, quotas, model-facing schemas
 and bot memories remain unchanged.
 
-Observed follow-ups, not implemented by this wording patch: researcher content
-can contain literal tool-call markup while native `tool_calls` is empty and
-`finish_reason=stop`, causing the current completion check to accept it as a
-report. Review truthful result validation before introducing fan-out. Multiple
+The initial audit found researcher content containing literal tool-call markup
+while native `tool_calls` was empty and `finish_reason=stop`. The owner approved
+a follow-up validation patch after timestamps confirmed that the job completed
+before the later manual cancellation. Such output now fails the research job
+while retaining scoped, bounded evidence and metrics. No content execution or
+automatic paid repair is added; genuine cancellation stays distinct. Multiple
 concurrent researchers per bot and an iterative research loop are separate
 decisions; the current adapter submits one request with native search. Loki's
 memory consolidation preserved the search-fix explanation, but some technical

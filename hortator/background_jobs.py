@@ -20,6 +20,14 @@ ACTIVE = ("queued", "running")
 RESULT_LIMIT = 2 * 1024 * 1024
 
 
+class JobResultError(ControlError):
+    """A worker returned unusable output that must remain inspectable."""
+
+    def __init__(self, message, result):
+        super().__init__(message)
+        self.result = result
+
+
 class BackgroundJobs:
     def __init__(self, store, registry):
         self.store, self.registry = store, registry
@@ -201,12 +209,16 @@ class BackgroundJobs:
                         (time.time(), job["id"]),
                     )
                     self.emit(job, "started")
-                    result = await self.handlers[job["plugin"]][0](job)
+                    failure = None
+                    try:
+                        result = await self.handlers[job["plugin"]][0](job)
+                    except JobResultError as exc:
+                        result, failure = exc.result, error_text(exc)
                     self.check(job)
                     result = self.registry.vault.redact(result)
                     if len(dumps(result).encode()) > RESULT_LIMIT:
                         raise ControlError("Background result exceeds the 2 MiB saved-result limit")
-                    self.finish(job, "completed", result=result)
+                    self.finish(job, "failed" if failure else "completed", result=result, error=failure)
         except asyncio.CancelledError:
             self.finish(
                 job,

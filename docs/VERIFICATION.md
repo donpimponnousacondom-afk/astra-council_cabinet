@@ -1,5 +1,39 @@
 # Verification record
 
+## Research output validation versus owner cancellation (2026-09-23)
+
+- Continued the clean, unmerged `hotfix/research_observability` branch after the
+  owner asked whether stopping Luna caused its malformed report. Exact stored
+  sequence: request `req_c150179749314278af6d` finished normally at **09:35:12.621**
+  and its job was saved completed at **09:35:12.623**. The owner disabled research
+  at **09:35:34.343**; that cancelled a different, main-generation request
+  `req_b7a5609d27fd4584848e` and revoked the pending follow-up. All times are
+  Europe/Madrid (+02:00). The malformed result preceded cancellation by 21.7 s.
+- Research now reuses the ordinary answer-envelope detector to reject literal
+  tool-call-shaped content. Unhandled native calls and empty reports also fail
+  validation. The job records `failed`, `complete: false`, explicit validation
+  cause and request identity, retaining output, source annotations and metrics
+  through existing scoped reads. Provider request evidence still truthfully says
+  it completed; this does not affect circuit health or trigger paid repair calls.
+  Existing historical jobs/requests and operator prompts/configuration are intact.
+- The generic job result-error path reuses normal grants, redaction and byte
+  limits before saving failed evidence. Failure notifications retain existing
+  at-most-once behavior and can be read/dismissed normally. Interrupted streams
+  remain cancelled, not malformed completed reports; valid prose and fenced
+  tool examples remain accepted. Partial output-limit reports keep their existing
+  saved-but-incomplete semantics. No schema or dashboard-source change was needed.
+- **69 targeted backend tests passed**, including 13 new cases across streamed
+  and buffered malformed/native/empty output, valid examples, actual partial-SSE
+  cancellation, retained private diagnostics, failure feedback and result reads,
+  deduplicated submissions, unchanged provider health, credential redaction,
+  byte bounds and cross-channel refusal. Existing research/background ownership,
+  runtime, feedback and concurrency checks passed. Two existing dependency
+  deprecation warnings remain. Fixtures used controlled HTTP responses, not paid
+  live research or Discord messages. Ruff and diff checks passed.
+- Deployment follows the committed-source shared-Screen refresh after active
+  turns/jobs finish; the external `logs/next-feature.json` receipt identifies the
+  resulting server/dashboard build. No historical research was rerun for testing.
+
 ## Loki memory/research live audit and dashboard wording (2026-09-23)
 
 - Renamed clean prepared `feat/next_feature` at `063358f` (main/origin/main)

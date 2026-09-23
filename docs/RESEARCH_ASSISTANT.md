@@ -68,6 +68,17 @@ or filtered completion is not advertised as complete. Absence of citation/usage
 metadata cannot prove a search succeeded. Provider reasoning is retained only
 in authenticated diagnostics, never returned through this tool.
 
+Report validation is separate from a successfully completed HTTP/model request.
+An empty report, unhandled native tool calls, or a literal tool-call envelope in
+assistant content makes the job **failed**, with `complete: false`, an explicit
+`validation_error` and `kind: "invalid_researcher_output"`. The saved output,
+sources, usage and metrics remain readable through the same scoped result pages;
+private reasoning stays private. Plain discussion of tools and fenced examples
+are allowed. Content is never executed as a tool or automatically sent for a
+paid repair/retry. A normal partial report stopped by an output limit retains
+the existing incomplete-result behavior. Owner/timeout cancellation is handled
+independently; old request/job evidence is not reclassified or rewritten.
+
 Metrics include per-request TTFT/TPS (unknown for buffered responses), elapsed
 job time, token counts with provenance, inference cost when known and native
 search-use counts. Search cost remains unknown rather than silently zero. Native

@@ -8,6 +8,7 @@ import json
 import time
 from dataclasses import replace
 
+from .background_jobs import JobResultError
 from .models import ControlError
 from .prompt_templates import render
 from .timekeeping import council_timezone, local_timestamp
@@ -248,6 +249,10 @@ class ResearchAssistant:
         }
 
     async def run(self, job):
+        # Use the same narrow envelope check as ordinary answers. It recognizes
+        # response wrappers, not mentions/fenced examples, and never executes text.
+        from .runtime import wrapped_reply
+
         p = json.loads(job["payload"])
         bot = self.store.get("bots", job["bot_id"])
         profile = copy.deepcopy(self.store.get("profiles", p["profile_id"]))
@@ -288,8 +293,15 @@ class ResearchAssistant:
         )
         metrics = json.loads(event["data"]) if event else {}
         search = result.metadata.get("native_web_search", {})
-        complete = result.finish_reason == "stop" and not result.tool_calls and bool(result.content.strip())
-        return {
+        issue = None
+        if result.tool_calls:
+            issue = "Researcher returned unhandled tool calls instead of a final report"
+        elif wrapped_reply(result.content):
+            issue = "Researcher returned literal tool-call markup instead of a final report"
+        elif not result.content.strip():
+            issue = "Researcher returned no visible report"
+        complete = result.finish_reason == "stop" and issue is None
+        saved = {
             "kind": "researcher_synthesis",
             "report": result.content,
             "complete": complete,
@@ -312,3 +324,12 @@ class ResearchAssistant:
                 "attempts": json.loads(row["context"]).get("attempt"),
             },
         }
+        if issue:
+            saved["kind"] = "invalid_researcher_output"
+            saved["validation_error"] = issue
+            raise JobResultError(
+                f"{issue}; request_id={result.request_id}. Output and metrics were saved for inspection; "
+                "no tool calls were executed and no automatic research retry was started.",
+                saved,
+            )
+        return saved

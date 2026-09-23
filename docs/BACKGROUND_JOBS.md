@@ -32,6 +32,13 @@ handlers are unavailable and cannot trigger model work.
 This feature does not automatically offload existing synchronous tools or change
 the lifetime, tool limits or delivery behavior of ordinary turns.
 
+A worker may fail validation while retaining a saved result for inspection.
+`JobResultError` passes that result through the usual grant check, credential
+redaction and 2 MiB bound, then records a failed job and its reason. Status,
+dashboard inspection and the single-consumption completion notification expose
+the failure while scoped result reads retain the evidence. This does not replay
+the worker or classify valid upstream transport as provider downtime.
+
 The completion instruction is an editable Prompt library template, with the
 usual per-bot `background_completion` layer switch/override. Normal generations
 do not receive it. Job payloads/results are credential-redacted; provider private
