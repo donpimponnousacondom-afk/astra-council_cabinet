@@ -28,10 +28,7 @@ test("research configuration saves independently and bot Control inspects/cancel
     })
     .click();
   let dialog = page.getByRole("dialog");
-  const queries = dialog.getByLabel(
-    "Search queries per search round (maximum)",
-    { exact: true },
-  );
+  const queries = dialog.getByLabel("Maximum search queries", { exact: true });
   const results = dialog.getByLabel("Results per search query (maximum)", {
     exact: true,
   });

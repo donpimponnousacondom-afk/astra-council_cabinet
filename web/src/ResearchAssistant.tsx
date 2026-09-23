@@ -46,7 +46,7 @@ export function ResearchSettings({
               131072,
             ],
             ["timeout_seconds", "Total research deadline (seconds)", 600, 7200],
-            ["max_keyword", "Search queries per search round (maximum)", 3, 50],
+            ["max_keyword", "Maximum search queries", 3, 50],
             ["limit", "Results per search query (maximum)", 5, 50],
           ] as const
         ).map(([key, label, fallback, maximum]) => (
@@ -55,7 +55,7 @@ export function ResearchSettings({
             label={label}
             hint={
               key === "max_keyword"
-                ? 'MiMo can expand the assignment into this many search queries in one search round. A query can be a phrase such as "capital of France". This controls query count, not word count or research rounds.'
+                ? 'Maximum queries MiMo may issue in a native search. A query can be a phrase such as "capital of France". This controls query count, not word count or research passes.'
                 : key === "limit"
                   ? "Maximum results returned per search query. More results can increase research input tokens. This is a ceiling, not a guarantee of that many distinct or useful sources."
                   : undefined
@@ -78,6 +78,11 @@ export function ResearchSettings({
           </Field>
         ))}
       </div>
+      <Notice>
+        Each researcher currently makes one research pass: one model request
+        with native web search, followed by a report. These search limits do not
+        add extra passes or change the calling bot's tool rounds.
+      </Notice>
       <Field
         label="Outstanding researchers per bot (default)"
         hint="Default for every bot with this capability. Minimum 4, with no fixed upper limit. Active jobs and pending follow-ups share this allowance across the bot's channels. Override it under Bots → Capabilities."

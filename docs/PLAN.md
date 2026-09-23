@@ -15,6 +15,13 @@ Background lifecycle, fan-out, provider retries and existing web tools stay as
 implemented. Native search failures remain visible and are not automatically
 reclassified as invalid reports or replayed.
 
+The owner subsequently requested an explicit UI distinction between query
+breadth and research rounds. Label `max_keyword` **Maximum search queries** and
+show that each job currently makes one research pass. This is a wording change,
+not approval for an iterative researcher loop. Any future research-pass setting
+belongs in the research plugin; ordinary bot round/call controls and other
+interfaces remain unchanged.
+
 ## Configurable researcher fan-out (2026-09-23)
 
 The owner approved concurrent researchers per bot with a minimum/default of

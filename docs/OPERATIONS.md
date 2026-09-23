@@ -19,13 +19,16 @@ timing/token metrics and cancellation; the plugin editor shows all researcher
 jobs. No plugin-specific credential is required: the selected provider supplies
 its own key, never the conversational bot's key override.
 
-Native search controls accept 1–50 independently: **Search queries per search
-round (maximum)** defaults to three, and **Results per search query (maximum)**
+Native search controls accept 1–50 independently: **Maximum search queries**
+defaults to three, and **Results per search query (maximum)**
 defaults to five. These map to `max_keyword` and `limit`, not researcher turns.
 Jobs capture both values on submission. Existing saved query counts and custom
 prompts survive upgrades; new jobs without an explicit result limit use five.
 Research guidance should distinguish thin coverage from explicit search errors,
 without demanding a local sequence of searches that the adapter does not run.
+The researcher panel identifies the current single research pass per job.
+There is no configurable research-pass count; ordinary bot tool rounds and
+parallel researcher capacity remain independent controls.
 
 With notifications enabled, submit independent researchers in one tool-call
 batch. The runtime stops typing and closes further tools after that batch, asks

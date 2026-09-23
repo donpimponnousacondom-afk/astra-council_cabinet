@@ -17,7 +17,7 @@ changes an existing bot/profile on installation.
 The native request uses `/chat/completions`, `tools: [{type: "web_search",
 force_search: true, max_keyword: 3, limit: 5}]` by default. The operator can
 choose 1–50 query expansions and 1–50 results per query. The dashboard calls these
-**Search queries per search round (maximum)** and **Results per search query
+**Maximum search queries** and **Results per search query
 (maximum)**. A query may be a multiword phrase such as "capital of France". These
 map unchanged to MiMo's `max_keyword` and `limit`; neither sets word count or
 research/model rounds. They are ceilings, not guaranteed useful or distinct
@@ -32,6 +32,13 @@ streaming mode. Each job explicitly sends `max_completion_tokens`, replacing
 inherited output-cap fields on the wire copy only. It bounds reasoning plus
 visible output; upstream search-context tokens are separately billable. There is
 no inherited conversation summary or automatic compaction of research inputs.
+
+The researcher panel explicitly states **one research pass per job**: one model
+request with native search, then its report. There is currently no research-pass
+count setting. Provider retries repeat a failed request, not a new research
+iteration. The calling bot's normal tool rounds/calls and researcher concurrency
+are separate. Future research-pass controls belong within this plugin's editor;
+they must not change ordinary bot tool-round controls or other interfaces.
 
 Configuration defaults: no selected profile, 16,384 output-token ceiling,
 600-second total deadline (including queue/retries, configurable 1–7,200), three

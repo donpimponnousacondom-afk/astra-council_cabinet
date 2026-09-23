@@ -31,6 +31,12 @@
   adding the agreed evidence/error guidance while preserving other custom text.
   Real source quality and Xiaomi's native search availability remain live
   acceptance checks for the owner's next research assignment.
+- Follow-up UI clarification changes only the researcher editor: **Maximum
+  search queries** replaces the ambiguous round-based label, and an explicit
+  notice states one research pass per job. No backend behavior or live settings
+  changed. The two existing browser tests passed again on isolated port 18378;
+  TypeScript, Vite, scoped formatting and diff checks also passed. Ordinary bot
+  round/call controls and the legacy interface were not edited.
 
 ## Background research lifecycle hardening (2026-09-23)
 
