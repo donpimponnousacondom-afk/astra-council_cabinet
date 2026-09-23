@@ -65,3 +65,10 @@ Private memory writes always include `{"operation":"write","key":"topic","value"
 
 
 As of 2026-09-14, the HTTP adapter captures every response before parsing, including non-200 statuses. Each engine includes `http_status`, URL and `http_response` with original headers/body evidence and a paged read reference. Parser/challenge diagnoses are separate from those upstream facts. In particular a 202 challenge is evaluated from its body, not guessed from its status. Use the returned `read_response` arguments with `web_search` itself to inspect full evidence. Search's own deadline is labelled `local_deadline`. See [HTTP_EVIDENCE.md](HTTP_EVIDENCE.md).
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Web search supports Brave and keyless DuckDuckGo with Auto fallback, explicit engine selection and combined results. Preserve successful partial results, per-engine provenance/errors, bounded downloads/previews and credential separation; never forward the Brave key to DuckDuckGo or bypass a search challenge. See [docs/WEB_SEARCH.md](WEB_SEARCH.md). Memory guidance must show complete operation-bearing examples; do not infer a write from key/value alone. Shell guidance must name the separate `workspace.start` prerequisite. These refinements do not authorize clearing memories or resetting bot databases; the owner deferred that work.

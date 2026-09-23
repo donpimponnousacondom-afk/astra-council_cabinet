@@ -38,3 +38,9 @@ Use `settings.timezone` for transcript timestamps, dynamic model clock, model-fa
 Models receive guidance to use the trusted clock and normalize older UTC references before comparing instants or writing new memories. Compaction uses the same convention. Tool formatting changes known metadata only, never quoted content, commands, schemas, arguments, old notes or raw request/response evidence.
 
 SQLite keeps epoch instants. Version/build APIs retain canonical UTC startup/build stamps; normal dashboard and Discord `!version` presentation converts their dates. Raw evidence and exports retain originals. Existing notes/summaries are not rewritten. Durations, cooldowns and UTC-day cost accounting remain unchanged.
+
+## Service construction and binding
+
+`Kernel` constructs the store, vault, provider pool, configuration service, registry, engine, background-job service, publishing worker and task owner, then calls `_bind_services()` once. That phase connects the service graph, seeds registered plugin records, constructs the Discord manager after its registry dependency is available, connects Discord dispatch, assigns the shared task owner and invokes optional plugin binding hooks in registration order. Constructors and binding do not start runtime tasks.
+
+`Kernel.lifetime()` remains the sole lifetime owner; `start()` still requires an open lifetime. Shutdown cancellation, joins and resource-close ordering are unchanged. Plugin `bind(kernel)` hooks register adapters with existing services and must not create a competing task owner. The researcher binds its worker to the general background-job service through this hook. The job service is constructed independently and remains available without a research plugin. This is an explicit composition phase, not a general dependency-injection framework.

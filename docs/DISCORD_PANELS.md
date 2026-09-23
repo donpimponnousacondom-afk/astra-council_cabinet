@@ -85,3 +85,12 @@ Finish with ordinary text. An export is a single file, not a bundled site: relat
 This version supports buttons and single-choice dropdowns, not modal forms, arbitrary web UI or editing an already-sent panel in place. Disabling a panel/grant rejects interactions server-side; it does not delete or repaint old Discord messages. No bot is granted workspace, shell or image generation merely to enable panels. New installations leave this plugin disabled.
 
 References: [Discord component reference](https://docs.discord.com/developers/components/reference), [Components V2 usage](https://docs.discord.com/developers/components/using-message-components), [interaction lifecycle](https://docs.discord.com/developers/interactions/receiving-and-responding). The implementation requires discord.py 2.7+ within the existing major-version bound.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- `discord_panel` is a separate opt-in keyless tool. Prepare presentation around ordinary assistant content; never return to tool-wrapped answers. Native buttons/dropdowns start real exact-owner tasks through the existing interaction runner with shared retries, active slots and the 14-minute deadline. Verify saved bot/application/message/channel/action ownership after restart and recheck grants after acknowledgement. Hortator retains its director scope. Never persist interaction tokens or replay uncertain sends. Keep callbacks as saved prompts, not executable code or arbitrary URLs. See [docs/DISCORD_PANELS.md](DISCORD_PANELS.md).
+
+- The owner explicitly wants automatic long-answer attachments without a checkbox. Artifacts are owned generated/exported files, not another plugin. `document_site.export` supplies existing saved files to `discord_attach` without granting workspace or image generation. Preserve both those independent grants; Loki image generation stays disabled. Panels default off for new installations; enable individual bots only as authorized.

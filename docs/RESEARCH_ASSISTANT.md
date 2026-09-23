@@ -180,3 +180,16 @@ Inspect saved work in **Bots → bot → Control → Background jobs**, or in th
 researcher plugin editor. The owner can page reports/metrics and cancel an active
 job or its pending follow-up. Dashboard inspection does not consume the bot's
 notification. Research configuration and existing bot settings remain separate.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Research fan-out uses operator `max_parallel_jobs` globally with an optional per-bot override: default/minimum four, no fixed upper ceiling. Each `start` creates one researcher and consumes one normal tool call; preserve round/call budgets and provider concurrency. Active jobs and pending completion notifications share the per-bot/plugin allowance across channels. Do not restore hidden two-worker/global-eight/per-turn-two ceilings or introduce batch-start shortcuts. Keep every outstanding job inspectable and settled history bounded. See RESEARCH_ASSISTANT for settings and capacity semantics.
+
+- Research native search budgets are separate operator settings: `max_keyword` (queries per search round) and `limit` (results per query), each 1–50, with new defaults 3 and 5. Freeze effective values in each submitted job and preserve explicit saved/per-bot values. This remains one provider request with native search, not a local iterative search loop. Distinguish insufficient evidence/model-written search claims from structured upstream errors; preserve custom saved prompts and make approved live wording edits narrowly.
+
+- Research follow-up dispatch uses `max_research_batches` (default 3, minimum 1) in the research plugin. Count the initial dispatch and each later dispatch turn once; siblings share one durable task allowance across completion waves. Preserve the original ceiling, identity, channel and reply target; rejected calls/idempotent recovery never spend another batch. A value of 1 disables follow-up dispatch. The parent bot evaluates and refines assignments, while every researcher remains single-pass.
+
+- Researcher UI must distinguish search queries/results, the current single research pass per job, and parallel job capacity. Any future research-pass count belongs in the research plugin's editor; do not alter ordinary bot tool-round/call controls or other interfaces as part of researcher tuning.

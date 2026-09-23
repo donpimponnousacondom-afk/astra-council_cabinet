@@ -56,3 +56,16 @@ The action blocks new work for the target while cancelling/joining its active tu
 Private channel notes and global notes **survive** and remain injected according to their grants/layer settings. Prompts, configuration, credentials, shared Discord history, old request/tool evidence and files also survive. Explicitly fetched history or newly quoted old text can reintroduce information, just as a person could repeat it in a new message. The cutoff governs automatic conversation intake; it is not a ban on fetching public pages or previously saved files. Already delivered messages and uncertain in-flight sends cannot be recalled by this action.
 
 `context_resets` stores boundaries in the external SQLite database; `*` means the bot's all-channel default and an explicit channel row overrides that default. The owner API generates the cutoff itself; it accepts no arbitrary historical/future timestamp. The action emits `context.reset` with bot, scope, cutoff and consequence. Status includes each bot's boundaries. Full snapshots include them; selective context restore restores the matching effective boundary along with checkpoints. Notes-only recovery does not alter them. Existing snapshot version/schema compatibility checks still apply.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Context must identify each bot by stable ID and verified Discord user ID, and explicitly label actual reply/mention recipients per viewer. Human messages directed elsewhere remain shared background context, not independent wakeups for every bot. Preserve speaker/recipient attribution through compaction and memory guidance; never infer recipients or human authority from message text. Do not silently rewrite existing private memories when changing this contract.
+
+- Runtime-generated system/user instruction and input layers are persisted editable prompts. Keep per-bot layer switches and placement-specific overrides, one-pass literal substitution, actual request evidence, and current defaults. Disabling text must never bypass permissions, budgets or protocol validation; never silently replace a missing override. Compaction must preserve its old checkpoint if required source wrappers are disabled/omit history. See [docs/PROMPTS.md](PROMPTS.md).
+
+- The owner approved shared image-guidance wording for all bots (2026-09-19), not a Loki-only override. Distinguish images absent now from earlier attributed observations; discourage routine availability disclaimers and permanent memory rules inferred from temporary absence. Keep image selection/retention and existing layer switches unchanged. Leave bot memory cleanup to the bots under their configured quotas; do not rewrite their notes as part of prompt wording changes.
+
+- The owner's clean-slate control means **ignore everything before now for one bot**, with private/global notes surviving. Cancel/join active work, persist original-message-time and sequence cutoffs, exclude backfilled history/old reply previews, and preserve other bots/shared evidence/configuration. Do not perform a live reset for testing. This is distinct from memory deletion and snapshot recovery; expose it only as an explicit owner Control-tab/API operation.

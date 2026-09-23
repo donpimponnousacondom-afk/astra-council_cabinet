@@ -99,3 +99,10 @@ PRIMARY KEY (bot_id, key)
 No memory files are stored inside the source repository. Complete SQLite backups include global notes alongside existing configuration and private notes. Global-note snapshot/restore scope is per bot; restoring one channel's private notes must not implicitly overwrite global notes shared across all of that bot's channels. Preserve the matching encryption key and other managed files for a complete application backup, as described in [OPERATIONS.md](OPERATIONS.md#backup-and-restore).
 
 The module is independently removable from registration, prompt composition and the authenticated editor/API while preserving the additive table for later re-enablement or export. It registers no background worker, sends no network traffic and does not modify normal channel-memory behavior. See [PLUGINS.md](PLUGINS.md) for extension boundaries and [TOOLS.md](TOOLS.md) for shared validation requirements.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- The owner selected global memories private to each bot across its channels. Keep this a separate opt-in plugin and quota from private channel notes; never turn it into a notebook shared between bots. Companion slash ingress is also opt-in and must preserve existing ordinary bot behavior and Hortator's owner/control-channel restrictions. No existing plugin grants, credentials, prompts or bot records are changed merely by installing these features.

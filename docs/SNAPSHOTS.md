@@ -63,3 +63,12 @@ Catalog entries include `id`, `name`, `note`, `created_at`, `build`, `source_com
 During a maintenance transaction, in-flight HTTP handlers drain and new requests receive a clear retryable 503. Old event streams exit before querying the closed store. The API listener and shared Screen session stay in place. The same application TaskGroup owner closes the old Kernel lifetime, performs the offline operation and opens the replacement; an HTTP request never closes another task's TaskGroup. Browser disconnection cannot abandon an already-started restore. Filesystem worker threads are joined before shutdown releases the runtime lock.
 
 Operational events identify snapshot creation, restoration, resume and failures, including operation/snapshot/recovery IDs without note contents or credentials. Restore failure messages retain the real cause and whether the runtime remains paused. API status and catalog receipts remain the source of truth after a browser reconnect.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Application snapshots live outside source Git and live data. Capture must stop/join every runtime writer before copying SQLite, matching key and managed files; never describe a live file copy as a consistent full snapshot. Restore validates source/schema/hash/key identity, creates a recovery snapshot, and stays durably paused until the owner resumes it. The runtime owner must enter and exit its own TaskGroups; HTTP handlers must not close another task's Kernel lifetime. Preserve the runtime lock inode, shared Screen logger and user's attachment across replacement. See [docs/SNAPSHOTS.md](SNAPSHOTS.md).
+
+- Selective experiment recovery defaults to one bot's channel notes. Global notes and context checkpoints are explicit optional scopes; do not reset other bots, rewrite shared transcript history or claim local restore reverses Discord sends, provider charges or remote publication. Never perform an actual state restore merely to test the feature against live data.
