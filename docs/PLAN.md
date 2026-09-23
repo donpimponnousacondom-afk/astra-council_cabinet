@@ -1,6 +1,6 @@
 # Implementation and acceptance plan
 
-## Conversational bot coordinates successive research batches (clarified 2026-09-23)
+## Conversational bot coordinates successive research batches (2026-09-23)
 
 The owner clarified the desired next behavior: the conversational bot launches
 researchers, acknowledges in a new Discord message, sleeps, then wakes when
@@ -11,15 +11,23 @@ is orchestration by the parent bot, not recursive delegation by a researcher or
 an internal researcher tool loop. Thin reports are not necessarily bad prompts:
 upstream search errors and inadequate source coverage must remain distinguishable.
 
-This is a requested direction, **not implemented behavior**. The current generic
-background submission guard rejects starts from completion follow-ups; existing
-handoff/wake/report behavior does not permit the next dispatch. Enabling it needs
-a deliberate research-plugin policy, with linked task ancestry and a bounded
-budget that survives wake-ups instead of resetting with each turn. Exact cycle
-budget settings remain to be specified. Preserve one tool call per researcher,
-current capacity/provider limits, fresh human priority, cancellation/clean-slate
-rules and new-message reporting. Any cycle control belongs in the researcher
-plugin's interface; ordinary bot round/call controls stay unchanged.
+The owner approved implementation and selected **three dispatch batches total**:
+the initial batch plus up to two refined batches, configurable in the research
+plugin as `max_research_batches` (minimum one, no fixed upper ceiling). All
+completion waves and descendants share the original task budget. Each dispatch
+turn consumes one batch only after its first job is accepted; retries/recovery
+and rejected submissions do not spend another batch. A smaller current allowance
+is respected, while increasing configuration cannot refill an existing task.
+Current grants, normal tool budgets, capacity/provider limits, fresh human
+priority, cancellation/clean-slate rules and new-message reporting still apply.
+Generic background plugins remain unable to launch from completion turns unless
+they register their own admission policy. Researchers never launch researchers.
+
+Loki is the alpha tester, not a special runtime identity. This feature applies to
+any bot explicitly granted the research plugin, and can be disabled or moved to
+another council member independently. Stable members keep their existing grants,
+settings and behavior. Cycle controls live only in the research plugin editor;
+ordinary bot round/call controls remain unchanged.
 
 ## Researcher native search breadth (2026-09-23)
 

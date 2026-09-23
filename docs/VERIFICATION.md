@@ -1,5 +1,52 @@
 # Verification record
 
+## Shared research-task dispatch budget (2026-09-23)
+
+- Renamed the clean, merged `1c12e9e` placeholder to
+  `feat/research_followup_cycles`. The owner selected three total dispatch
+  batches: initial research plus at most two batches of refined questions.
+  This is a granted capability for any council bot; Loki remains the alpha
+  tester, with no bot-specific runtime rule or extra grants for stable members.
+- The research plugin now admits parent-bot follow-up submissions using the
+  current turn's durably claimed results. All sibling waves and descendants
+  share one saved allowance. Each dispatch turn spends once; failed inserts
+  roll back the budget, duplicate submissions recover without spending, and
+  retaining descendants prevents aged-out initial jobs from resetting it.
+  Increasing configuration does not replenish existing tasks; lowering it is
+  respected. Legacy jobs without ancestry can report but cannot refine.
+- **218 backend tests passed** across researcher transport/validation/fan-out,
+  the new cycle suite, background dispatch/batching/receipts/lifecycle, runtime,
+  prompt layers, clean-slate controls and snapshots. The new end-to-end case
+  dispatches, acknowledges, sleeps, wakes and refines through three batches,
+  then rejects a fourth. It checks worker release after each acknowledgement,
+  four new Discord sends and zero edits. Scope, forged ancestry, lowered/one
+  batch limits, retention, recovery and failed job insertion are covered.
+  Two existing dependency deprecation warnings remain.
+- **Two Playwright tests passed** using an isolated `/tmp` dashboard build and
+  port 18380. The research-only field defaults to three, allows one or larger
+  integers with no fixed ceiling, rejects missing/zero values, and saves/reopens
+  seven. Existing search controls, custom text, bot settings, fan-out inheritance
+  and job inspection remain covered. TypeScript, Vite, scoped formatting, Ruff
+  and `git diff --check` pass. Provider/Discord tests use mocks; no paid research
+  or test message was generated.
+- Before deployment, live turns, requests, active jobs and pending notifications
+  were all zero. The lifecycle-owned snapshot API captured
+  `20260923T140522056933Z-873509e35197` (**Before research follow-up batches**),
+  1,558 files, under `/home/codexy/.local/share/hortator-snapshots`, then resumed
+  the prior runtime mode. Snapshot verification passed for the complete file
+  inventory/hashes, SQLite checks and matching-key decryption;
+  its private receipt is `logs/research-cycles-before-snapshot.json`. This is a
+  pre-change recovery snapshot: restore with its compatible code/schema. It
+  does not replace the independent manual host archive pointer.
+- Release procedure: commit source, recheck idle work, refresh the shared Screen
+  runtime, then narrowly update the two saved background instruction templates
+  and set the approved global batch allowance to three. Preserve grants,
+  providers, main-bot round/call limits and other custom prompt text. The refresh
+  receipt at `logs/next-feature.json` records dashboard/server startup identity;
+  the private `logs/research-cycles-release.json` records live configuration and
+  readback checks. Real research quality/refinement decisions remain an owner
+  acceptance check during normal conversations.
+
 ## Researcher search breadth controls (2026-09-23)
 
 - Renamed the prepared `feat/next_feature` placeholder at merged `398a37d`

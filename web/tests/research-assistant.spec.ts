@@ -34,6 +34,29 @@ test("research configuration saves independently and bot Control inspects/cancel
   });
   await expect(queries).toHaveValue("3");
   await expect(results).toHaveValue("5");
+  const batches = dialog.getByLabel("Research batches per task (maximum)", {
+    exact: true,
+  });
+  await expect(batches).toHaveValue("3");
+  await expect(batches).toHaveAttribute("min", "1");
+  await expect(batches).not.toHaveAttribute("max");
+  for (const invalid of ["", "0"]) {
+    await batches.fill(invalid);
+    await dialog
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    expect(
+      await batches.evaluate((input: HTMLInputElement) =>
+        input.checkValidity(),
+      ),
+    ).toBe(false);
+    expect(
+      await (
+        await page.request.get("/api/config/plugins/research_assistant")
+      ).json(),
+    ).toEqual(pluginBefore);
+  }
+  await batches.fill("7");
   for (const input of [queries, results]) {
     await expect(input).toHaveAttribute("min", "1");
     await expect(input).toHaveAttribute("max", "50");
@@ -106,6 +129,7 @@ test("research configuration saves independently and bot Control inspects/cancel
     max_parallel_jobs: 16,
     max_keyword: 50,
     limit: 50,
+    max_research_batches: 7,
     system_prompt: "Research carefully. Today is {now}.",
   });
   await page
@@ -116,6 +140,7 @@ test("research configuration saves independently and bot Control inspects/cancel
     .click();
   await expect(queries).toHaveValue("50");
   await expect(results).toHaveValue("50");
+  await expect(batches).toHaveValue("7");
   const after = await (await page.request.get("/api/config/bots/ada")).json();
   expect(after).toEqual(before);
 

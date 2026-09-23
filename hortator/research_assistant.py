@@ -12,6 +12,7 @@ from dataclasses import replace
 from .background_jobs import JobResultError
 from .models import ControlError
 from .prompt_templates import render
+from .research_cycles import ResearchCycles
 from .timekeeping import council_timezone, local_timestamp
 from .tool_feedback import errors_for
 
@@ -35,6 +36,7 @@ DEFAULTS = {
     "max_keyword": 3,
     "limit": 5,
     "max_parallel_jobs": 4,
+    "max_research_batches": 3,
     "notify_on_completion": True,
 }
 CONFIG_SCHEMA = {
@@ -48,6 +50,7 @@ CONFIG_SCHEMA = {
         "max_keyword": {"type": "integer", "minimum": 1, "maximum": 50},
         "limit": {"type": "integer", "minimum": 1, "maximum": 50},
         "max_parallel_jobs": {"type": "integer", "minimum": 4},
+        "max_research_batches": {"type": "integer", "minimum": 1},
         "notify_on_completion": {"type": "boolean"},
     },
 }
@@ -74,7 +77,11 @@ DESCRIPTION = (
     "inspect capacity before submitting more. Provider concurrency may make admitted jobs wait. "
     "Follow-ups report useful progress and findings in NEW messages, never edits to old messages. "
     "Read the newly settled jobs; do not wait for remaining workers, which wake later follow-ups. "
-    "No recursive submissions from completion follow-ups. "
+    "On a completion wake-up, evaluate the saved evidence. If useful gaps remain and the task has "
+    "research batches left, you may submit narrower follow-up assignments in one batch, acknowledge "
+    "the accepted jobs in a NEW message, then stop again. The initial dispatch and every follow-up "
+    "dispatch each consume one task-wide batch; all sibling completion waves share that budget. "
+    "Do not repeat failed searches unchanged or infer an outage from thin results. "
     "This experiment currently starts jobs only in configured conversational channels, not slash/panel "
     "invocations or paused one-shot turns. Example: "
     '{"operation":"start","submission_id":"pricing-2026-09","task":"Compare official pricing, cite dated URLs.","max_output_tokens":4096}.'
@@ -195,6 +202,12 @@ def validate_config(config, store):
         # JSON Schema accepts integral floats; admission uses a strict saved
         # integer so an API-accepted setting cannot fail later at submission.
         errors.append({"path": "$.max_parallel_jobs", "message": "Use an integer of at least 4"})
+    if (
+        isinstance(config, dict)
+        and "max_research_batches" in config
+        and type(config["max_research_batches"]) is not int
+    ):
+        errors.append({"path": "$.max_research_batches", "message": "Use an integer of at least 1"})
     if errors:
         raise ControlError(
             "Invalid researcher configuration: " + "; ".join(f"{e['path']}: {e['message']}" for e in errors)
@@ -209,6 +222,7 @@ class ResearchAssistant:
         from .plugins import PluginSpec
 
         self.registry, self.store = registry, registry.store
+        self.cycles = ResearchCycles(self)
         registry.register(
             PluginSpec(
                 ID, "Sub-agent researcher · experimental", DESCRIPTION, PARAMETERS, self.call, DEFAULTS
@@ -222,6 +236,8 @@ class ResearchAssistant:
             run=self.run,
             check=self.check,
             limit=lambda bot: self.configuration(bot)["max_parallel_jobs"],
+            admit=self.cycles.admit,
+            describe=self.cycles.describe,
         )
 
     def configuration(self, bot):
@@ -251,10 +267,19 @@ class ResearchAssistant:
         capacity = self.jobs.capacity(context.bot["id"], ID)
         schema = copy.deepcopy(PARAMETERS)
         schema["properties"]["max_output_tokens"]["maximum"] = config["max_output_tokens"]
+        try:
+            cycle = self.cycles.context_status(context)
+            cycle_text = (
+                f" Research task dispatch batches: {cycle['batches_used']}/{cycle['max_batches']} used; "
+                f"{cycle['remaining_batches']} new batches left, shared across all completion waves."
+            )
+        except ControlError as exc:
+            cycle_text = f" New research dispatch unavailable: {exc}."
         return replace(
             self.registry.specs[ID],
             parameters=schema,
             description=DESCRIPTION
+            + cycle_text
             + (
                 f" Current output ceiling: {config['max_output_tokens']} tokens; "
                 f"total deadline: {config['timeout_seconds']} seconds; "

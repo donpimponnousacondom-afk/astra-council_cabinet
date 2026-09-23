@@ -39,6 +39,8 @@ class BackgroundJobs:
         self.store, self.registry = store, registry
         self.handlers = {}
         self.limits = {}
+        self.admissions = {}
+        self.descriptions = {}
         self.tasks = {}
         self.origin_gates = {}
         self.background = None
@@ -59,11 +61,15 @@ class BackgroundJobs:
             "ON background_jobs(bot_id,channel_id,plugin,origin_turn_id)"
         )
 
-    def register(self, name, *, run, check, limit=None):
+    def register(self, name, *, run, check, limit=None, admit=None, describe=None):
         if name in self.handlers:
             raise ValueError(f"Duplicate background job handler: {name}")
         self.handlers[name] = (run, check)
         self.limits[name] = limit or (lambda bot: 1)
+        if admit:
+            self.admissions[name] = admit
+        if describe:
+            self.descriptions[name] = describe
 
     def capacity(self, bot_id, plugin):
         """Current operator allowance across this bot's channels, not a tool argument."""
@@ -162,7 +168,7 @@ class BackgroundJobs:
                 raise ControlError("Submission ID already belongs to another assignment; use a new ID")
             self.owned(existing["id"], context, plugin)
             return self.status(existing)
-        if context.bot.get("background_completion"):
+        if context.bot.get("background_completion") and plugin not in self.admissions:
             raise ControlError(
                 "A completion follow-up cannot launch more background jobs; answer or read results"
             )
@@ -194,13 +200,24 @@ class BackgroundJobs:
             reply_to=context.bot.get("activation", {}).get("message_id"),
         )
         self.check(job)
-        self.store.execute(
-            "INSERT INTO background_jobs(id,plugin,bot_id,channel_id,origin_turn_id,submission_id,created_at,"
-            "deadline,updated_at,state,payload,notify,reply_to) VALUES(:id,:plugin,:bot_id,:channel_id,"
-            ":origin_turn_id,:submission_id,:created_at,:deadline,:updated_at,:state,:payload,:notify,:reply_to)",
-            job,
-        )
-        self.emit(job, "queued", **self.capacity(job["bot_id"], plugin))
+        # Plugin admission and the job must commit together. Hooks are synchronous
+        # and trusted; a rejected/failed insert never spends a follow-up budget.
+        self.store.execute("SAVEPOINT background_submission")
+        try:
+            if admit := self.admissions.get(plugin):
+                admit(context, job)
+            self.store.execute(
+                "INSERT INTO background_jobs(id,plugin,bot_id,channel_id,origin_turn_id,submission_id,created_at,"
+                "deadline,updated_at,state,payload,notify,reply_to) VALUES(:id,:plugin,:bot_id,:channel_id,"
+                ":origin_turn_id,:submission_id,:created_at,:deadline,:updated_at,:state,:payload,:notify,:reply_to)",
+                job,
+            )
+            self.store.execute("RELEASE background_submission")
+        except BaseException:
+            self.store.execute("ROLLBACK TO background_submission")
+            self.store.execute("RELEASE background_submission")
+            raise
+        self.emit(job, "queued", **self.capacity(job["bot_id"], plugin), **self.describe(job))
         gate = None
         if self.store.one("SELECT 1 FROM turns WHERE id=? AND status='running'", (context.turn_id,)):
             gate = self.origin_gates.setdefault(context.turn_id, asyncio.Event())
@@ -326,7 +343,12 @@ class BackgroundJobs:
             "metrics": result.get("metrics"),
             "next": {"operation": "read_result", "job_id": job["id"], "offset": 0, "length": 6000},
             "capacity": self.capacity(job["bot_id"], job["plugin"]),
+            **self.describe(job),
         }
+
+    def describe(self, job):
+        describe = self.descriptions.get(job["plugin"])
+        return describe(job) if describe else {}
 
     def batch(self, job):
         return self.store.rows(
@@ -387,6 +409,9 @@ class BackgroundJobs:
         return {
             "origin_turn_id": context.turn_id,
             "scope": "All jobs dispatched by this turn; progress counts notification-enabled jobs across plugins.",
+            "plugin_state": {
+                row["plugin"]: self.describe(row) for row in rows if row["plugin"] in self.descriptions
+            },
             "progress": self.progress(rows),
             "jobs": receipts,
             "omitted_receipts": len(rows) - len(receipts),

@@ -64,13 +64,18 @@ Batch siblings are protected
 from retention while any worker, notification or reporting turn is outstanding.
 
 Each notification is claimed before execution, never automatically replayed following
-an inference or uncertain Discord delivery failure. Follow-ups cannot recursively
-launch more background jobs. Normal answers and intentional silence still end
+an inference or uncertain Discord delivery failure. Follow-up submissions are
+blocked unless a trusted plugin supplies explicit admission policy. The research
+plugin permits refined batches within a durable task-wide allowance; workers
+themselves cannot delegate. Normal answers and intentional silence still end
 the follow-up. Progress and results use **new ordinary outbox messages**; the
 workflow never edits the dispatch acknowledgement or an older answer. It does
 not manufacture findings or bypass configured silence/delivery gates. A follow-up
 may read results and use its ordinary tool budget, but cannot wait on remaining
-researchers or recursively start more; subsequent waves report their outcomes.
+researchers; subsequent waves report their outcomes. The research plugin may
+admit a refined batch while earlier workers continue, within both available
+slots and the shared task budget. The normal acknowledgement handoff then ends
+that completion turn too.
 
 Pause/configuration cancellation joins relevant workers and revokes pending
 notifications. Clean-slate boundaries prevent old work from reentering context.
