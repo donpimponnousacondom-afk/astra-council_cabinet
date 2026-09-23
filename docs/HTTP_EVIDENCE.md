@@ -16,6 +16,14 @@ A successfully stored extracted document retains `status: ready`; this means **l
 
 Search continues to extract and combine Brave/DuckDuckGo results. Each `engine_status` contains its actual HTTP response, separate parsing category/local issue and result count. A DuckDuckGo 202 challenge now reaches the parser with its actual body; a reported challenge must come from recognized body markers. A valid result payload is not discarded merely because its status differs from 200. Partial success retains the other engine's results. Locally generated parser explanations and the combined-search summary are labelled diagnostics, not server response text. Search's own deadline is `local_deadline`, distinct from a transport failure.
 
+Under active tool-context pressure, successful search results keep their extracted
+entries before duplicated raw HTTP previews, headers and redirects. Those raw
+fields may be paged out of the prompt copy with an explicit `paged_fields` list,
+notice and existing `read_response` handle. Status, reason, capture completeness
+and parsing diagnostics remain visible; failed-engine previews are not removed
+by this success-only step. Full original results and HTTP evidence stay unchanged
+in the ledger. Paging is a local context decision, not evidence of search failure.
+
 ## Console contract
 
 Normal web-tool lines show the full requested/final URL, including ordinary query parameters and fragments, without length-based clipping. Different requested and final URLs are both shown. URL input validation allows up to 65,536 characters; this is a resource bound, not a claim every upstream server accepts that length. The terminal may wrap naturally. Terminal control characters remain escaped and credential protection remains active.

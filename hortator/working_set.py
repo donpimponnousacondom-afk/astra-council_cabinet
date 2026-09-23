@@ -109,6 +109,9 @@ def result_reference(message):
         body = {}
     keys = (
         "result_id",
+        "source_result_id",
+        "source_tool",
+        "page_result_id",
         "document_id",
         "job_id",
         "task",
@@ -131,12 +134,30 @@ def result_reference(message):
         if len(dumps(reference[key])) > 1200:
             del reference[key]
     if body.get("result_id"):
-        reference["reread"] = {"operation": "read_result", "result_id": body["result_id"], "length": 2000}
+        # A paged read has its own evidence receipt, but recovery must point at
+        # the source bytes and original offset, not JSON containing another read.
+        source = body.get("source_result_id") or body["result_id"]
+        offset = body.get("range", {}).get("start", 0) if body.get("source_result_id") else 0
+        if source != body["result_id"]:
+            reference["page_result_id"] = body["result_id"]
+            reference["result_id"] = source
+        reference["reread"] = {
+            "operation": "read_result",
+            "result_id": source,
+            "offset": offset,
+            "length": 2000,
+        }
         read_response = body.get("read_response")
         if message.get("name") == "council_inspect" or (
             isinstance(read_response, dict) and read_response.get("resource") == "read_result"
         ):
-            reference["reread"] = {"resource": "read_result", "result_id": body["result_id"], "length": 2000}
+            reference["reread"] = {
+                "resource": "read_result",
+                "result_id": source,
+                "offset": offset,
+                "length": 2000,
+            }
+            reference["read_response"] = reference["reread"]
     return {
         "omitted_from_active_prompt": True,
         "notice": "Body omitted from this prompt, not summarized. Original evidence remains in the trajectory. "
@@ -146,10 +167,44 @@ def result_reference(message):
     }
 
 
+def page_search_http(message):
+    """Page duplicated HTTP evidence before hiding usable search results.
+
+    Only a prompt copy changes. Original status, body, headers and redirects are
+    already durable under read_response; extracted results are kept verbatim.
+    """
+    try:
+        body = json.loads(message.get("content", ""))
+    except ValueError, TypeError:
+        return False
+    if not isinstance(body, dict) or not body.get("results"):
+        return False
+    changed = False
+    for engine in body.get("engine_status", []):
+        http = engine.get("http_response", {})
+        if engine.get("status") != "ok" or not http.get("read_response"):
+            continue
+        fields = [key for key in ("body", "response_headers", "redirects") if key in http]
+        if not fields:
+            continue
+        for key in fields:
+            del http[key]
+        http["paged_fields"] = fields
+        http["notice"] = (
+            "These raw HTTP fields are available through read_response. "
+            "Extracted search results are present in results. Paging alone does not indicate a failed search."
+        )
+        changed = True
+    if changed:
+        message["content"] = dumps(body)
+    return changed
+
+
 def bound_exchanges(extras, estimate, token_limit):
     """Return new messages: no mutation of previously assembled request evidence.
 
-    First replace large old result bodies with explicit references. Then remove
+    First page redundant successful-search HTTP evidence. Replace large old
+    result bodies with explicit references only until the remainder fits. Then remove
     complete oldest call/result groups, retaining a bounded recent progress index.
     Most recent results are kept whenever they fit. No helper model is called.
     """
@@ -169,11 +224,13 @@ def bound_exchanges(extras, estimate, token_limit):
         if message.get("role") == "assistant" or not groups:
             groups.append([])
         groups[-1].append(message)
-    minimized, omitted = 0, 0
+    minimized, omitted, paged_http = 0, 0, 0
 
     def minimize(group):
         nonlocal minimized
-        for message in group:
+        for message in sorted(group, key=lambda m: len(m.get("content") or ""), reverse=True):
+            if size(assembled()) <= token_limit:
+                break
             if message.get("role") == "tool" and len(message.get("content", "")) > 1600:
                 message["content"] = dumps(result_reference(message))
                 minimized += 1
@@ -202,9 +259,25 @@ def bound_exchanges(extras, estimate, token_limit):
             messages.insert(0, prefix)
         return messages
 
+    # Search snippets are the useful payload. Full HTTP previews/headers are
+    # separately readable and should not evict all successful results in a batch.
+    for group in groups:
+        names = {
+            call["id"]: call["function"]["name"]
+            for message in group
+            for call in message.get("tool_calls", [])
+        }
+        for message in group:
+            if size(assembled()) <= token_limit:
+                break
+            if message.get("role") == "tool" and names.get(message.get("tool_call_id")) == "web_search":
+                paged_http += int(page_search_http(message))
+
     # Preserve the latest response body where possible: prune older complete
     # exchanges before considering its replacement with a reread reference.
     for group in groups[:-1]:
+        if size(assembled()) <= token_limit:
+            break
         minimize(group)
         if size(assembled()) <= token_limit:
             break
@@ -234,6 +307,7 @@ def bound_exchanges(extras, estimate, token_limit):
         "estimated_tokens": size(active),
         "omitted_groups": omitted,
         "minimized_results": minimized,
+        "paged_http_results": paged_http,
     }
 
 

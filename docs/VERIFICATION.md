@@ -1,5 +1,49 @@
 # Verification record
 
+## Search results lost to tool-context minimization (2026-09-22)
+
+- Renamed clean prepared `feat/next_feature`, at merged main/origin/main
+  `2c3f661`, to `hotfix/web_tool_context`. The owner authorized investigation,
+  a surgical fix/restart if warranted, and a next-day follow-up note.
+- Read-only live evidence confirmed both Brave and DuckDuckGo returned HTTP 200
+  with parsed results. In Loki's 21:15 and 21:17 Europe/Madrid tests, completion
+  events **53936/53939** and **53966/53969** recorded successful searches, but
+  requests `req_eaa580f5c21b43d792f8` and `req_3927277e39764491a545` received only
+  omission references. Later rereads did expose snippets: the bot's absolute
+  claim that it could never read results overstates the failure.
+- Two existing defects explained the complaint: a parallel batch crossing its
+  working-set budget minimized every large result even after enough space had
+  been freed, and omitted `read_result` pages pointed back to their own new
+  receipt rather than the original source/offset. Repeated reads could nest JSON
+  wrappers. Duplicated raw HTTP previews/headers crowded out useful search data.
+  The new research plugin was disabled and Loki had no research grant; neither
+  search nor working-set source changed in that feature.
+- Fixed prompt projection without changing stored HTTP evidence: successful
+  searches page duplicated HTTP fields explicitly before dropping extracted
+  entries; batch minimization stops once the remaining results fit; omitted-page
+  recovery retains its source ID and Unicode offset. Native assistant
+  continuation fields, tool/result pairing, reread scope/grants and budgets stay
+  intact. Loki's 6,000-token setting, configuration and memories were not edited.
+- Offline replay of the latest tool batches in those two actual requests, using
+  their captured native assistant continuation fields and original tool results,
+  changed **zero readable searches to both searches**: 11 and 13 parsed entries
+  respectively remained within 6,000 estimated tokens. The earlier four-query
+  batch in `req_fbf7605323034ed09cfe` retained two searches/18 entries instead of
+  omitting all four. This replay did not send provider or Discord requests, and
+  does not establish a new live model answer's behavior.
+- **175 backend tests passed**, including five new regressions for immutable
+  HTTP evidence/paging, original-source rereads, inspector operation syntax,
+  partial-batch retention and failed-engine previews. Existing agentic runtime,
+  web search/fetch, HTTP evidence, inspector, feedback, console, concurrency,
+  research and background-job tests also passed. Two existing TestClient
+  dependency deprecation warnings remain. Ruff and diff checks pass.
+- Deployment uses the committed-source shared-Screen `--refresh`; its external
+  `logs/next-feature.json` receipt records the actual server/dashboard identity.
+  **Tomorrow:** try two brief searches with Loki and inspect whether it uses the
+  snippets directly. Explicit paging remains expected under pressure; any stale
+  complaint saved in its notes is left for the bot/operator. Research-assistant
+  enablement and live acceptance remain separate pending work.
+
 ## Background research service and optional MiMo adapter (2026-09-22)
 
 - Renamed the clean prepared `feat/next_feature` at `0f5faf1` (equal to
