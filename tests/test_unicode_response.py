@@ -7,8 +7,8 @@ import pytest
 
 from conftest import configured
 from hortator.provider import ProviderError
-from test_provider import call_args, install_client
-from test_provider_streaming import packet, respond, stored
+from support.provider import call_args, install_client
+from support.provider_streaming import packet, respond, stored
 
 
 def escaped_wire(*packets):

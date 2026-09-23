@@ -9,9 +9,9 @@ from hortator.app import create_app
 from hortator.memory_budget import budget_for
 from hortator.models import Bot, ControlError
 from hortator.plugins import ToolContext
-from test_provider import install_client
-from test_runtime import completion, settle
-from test_runtime_feedback import ready, reply, responses, tool
+from support.provider import install_client
+from support.runtime import completion, settle
+from support.runtime_feedback import ready, reply, responses, tool
 
 
 async def write(kernel, context, key, value):

@@ -285,6 +285,8 @@ class Completion:
     request_id: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
     response_diagnostics: dict[str, Any] = field(default_factory=dict)
+    # Measured numeric counts/timings and provenance; never private reasoning text.
+    metrics: dict[str, Any] = field(default_factory=dict)
 
     def message(self):
         result = {"role": "assistant", "content": self.content or None}
@@ -755,6 +757,14 @@ class ProviderPool:
                 if ttft is not None and duration > ttft and completion_count > 0
                 else None
             )
+            result.metrics = {
+                "duration_ms": duration,
+                "ttft_ms": ttft,
+                "token_counts": token_counts,
+                "total_tokens": token_counts["total"]["value"],
+                "tps": tps,
+                "tps_source": token_counts["completion"]["source"] if tps is not None else "unavailable",
+            }
             result.content = strip_reasoning(result.content)
             self.success(provider)
             metrics = normalized_usage(result.usage, profile)
@@ -795,13 +805,13 @@ class ProviderPool:
                     "profile_id": profile["id"],
                     "model": profile["model"],
                     **metrics,
-                    "duration_ms": duration,
-                    "ttft_ms": ttft,
+                    "duration_ms": result.metrics["duration_ms"],
+                    "ttft_ms": result.metrics["ttft_ms"],
                     "finish_reason": result.finish_reason,
-                    "token_counts": token_counts,
-                    "total_tokens": token_counts["total"]["value"],
-                    "tps": tps,
-                    "tps_source": token_counts["completion"]["source"] if tps is not None else "unavailable",
+                    "token_counts": result.metrics["token_counts"],
+                    "total_tokens": result.metrics["total_tokens"],
+                    "tps": result.metrics["tps"],
+                    "tps_source": result.metrics["tps_source"],
                 },
                 bot_id=bot["id"],
                 turn_id=turn_id,

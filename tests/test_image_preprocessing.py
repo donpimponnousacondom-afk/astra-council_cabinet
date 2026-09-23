@@ -10,8 +10,8 @@ from conftest import configured
 from hortator import vision
 from hortator.console import OperationalConsole
 from hortator.discord_gateway import CouncilClient
-from test_addressing import message, CHANNEL
-from test_vision import attachment
+from support.addressing import message, CHANNEL
+from support.vision import attachment
 
 
 def jpeg(size=(80, 60), mode="RGB", progressive=False, orientation=1):

@@ -7,45 +7,11 @@ import httpx
 import pytest
 
 from conftest import configured, ingest
-from test_provider import install_client
+from support.provider import install_client
 from hortator.models import ControlError
 from hortator.plugins import ToolContext
 from hortator.runtime import DeliveryError
-from hortator.concurrency import join_tasks
-
-
-def completion(content="Hello", silence=False):
-    fn = "council_silence"
-    args = {"label": "Listening"}
-    return httpx.Response(
-        200,
-        json={
-            "choices": [
-                {
-                    "message": {
-                        "tool_calls": [
-                            {
-                                "id": "call1",
-                                "type": "function",
-                                "function": {"name": fn, "arguments": json.dumps(args)},
-                            }
-                        ]
-                    }
-                    if silence
-                    else {"content": content},
-                    "finish_reason": "tool_calls" if silence else "stop",
-                }
-            ],
-            "usage": {"prompt_tokens": 100, "completion_tokens": 10},
-        },
-    )
-
-
-async def settle(k):
-    # Superseded turns are intentionally cancelled; join their finalizers while
-    # still propagating unexpected exceptions from every task.
-    await join_tasks(*list(k.engine.tasks.values()))
-    await asyncio.sleep(0)
+from support.runtime import completion, settle
 
 
 async def test_duplicate_events_one_turn_and_independent_silence(kernel):

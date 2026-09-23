@@ -8,9 +8,9 @@ import httpx
 import pytest
 
 from conftest import configured, ingest
-from test_provider import install_client
-from test_runtime import settle
-from test_slash_commands import interaction, enable as enable_slash
+from support.provider import install_client
+from support.runtime import settle
+from support.slash_commands import interaction, enable as enable_slash
 from hortator.plugins import ToolContext
 from hortator.reasoning_viewer import ReasoningViewer, answer_view, captured_text, page_capture, reader_view
 from hortator.slash_commands import ACK_RETRY_DELAY
@@ -339,7 +339,7 @@ async def test_answer_delivery_adds_only_button_preserving_footer_files_and_tran
         ]
     }
     if ingress == "panel":
-        from test_discord_panels import enable as enable_panel, prepare
+        from support.discord_panels import enable as enable_panel, prepare
 
         bot = enable_panel(kernel, footer_enabled=True, footer_template="Unchanged footer")
         bot.pop("revision")
@@ -354,7 +354,7 @@ async def test_answer_delivery_adds_only_button_preserving_footer_files_and_tran
     def respond(request):
         if not stream:
             return httpx.Response(200, json=body)
-        from test_provider import Fragments
+        from support.provider import Fragments
 
         packet = {"choices": [{"delta": body["choices"][0]["message"], "finish_reason": "stop"}]}
         return httpx.Response(

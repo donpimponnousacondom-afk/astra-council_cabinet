@@ -4,8 +4,8 @@ import json
 from hortator.http_evidence import HTTPResponse, record_response
 from hortator.store import dumps
 from hortator.working_set import bound_exchanges, result_reference
-from test_agentic_runtime import grant
-from test_runtime_feedback import tool
+from support.agentic_runtime import grant
+from support.runtime_feedback import tool
 
 
 async def test_search_results_survive_paging_http_evidence_without_changing_capture(kernel):

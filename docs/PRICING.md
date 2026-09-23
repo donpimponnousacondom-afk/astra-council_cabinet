@@ -35,3 +35,10 @@ Hortator does not automatically select time-of-day pricing. Choosing peak rates 
 For this task the owner explicitly chose to preserve the active vision profile's existing **$0.22 input / $0.66 output** rates and add **$0.014 cache-hit input**, with the cache-miss field copied from that $0.22 input rate. This is a chosen manual combination, not automatic selection of the provider's complete peak or off-peak tariff. Check the active profile for its current values; this dated decision is not a rolling configuration snapshot.
 
 The [DeepSeek context-cache guide](https://api-docs.deepseek.com/guides/kv_cache/) describes its hit/miss usage fields. Token counts returned by the API are the basis for actual usage; offline text/image estimates are not billing evidence ([token usage guide](https://api-docs.deepseek.com/quick_start/token_usage/)). The model-written incident report's blanket assertion that reasoning is free is not treated as a verified billing contract.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Cache pricing is explicit per model profile. Preserve operator input/output rates; never replace them with a published tariff or schedule without authorization. Unknown usage remains unknown.

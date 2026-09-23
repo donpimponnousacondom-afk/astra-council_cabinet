@@ -33,3 +33,10 @@ Shared fields have one severity-independent order: tool name, operation, engine,
 Received HTTP 4xx/5xx responses and local extraction/capture limitations are warnings, not invented transport failures. Actual transport failure while reading a response is an error with the partial HTTP evidence intact. Search engine outcomes retain their own severity alongside the combined tool result. INFO versus ERROR cannot reorder shared fields. Repeat grouping distinguishes severity, URL, HTTP status and search engine/query so an escalation or different destination is not hidden.
 
 Expanded `T` evidence follows the original HTTP response handles, including each search engine, so `n`/`N` can page received headers and body directly in the console. Literal upstream text is not treated as private provider reasoning. Existing console evidence bounds remain explicit; no source response is rerun just to inspect evidence. Existing `T`, `P`, `f`, scopes, normal scrollback and Ctrl-C remain available.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Web tools preserve actual HTTP status, supplied reason, headers and captured response bodies independently of extraction or local policy outcomes. Never replace a received response with a generic HTTP exception or infer a challenge/expiry from its status alone. Keep bounded full evidence with explicit paged reads/partial-capture markers. Show complete web URLs (including ordinary queries/fragments) in the normal console without readability clipping; retain credential redaction and terminal-control escaping. Use one field ordering across severities, one decimal for displayed milliseconds, messages last and full call IDs in expanded/structured evidence. See [docs/HTTP_EVIDENCE.md](HTTP_EVIDENCE.md).

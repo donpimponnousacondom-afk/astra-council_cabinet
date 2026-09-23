@@ -1,5 +1,6 @@
 # Local state and credentials. Keep these on disk, never in commits.
 /data/
+/audit/
 .env
 .env.*
 !.env.example

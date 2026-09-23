@@ -12,10 +12,10 @@ from hortator.footer import DEFAULT_FOOTER_TEMPLATE, render_footer
 from hortator.discord_gateway import CouncilClient
 from hortator.discord_text import CodeBlock, model_message
 from hortator.models import Bot, OWNER_ID
-from test_discord_formatting import message
-from test_provider import Fragments, install_client
-from test_runtime import completion, settle
-from test_typing import prepare_bot
+from support.discord_formatting import message
+from support.provider import Fragments, install_client
+from support.runtime import completion, settle
+from support.typing import prepare_bot
 
 
 UNKNOWN = "-# TTFT: — | TPS: —"

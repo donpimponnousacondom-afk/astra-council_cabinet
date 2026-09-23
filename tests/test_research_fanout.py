@@ -6,26 +6,12 @@ import pytest
 
 from hortator.models import ControlError
 from hortator.research_assistant import ID
-from test_background_jobs import finish, setup as background_setup
-from test_provider import install_client
-from test_research_assistant import call, setup, start
-from test_runtime import completion, settle
-from test_runtime_feedback import reply, responses, tool
-
-
-def set_limit(kernel, value, *, bot=False):
-    kind, entity_id = ("bots", "ada") if bot else ("plugins", ID)
-    entity = kernel.store.get(kind, entity_id)
-    target = entity.setdefault("plugin_config", {}).setdefault(ID, {}) if bot else entity["config"]
-    target["max_parallel_jobs"] = value
-    kernel.store.put(kind, entity)
-
-
-def worker(kernel, run):
-    # Keep real registry admission and grant/profile checks while replacing only
-    # paid inference in lifecycle/admission tests.
-    _, check = kernel.jobs.handlers[ID]
-    kernel.jobs.handlers[ID] = (run, check)
+from support.background_jobs import finish, setup as background_setup
+from support.provider import install_client
+from support.research_assistant import call, setup, start
+from support.runtime import completion, settle
+from support.runtime_feedback import reply, responses, tool
+from support.research_fanout import set_limit, worker
 
 
 @pytest.mark.parametrize("count", [4, 16])

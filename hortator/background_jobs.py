@@ -72,7 +72,11 @@ class BackgroundJobs:
             self.descriptions[name] = describe
 
     def capacity(self, bot_id, plugin):
-        """Current operator allowance across this bot's channels, not a tool argument."""
+        """Current operator allowance across this bot's channels, not a tool argument.
+
+        Reads the bot and outstanding-job count each time, including tool schema
+        refreshes, so changed limits and completion notifications apply immediately.
+        """
         bot = self.store.get("bots", bot_id) or {}
         limit = self.limits.get(plugin, lambda bot: 1)(bot)
         if type(limit) is not int or limit < 1:
@@ -224,6 +228,7 @@ class BackgroundJobs:
         self.tasks[job["id"]] = self.background.spawn(
             self.run(job, gate=gate), name=f"background-job:{job['id']}", bot_id=job["bot_id"]
         )
+        # run() cannot execute its finally if cancelled before its first step.
         self.tasks[job["id"]].add_done_callback(lambda _: self.tasks.pop(job["id"], None))
         return self.status(self.get(job["id"]))
 
@@ -304,6 +309,7 @@ class BackgroundJobs:
             gate.set()
 
     def begin_batch(self, turn_id):
+        # Prior workers retain their released gate; only new submissions use this round's gate.
         self.origin_gates[turn_id] = asyncio.Event()
 
     def release_batch(self, turn_id):
@@ -505,7 +511,11 @@ class BackgroundJobs:
         task = self.tasks.get(job["id"])
         if task:
             await cancel_and_wait(task)
-        if self.get(job["id"])["state"] in ACTIVE:
+        # Joining yields: retention cleanup may have removed this now-settled row.
+        current = self.get(job["id"])
+        if current is None:
+            return
+        if current["state"] in ACTIVE:
             self.finish(job, "cancelled", error=reason)
         self.store.execute(
             "UPDATE background_jobs SET notification='revoked' WHERE id=? AND notification='pending'",

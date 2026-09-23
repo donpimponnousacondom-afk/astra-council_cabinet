@@ -45,26 +45,34 @@ class Kernel:
         self.service.seed()
         self.service.seed_prompt_templates()
         self.registry = Registry(self.store, self.vault, self.directory, self.service.inspect_model)
-        self.service.registry = self.registry
-        self.service.seed_plugins()
         self.engine = Engine(self.store, self.vault, self.pool, self.registry)
-        self.service.engine = self.engine
         self.jobs = BackgroundJobs(self.store, self.registry)
+        self.publishing = PublishingWorker(self.store, self.vault, self.directory, self.registry.documents)
+        self.background = BackgroundTasks(self.store)
+        self._bind_services()
+
+    def _bind_services(self):
+        """Connect the constructed services once, before any runtime task starts."""
+        if getattr(self, "_services_bound", False):
+            raise RuntimeError("Kernel services are already bound")
+        self._services_bound = True
+        self.service.registry = self.registry
+        self.service.engine = self.engine
+        self.service.background = self.background
         self.registry.jobs = self.jobs
         self.engine.jobs = self.jobs
         self.jobs.engine = self.engine
-        self.registry.research.bind(self.jobs, self.pool)
+        self.service.seed_plugins()
+        # DiscordManager reads the registry during construction, after core binding.
         self.connector = DiscordManager(self.service)
         self.service.connector = self.connector
         self.engine.transport = self.connector
         from .discord_dispatch import DiscordDispatch
 
         self.registry.discord_dispatch = DiscordDispatch(self.service)
-        self.publishing = PublishingWorker(self.store, self.vault, self.directory, self.registry.documents)
-        self.background = BackgroundTasks(self.store)
-        self.service.background = self.background
         for component in (self.connector, self.engine, self.publishing, self.jobs):
             component.background = self.background
+        self.registry.bind(self)
 
     def start(self):
         if self.background.group is None or self.background.closing or self.closed:
@@ -415,7 +423,10 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
         if not job:
             raise ControlError("Background job not found", 404)
         await k.jobs.cancel_job(job, "Cancelled by dashboard owner")
-        return k.jobs.status(k.jobs.get(job_id))
+        current = k.jobs.get(job_id)
+        if not current:
+            raise ControlError("Background job no longer retained", 404)
+        return k.jobs.status(current)
 
     @app.post("/api/snapshots")
     async def capture_snapshot(body: SnapshotBody, actor=Depends(authenticated)):

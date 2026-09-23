@@ -84,3 +84,10 @@ Long capture parsing, paging and encoding run on detached worker data with two
 concurrent preparation slots and a 30-second preparation deadline. SQLite and
 vault state remain on their owning thread. The plugin is `model_tool=False`, so
 enabling it adds no model schema or prompt instructions.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- The owner approved `reasoning_viewer` as a narrow opt-in exception to keeping provider reasoning off Discord. It is keyless, global/per-bot, default off and never a model tool. Automatically attach REASONING only to new answers with readable saved captures; exact-owner clicks read a private paged/downloadable view, final request first with earlier generation requests separate. Verify durable bot/application/channel/message/outbox/request ownership and current grants on every read, including after awaits. No inference calls, public reasoning, transcript/memory injection, hidden-text reconstruction or footer changes. Disabling revokes old controls without deleting diagnostics. Existing private dashboard/console evidence remains unchanged. See [REASONING_VIEWER.md](REASONING_VIEWER.md).

@@ -1,3 +1,8 @@
+import type {
+  ResearchConfiguration,
+  BackgroundJobSummary,
+  BackgroundJobDetail,
+} from "./researchApi";
 import { useEffect, useRef, useState } from "react";
 import { api, dateLabel } from "./api";
 import type { RecordData } from "./api";
@@ -9,9 +14,9 @@ export function ResearchSettings({
   profiles,
   onChange,
 }: {
-  config: RecordData;
+  config: ResearchConfiguration;
   profiles: RecordData[];
-  onChange: (value: RecordData) => void;
+  onChange: (value: ResearchConfiguration) => void;
 }) {
   return (
     <>
@@ -155,9 +160,9 @@ export function ResearchBotSettings({
   inheritedLimit,
   onChange,
 }: {
-  config: RecordData;
+  config: ResearchConfiguration;
   inheritedLimit: number;
-  onChange: (value: RecordData) => void;
+  onChange: (value: ResearchConfiguration) => void;
 }) {
   return (
     <section>
@@ -191,9 +196,9 @@ export function BackgroundJobsPanel({
   botId?: string;
   plugin?: string;
 }) {
-  const [jobs, setJobs] = useState<RecordData[]>([]);
+  const [jobs, setJobs] = useState<BackgroundJobSummary[]>([]);
   const [selected, setSelected] = useState<string>("");
-  const [detail, setDetail] = useState<RecordData | null>(null);
+  const [detail, setDetail] = useState<BackgroundJobDetail | null>(null);
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
@@ -213,9 +218,12 @@ export function BackgroundJobsPanel({
         const query = new URLSearchParams();
         if (botId) query.set("bot_id", botId);
         if (plugin) query.set("plugin", plugin);
-        const data = await api<RecordData[]>(`/api/background-jobs?${query}`, {
-          signal: controller.signal,
-        });
+        const data = await api<BackgroundJobSummary[]>(
+          `/api/background-jobs?${query}`,
+          {
+            signal: controller.signal,
+          },
+        );
         if (live) {
           setJobs(data);
           setError("");
@@ -237,7 +245,7 @@ export function BackgroundJobsPanel({
     const controller = new AbortController();
     setDetail(null);
     if (selected)
-      api<RecordData>(
+      api<BackgroundJobDetail>(
         `/api/background-jobs/${encodeURIComponent(selected)}?offset=${offset}`,
         { signal: controller.signal },
       )
@@ -357,7 +365,9 @@ export function BackgroundJobsPanel({
           <button
             type="button"
             disabled={detail.next_offset == null}
-            onClick={() => setOffset(detail.next_offset)}
+            onClick={() => {
+              if (detail.next_offset != null) setOffset(detail.next_offset);
+            }}
           >
             Next result page
           </button>

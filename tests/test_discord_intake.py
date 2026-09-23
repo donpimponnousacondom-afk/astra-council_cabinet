@@ -9,7 +9,7 @@ from conftest import configured
 from hortator.discord_content import MAX_RICH_CHARS, TRUNCATED, component_text, embed_text
 from hortator.discord_gateway import CouncilClient
 from hortator.models import OWNER_ID
-from test_addressing import CHANNEL, message
+from support.addressing import CHANNEL, message
 
 
 PHOENIX = "777777777777777777"

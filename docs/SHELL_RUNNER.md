@@ -105,3 +105,10 @@ Archives are runtime data outside source Git. Older code will not inspect the ne
 The focused suite executes actual bubblewrap subprocesses; it is skipped with a stated readiness reason on unsupported hosts. On the host above it verifies real scripts/pipelines, working-directory persistence, nonzero exits, concurrent byte-accurate output paging, timeout with closed output pipes, immediate startup cancellation, task cancellation, shutdown lease release, detached-child cleanup, process/address-space/tmpfs limits, unsafe-copyback rejection and bot/channel/turn ownership. Separate controller processes are SIGKILLed during setup and execution; pidfds prove namespace init exits promptly and subsequent recovery records interruption. Sentinel files, synthetic private environment values and a temporary loopback listener test the boundary without reading real secrets or contacting production.
 
 The full branch's integration verification also exercises an image larger than 8 MiB through observed attachment import, real isolated Pillow compression, current-turn artifact export and the existing mocked Discord transport. See [VERIFICATION.md](VERIFICATION.md) for final commands/counts. These local checks do not establish live provider/Discord acceptance, production deployment or remote site delivery.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Shell job count is a recent-record budget, never a lifetime call limit. Automatically archive oldest terminal records outside running turns; retain metadata/IDs and enforce existing scopes for reads, including archived jobs. Preserve output retention/byte quotas, active references, workspace files, audit evidence and backups. Do not solve count exhaustion by raising configured quotas. Command limits accept up to 600 seconds (default 90); keep model schema and registry timeout aligned with the effective per-bot limit, without extending parent task/platform deadlines. See [SHELL_RUNNER.md](SHELL_RUNNER.md).

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import time
 from collections import defaultdict
 from dataclasses import dataclass
 
+from .answer_validation import wrapped_reply
 from .concurrency import cancel_and_wait, join_tasks, task_group, error_text
 from .context import ContextBuilder
 from .addressing import human_directed_elsewhere
@@ -26,20 +26,6 @@ REPLY_REPAIR = (
     "content, without JSON/XML/function wrappers or a description of your tool decision. "
     "Use actual tool_calls only for available actions or terminal decisions."
 )
-
-
-def wrapped_reply(content):
-    """Recognize obsolete reply envelopes, never parse or execute text as a tool.
-
-    Deliberately narrow: ordinary JSON, prose about tools, and fenced examples are valid answers.
-    """
-    text = content.lstrip()
-    return bool(
-        re.match(r'\{\s*"(?:tool|name)"\s*:\s*"council_speak"', text)
-        or re.match(r'\{\s*"function"\s*:\s*\{\s*"name"\s*:\s*"council_speak"', text)
-        or re.match(r"<(?:tool_call|function(?:=|\s|>))", text, re.I)
-        or ("```" not in text and re.search(r"</(?:parameter|function)\s*>\s*$", text, re.I))
-    )
 
 
 @dataclass
@@ -511,6 +497,56 @@ class Engine:
         async with task_group() as group:
             await self.run_turn(bot, profile, provider, channel_id, turn_id, compact_only, group)
 
+    def plan_round_tools(self, context, silence_tools, round_index, round_limit, *, handoff=False):
+        """Plan one round's schemas without granting extra calls or attachment access."""
+        available = (
+            []
+            if handoff
+            else silence_tools + (self.registry.schemas(context) if round_index < round_limit else [])
+        )
+        can_attach = bool(
+            not handoff
+            and round_index < round_limit
+            and self.store.one(
+                "SELECT id FROM artifacts WHERE bot_id=? AND turn_id=? LIMIT 1",
+                (context.bot["id"], context.turn_id),
+            )
+        )
+        if can_attach:
+            available.append(ATTACH)
+        return available, can_attach
+
+    async def finalize_turn(
+        self, bot, provider, turn_id, typing_task, *, status, decision, error, retry_delay
+    ):
+        """Join typing before recording the outcome, releasing workers and restarting cadence."""
+        self.human_superseded.discard(turn_id)
+        if typing_task:
+            await cancel_and_wait(typing_task)
+        self.store.execute(
+            "UPDATE turns SET status=?,decision=?,error=?,ended_at=? WHERE id=?",
+            (status, decision, error, time.time(), turn_id),
+        )
+        if self.jobs:
+            self.jobs.release_turn(turn_id)
+        # No catch-up bursts; activation interval restarts when work settles.
+        current = self.store.get("bots", bot["id"])
+        interval = current["interval_seconds"] if current else bot["interval_seconds"]
+        self.store.execute(
+            "UPDATE bot_runtime SET next_at=?,retry_until=? WHERE bot_id=?",
+            (
+                time.time() + max(interval, retry_delay),
+                time.time() + retry_delay if retry_delay else 0,
+                bot["id"],
+            ),
+        )
+        self.store.emit(
+            "turn.ended",
+            {"status": status, "decision": decision, "error": error, "provider_id": provider["id"]},
+            bot_id=bot["id"],
+            turn_id=turn_id,
+        )
+
     async def run_turn(self, bot, profile, provider, channel_id, turn_id, compact_only, group):
         status, decision, error = "failed", None, None
         retry_delay = 0
@@ -580,23 +616,9 @@ class Engine:
                     raise ControlError(
                         "Extended task time budget exhausted; saved local files remain available"
                     )
-                available_tools = (
-                    []
-                    if background_handoff
-                    else silence_tools + (self.registry.schemas(context) if round_index < round_limit else [])
+                available_tools, can_attach = self.plan_round_tools(
+                    context, silence_tools, round_index, round_limit, handoff=background_handoff
                 )
-                # Most chat turns need no attachment schema. Expose preparation only
-                # after a real artifact exists, and keep it inside the ordinary budget.
-                can_attach = (
-                    not background_handoff
-                    and round_index < round_limit
-                    and self.store.one(
-                        "SELECT id FROM artifacts WHERE bot_id=? AND turn_id=? LIMIT 1",
-                        (bot["id"], turn_id),
-                    )
-                )
-                if can_attach:
-                    available_tools.append(ATTACH)
                 budget_bot = {**bot, "max_tool_rounds": round_limit, "max_calls_per_round": calls_limit}
                 if background_handoff:
                     budget_bot["background_handoff"] = self.jobs.handoff(context)
@@ -1047,31 +1069,15 @@ class Engine:
                 level="error",
             )
         finally:
-            self.human_superseded.discard(turn_id)
-            if typing_task:
-                await cancel_and_wait(typing_task)
-            self.store.execute(
-                "UPDATE turns SET status=?,decision=?,error=?,ended_at=? WHERE id=?",
-                (status, decision, error, time.time(), turn_id),
-            )
-            if self.jobs:
-                self.jobs.release_turn(turn_id)
-            # No catch-up bursts; activation interval restarts when work settles.
-            current = self.store.get("bots", bot["id"])
-            interval = current["interval_seconds"] if current else bot["interval_seconds"]
-            self.store.execute(
-                "UPDATE bot_runtime SET next_at=?,retry_until=? WHERE bot_id=?",
-                (
-                    time.time() + max(interval, retry_delay),
-                    time.time() + retry_delay if retry_delay else 0,
-                    bot["id"],
-                ),
-            )
-            self.store.emit(
-                "turn.ended",
-                {"status": status, "decision": decision, "error": error, "provider_id": provider["id"]},
-                bot_id=bot["id"],
-                turn_id=turn_id,
+            await self.finalize_turn(
+                bot,
+                provider,
+                turn_id,
+                typing_task,
+                status=status,
+                decision=decision,
+                error=error,
+                retry_delay=retry_delay,
             )
 
     async def deliver(

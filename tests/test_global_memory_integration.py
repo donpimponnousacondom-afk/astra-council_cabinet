@@ -9,7 +9,7 @@ from hortator.app import create_app
 from hortator.models import Bot, ControlError, OWNER_ID
 from hortator.plugins import ToolContext
 from hortator.security import Actor
-from test_global_memory import enabled, write
+from support.global_memory import enabled, write
 
 
 async def test_production_registration_defaults_keyless_contract_and_context_layers(kernel, owner):

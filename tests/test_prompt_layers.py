@@ -166,8 +166,8 @@ async def test_disabled_compaction_inputs_do_not_advance_checkpoint(
 
 async def test_compaction_custom_roles_and_literal_values_are_used_on_wire(kernel, owner):
     import json
-    from test_provider import install_client
-    from test_runtime import completion
+    from support.provider import install_client
+    from support.runtime import completion
 
     bot = configured(kernel, persona="literal {transcript}")
     ingest(kernel, content="history to compact", discord_id="old")

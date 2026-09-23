@@ -100,3 +100,10 @@ For integration with concurrent document work, review these shared hooks togethe
 The document implementation and Documents UI are unchanged. Existing version-inspection tests account for the new tool-result evidence ID while checking that the underlying version/authorization response stays the same.
 
 The automated workflow uses real local Bubblewrap/Bash/Pillow and real temporary storage, with simulated provider and Discord responses. It establishes neither live provider compatibility nor Discord visual/delivery acceptance. The owner coordinates integration and the final real council workflow. See [dated verification evidence](VERIFICATION.md).
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Workspace, fetched-document and job bytes belong outside Git and in complete backups. Preserve active references during retention cleanup. One successful document/workspace/web task start may extend a turn; switching tools must never renew that budget. Active-prompt minimization must leave original request/tool evidence intact and recheck source grants on rereads.

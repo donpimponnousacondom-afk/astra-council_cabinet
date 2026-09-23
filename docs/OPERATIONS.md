@@ -1,64 +1,20 @@
 # Operations
 
-## Experimental background research
-
-Enable **Plugins → Sub-agent researcher · experimental**, select a dedicated MiMo
-research profile/provider (with native Web Search enabled upstream), and grant
-the plugin under **Bots → Capabilities**. Existing bots keep their own model.
-The global editor configures the research output ceiling, total deadline,
-search queries per search round, results per query, research batches per task,
-outstanding researchers per bot, editable system
-prompt and default completion notification. The researcher allowance defaults
-to four (minimum four, no fixed upper ceiling). **Bots → Capabilities** provides
-an optional per-bot override; blank uses the global default. Active jobs and
-pending completion notifications count against the allowance across all channels.
-Each researcher needs a separate `start` tool call within the bot's existing
-round/call budget; the provider's concurrency limit still controls simultaneous
-requests. Read/claim completed jobs to release occupied notification slots.
-**Bots → Control → Background jobs** inspects saved assignments, report pages,
-timing/token metrics and cancellation; the plugin editor shows all researcher
-jobs. No plugin-specific credential is required: the selected provider supplies
-its own key, never the conversational bot's key override.
-
-Native search controls accept 1–50 independently: **Maximum search queries**
-defaults to three, and **Results per search query (maximum)**
-defaults to five. These map to `max_keyword` and `limit`, not researcher turns.
-Jobs capture both values on submission. Existing saved query counts and custom
-prompts survive upgrades; new jobs without an explicit result limit use five.
-Research guidance should distinguish thin coverage from explicit search errors,
-without demanding a local sequence of searches that the adapter does not run.
-The researcher panel identifies the current single research pass per job.
-**Research batches per task (maximum)** defaults to **3**: the initial dispatch
-plus up to two batches of refined assignments from the calling bot. Minimum one
-disables follow-up dispatch; there is no fixed upper ceiling. All completion
-waves of a task share its saved allowance. Raising it does not refill existing
-tasks; lowering it is respected. Ordinary bot tool rounds and parallel researcher
-capacity remain independent controls.
-
-With notifications enabled, submit independent researchers in one tool-call
-batch. The runtime stops typing and closes further tools after that batch, asks
-the bot for a brief text acknowledgement, then releases queued workers when the
-turn ends. Job deadlines include that acknowledgement/provider wait. This also
-works when parent and children share a provider limited to one request.
-Completion waves coalesce settled siblings and include progress counts (for
-example, two of five settled). Each update is a **new message**, never an edit to
-the original acknowledgement. Remaining workers trigger later waves. A waking
-bot may evaluate the evidence and dispatch narrower questions while task batches
-and capacity remain, then acknowledge the new batch and sleep again. A worker
-never launches its own agents. The
-editable **Background dispatch & progress** prompt controls presentation; runtime
-handoff and grants remain enforced if its text is disabled. Explicit notification
-opt-out retains the existing bounded polling behavior.
-
-Completion queues ordinary scoped follow-ups, including timer-zero bots;
-pauses, grants, human-message priority, provider concurrency and budgets still
-apply. Slash/panel invocations are not supported by this first version. See
-[RESEARCH_ASSISTANT](RESEARCH_ASSISTANT.md) and [BACKGROUND_JOBS](BACKGROUND_JOBS.md)
-for request examples, retention, shutdown/restart behavior and billing limits.
-New installations leave this capability disabled. No live bot grants or model
-settings change merely by installing it.
-
 All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The user handles PRs with GitHub **Squash and merge**; after a merge, update main with a fast-forward pull and create a fresh task branch. Never push to main or push any branch without an explicit request.
+
+## Plugins and experiments
+
+Enable the optional researcher through **Plugins → Sub-agent researcher · experimental**,
+select its dedicated research profile, and grant it under **Bots → Capabilities**.
+Use **Bots → Control → Background jobs** or the plugin editor to inspect assignments,
+saved reports, timing/token evidence and cancellation. Read or claim finished jobs
+to release pending-notification capacity. No existing bot grants or model settings
+change merely by installing the feature.
+
+[RESEARCH_ASSISTANT.md](RESEARCH_ASSISTANT.md) is authoritative for all researcher
+defaults, search limits, capacity, task batches, provider credentials, prompt tuning
+and request examples. [BACKGROUND_JOBS.md](BACKGROUND_JOBS.md) defines dispatch,
+completion notifications, deadlines, retention, shutdown and recovery.
 
 ## Prompt controls and a fresh conversation
 
@@ -590,11 +546,11 @@ available; a close code alone still cannot establish a network/provider cause.
 Client supervisor failures show the failed login/identity/gateway phase and
 reconnect delay. The supervisor retains its existing 5–120 second backoff.
 
-Slash acknowledgement uses a shared **2.9-second initial window**, up to five
+Slash acknowledgement uses a shared **2.9-second initial window**, up to thirty
 quick transient deferral attempts, and up to three read-only receipt lookups if
 Discord acceptance is uncertain. It never gives each attempt a fresh window or
 extends Discord's three-second initial-response rule. Deferral retry gaps are
-25 ms after a failure, not per-request timeouts. Recovery continues model
+90 ms after a failure, not per-request timeouts. Recovery continues model
 work only after confirming the expected existing deferred response. The `d`
 scope and `f` expanded events expose attempts, channel/interaction IDs, HTTP
 status, Discord code and exception causes without tokens. Final answer delivery
@@ -792,9 +748,18 @@ Backups now include `workspaces/`, `jobs/` and `fetched_documents/`, with their 
 For an explicitly owner-authorized parallel linked worktree, keep dependency/build/test storage isolated and use an unused test port: `HORTATOR_TEST_PORT=18110 ./scripts/check.sh`. The browser server owns temporary `/tmp/hortator-e2e-*` data and refuses port 8000. Never point its fixture/server at production storage or reuse another session’s server.
 
 
+## Automated verification
+
+`./scripts/check.sh` runs the full backend, static checks, frontend build and local
+browser tests. `--suite ci` omits browser tests only. Metadata is written to ignored
+`test-results/verification/result.json`, including revision, dirty state, command
+exits, durations and skipped test identities. See the [verification template and
+CI activation procedure](verification-template.md). The workflow must be published
+and its status check required by repository rules before it gates merges.
+
 ## Python 3.14 and sandbox toolchain maintenance
 
-The application now requires Python 3.14 (`.python-version` and `requires-python >=3.14,<3.15`). Provision it with `uv python install 3.14` or use an existing operator-managed Python 3.14; leave distribution Python symlinks alone. Use `uv sync --frozen --python 3.14`. Stop the shared Screen foreground runtime before replacing its `.venv`; validate in a separate `UV_PROJECT_ENVIRONMENT` while it is still running. The `hortator-next-feature` helper also invokes Python 3.14 explicitly. Historical verification records describe the interpreters actually used then, not today's baseline. External SSH receivers retain their independent system-Python contract.
+The application now requires Python 3.14 (`.python-version` and `requires-python >=3.14,<3.15`). Provision it with `uv python install 3.14` or use an existing operator-managed Python 3.14; leave distribution Python symlinks alone. Use `uv sync --frozen --python 3.14`. Stop the shared Screen foreground runtime before replacing its `.venv`; validate in a separate `UV_PROJECT_ENVIRONMENT` while it is still running. The `hortator-next-feature` helper also invokes Python 3.14 explicitly. Historical verification records describe the interpreters actually used then, not today's baseline. External SSH receivers retain their independent system-Python contract. Ruff intentionally targets Python 3.14 for the application, including parenthesis-free multi-exception handlers; receiver code keeps its separately configured older target. Do not globally rewrite either syntax policy.
 
 Install the OS tools and pinned micromamba bootstrap described in [SHELL_RUNNER.md](SHELL_RUNNER.md#operator-requirements-and-readiness). Keep uv and micromamba discoverable in the service PATH, then refresh runner readiness. Missing tools or another application Python version fail closed. Never use readiness as evidence that every package fits the finite limits. A public package smoke check is opt-in: `HORTATOR_REQUIRE_SANDBOX=1 HORTATOR_TEST_PACKAGE_NETWORK=1 uv run pytest -q tests/test_shell_runner.py`. It downloads a small Python package and zstd inside disposable namespaces, not into host applications.
 
@@ -965,3 +930,48 @@ Enable **Plugins → Interactive Discord panels**, then the matching per-bot **C
 Use Trajectory's `panel_action` turns and `discord.panel_*` events to diagnose clicks. The bot's `discord_panel` list/status tools inspect its records; disable revokes one panel, and the dashboard capability toggle blocks all its callbacks. Old messages remain visible. Default lifetime is seven days, configurable per panel up to thirty. Unknown/expired/unconfirmed panels give a refusal, not a model call. See [DISCORD_PANELS.md](DISCORD_PANELS.md) for usage and lifecycle.
 
 Long answer attachments remain automatic. Document-enabled bots can now export site/path into an artifact and then call `discord_attach`; no workspace or image-generation grant is necessary. Those grants must not be enabled as a side effect of panel setup.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Console timestamps use bold soft blue, distinct from body text on the owner's gray terminal background, including notices and replays. The owner rejected plain bright-white timestamps. Keep bold labels, scopes and severities with separate semantic colors for identities/metrics; preserve no-color mode, ordinary scrollback and existing single-key controls.
+
+- Console diagnostics must support independent tools/providers detail levels (`T`/`P`) with bounded pages of original stored commands, stdout/stderr and request evidence. Distinguish command exit codes from runner/tool infrastructure failures; never rerun a command to inspect it. Keep credentials redacted at every depth. The owner explicitly requested provider-produced reasoning in private diagnostics: retain it separately for the authenticated dashboard and local `P` evidence pages, including failed/cancelled partial streams. Never expose it through public Discord, model inspection, ordinary events or transcript replay beyond the native continuation required by that same provider request loop. The opt-in owner-only private `reasoning_viewer` below is the sole Discord exception. Preserve lowercase scope filters, ordinary scrollback and Ctrl-C. See the operations key map before adding shortcuts.
+
+- Provider request retries are shared by ordinary turns, slash invocations and compaction: default three additional attempts, ten seconds apart. Retry only the failed inference request with its existing context; never rerun completed tools, restart a turn, replay a Discord delivery or renew a task budget. Cancellation and outer task/platform deadlines remain authoritative. Record every attempt and partial evidence; intermediate failures/retry waits are warnings, and only final exhausted/nonretryable requests update circuit failure counts. Preserve the separate circuit settings and per-attempt timeout. See OPERATIONS for retry eligibility and accounting.
+
+- Warning/error diagnostics must name the failed operation, available bot/channel/request identity, actual cause and known consequence. Never classify our total request deadline (`local_deadline`) or local HTTP pool exhaustion as provider downtime; keep real connection/read/write failures distinct. Include the configured deadline without changing it implicitly. Cancellation propagates and compaction cancellation is a warning with the old checkpoint retained. Empty exception messages need an explicit type/explanation; folded views must retain actionable fields and full redacted evidence remains inspectable. Do not infer network outages, successful delivery, automatic replay or the source of event-loop stalls without evidence.
+
+- The owner confirmed on 2026-09-23 that `CPA_proxy` is a local transparent logging/observability proxy: it does not modify upstream requests or responses. Treat MiMo response payloads received through it as Xiaomi's upstream responses. Diagnose from Hortator's saved requests, responses and events; do not speculate about proxy rewriting or seek separate CPA logs without concrete evidence of a proxy/transport fault. Preserve real transport warnings and upstream errors, and distinguish model-written claims from structured provider evidence.
+
+- Discord intake composes bounded ordinary text, embeds and Components V2 text from separate stored sources. Partial edits replace only supplied sources, including explicit empty arrays; delayed duplicate creates must not undo newer edits. Room `allow_external_bots` admits external bots and Discord-authenticated application-owned responses (`application_id` plus `webhook_id`); ordinary incoming webhooks stay excluded. Never derive human/owner/council identity from app display text or interaction invoker metadata. Reconnect overlap is bounded to 100 historical messages and never grants human priority. Preserve canonical council answers/footers and the existing attachment vision pipeline.
+
+- Reasoning controls edit a model profile's exact native request JSON. Keep unset distinct from off, preserve unrelated vendor fields, and never invent provider-level reasoning inheritance or claim a model supports every displayed option.
+
+- Compaction `summary_tokens` limits only retained summary text, counted locally with cl100k_base, excluding private reasoning. There is no fixed 32,000 ceiling; preserve the context-relative fit guard. Compaction strips inherited JSON output caps and defaults to the provider's output allowance, which is not unlimited. Following the owner's 2026-09-15 request, the separate optional per-profile `compaction_max_tokens` explicitly sends native `max_tokens` for reasoning plus summary; null preserves existing behavior. Never activate formerly ignored JSON caps implicitly. Reserve input space for the larger of retained-summary limit and explicit output cap. Keep generation caps, saved JSON and native reasoning intact. Never truncate/accept an oversized or incomplete summary: preserve the old checkpoint and complete candidate. Log the actual output policy/cap. Different-model/background batch compaction remains future work.
+
+- Provider User-Agent is an explicit dashboard field backed by the existing case-insensitive `headers` entry, shared by discovery, generation and compaction. Preserve other headers; clearing it restores the HTTP client default. Keep provider upstream HTTP failures distinct from the control API's HTTP status: an upstream 401 must not become a dashboard login failure. Persist bounded, credential-redacted discovery evidence without changing completion health or claiming that a different User-Agent guarantees provider acceptance.
+
+- SSE streaming is a model-profile setting (`stream`, default true), visible on each model card and in its editor. Preserve saved modes and unrelated vendor JSON; buffered requests omit `stream_options`, retain reported usage/reasoning and leave TTFT/TPS unknown. Parse bounded UTF-8 SSE events, tolerating documented null/empty keepalives and nullable optional fields; never silently skip malformed JSON or deliver an incomplete response. Distinguish `response_format`, `local_client`, `upstream_error`, `upstream_http` and `transport` failures. Format/client failures must not trip shared provider health. Preserve private partial reasoning and bounded offending-frame evidence with credentials redacted. Diagnostic absence must describe the selected request and distinguish missing capture from a provider returning no reasoning; never imply all absent traces were discarded. Separate SSE event/retained-output bounds from cumulative framing overhead: total stream bytes are diagnostic only and the configured deadline remains authoritative. Local byte-bound failures must name the observed/allowed bytes and never trip provider health; see OPERATIONS for the distinct event, output, metadata and buffered-body limits.
+
+- The user prefers concise Discord help in a fenced code block, without the repeated owner/credential introductory paragraph. This is presentation only; preserve exact-owner authorization. Support native Discord Markdown in every bot's output, with balanced code fences in long previews and mention suppression intact.
+
+- Discover each connected bot's own application emojis through its authenticated Discord client before initial gateway connection, then refresh every five minutes using owned background tasks. Supply a bounded verified name/full-markup inventory to both ordinary and slash model contexts, scoped to the current bot/application. Never infer emoji ownership or IDs from conversation text, expand arbitrary `:name:` aliases, or undo intentional Markdown escaping/code formatting. Keep valid `<:name:id>` / `<a:name:id>` markup and mention suppression intact. Discovery failures must omit stale guidance and remain separate from gateway/provider health; see OPERATIONS for bounds and diagnostics.
+
+- Discord diagnostic footers use `-#` subtext. Default on for Hortator and off for council bots, with per-bot dashboard fields and deterministic owner `!footer` controls. Templates are bounded literal substitutions, never executable expressions. Use the final generating request's measured TTFT and reported output usage; keep unknowns explicit and diagnostics separate from canonical model answers, including gateway/history/edit reconciliation. Never spend provider credit to produce a footer. See OPERATIONS for placeholders and timing definitions.
+
+- Footer token counts prefer reported usage, with fixed cl100k_base text estimates marked `~` when unavailable, including buffered responses. `REASONING_TOKENS`/`THINKING_TOKENS` shows `none` without a reported count or returned full reasoning text; `0` requires explicit upstream zero. Completion includes reasoning; total includes input plus completion once. Preserve numeric provenance, raw billing/usage and existing TTFT/TPS semantics; never expose private reasoning text or tokenize image base64/encrypted reasoning as text. Keep saved templates unchanged and token counting off the event loop.
+
+- Provider completion console lines append `reasoning_tokens`, `total_tokens`, `tps` after established fields and before any message, without readability clipping. Report each request separately, including tool-call rounds and compaction; never aggregate turns or change the final-request Discord footer. Preserve raw usage/billing, numeric provenance, `none` versus explicit zero, marked text estimates and unknown buffered TPS. See OPERATIONS for definitions.
+
+- Memory mutation diagnostics append `units_affected`, then `unit_total`, after existing fields and before messages. Use stored Unicode character counts: full saved note for writes/replacements, removed note for deletes, and the post-change total of that bot's global notebook or affected private channel notebook. Include successful budget warnings; no successful-change event for reads/usage/rejected writes. Preserve quotas, redaction and model-facing results. See OPERATIONS for accounting semantics.
+
+- Reconnect history must skip retained contexts outside the bot's current room/guild/thread grants before fetching them. Preserve their transcripts and checkpoints; an obsolete assignment is a DEBUG skip, not a gateway failure. Real failures on current channels remain warnings with the channel ID and failing stage. Recheck current grants after asynchronous channel discovery.
+
+- New human Discord mentions and replies to a bot bypass its activation interval and personal send cooldown. Bot/webhook traffic, quoted mention text and historical replay never grant this priority. Keep pause/scope/owner gates, one active turn per bot, concurrency, usage limits, provider backoff and the short room send gap. Persist each human-message priority claim once; never repeatedly retry it without the ordinary cadence. A personal cooldown must not hold the room send lock. Supersede stale unsent drafts for fresh directed human input, but preserve in-flight Discord delivery uncertainty.
+
+- Human role mentions use that same ping path, always enabled without a dashboard toggle. Match Discord's structured `role_mentions` only against the receiving client's verified cached `guild.me.roles`; never scan other bots' guild memberships, fetch member lists or parse role IDs from message text. Merge each client's first live observation into shared-message addressing without overwriting other targets or granting priority to history/duplicates. Role membership changes affect new messages, not old duplicate creates. `@everyone`/`@here` remain outside this feature; preserve room and Hortator owner/control-channel gates.
+
+- The owner explicitly selected `bots.interval_seconds=0` to disable ordinary scheduled turns while retaining room observation, new human mention/reply activations, granted slash requests and deterministic owner commands. This timer-only sentinel does not apply to memory quotas or send cooldowns. Ignore `evaluate_when_idle` while the timer is off; preserve its saved value for re-enabling a positive interval. No automatic retry of a consumed directed request while the timer is off. `!interval <bot> 0` preserves the send cooldown; positive values retain the command's existing activation/cooldown behavior. Do not silently change existing bot settings.

@@ -8,9 +8,9 @@ import pytest
 from conftest import configured, ingest
 from hortator.application_emojis import MAX_PROMPT_EMOJIS, REFRESH_SECONDS
 from hortator.concurrency import cancel_and_wait, join_tasks
-from test_provider import install_client
-from test_runtime import completion, settle
-from test_slash_commands import enable, interaction
+from support.provider import install_client
+from support.runtime import completion, settle
+from support.slash_commands import enable, interaction
 
 
 RED = "<:red:1548579891820232704>"

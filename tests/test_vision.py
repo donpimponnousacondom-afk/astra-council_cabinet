@@ -1,5 +1,4 @@
 import base64
-import io
 import json
 import struct
 import zlib
@@ -8,11 +7,10 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from PIL import Image
 
 from conftest import configured
-from test_provider import install_client
-from test_typing import prepare_bot
+from support.provider import install_client
+from support.typing import prepare_bot
 from hortator.models import OWNER_ID, ControlError
 from hortator.provider import Completion
 from hortator.vision import (
@@ -25,38 +23,7 @@ from hortator.vision import (
     image_limits_exceeded,
     validate_image,
 )
-
-URL = "https://cdn.discordapp.com/attachments/123/456/image.png?ex=expired-soon"
-
-
-def png():
-    buffer = io.BytesIO()
-    Image.new("RGB", (3, 2), "red").save(buffer, format="PNG")
-    return buffer.getvalue()
-
-
-def attachment(**changes):
-    return {
-        "id": "456",
-        "filename": "image.png",
-        "url": URL,
-        "size": len(png()),
-        "content_type": "image/png",
-        **changes,
-    }
-
-
-async def cached(kernel):
-    client = httpx.AsyncClient(
-        transport=httpx.MockTransport(
-            lambda request: httpx.Response(200, content=png(), headers={"content-type": "image/png"})
-        )
-    )
-    cache = ImageCache(kernel.store, client)
-    result = await cache.capture(attachment())
-    await client.aclose()
-    assert result["vision"]["status"] == "ready"
-    return cache, result
+from support.vision import URL, attachment, cached, png
 
 
 @pytest.mark.parametrize(
@@ -559,7 +526,7 @@ async def test_old_multi_image_message_never_blocks_or_recaptures_after_handled_
 
 async def test_image_inputs_survive_tool_rounds_but_expire_after_completed_turn(kernel):
     from conftest import ingest
-    from test_runtime import completion, settle
+    from support.runtime import completion, settle
 
     bot, channel = prepare_bot(kernel)
     _, item = await cached(kernel)

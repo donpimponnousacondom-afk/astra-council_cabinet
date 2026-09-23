@@ -115,3 +115,16 @@ they never use the inference/tool runner or consume a turn. It composes with
 `discord_panel` and works without that tool's grant. Global/per-bot switches are
 off by default. See [REASONING_VIEWER](REASONING_VIEWER.md) for durable ownership,
 pagination, downloads, revocation and the narrow Discord diagnostic exception.
+
+## Optional contract hooks
+
+`PluginSpec` keeps its existing positional arguments and defaults. Trusted entry-point packages may optionally supply these synchronous callbacks:
+
+- `context_spec(context) -> PluginSpec`: return a contextual description/schema, preferably with `dataclasses.replace`; do not mutate the registered base spec. The registry still applies existing grants before advertising a schema and before execution.
+- `validate(kind, entity, store) -> None`: validate a proposed saved entity, raising `ControlError` on invalid configuration. Hooks are visited in registration order; ignore unrelated kinds/IDs. Research validates both global settings against saved bot overrides and proposed bot overrides against global settings.
+- `references(kind, entity_id) -> list[str]`: report saved references that prevent deletion. Return an empty list for unrelated targets. Research profile references now belong to the researcher plugin.
+- `bind(kernel) -> None`: connect to fully constructed core services during Kernel's one binding phase, before opening its task lifetime or starting runtime services. Research registers its worker/admission policy here. Do not start tasks or perform remote I/O in this callback.
+
+The `keyless` and `installed_description` booleans default false. They control catalog presentation: whether the credential field is needed and whether the current installed description supersedes saved seeded text. They do not grant capabilities, change credential resolution, or authorize model access. Existing plugins without hooks retain their previous behavior; no hook is required to register a normal tool.
+
+Core validation for shared workspace/document constraints and shell's additional workspace grant remain explicit. Hooks are not a dependency resolver or a new permission system. Background jobs remain a Kernel-owned service even with no researcher registered; removing the researcher removes its worker/contract hooks, not the service or its durable records. See [service construction and ownership](CONCURRENCY.md#service-construction-and-binding).

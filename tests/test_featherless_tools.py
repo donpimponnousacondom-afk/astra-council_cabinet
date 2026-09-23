@@ -7,7 +7,7 @@ import pytest
 
 import featherless_tester as probe
 import featherless_tools as lab
-from test_featherless_tester import model, options
+from support.featherless_tester import model, options
 
 
 def call(name, arguments, call_id="call1"):

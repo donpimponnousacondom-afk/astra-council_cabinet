@@ -9,7 +9,7 @@ import tiktoken
 from conftest import configured
 from hortator.footer import render_footer, validate_template
 from hortator.footer_tokens import measure_footer_tokens
-from test_provider import Fragments, call_args, install_client
+from support.provider import Fragments, call_args, install_client
 
 
 TEMPLATE = "R: {{REASONING_TOKENS}} | C: {{COMPLETION_TOKENS}} | T: {{TOTAL_TOKENS}}"

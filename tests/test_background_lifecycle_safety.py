@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock
 
 from conftest import configured, ingest
 from hortator.plugins import ToolContext
-from test_addressing import message
-from test_provider import install_client
-from test_runtime import completion
+from support.addressing import message
+from support.provider import install_client
+from support.runtime import completion
 
 
 async def test_cancel_before_turn_entry_records_terminal_state(kernel):

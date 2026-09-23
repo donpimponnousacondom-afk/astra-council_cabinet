@@ -49,9 +49,12 @@ The handler defers the interaction before starting model work. Discord requires 
 
 The local acknowledgement cutoff is **2.9 seconds from interaction creation**,
 replacing the former one-shot 2.5-second wait. Earlier gateway/handler delay is
-included; retries do not get another three seconds. Up to **five deferral calls**
-are allowed for quick connection/timeout/server failures, with 25 ms between
-attempts while time remains. discord.py also manages its own HTTP retries and
+included; retries do not get another three seconds. Up to **thirty deferral calls**
+are allowed for quick connection/timeout/server failures, with 90 ms between
+attempts while time remains. Thirty is a ceiling, not a promise of thirty calls:
+HTTP latency and the remaining shared deadline can stop retries earlier. The
+owner confirmed this later merged tuning on 2026-09-23, superseding the earlier
+five-attempt/25-ms policy. discord.py also manages its own HTTP retries and
 rate limits inside this outer deadline; application attempt counts are not a
 count of every wire request. Authentication/permission/expired-interaction and
 local programming errors are not blindly retried.
@@ -93,7 +96,7 @@ These are separate clocks, not interchangeable retry delays:
 | Setting | What it limits |
 | --- | --- |
 | `ACK_SECONDS = 2.9` | The entire initial acknowledgement window, including time already elapsed since creation; Discord requires acknowledgement within three seconds. |
-| `ACK_RETRY_DELAY = 0.025` | 25 ms between quick transient acknowledgement failures, with at most five calls inside the same window. It does not cancel a pending call every 25 ms. |
+| `ACK_RETRY_DELAY = 0.090` | 90 ms between quick transient acknowledgement failures, with at most thirty calls inside the same window. It does not cancel a pending call every 90 ms. |
 | `ACK_RECEIPT_SECONDS = 5` | Each read-only lookup of a possibly accepted acknowledgement; separately limited to three lookups. |
 | `asyncio.timeout(30)` in `SlashEngine.deliver` | Final delivery of the already-generated answer/files through `edit_original_response`, including uploads, HTTP waiting and library retries. It is not an inference timeout. |
 | `MAX_SECONDS = 14 * 60` | The whole slash invocation, including acknowledgement, provider/tool work and answer delivery; reserves a minute before Discord's 15-minute token expiry. |
@@ -120,3 +123,12 @@ A successful interaction edit records its Discord message ID and outbox receipt.
 Registration uses the Discord API's individual command create/update/delete operations through the pinned discord.py HTTP client. It never bulk-overwrites the app's command tree. Existing unowned `/prompt` commands cause a polite registration refusal instead of being overwritten. The recorded bot/application/command IDs remain the authority for command deletion. Removing this stage's hooks and registry entry leaves ordinary bots, shared tools and retained history intact; keep the stage's local commit as the code rollback boundary.
 
 The implementation and mocked tests do not establish that a newly configured Discord application has been installed or successfully invoked. Finish portal setup and use `/prompt` for live acceptance after deployment.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Slash acknowledgement recovery uses at most thirty transient deferral calls with 90 ms gaps within one 2.9-second window from interaction creation, never fresh deadlines. Retry gaps do not shorten a pending request's timeout. Uncertain acceptance or Discord 40060 is reconciled by at most three read-only original-response lookups; require the expected loading placeholder and matching visibility/identity before starting model work. Do not replay a completed answer, manufacture acceptance or persist interaction tokens. Keep acknowledgement, gateway reconnect and inference retry diagnostics distinct; see SLASH_COMMANDS for eligibility and timing.
+
+- The keyless `slash_commands` plugin is owner-only ingress for council companions, not a model tool. Preserve global/per-bot opt-in, ordinary room behavior, shared active-bot/concurrency/budget gates, exact registered command ownership and fresh isolated slash contexts. Personal installation does not grant ambient channel history or director tools. Defer promptly and cancel/join at the 14-minute local deadline; Discord tokens expire after 15 minutes and must stay in memory, never logs/database/provider evidence. The owner requested public slash replies by default (2026-09-13), with explicit `private:true` per invocation; preserve exact-owner access, mention suppression, explicit silence/failure receipts and uncertain delivery semantics. Disable/unregister only owned commands; never bulk overwrite another app command tree. See [docs/SLASH_COMMANDS.md](SLASH_COMMANDS.md).

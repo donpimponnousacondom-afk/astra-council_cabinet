@@ -11,10 +11,10 @@ identity survive conversational completion. No interaction token is saved.
 Admission uses each registered handler's positive per-bot allowance across all
 channels. A handler can supply a `limit(bot)` callback; otherwise its allowance
 is one outstanding job. Queued/running jobs and pending completion notifications
-occupy slots. The research plugin defaults to four, with an operator-configured
-global default and per-bot override. There is no separate two-worker semaphore,
-eight-job global ceiling or two-submissions-per-turn restriction. Admitted jobs
-have independent owned workers; the provider pool still enforces actual request
+occupy slots. The research plugin's allowance, defaults and per-bot overrides are
+defined in [RESEARCH_ASSISTANT.md](RESEARCH_ASSISTANT.md); generic background jobs
+add no separate research-specific admission ceiling. Admitted jobs have
+independent owned workers; the provider pool still enforces actual request
 concurrency. Each submission remains one tool call within the bot's ordinary
 round/call budget.
 
@@ -109,3 +109,12 @@ a crash can leave an interrupted receipt for a single failure follow-up. Saved
 reports remain available until ordinary retention cleanup. Code rollback leaves
 the extra table unused; full snapshot compatibility still requires matching
 source/schema as documented in SNAPSHOTS.
+
+## Owner decisions (preserved from AGENTS, 2026-09-23)
+
+The date marks relocation of standing instructions, not a new product decision.
+Existing decision dates and qualifications below remain authoritative.
+
+- Background jobs are a reusable Kernel-owned service, independent of the optional `research_assistant` experiment. Keep TaskGroup ownership, durable scoped state, bounded admission/retention, stable submission IDs and at-most-one completion activation per job notification (settled siblings may share one wave). A worker never posts Discord directly; completion uses fresh ordinary context, prioritizes human input, respects pause/grant/budget/concurrency gates and may wake timer-zero bots. Do not replay paid requests after restart or let clean-slate resets reintroduce old work. Completion-triggered submissions require a registered plugin admission policy with a durable task-wide budget; plugins without that policy remain blocked. The MiMo adapter is default off, uses only its supplied assignment plus editable system prompt and its selected provider credential (never the main bot's key override), preserves native search evidence/metrics and keeps reasoning private. First version excludes slash/panel and paused one-shot starts. See BACKGROUND_JOBS and RESEARCH_ASSISTANT.
+
+- Notified background dispatch executes the accepted batch, stops typing and permits one text-only acknowledgement before releasing workers to provider slots. Later progress/results are NEW ordinary messages, never edits to old answers. Coalesce settled siblings by bot/channel/plugin/origin turn with bounded durable receipts and cumulative counts; overflow remains pending, with no notification replay. Researcher redispatch from completion turns uses the shared task batch budget; workers themselves cannot delegate. Explicit notification opt-out retains bounded polling. Preserve deadlines through the dispatch queue and finalize turns cancelled before entry; do not cancel the same parent twice while it joins cleanup. See BACKGROUND_JOBS.

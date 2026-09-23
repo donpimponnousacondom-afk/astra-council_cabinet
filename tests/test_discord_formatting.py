@@ -6,18 +6,8 @@ import pytest
 from hortator.discord_gateway import COMMANDS
 from hortator.discord_text import code_pages
 from hortator.models import OWNER_ID
-from test_typing import prepare_bot
-
-
-def message(content, channel):
-    return SimpleNamespace(
-        content=content,
-        channel=channel,
-        author=SimpleNamespace(id=int(OWNER_ID), bot=False),
-        webhook_id=None,
-        guild=None,
-        attachments=[],
-    )
+from support.typing import prepare_bot
+from support.discord_formatting import message
 
 
 async def test_help_is_complete_fenced_pages_without_preface_or_model_calls(kernel):

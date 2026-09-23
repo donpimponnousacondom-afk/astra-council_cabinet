@@ -4,8 +4,8 @@ import httpx
 import pytest
 
 from conftest import configured
-from test_console import output
-from test_provider import Fragments, call_args, install_client
+from support.console import output
+from support.provider import Fragments, call_args, install_client
 
 
 @pytest.mark.parametrize("stream", [True, False])

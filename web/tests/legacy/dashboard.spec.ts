@@ -322,7 +322,14 @@ test("overview, pause/resume, command reference, and mobile navigation", async (
   await expect(
     page.getByText("A few connections. A whole conversation."),
   ).toBeVisible();
-  await expect(page.getByText("Draft", { exact: true })).toHaveCount(3);
+  // Other browser cases add bots to the shared seeded server. Check our fixtures,
+  // not a global count that depends on which files ran before this one.
+  for (const name of ["Ada", "Hortator", "Socrates"]) {
+    const card = page.getByRole("article").filter({
+      has: page.getByRole("heading", { name, exact: true }),
+    });
+    await expect(card.getByText("Draft", { exact: true })).toBeVisible();
+  }
   await page
     .getByRole("button", { name: "Pause council", exact: true })
     .click();

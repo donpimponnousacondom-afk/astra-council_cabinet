@@ -1,5 +1,78 @@
 # Verification record
 
+Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate older
+entries. New entries follow the [evidence template](verification-template.md);
+historical claims retain their original date and scope.
+
+## Audit hardening and preservation review (2026-09-23)
+
+- **Source:** `feat/audit_hardening`; slash contract fix `3a010f6` and integrated
+  implementation `2cfa832`. The full check started on `3a010f6` plus the uncommitted
+  implementation, which was committed unchanged during validation. The runner
+  records both revision/dirty states; this is not presented as a clean-start run.
+- **Backend scope/result:** full collection, **1,474 passed, one skipped, zero
+  failures in 304.01 seconds**. The skipped public-package download is opt-in.
+  Two upstream TestClient/AnyIO deprecations remain unsuppressed. Ruff lint/format
+  and four verification-runner tests passed. The runner also has an isolated
+  failure-propagation test; its synthetic output is not counted as suite evidence.
+- **Frontend:** formatting and TypeScript/Vite build passed. The initial integrated
+  browser run had 59 passes and one order-dependent legacy assertion failure.
+  The assertion now checks the three named fixture cards instead of a global bot
+  count. A rerun exposed an intentionally visible server/dashboard stamp mismatch
+  after committing source; rebuilding resolved the test setup. The final complete
+  browser run passed **60 tests in 1.9 minutes**, exit zero. No application source
+  changed after the full backend pass; only this browser assertion and docs did.
+  The original failed integrated result is retained, not relabeled as passed.
+- **Evidence:** ignored `test-results/verification/result.json` and `pytest.xml`;
+  the owner-requested local audit response archives final results inside ignored
+  `audit/`. The supplied audit and logs remain unchanged and uncommitted.
+- **Classification:** mocked provider/Discord adapters and local integration,
+  including real isolated shell tests and a separate seeded browser server;
+  no live research request or Discord message was sent for acceptance.
+- **Review:** three delegated reviewers covered backend lifecycle/metrics,
+  plugin/CI wiring, test support and independent integration review. Shared helpers
+  moved mechanically with AST preservation checks; detector policies remain
+  deliberately distinct. Pre-entry cancellation requires the retained callback.
+- **Documentation:** all 57 relocated feature rules and nine retained cross-cutting
+  rules accounted for; original operating prefix and complete dated plan retained.
+  Newest-first indexes include nested dated verification sections. The older claim
+  that research reused ordinary answer detection was true at commit `6039d92`;
+  PR #62 changed that later. Historical evidence is not rewritten as current fact.
+- **Outstanding:** publishing the workflow and requiring its status check, dependency
+  compatibility migration, broader turn-loop/frontend decomposition, and live
+  research acceptance below. Adding local YAML does not enforce remote merging.
+
+Live research acceptance checklist (not run in this maintenance task):
+
+- [ ] Four scoped assignments create four jobs, one ordinary tool call each.
+- [ ] Parent acknowledges in a new message and stops typing while workers run.
+- [ ] Completion wakes the parent with fresh context and a new message, no edits.
+- [ ] Refined dispatch shares the original task budget and rejects duplicates.
+- [ ] Failed/empty native search preserves evidence, metrics and honest reporting.
+
+## Slash acknowledgement contract aligned with merged tuning (2026-09-23)
+
+- **Source:** `hotfix/slash_ack_contract`, based on merged `a93538b`, with this
+  contract-only patch. The owner explicitly retained PR #44's 30 attempts and
+  90 ms retry gaps inside the original 2.9-second window. Running constants and
+  behavior are unchanged; the source edit corrects their stale comment.
+- **Focused backend:** 53 slash tests passed in 10.83 seconds. The formerly
+  failing exhaustion test now pins 30 deferrals and three receipt reads. A
+  separate assertion pins the real defaults before the fixture removes retry
+  sleeps. Existing stale-interaction, cancellation, receipt and no-work-on-
+  failure cases remain covered.
+- **Full backend:** `uv run pytest -q --durations=10` completed with **1,456
+  passed, one skipped, two dependency deprecation warnings in 304.15 seconds**.
+  The audit's known failing test is resolved; no warning suppression was added.
+- **Static checks:** Ruff lint and format checks passed across `hortator`,
+  `tests` and `scripts`; `git diff --check` passed. **Frontend:** not rerun;
+  no UI or frontend dependency change.
+- **Live checks:** no Discord/provider probes, configuration writes or runtime
+  restart. Current contract documents and standing instructions are aligned;
+  earlier verification evidence remains historical. `/audit/` is ignored and
+  its three supplied files retain their original hashes. CI and broader audit
+  changes remain separate work.
+
 ## Shared research-task dispatch budget (2026-09-23)
 
 - Renamed the clean, merged `1c12e9e` placeholder to

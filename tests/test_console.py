@@ -18,24 +18,13 @@ import pytest
 
 from hortator import console as console_module
 from hortator.console import OperationalConsole
+from support.console import output, read_all_evidence
 
 
 def access(target="/api/status", status=200):
     logging.getLogger("uvicorn.access").info(
         '%s - "%s %s HTTP/%s" %d', "127.0.0.1:12345", "GET", target, "1.1", status
     )
-
-
-def output(**kwargs):
-    return OperationalConsole(stream=io.StringIO(), keys=False, color=False, **kwargs)
-
-
-def read_all_evidence(console):
-    for _ in range(100):
-        if console.evidence.get("next") is None:
-            return
-        console.key("n")
-    raise AssertionError("Synthetic evidence should fit within 100 bounded pages")
 
 
 async def test_real_ledger_events_have_time_scope_identity_and_no_http_poll_spam(kernel):
