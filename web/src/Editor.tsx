@@ -19,7 +19,11 @@ import { PricingEditor } from "./Pricing";
 import { GlobalMemoryPanel } from "./GlobalMemory";
 import { SlashCommandSetup } from "./SlashCommands";
 import { BotControl } from "./BotControl";
-import { BackgroundJobsPanel, ResearchSettings } from "./ResearchAssistant";
+import {
+  BackgroundJobsPanel,
+  ResearchBotSettings,
+  ResearchSettings,
+} from "./ResearchAssistant";
 import { alphabetical } from "./ordering";
 import {
   DocumentBotSettings,
@@ -893,6 +897,24 @@ export function Editor({
                         "Calls are executed in order, not in parallel.",
                       )}
                     </div>
+                    {(draft.enabled_plugins || []).includes(
+                      "research_assistant",
+                    ) && (
+                      <ResearchBotSettings
+                        config={draft.plugin_config?.research_assistant || {}}
+                        inheritedLimit={
+                          dashboard.plugins.find(
+                            (plugin) => plugin.id === "research_assistant",
+                          )?.config?.max_parallel_jobs ?? 4
+                        }
+                        onChange={(value) =>
+                          set("plugin_config", {
+                            ...draft.plugin_config,
+                            research_assistant: value,
+                          })
+                        }
+                      />
+                    )}
                     {(draft.enabled_plugins || []).includes(
                       "document_site",
                     ) && (

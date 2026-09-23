@@ -12,6 +12,9 @@ test("research configuration saves independently and bot Control inspects/cancel
     page.getByRole("heading", { name: "The council", exact: true }),
   ).toBeVisible();
   const before = await (await page.request.get("/api/config/bots/ada")).json();
+  const pluginBefore = await (
+    await page.request.get("/api/config/plugins/research_assistant")
+  ).json();
   const navigate = async (name: string) =>
     page
       .getByRole("navigation", { name: "Workbench pages" })
@@ -25,6 +28,29 @@ test("research configuration saves independently and bot Control inspects/cancel
     })
     .click();
   let dialog = page.getByRole("dialog");
+  const parallelLimit = dialog.getByLabel(
+    "Outstanding researchers per bot (default)",
+    { exact: true },
+  );
+  await expect(parallelLimit).toHaveValue("4");
+  await expect(parallelLimit).toHaveAttribute("min", "4");
+  await expect(parallelLimit).not.toHaveAttribute("max");
+  await parallelLimit.fill("");
+  await expect(parallelLimit).toHaveValue("");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  expect(
+    await parallelLimit.evaluate((input: HTMLInputElement) =>
+      input.checkValidity(),
+    ),
+  ).toBe(false);
+  expect(
+    await (
+      await page.request.get("/api/config/plugins/research_assistant")
+    ).json(),
+  ).toEqual(pluginBefore);
+  await parallelLimit.fill("16");
   await dialog
     .getByLabel("Research model profile", { exact: true })
     .selectOption("balanced");
@@ -49,6 +75,7 @@ test("research configuration saves independently and bot Control inspects/cancel
     profile_id: "balanced",
     max_output_tokens: 4096,
     timeout_seconds: 900,
+    max_parallel_jobs: 16,
   });
   const after = await (await page.request.get("/api/config/bots/ada")).json();
   expect(after).toEqual(before);
@@ -106,4 +133,127 @@ test("research configuration saves independently and bot Control inspects/cancel
     dialog.getByRole("table", { name: "Background jobs" }),
   ).toContainText("revoked");
   expect(cancelled).toBe(true);
+});
+
+test("bot research fan-out overrides inherit cleanly and preserve other plugin settings", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByLabel("Dashboard password")
+    .fill("test-only-password-never-use-in-production");
+  await page.getByRole("button", { name: "Enter council control" }).click();
+  await expect(
+    page.getByRole("heading", { name: "The council", exact: true }),
+  ).toBeVisible();
+  const session = await (await page.request.get("/api/auth/session")).json();
+  const global = await (
+    await page.request.get("/api/config/plugins/research_assistant")
+  ).json();
+  const inheritedLimit = global.config.max_parallel_jobs ?? 4;
+  const id = "wb-research-fanout";
+  const overrides = {
+    research_assistant: {
+      system_prompt: "Research briefly. Today is {now}.",
+      timeout_seconds: 1200,
+    },
+    document_site: { local_base_url: "http://127.0.0.1:19000" },
+  };
+  const created = await page.request.post("/api/control", {
+    headers: { "X-CSRF-Token": session.csrf },
+    data: {
+      action: "create",
+      kind: "bots",
+      id,
+      data: {
+        id,
+        name: id,
+        model_profile_id: "balanced",
+        enabled: false,
+        enabled_plugins: ["research_assistant"],
+        plugin_config: overrides,
+      },
+    },
+  });
+  expect(created.ok()).toBe(true);
+  const original = await created.json();
+  await page
+    .getByRole("button", { name: "Refresh dashboard", exact: true })
+    .click();
+  await page
+    .getByRole("navigation", { name: "Workbench pages" })
+    .getByRole("button", { name: "Bots", exact: true })
+    .click();
+  const openCapabilities = async () => {
+    await page.getByRole("button", { name: `Edit ${id}`, exact: true }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Capabilities", exact: true })
+      .click();
+  };
+  await openCapabilities();
+  const dialog = page.getByRole("dialog");
+  const limit = dialog.getByLabel("Outstanding researchers for this bot", {
+    exact: true,
+  });
+  await expect(limit).toHaveValue("");
+  await expect(limit).toHaveAttribute(
+    "placeholder",
+    `Inherit ${inheritedLimit}`,
+  );
+  await expect(limit).toHaveAttribute("min", "4");
+  await expect(limit).not.toHaveAttribute("max");
+  await limit.fill("3");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  expect(
+    await limit.evaluate((input: HTMLInputElement) => input.checkValidity()),
+  ).toBe(false);
+  expect(
+    await (await page.request.get(`/api/config/bots/${id}`)).json(),
+  ).toEqual(original);
+  await limit.fill("24");
+  await dialog.getByRole("button", { name: "Identity", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Capabilities", exact: true })
+    .click();
+  await expect(limit).toHaveValue("24");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const saved = await (await page.request.get(`/api/config/bots/${id}`)).json();
+  expect(saved.plugin_config).toEqual({
+    ...overrides,
+    research_assistant: {
+      ...overrides.research_assistant,
+      max_parallel_jobs: 24,
+    },
+  });
+  for (const key of [
+    "enabled",
+    "enabled_plugins",
+    "model_profile_id",
+    "max_calls_per_round",
+    "max_tool_rounds",
+    "room_ids",
+  ])
+    expect(saved[key]).toEqual(original[key]);
+  await openCapabilities();
+  await expect(limit).toHaveValue("24");
+  await limit.fill("");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const restored = await (
+    await page.request.get(`/api/config/bots/${id}`)
+  ).json();
+  expect(restored.plugin_config).toEqual(overrides);
+  expect(
+    await (
+      await page.request.get("/api/config/plugins/research_assistant")
+    ).json(),
+  ).toEqual(global);
 });

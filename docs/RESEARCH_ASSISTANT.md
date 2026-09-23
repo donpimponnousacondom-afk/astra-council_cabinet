@@ -29,11 +29,30 @@ no inherited conversation summary or automatic compaction of research inputs.
 
 Configuration defaults: no selected profile, 16,384 output-token ceiling,
 600-second total deadline (including queue/retries, configurable 1–7,200), one
-keyword, automatic completion follow-up enabled. The system prompt is editable;
+keyword, four outstanding researchers per bot, automatic completion follow-up
+enabled. The system prompt is editable;
 `{now}` uses the council timezone. Per-bot plugin JSON overrides use the usual
 shallow merge and validation. Profile changes cancel affected work. Sharing a
 provider with the main bot also shares its concurrency limit; use an independent
 provider when research must not occupy the bot's only inference slot.
+
+**Outstanding researchers per bot (default)** sets `max_parallel_jobs` globally.
+**Bots → Capabilities → Outstanding researchers for this bot** optionally overrides
+it; blank restores inheritance. The default and minimum are four, with no fixed
+upper ceiling. Active jobs and pending completion notifications share this
+allowance across the bot's channels. Completed results whose follow-up has been
+read, claimed or revoked no longer occupy a slot. Status/list/start responses
+include current capacity and available slots; the tool description also states
+the current allowance. Model-facing lists include all outstanding jobs in their
+admitted channel plus up to 30 recent settled jobs.
+
+Each `start` creates exactly one researcher and consumes one tool call. For
+example, eight independent assignments require eight starts, an allowance of at
+least eight available slots and a bot call budget permitting eight calls. Starts
+return promptly and their workers run independently, subject to the selected
+provider's concurrency limit. There is no batch-start shortcut or extra tool
+budget. Reading/claiming a finished job can free its slot, and each job retains
+its own deadline, output allowance, saved evidence and notification.
 
 ```json
 {"operation":"start","submission_id":"official-prices-sept","task":"Compare official prices. Cite URLs and dates; flag contradictions.","max_output_tokens":4096}

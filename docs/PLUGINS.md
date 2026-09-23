@@ -6,9 +6,14 @@ The optional **Sub-agent researcher · experimental** exposes `research_assistan
 and is disabled by default. It delegates to a separately configured MiMo profile
 without changing the conversational model or existing web tools. The reusable
 `registry.jobs` service is bound by Kernel before tool execution; trusted plugins
-may register a handler plus current-scope/configuration checker and submit work
-under Kernel TaskGroup ownership. Workers persist status/results and queue one
-ordinary completion turn, rather than posting Discord messages themselves.
+may register a handler plus current-scope/configuration checker and optional
+`limit(bot)` callback, then submit work under Kernel TaskGroup ownership. The
+callback supplies a positive per-bot/plugin outstanding allowance (default one);
+the research plugin uses its operator-configured `max_parallel_jobs` (default
+and minimum four). Active work and pending notifications share that allowance,
+while provider concurrency remains independently enforced. Workers persist
+status/results and queue one ordinary completion turn, rather than posting
+Discord messages themselves.
 See [RESEARCH_ASSISTANT](RESEARCH_ASSISTANT.md) for setup/tool calls and
 [BACKGROUND_JOBS](BACKGROUND_JOBS.md) for lifecycle, quotas and revocation.
 

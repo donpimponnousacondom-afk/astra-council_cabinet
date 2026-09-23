@@ -8,10 +8,24 @@ The first consumer is the experimental Sub-agent researcher plugin.
 Jobs are stored in the application SQLite database, included in consistent
 snapshots. Their bot, channel, origin turn, assignment, deadline and submission
 identity survive conversational completion. No interaction token is saved.
-Two workers share a queue of at most eight jobs. A bot may have one active job
-or pending completion; a turn may create at most two jobs. Result snapshots are
-bounded to 2 MiB, expire after seven inactive days, and roll at 100 settled
-records per bot. Pending notifications are protected until consumed/revoked.
+Admission uses each registered handler's positive per-bot allowance across all
+channels. A handler can supply a `limit(bot)` callback; otherwise its allowance
+is one outstanding job. Queued/running jobs and pending completion notifications
+occupy slots. The research plugin defaults to four, with an operator-configured
+global default and per-bot override. There is no separate two-worker semaphore,
+eight-job global ceiling or two-submissions-per-turn restriction. Admitted jobs
+have independent owned workers; the provider pool still enforces actual request
+concurrency. Each submission remains one tool call within the bot's ordinary
+round/call budget.
+
+Status includes current capacity, active jobs, pending completions and available
+slots. Admission checks the current allowance; any over-limit saved work stays
+inspectable. Saving configuration through the control service retains its normal
+cancel/join behavior for affected work. Result snapshots are bounded to 2 MiB,
+expire after seven inactive days,
+and roll at 100 settled records per bot. Pending notifications are protected
+until consumed/revoked. The owner inventory includes all outstanding jobs plus
+the latest 50 settled records, so large configured allowances remain inspectable.
 
 Completion queues one ordinary turn in its originating admitted channel. Fresh
 human-directed input takes priority. Timer-zero bots can receive this explicit

@@ -29,6 +29,7 @@ DEFAULTS = {
     "max_output_tokens": 16384,
     "timeout_seconds": 600,
     "max_keyword": 1,
+    "max_parallel_jobs": 4,
     "notify_on_completion": True,
 }
 CONFIG_SCHEMA = {
@@ -40,6 +41,7 @@ CONFIG_SCHEMA = {
         "max_output_tokens": {"type": "integer", "minimum": 1, "maximum": 131072},
         "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 7200},
         "max_keyword": {"type": "integer", "minimum": 1, "maximum": 3},
+        "max_parallel_jobs": {"type": "integer", "minimum": 4},
         "notify_on_completion": {"type": "boolean"},
     },
 }
@@ -56,7 +58,11 @@ DESCRIPTION = (
     "synthesis, not verified source truth; inspect its sources and search errors. Metrics include "
     "elapsed time, tokens, TTFT and TPS when available, so you can choose direct web_search for faster lookups. "
     "A submission_id identifies one assignment: reuse it to recover the same job, use a new one for new work. "
-    "One outstanding job per bot; no recursive submissions from completion follow-ups. "
+    "Each start call creates exactly one researcher and consumes one ordinary tool call; "
+    "fan out independent assignments with separate start calls inside your normal round/call budget. "
+    "Active jobs and pending completions share this bot's configured allowance across channels; "
+    "inspect capacity before submitting more. Provider concurrency may make admitted jobs wait. "
+    "No recursive submissions from completion follow-ups. "
     "This experiment currently starts jobs only in configured conversational channels, not slash/panel "
     "invocations or paused one-shot turns. Example: "
     '{"operation":"start","submission_id":"pricing-2026-09","task":"Compare official pricing, cite dated URLs.","max_output_tokens":4096}.'
@@ -103,6 +109,14 @@ PARAMETERS = {
 
 def validate_config(config, store):
     errors = errors_for(CONFIG_SCHEMA, config)
+    if (
+        isinstance(config, dict)
+        and "max_parallel_jobs" in config
+        and type(config["max_parallel_jobs"]) is not int
+    ):
+        # JSON Schema accepts integral floats; admission uses a strict saved
+        # integer so an API-accepted setting cannot fail later at submission.
+        errors.append({"path": "$.max_parallel_jobs", "message": "Use an integer of at least 4"})
     if errors:
         raise ControlError(
             "Invalid researcher configuration: " + "; ".join(f"{e['path']}: {e['message']}" for e in errors)
@@ -125,7 +139,12 @@ class ResearchAssistant:
 
     def bind(self, jobs, pool):
         self.jobs, self.pool = jobs, pool
-        jobs.register(ID, run=self.run, check=self.check)
+        jobs.register(
+            ID,
+            run=self.run,
+            check=self.check,
+            limit=lambda bot: self.configuration(bot)["max_parallel_jobs"],
+        )
 
     def configuration(self, bot):
         return {
@@ -151,6 +170,7 @@ class ResearchAssistant:
 
     def spec_for(self, context):
         config = self.configuration(context.bot)
+        capacity = self.jobs.capacity(context.bot["id"], ID)
         schema = copy.deepcopy(PARAMETERS)
         schema["properties"]["max_output_tokens"]["maximum"] = config["max_output_tokens"]
         return replace(
@@ -160,6 +180,8 @@ class ResearchAssistant:
             + (
                 f" Current output ceiling: {config['max_output_tokens']} tokens; "
                 f"total deadline: {config['timeout_seconds']} seconds; "
+                f"outstanding researchers: {capacity['outstanding_jobs']}/{capacity['max_parallel_jobs']}; "
+                f"available slots: {capacity['available_slots']}; "
                 f"default completion notification: {config['notify_on_completion']}."
             ),
         )
@@ -204,7 +226,10 @@ class ResearchAssistant:
             }
         if operation == "list":
             rows = self.store.rows(
-                "SELECT * FROM background_jobs WHERE plugin=? AND bot_id=? AND channel_id=? ORDER BY created_at DESC LIMIT 30",
+                "WITH owned AS (SELECT * FROM background_jobs WHERE plugin=? AND bot_id=? AND channel_id=?) "
+                "SELECT * FROM owned WHERE state IN ('queued','running') OR notification='pending' OR id IN ("
+                "SELECT id FROM owned WHERE state NOT IN ('queued','running') AND notification<>'pending' "
+                "ORDER BY created_at DESC LIMIT 30) ORDER BY created_at DESC",
                 (ID, context.bot["id"], context.channel_id),
             )
             visible = []
@@ -214,7 +239,7 @@ class ResearchAssistant:
                 except ControlError:
                     continue
                 visible.append(self.jobs.status(row))
-            return {"jobs": visible}
+            return {"jobs": visible, "capacity": self.jobs.capacity(context.bot["id"], ID)}
         job = self.jobs.owned(args["job_id"], context, ID)
         if operation == "wait":
             deadline = asyncio.get_running_loop().time() + args.get("seconds", 10)
@@ -239,7 +264,7 @@ class ResearchAssistant:
             (job["id"],),
         )
         return {
-            **result,
+            **self.jobs.status(self.jobs.get(job["id"])),
             "content": text[offset:end],
             "offset": offset,
             "total_chars": len(text),

@@ -1,5 +1,46 @@
 # Verification record
 
+## Configurable researcher fan-out (2026-09-23)
+
+- Continued the active unmerged `hotfix/research_observability` branch. Kept
+  invalid-report validation in its preceding independent commit and implemented
+  the owner's subsequent fan-out request with parallel backend/dashboard work.
+  No live memory, prompt, provider or bot configuration was rewritten.
+- Research `max_parallel_jobs` defaults to four and validates integers of at
+  least four, without a fixed upper ceiling. Global plugin configuration and
+  optional per-bot Capabilities override use the ordinary merge contract. Blank
+  bot override inherits; blank global input stays visibly invalid instead of
+  displaying a fallback that differs from the draft. Other fields/drafts remain
+  intact. The legacy dashboard is untouched.
+- Replaced the hidden one-job/two-worker/global-eight/per-turn-two restrictions
+  with the current per-bot/plugin outstanding allowance. Active work and pending
+  notifications consume slots across channels. One start creates one job and
+  consumes one tool call; normal round/call limits, provider slots, deadlines,
+  grants and completion/cancellation rules remain authoritative. Current capacity
+  appears in tool guidance, results and queued events. Large outstanding groups
+  stay inspectable; settled history remains bounded and chronologically ordered.
+- **127 backend tests passed**, including 28 new fan-out cases: four/sixteen
+  simultaneous workers, global and bot API validation, sixty outstanding jobs,
+  reading a result to free capacity, deduplication at capacity, cancellation/join
+  of all workers, restart without replay, one notification claim per job, narrower
+  provider concurrency, deadlines covering provider-queue waits, and actual
+  engine round/call accounting. This also reran malformed-report validation,
+  ordinary runtime, provider retries, plugins, agentic API/runtime and owned
+  concurrency checks. Two existing dependency deprecation warnings remain.
+- **Two Playwright browser tests passed** using isolated fixture data and a build
+  under `/tmp` on port 18374. Covered global limit 16, bot override 24, min/blank
+  rejection, no maximum attribute, draft retention across tabs, inheritance and
+  unchanged unrelated configuration, plus saved-job inspection/cancellation.
+  TypeScript, Vite, scoped Prettier, Ruff and diff checks passed. All inference
+  and browser job evidence used mocks/fixtures; no paid fan-out or Discord test
+  messages were sent.
+- Read-only deployment preparation confirmed Loki's existing eight calls per
+  round/eight rounds and research provider concurrency of eight. These values
+  were preserved. Final deployment uses the committed-source shared-Screen
+  refresh; `logs/next-feature.json` records the verified matching server/dashboard
+  build. Owner acceptance remains a live four-assignment fan-out, inspecting
+  individual results and completion follow-ups before increasing the allowance.
+
 ## Research output validation versus owner cancellation (2026-09-23)
 
 - Continued the clean, unmerged `hotfix/research_observability` branch after the
