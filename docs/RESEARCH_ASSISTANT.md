@@ -16,7 +16,12 @@ changes an existing bot/profile on installation.
 
 The native request uses `/chat/completions`, `tools: [{type: "web_search",
 force_search: true, max_keyword: 1, limit: 1}]`. The operator can choose one to
-three keyword expansions. The selected profile supplies exact reasoning JSON and
+three query expansions per native search round. The dashboard calls this
+**Search queries per search round (maximum)**: a query may be a multiword phrase
+such as "capital of France". This sets neither word count nor research/model
+rounds. It maps unchanged to MiMo's `max_keyword`; the adapter still submits one
+completion request with native search, rather than running a local iterative
+research loop. The selected profile supplies exact reasoning JSON and
 streaming mode. Each job explicitly sends `max_completion_tokens`, replacing
 inherited output-cap fields on the wire copy only. It bounds reasoning plus
 visible output; upstream search-context tokens are separately billable. There is
@@ -24,11 +29,30 @@ no inherited conversation summary or automatic compaction of research inputs.
 
 Configuration defaults: no selected profile, 16,384 output-token ceiling,
 600-second total deadline (including queue/retries, configurable 1–7,200), one
-keyword, automatic completion follow-up enabled. The system prompt is editable;
+keyword, four outstanding researchers per bot, automatic completion follow-up
+enabled. The system prompt is editable;
 `{now}` uses the council timezone. Per-bot plugin JSON overrides use the usual
 shallow merge and validation. Profile changes cancel affected work. Sharing a
 provider with the main bot also shares its concurrency limit; use an independent
 provider when research must not occupy the bot's only inference slot.
+
+**Outstanding researchers per bot (default)** sets `max_parallel_jobs` globally.
+**Bots → Capabilities → Outstanding researchers for this bot** optionally overrides
+it; blank restores inheritance. The default and minimum are four, with no fixed
+upper ceiling. Active jobs and pending completion notifications share this
+allowance across the bot's channels. Completed results whose follow-up has been
+read, claimed or revoked no longer occupy a slot. Status/list/start responses
+include current capacity and available slots; the tool description also states
+the current allowance. Model-facing lists include all outstanding jobs in their
+admitted channel plus up to 30 recent settled jobs.
+
+Each `start` creates exactly one researcher and consumes one tool call. For
+example, eight independent assignments require eight starts, an allowance of at
+least eight available slots and a bot call budget permitting eight calls. Starts
+return promptly and their workers run independently, subject to the selected
+provider's concurrency limit. There is no batch-start shortcut or extra tool
+budget. Reading/claiming a finished job can free its slot, and each job retains
+its own deadline, output allowance, saved evidence and notification.
 
 ```json
 {"operation":"start","submission_id":"official-prices-sept","task":"Compare official prices. Cite URLs and dates; flag contradictions.","max_output_tokens":4096}
@@ -62,6 +86,17 @@ annotations, search errors, usage, finish reason and `complete` flag. A partial
 or filtered completion is not advertised as complete. Absence of citation/usage
 metadata cannot prove a search succeeded. Provider reasoning is retained only
 in authenticated diagnostics, never returned through this tool.
+
+Report validation is separate from a successfully completed HTTP/model request.
+An empty report, unhandled native tool calls, or a literal tool-call envelope in
+assistant content makes the job **failed**, with `complete: false`, an explicit
+`validation_error` and `kind: "invalid_researcher_output"`. The saved output,
+sources, usage and metrics remain readable through the same scoped result pages;
+private reasoning stays private. Plain discussion of tools and fenced examples
+are allowed. Content is never executed as a tool or automatically sent for a
+paid repair/retry. A normal partial report stopped by an output limit retains
+the existing incomplete-result behavior. Owner/timeout cancellation is handled
+independently; old request/job evidence is not reclassified or rewritten.
 
 Metrics include per-request TTFT/TPS (unknown for buffered responses), elapsed
 job time, token counts with provenance, inference cost when known and native

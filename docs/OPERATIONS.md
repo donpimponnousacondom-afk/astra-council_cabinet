@@ -6,7 +6,14 @@ Enable **Plugins → Sub-agent researcher · experimental**, select a dedicated 
 research profile/provider (with native Web Search enabled upstream), and grant
 the plugin under **Bots → Capabilities**. Existing bots keep their own model.
 The global editor configures the research output ceiling, total deadline,
-keyword limit, editable system prompt and default completion notification.
+search queries per search round, outstanding researchers per bot, editable system
+prompt and default completion notification. The researcher allowance defaults
+to four (minimum four, no fixed upper ceiling). **Bots → Capabilities** provides
+an optional per-bot override; blank uses the global default. Active jobs and
+pending completion notifications count against the allowance across all channels.
+Each researcher needs a separate `start` tool call within the bot's existing
+round/call budget; the provider's concurrency limit still controls simultaneous
+requests. Read/claim completed jobs to release occupied notification slots.
 **Bots → Control → Background jobs** inspects saved assignments, report pages,
 timing/token metrics and cancellation; the plugin editor shows all researcher
 jobs. No plugin-specific credential is required: the selected provider supplies

@@ -33,7 +33,7 @@ Raw API timestamps keep their existing epoch or canonical UTC representation. Da
 | `GET /api/export/config` | Configuration without credentials |
 | `GET /api/commands` | Command help used by the dashboard |
 | `GET /api/openapi.json` | Authenticated OpenAPI specification |
-| `GET /api/background-jobs?bot_id=&plugin=` | Latest 50 job states and measurements; optional scope filters |
+| `GET /api/background-jobs?bot_id=&plugin=` | All outstanding jobs plus latest 50 settled job states and measurements; optional scope filters |
 | `GET /api/background-jobs/{id}?offset=0&length=6000` | Owner-only assignment and saved result page, maximum 18,000 characters |
 | `POST /api/background-jobs/{id}/cancel` | Cancel/join active work or revoke its pending follow-up; requires CSRF |
 

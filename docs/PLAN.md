@@ -1,5 +1,47 @@
 # Implementation and acceptance plan
 
+## Configurable researcher fan-out (2026-09-23)
+
+The owner approved concurrent researchers per bot with a minimum/default of
+four and a configurable higher allowance. Expose `max_parallel_jobs` in the
+global researcher editor and as an optional per-bot Capabilities override. There
+is no fixed upper ceiling; each start must still create only one job and consume
+one ordinary tool call. Preserve existing round budgets, provider concurrency,
+deadlines, grants, cancellation, result retention and single-consumption job
+notifications. Active jobs and pending notifications occupy the configured
+allowance across a bot's channels. Remove the original hidden two-worker,
+eight-global-job and two-submissions-per-turn limits so the operator's setting
+has its stated effect. Keep the reusable service independent of the researcher.
+
+This is a separate implementation commit from invalid-report validation. No
+batch-start shortcut, recursive agent delegation, automatic paid repair or local
+iterative research loop is added. Existing plugin grants, model profiles, bot
+tool budgets, prompts and memories are not rewritten. Live owner testing should
+fan out four brief assignments, then inspect admission, provider slot waits,
+individual results and completion follow-ups before increasing the allowance.
+
+## Research and memory acceptance review (2026-09-23)
+
+The owner requested a two-hour live audit before deciding the next researcher
+changes. Clarify the dashboard's `max_keyword` label as **Search queries per
+search round (maximum)**, with a phrase example and an explicit distinction from
+word count/research rounds. Also clarify the existing single outstanding job
+rule, including unread completions. Saved settings, quotas, model-facing schemas
+and bot memories remain unchanged.
+
+The initial audit found researcher content containing literal tool-call markup
+while native `tool_calls` was empty and `finish_reason=stop`. The owner approved
+a follow-up validation patch after timestamps confirmed that the job completed
+before the later manual cancellation. Such output now fails the research job
+while retaining scoped, bounded evidence and metrics. No content execution or
+automatic paid repair is added; genuine cancellation stays distinct. Concurrent
+researchers were subsequently approved separately above; the current adapter
+still submits one request with native search rather than a local iterative loop.
+Loki's
+memory consolidation preserved the search-fix explanation, but some technical
+rules in his notes are still inaccurate and should be reviewed by the bot/owner.
+See the [dated audit](VERIFICATION.md).
+
 ## Search result retention and reread recovery (2026-09-22)
 
 The owner requested investigation of Loki's search complaints, authorized a fix

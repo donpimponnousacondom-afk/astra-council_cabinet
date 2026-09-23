@@ -20,12 +20,20 @@ ACTIVE = ("queued", "running")
 RESULT_LIMIT = 2 * 1024 * 1024
 
 
+class JobResultError(ControlError):
+    """A worker returned unusable output that must remain inspectable."""
+
+    def __init__(self, message, result):
+        super().__init__(message)
+        self.result = result
+
+
 class BackgroundJobs:
     def __init__(self, store, registry):
         self.store, self.registry = store, registry
         self.handlers = {}
+        self.limits = {}
         self.tasks = {}
-        self.slots = asyncio.Semaphore(2)
         self.background = None
         self.engine = None
         self.closed = False
@@ -40,10 +48,31 @@ class BackgroundJobs:
             UNIQUE(bot_id,channel_id,plugin,submission_id))""")
         store.execute("CREATE INDEX IF NOT EXISTS background_job_owner ON background_jobs(bot_id,state)")
 
-    def register(self, name, *, run, check):
+    def register(self, name, *, run, check, limit=None):
         if name in self.handlers:
             raise ValueError(f"Duplicate background job handler: {name}")
         self.handlers[name] = (run, check)
+        self.limits[name] = limit or (lambda bot: 1)
+
+    def capacity(self, bot_id, plugin):
+        """Current operator allowance across this bot's channels, not a tool argument."""
+        bot = self.store.get("bots", bot_id) or {}
+        limit = self.limits.get(plugin, lambda bot: 1)(bot)
+        if type(limit) is not int or limit < 1:
+            raise ControlError("Background job allowance must be a positive integer")
+        counts = self.store.one(
+            "SELECT count(*) AS outstanding_jobs, "
+            "coalesce(sum(state IN ('queued','running')),0) AS active_jobs "
+            "FROM background_jobs WHERE bot_id=? AND plugin=? "
+            "AND (state IN ('queued','running') OR notification='pending')",
+            (bot_id, plugin),
+        )
+        return {
+            "max_parallel_jobs": limit,
+            **counts,
+            "pending_completions": counts["outstanding_jobs"] - counts["active_jobs"],
+            "available_slots": max(0, limit - counts["outstanding_jobs"]),
+        }
 
     def recover(self):
         # No paid POST is replayed after a crash or restore. Completed receipts
@@ -72,10 +101,12 @@ class BackgroundJobs:
 
     def inventory(self, *, bot_id=None, plugin=None):
         rows = self.store.rows(
-            "SELECT id,plugin,bot_id,channel_id,created_at,updated_at,deadline,state,error,notification,"
+            "WITH owned AS (SELECT id,plugin,bot_id,channel_id,created_at,updated_at,deadline,state,error,notification,"
             "continuation_turn_id,origin_turn_id,json_extract(result,'$.metrics') AS metrics_json "
-            "FROM background_jobs WHERE (? IS NULL OR bot_id=?) AND (? IS NULL OR plugin=?) "
-            "ORDER BY created_at DESC LIMIT 50",
+            "FROM background_jobs WHERE (? IS NULL OR bot_id=?) AND (? IS NULL OR plugin=?)) "
+            "SELECT * FROM owned WHERE state IN ('queued','running') OR notification='pending' OR id IN ("
+            "SELECT id FROM owned WHERE state NOT IN ('queued','running') AND notification<>'pending' "
+            "ORDER BY created_at DESC LIMIT 50) ORDER BY created_at DESC",
             (bot_id, bot_id, plugin, plugin),
         )
         for row in rows:
@@ -117,27 +148,14 @@ class BackgroundJobs:
         if self.closed or not self.background or self.background.group is None:
             raise ControlError("Background job service is not running")
         self.cleanup()
-        if self.store.one(
-            "SELECT 1 FROM background_jobs WHERE bot_id=? AND (state IN ('queued','running') OR notification='pending')",
-            (context.bot["id"],),
-        ):
+        capacity = self.capacity(context.bot["id"], plugin)
+        if capacity["available_slots"] == 0:
             raise ControlError(
-                "This bot already has background work or an unread completion; recover it first"
+                f"Background job allowance reached for {plugin}: "
+                f"{capacity['outstanding_jobs']}/{capacity['max_parallel_jobs']} outstanding, "
+                f"{capacity['active_jobs']} active, {capacity['pending_completions']} pending completions, "
+                "0 available slots. Wait, read a finished result or cancel existing work before starting another job."
             )
-        if (
-            self.store.one("SELECT count(*) AS n FROM background_jobs WHERE state IN ('queued','running')")[
-                "n"
-            ]
-            >= 8
-        ):
-            raise ControlError("Background job queue is full; try after existing jobs finish")
-        if (
-            self.store.one(
-                "SELECT count(*) AS n FROM background_jobs WHERE origin_turn_id=?", (context.turn_id,)
-            )["n"]
-            >= 2
-        ):
-            raise ControlError("At most two background submissions are allowed in one turn")
         now = time.time()
         job = dict(
             id=uid("bg_"),
@@ -161,7 +179,7 @@ class BackgroundJobs:
             ":origin_turn_id,:submission_id,:created_at,:deadline,:updated_at,:state,:payload,:notify,:reply_to)",
             job,
         )
-        self.emit(job, "queued")
+        self.emit(job, "queued", **self.capacity(job["bot_id"], plugin))
         self.tasks[job["id"]] = self.background.spawn(
             self.run(job), name=f"background-job:{job['id']}", bot_id=job["bot_id"]
         )
@@ -194,19 +212,22 @@ class BackgroundJobs:
     async def run(self, job):
         try:
             async with asyncio.timeout(max(0, job["deadline"] - time.time())):
-                async with self.slots:
-                    self.check(job)
-                    self.store.execute(
-                        "UPDATE background_jobs SET state='running',updated_at=? WHERE id=?",
-                        (time.time(), job["id"]),
-                    )
-                    self.emit(job, "started")
+                self.check(job)
+                self.store.execute(
+                    "UPDATE background_jobs SET state='running',updated_at=? WHERE id=?",
+                    (time.time(), job["id"]),
+                )
+                self.emit(job, "started")
+                failure = None
+                try:
                     result = await self.handlers[job["plugin"]][0](job)
-                    self.check(job)
-                    result = self.registry.vault.redact(result)
-                    if len(dumps(result).encode()) > RESULT_LIMIT:
-                        raise ControlError("Background result exceeds the 2 MiB saved-result limit")
-                    self.finish(job, "completed", result=result)
+                except JobResultError as exc:
+                    result, failure = exc.result, error_text(exc)
+                self.check(job)
+                result = self.registry.vault.redact(result)
+                if len(dumps(result).encode()) > RESULT_LIMIT:
+                    raise ControlError("Background result exceeds the 2 MiB saved-result limit")
+                self.finish(job, "failed" if failure else "completed", result=result, error=failure)
         except asyncio.CancelledError:
             self.finish(
                 job,
@@ -256,6 +277,7 @@ class BackgroundJobs:
             "poll_after_seconds": 10 if job["state"] in ACTIVE else None,
             "metrics": result.get("metrics"),
             "next": {"operation": "read_result", "job_id": job["id"], "offset": 0, "length": 6000},
+            "capacity": self.capacity(job["bot_id"], job["plugin"]),
         }
 
     def pending(self, bot):

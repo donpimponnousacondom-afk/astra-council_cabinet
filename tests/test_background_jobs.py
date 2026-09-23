@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from conftest import configured, ingest
+from hortator.background_jobs import JobResultError
 from hortator.models import ControlError
 from hortator.plugins import ToolContext
 from test_provider import install_client
@@ -118,6 +119,35 @@ async def test_completed_results_are_in_sqlite_and_retention_rolls(kernel):
     kernel.store.execute("UPDATE background_jobs SET updated_at=?", (time.time() - 8 * 86400,))
     kernel.jobs.cleanup()
     assert kernel.jobs.get(result["job_id"]) is None
+
+
+@pytest.mark.parametrize("oversized", [False, True])
+async def test_failed_result_uses_normal_redaction_bounds_and_scope(kernel, monkeypatch, oversized):
+    kernel.vault.put("provider/test/api_key", "private-test-key")
+    monkeypatch.setattr("hortator.background_jobs.RESULT_LIMIT", 200)
+
+    async def work(job):
+        raise JobResultError(
+            "Unusable result private-test-key",
+            {"complete": False, "report": "private-test-key" + ("x" * 300 if oversized else "")},
+        )
+
+    context = setup(kernel, work)
+    response = kernel.jobs.submit(context, "memory", "bad", {}, seconds=60)
+    await finish(kernel)
+    job = kernel.jobs.get(response["job_id"])
+    assert job["state"] == "failed" and job["notification"] == "pending"
+    assert "private-test-key" not in str(job)
+    if oversized:
+        assert job["result"] is None and "saved-result limit" in job["error"]
+    else:
+        assert json.loads(job["result"])["complete"] is False
+        assert "Unusable result" in job["error"]
+        other = ToolContext(context.bot, "other-channel", "other-turn")
+        with pytest.raises(ControlError, match="scope"):
+            kernel.jobs.owned(job["id"], other, "memory")
+        await kernel.jobs.cancel_job(job, "Dismiss failed result")
+        assert kernel.jobs.get(job["id"])["notification"] == "revoked"
 
 
 async def test_cancel_before_worker_enters_and_redact_assignment(kernel):

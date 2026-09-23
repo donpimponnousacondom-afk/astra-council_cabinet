@@ -99,6 +99,7 @@ async def test_real_adapter_preserves_sources_usage_and_private_reasoning(kernel
     job = kernel.jobs.get(reply["job_id"])
     assert job["state"] == "completed", job["error"]
     result = json.loads(job["result"])
+    assert result["complete"]
     assert result["sources"] == [annotation]
     assert result["search_errors"] == ["One source unavailable"]
     assert result["search_usage"] == {"tool_usage": 1, "page_usage": 2}
@@ -204,3 +205,109 @@ async def test_research_uses_selected_provider_key_and_marks_partial_reports(ker
     report = json.loads(job["result"])
     assert not report["complete"] and report["finish_reason"] == "length"
     assert report["metrics"]["search_cost"] is None
+
+
+@pytest.mark.parametrize("stream", [True, False])
+@pytest.mark.parametrize(
+    "content,native_calls,issue",
+    [
+        (
+            "<tool_call><function=web_search><parameter=query>model prices</parameter></function></tool_call>"
+            "<tool_call><function=web_search><parameter=query>benchmarks</parameter></function></tool_call>",
+            False,
+            "literal tool-call markup",
+        ),
+        ("", True, "unhandled tool calls"),
+        ("   ", False, "no visible report"),
+        (
+            "Example syntax:\n```xml\n<tool_call><function=web_search></function></tool_call>\n```",
+            False,
+            None,
+        ),
+        ("A page mentions `<tool_call>` markup. No evidence found for its claim.", False, None),
+    ],
+)
+async def test_report_validation_keeps_evidence_without_executing_or_retrying(
+    kernel, stream, content, native_calls, issue
+):
+    context = setup(kernel, stream=stream)
+    bodies = []
+    annotation = {"url": "https://example.com/source", "title": "Source"}
+
+    def respond(request):
+        bodies.append(request.content)
+        message = {"content": content, "annotations": [annotation], "reasoning_content": "PRIVATE TRACE"}
+        if native_calls:
+            message["tool_calls"] = [
+                {"id": "native", "type": "function", "function": {"name": "web_search", "arguments": "{}"}}
+            ]
+            if stream:
+                message["tool_calls"][0]["index"] = 0
+        usage = {"prompt_tokens": 40, "completion_tokens": 20, "web_search_usage": {"tool_usage": 3}}
+        finish_reason = "tool_calls" if native_calls else "stop"
+        if stream:
+            packet = {
+                "choices": [{"index": 0, "delta": message, "finish_reason": finish_reason}],
+                "usage": usage,
+            }
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                stream=Fragments(("data: " + json.dumps(packet) + "\n\ndata: [DONE]\n\n").encode()),
+            )
+        return httpx.Response(
+            200, json={"choices": [{"message": message, "finish_reason": finish_reason}], "usage": usage}
+        )
+
+    await install_client(kernel, respond)
+    reply = await call(kernel, context, **start())
+    await finish(kernel)
+    job = kernel.jobs.get(reply["job_id"])
+    saved = json.loads(job["result"])
+    assert job["state"] == ("failed" if issue else "completed")
+    assert saved["complete"] is (issue is None)
+    assert saved["report"] == content.strip() and saved["sources"] == [annotation]
+    assert saved["search_usage"] == {"tool_usage": 3}
+    assert saved["metrics"]["attempts"] == 1 and "PRIVATE TRACE" not in job["result"]
+    request = kernel.store.one("SELECT * FROM requests WHERE id=?", (saved["request_id"],))
+    assert request["status"] == "completed"  # Transport did finish; validation is a separate job outcome.
+    assert kernel.store.health("openrouter")["consecutive_failures"] == 0
+    notification = kernel.jobs.notification(job)
+    assert notification["state"] == job["state"]
+    if issue:
+        assert saved["kind"] == "invalid_researcher_output"
+        assert issue in saved["validation_error"] and issue in notification["error"]
+        event = kernel.store.one("SELECT * FROM events WHERE kind='background_job.failed'")
+        assert event["level"] == "warning" and saved["request_id"] in event["data"]
+    read = await call(kernel, context, operation="read_result", job_id=job["id"], length=18000)
+    assert json.loads(read["content"]) == saved
+    assert kernel.jobs.get(job["id"])["notification"] == "read"
+    await call(kernel, context, **start())  # Same submission ID never replays the paid request.
+    assert len(bodies) == 1
+    assert not kernel.store.one(
+        "SELECT 1 FROM events WHERE kind='tool.started' AND json_extract(data,'$.name')='web_search'"
+    )
+
+
+async def test_cancelled_partial_tool_markup_remains_cancellation(kernel):
+    context = setup(kernel)
+    received = asyncio.Event()
+
+    class Partial(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            packet = {"choices": [{"delta": {"content": "<tool_call><function=web_search>"}}]}
+            yield ("data: " + json.dumps(packet) + "\n\n").encode()
+            received.set()
+            await asyncio.Event().wait()
+
+    await install_client(
+        kernel, lambda _: httpx.Response(200, headers={"content-type": "text/event-stream"}, stream=Partial())
+    )
+    reply = await call(kernel, context, **start())
+    await received.wait()
+    await kernel.jobs.cancel_job(kernel.jobs.get(reply["job_id"]), "Owner stopped research")
+    job = kernel.jobs.get(reply["job_id"])
+    assert job["state"] == "cancelled" and job["notification"] != "pending"
+    assert job["result"] is None
+    assert kernel.store.one("SELECT status FROM requests")["status"] == "cancelled"
+    assert not kernel.store.one("SELECT 1 FROM events WHERE kind='background_job.failed'")

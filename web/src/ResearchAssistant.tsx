@@ -46,10 +46,18 @@ export function ResearchSettings({
               131072,
             ],
             ["timeout_seconds", "Total research deadline (seconds)", 600, 7200],
-            ["max_keyword", "Search keyword limit", 1, 3],
+            ["max_keyword", "Search queries per search round (maximum)", 1, 3],
           ] as const
         ).map(([key, label, fallback, maximum]) => (
-          <Field key={key} label={label}>
+          <Field
+            key={key}
+            label={label}
+            hint={
+              key === "max_keyword"
+                ? 'MiMo can expand the assignment into this many search queries in one search round. A query can be a phrase such as "capital of France". This controls query count, not word count or research rounds.'
+                : undefined
+            }
+          >
             <input
               type="number"
               min={1}
@@ -66,6 +74,29 @@ export function ResearchSettings({
           </Field>
         ))}
       </div>
+      <Field
+        label="Outstanding researchers per bot (default)"
+        hint="Default for every bot with this capability. Minimum 4, with no fixed upper limit. Active jobs and pending follow-ups share this allowance across the bot's channels. Override it under Bots → Capabilities."
+      >
+        <input
+          type="number"
+          min={4}
+          step={1}
+          required
+          value={
+            config.max_parallel_jobs === undefined
+              ? 4
+              : (config.max_parallel_jobs ?? "")
+          }
+          onChange={(e) =>
+            onChange({
+              ...config,
+              max_parallel_jobs:
+                e.target.value === "" ? null : Number(e.target.value),
+            })
+          }
+        />
+      </Field>
       <Switch
         label="Follow up when background research finishes"
         checked={config.notify_on_completion ?? true}
@@ -86,12 +117,50 @@ export function ResearchSettings({
         />
       </Field>
       <Notice>
-        Jobs outlive the submitting turn. One active job per bot; two workers
-        globally. Follow-ups respect pauses and channel permissions. This
-        experiment runs in configured conversational channels; slash/panel
-        invocations are not supported.
+        Jobs outlive the submitting turn and can run in parallel. Each
+        researcher requires its own start tool call within the bot's normal
+        round and call budgets. Provider concurrency still limits simultaneous
+        model requests. Extra starts at the bot's configured limit are rejected
+        until a slot is released; pending follow-ups continue to occupy slots.
+        Follow-ups respect pauses and channel permissions. This experiment runs
+        in configured conversational channels; slash/panel invocations are not
+        supported.
       </Notice>
     </>
+  );
+}
+
+export function ResearchBotSettings({
+  config,
+  inheritedLimit,
+  onChange,
+}: {
+  config: RecordData;
+  inheritedLimit: number;
+  onChange: (value: RecordData) => void;
+}) {
+  return (
+    <section>
+      <h3>Background research</h3>
+      <Field
+        label="Outstanding researchers for this bot"
+        hint={`Optional override; leave empty to inherit the global limit of ${inheritedLimit}. Minimum 4, with no fixed upper limit. Active jobs and pending follow-ups count across all this bot's channels. Each new researcher costs one tool call; normal tool budgets and provider concurrency still apply.`}
+      >
+        <input
+          type="number"
+          min={4}
+          step={1}
+          value={config.max_parallel_jobs ?? ""}
+          placeholder={`Inherit ${inheritedLimit}`}
+          onChange={(e) => {
+            const next = { ...config };
+            if (e.target.value === "") delete next.max_parallel_jobs;
+            else next.max_parallel_jobs = Number(e.target.value);
+            onChange(next);
+          }}
+        />
+      </Field>
+    </section>
   );
 }
 

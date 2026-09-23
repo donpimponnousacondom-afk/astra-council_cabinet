@@ -1,5 +1,154 @@
 # Verification record
 
+## Configurable researcher fan-out (2026-09-23)
+
+- Continued the active unmerged `hotfix/research_observability` branch. Kept
+  invalid-report validation in its preceding independent commit and implemented
+  the owner's subsequent fan-out request with parallel backend/dashboard work.
+  No live memory, prompt, provider or bot configuration was rewritten.
+- Research `max_parallel_jobs` defaults to four and validates integers of at
+  least four, without a fixed upper ceiling. Global plugin configuration and
+  optional per-bot Capabilities override use the ordinary merge contract. Blank
+  bot override inherits; blank global input stays visibly invalid instead of
+  displaying a fallback that differs from the draft. Other fields/drafts remain
+  intact. The legacy dashboard is untouched.
+- Replaced the hidden one-job/two-worker/global-eight/per-turn-two restrictions
+  with the current per-bot/plugin outstanding allowance. Active work and pending
+  notifications consume slots across channels. One start creates one job and
+  consumes one tool call; normal round/call limits, provider slots, deadlines,
+  grants and completion/cancellation rules remain authoritative. Current capacity
+  appears in tool guidance, results and queued events. Large outstanding groups
+  stay inspectable; settled history remains bounded and chronologically ordered.
+- **127 backend tests passed**, including 28 new fan-out cases: four/sixteen
+  simultaneous workers, global and bot API validation, sixty outstanding jobs,
+  reading a result to free capacity, deduplication at capacity, cancellation/join
+  of all workers, restart without replay, one notification claim per job, narrower
+  provider concurrency, deadlines covering provider-queue waits, and actual
+  engine round/call accounting. This also reran malformed-report validation,
+  ordinary runtime, provider retries, plugins, agentic API/runtime and owned
+  concurrency checks. Two existing dependency deprecation warnings remain.
+- **Two Playwright browser tests passed** using isolated fixture data and a build
+  under `/tmp` on port 18374. Covered global limit 16, bot override 24, min/blank
+  rejection, no maximum attribute, draft retention across tabs, inheritance and
+  unchanged unrelated configuration, plus saved-job inspection/cancellation.
+  TypeScript, Vite, scoped Prettier, Ruff and diff checks passed. All inference
+  and browser job evidence used mocks/fixtures; no paid fan-out or Discord test
+  messages were sent.
+- Read-only deployment preparation confirmed Loki's existing eight calls per
+  round/eight rounds and research provider concurrency of eight. These values
+  were preserved. Final deployment uses the committed-source shared-Screen
+  refresh; `logs/next-feature.json` records the verified matching server/dashboard
+  build. Owner acceptance remains a live four-assignment fan-out, inspecting
+  individual results and completion follow-ups before increasing the allowance.
+
+## Research output validation versus owner cancellation (2026-09-23)
+
+- Continued the clean, unmerged `hotfix/research_observability` branch after the
+  owner asked whether stopping Luna caused its malformed report. Exact stored
+  sequence: request `req_c150179749314278af6d` finished normally at **09:35:12.621**
+  and its job was saved completed at **09:35:12.623**. The owner disabled research
+  at **09:35:34.343**; that cancelled a different, main-generation request
+  `req_b7a5609d27fd4584848e` and revoked the pending follow-up. All times are
+  Europe/Madrid (+02:00). The malformed result preceded cancellation by 21.7 s.
+- Research now reuses the ordinary answer-envelope detector to reject literal
+  tool-call-shaped content. Unhandled native calls and empty reports also fail
+  validation. The job records `failed`, `complete: false`, explicit validation
+  cause and request identity, retaining output, source annotations and metrics
+  through existing scoped reads. Provider request evidence still truthfully says
+  it completed; this does not affect circuit health or trigger paid repair calls.
+  Existing historical jobs/requests and operator prompts/configuration are intact.
+- The generic job result-error path reuses normal grants, redaction and byte
+  limits before saving failed evidence. Failure notifications retain existing
+  at-most-once behavior and can be read/dismissed normally. Interrupted streams
+  remain cancelled, not malformed completed reports; valid prose and fenced
+  tool examples remain accepted. Partial output-limit reports keep their existing
+  saved-but-incomplete semantics. No schema or dashboard-source change was needed.
+- **69 targeted backend tests passed**, including 13 new cases across streamed
+  and buffered malformed/native/empty output, valid examples, actual partial-SSE
+  cancellation, retained private diagnostics, failure feedback and result reads,
+  deduplicated submissions, unchanged provider health, credential redaction,
+  byte bounds and cross-channel refusal. Existing research/background ownership,
+  runtime, feedback and concurrency checks passed. Two existing dependency
+  deprecation warnings remain. Fixtures used controlled HTTP responses, not paid
+  live research or Discord messages. Ruff and diff checks passed.
+- Deployment follows the committed-source shared-Screen refresh after active
+  turns/jobs finish; the external `logs/next-feature.json` receipt identifies the
+  resulting server/dashboard build. No historical research was rerun for testing.
+
+## Loki memory/research live audit and dashboard wording (2026-09-23)
+
+- Renamed clean prepared `feat/next_feature` at `063358f` (main/origin/main)
+  to `hotfix/research_observability`. Read-only audit window:
+  **07:40–09:40 Europe/Madrid (+02:00)**. No paid diagnostic requests, Discord
+  messages, memory edits or runtime-configuration writes were made for the audit.
+- Memory maintenance turn `turn_67ad039a7c244cc19e0f`, events **54515–54578**,
+  ran from 09:10 to 09:14. Compared its first request's injected global notebook
+  with current saved notes: **28 → 23 notes; 46,125 → 35,361 characters**,
+  reclaiming **10,764 (23.3%)** and leaving **12,639** below the 48,000 target.
+  Nineteen successful mutations: eleven writes/replacements and eight deletes;
+  three new consolidated notes replaced overlapping historical entries. The
+  initial write reached 48,003, triggered the intended overshoot warning, and
+  the next deletion brought usage under the target. No rejected memory writes.
+- Qualitative review: merged project/history and behavioral notes; preserved and
+  expanded the prior search-fix explanation, including that `read_result` is an
+  operation, not a standalone tool. No notebook reset occurred. It is not an
+  accuracy certificate: a retained technical note says a tool round decrements
+  per call and top-level `max_tokens` covers visible output only. Those rules are
+  misleading in this harness; multiple calls share a round and output accounting
+  depends on the native provider. The note's 16K researcher ceiling also predates
+  the owner's later 65,535 configuration. Leave correction to the bot/operator.
+- Two live research jobs reached stored `completed`, both via profile model
+  `xiaomi/mimo-v2.6-flash` on provider **CPA_proxy**, not a direct MiMo transport.
+  Both were single-attempt requests with native search evidence and no reported
+  search errors. This verifies transport/usage capture, not report quality.
+
+  | Assignment | Request time | TTFT | TPS | Completion / reasoning tokens | Supplied sources | Outcome |
+  | --- | ---: | ---: | ---: | ---: | ---: | --- |
+  | Coyote dossier | 47.5 s | 16.45 s | 42.5 | 1,321 / 195 | 1 | Usable but thin report; unsupported material explicitly flagged |
+  | Luna comparison | 10.6 s | 8.28 s | 54.0 | 124 / 70 | 3 | Literal tool-call markup instead of a research report |
+
+  Completion includes reasoning; TPS excludes time before the first streamed
+  token. Recorded inference costs were $0.00110044 and $0.00041052 respectively;
+  search costs are unknown and excluded. Upstream usage reported one search/page
+  for the first and three for the second. No independent source-fact audit was
+  performed; these are saved request/result observations.
+- Coyote job `bg_619cd881192745b399b6` completed after its submitting turn ended,
+  then triggered exactly one follow-up (`turn_442162ed8cf34ff7a356`), which read
+  the result and delivered an answer. One initial invalid-JSON research call at
+  **54441** was repaired within that original turn before the successful start.
+- At **54677–54686**, Loki attempted five model-comparison assignments. Luna job
+  `bg_e1aa005ba2044664863b` was admitted; four subsequent starts were rejected by
+  the **one outstanding job per bot** rule before any worker/provider request.
+  Global capacity is two workers/eight queued-or-running jobs; unread completion
+  notifications also occupy a bot's admission slot. Rejected assignments are
+  not queued for later. No fan-out is implemented by this audit.
+- Luna result `req_c150179749314278af6d` contains two `<tool_call>` blocks as
+  ordinary content, empty native `tool_calls`, and `finish_reason=stop`. The
+  current predicate therefore sets `complete=true` despite there being no report.
+  This is an identified validation gap for follow-up; the evidence does not locate
+  the malformed output at the model versus proxy. Preserve raw evidence and do
+  not execute content as tools. The pending notification was revoked when the
+  owner disabled the plugin at **54696**, not lost in a worker crash.
+- Other window events: 14 sent turns, four cancelled and no failed turns;
+  one cancellation superseded an unsent draft with newer directed input, three
+  followed dashboard researcher configuration/enablement changes. No provider
+  failure/retry event occurred. Two Discord reconnects resumed in 556/279 ms.
+  No ordinary web-search retest in this window establishes resolution of Loki's
+  earlier recovery behavior.
+- Official [MiMo Web Search documentation](https://mimo.mi.com/docs/en-US/quick-start/usage-guide/text-generation/tool-calling/web-search)
+  checked again: `max_keyword` limits query expansions **within** a search round,
+  not round count or words in a query. Renamed the modern field to **Search queries
+  per search round (maximum)** with explanatory help, and clarified the existing
+  outstanding-job restriction. Wire values, limits and saved prompts are unchanged.
+  The request adapter still sends `limit: 1`; no new interpretation or control of
+  that separate native parameter is introduced here.
+- TypeScript check, Vite build, targeted Prettier and diff checks passed.
+  The existing researcher configuration/job-inspection Playwright test passed
+  on isolated port 18364 using `/tmp/hortator-research-observability-web` and
+  fixture data. No backend implementation changed. Deployment uses the clean
+  committed branch and shared-Screen refresh after active work finishes; the
+  external `logs/next-feature.json` receipt records final runtime/build identity.
+
 ## Search results lost to tool-context minimization (2026-09-22)
 
 - Renamed clean prepared `feat/next_feature`, at merged main/origin/main
