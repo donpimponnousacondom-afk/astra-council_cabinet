@@ -6,7 +6,7 @@ Enable **Plugins → Sub-agent researcher · experimental**, select a dedicated 
 research profile/provider (with native Web Search enabled upstream), and grant
 the plugin under **Bots → Capabilities**. Existing bots keep their own model.
 The global editor configures the research output ceiling, total deadline,
-search queries per search round, outstanding researchers per bot, editable system
+search queries per search round, results per query, outstanding researchers per bot, editable system
 prompt and default completion notification. The researcher allowance defaults
 to four (minimum four, no fixed upper ceiling). **Bots → Capabilities** provides
 an optional per-bot override; blank uses the global default. Active jobs and
@@ -18,6 +18,17 @@ requests. Read/claim completed jobs to release occupied notification slots.
 timing/token metrics and cancellation; the plugin editor shows all researcher
 jobs. No plugin-specific credential is required: the selected provider supplies
 its own key, never the conversational bot's key override.
+
+Native search controls accept 1–50 independently: **Maximum search queries**
+defaults to three, and **Results per search query (maximum)**
+defaults to five. These map to `max_keyword` and `limit`, not researcher turns.
+Jobs capture both values on submission. Existing saved query counts and custom
+prompts survive upgrades; new jobs without an explicit result limit use five.
+Research guidance should distinguish thin coverage from explicit search errors,
+without demanding a local sequence of searches that the adapter does not run.
+The researcher panel identifies the current single research pass per job.
+There is no configurable research-pass count; ordinary bot tool rounds and
+parallel researcher capacity remain independent controls.
 
 With notifications enabled, submit independent researchers in one tool-call
 batch. The runtime stops typing and closes further tools after that batch, asks

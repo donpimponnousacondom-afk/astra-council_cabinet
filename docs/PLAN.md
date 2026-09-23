@@ -1,5 +1,48 @@
 # Implementation and acceptance plan
 
+## Conversational bot coordinates successive research batches (clarified 2026-09-23)
+
+The owner clarified the desired next behavior: the conversational bot launches
+researchers, acknowledges in a new Discord message, sleeps, then wakes when
+reports settle. It evaluates the evidence and may dispatch narrower follow-up
+assignments, announce that new batch and sleep again while existing or new
+workers continue. Individual researchers remain single-pass assignments; this
+is orchestration by the parent bot, not recursive delegation by a researcher or
+an internal researcher tool loop. Thin reports are not necessarily bad prompts:
+upstream search errors and inadequate source coverage must remain distinguishable.
+
+This is a requested direction, **not implemented behavior**. The current generic
+background submission guard rejects starts from completion follow-ups; existing
+handoff/wake/report behavior does not permit the next dispatch. Enabling it needs
+a deliberate research-plugin policy, with linked task ancestry and a bounded
+budget that survives wake-ups instead of resetting with each turn. Exact cycle
+budget settings remain to be specified. Preserve one tool call per researcher,
+current capacity/provider limits, fresh human priority, cancellation/clean-slate
+rules and new-message reporting. Any cycle control belongs in the researcher
+plugin's interface; ordinary bot round/call controls stay unchanged.
+
+## Researcher native search breadth (2026-09-23)
+
+The owner approved a narrow researcher-plugin patch: expose MiMo `limit` as
+results per search query, expand both `limit` and `max_keyword` to the documented
+1–50 range, and start with three queries and five results per query. These
+ceilings do not add researcher rounds or a local search/fetch loop. Preserve
+saved settings and per-bot overrides; freeze effective limits in each submitted
+job. Update default researcher and parent-tool guidance to distinguish limited
+coverage from explicit search failures. Existing custom prompts remain editable
+and are never overwritten by startup; apply the approved wording to this
+installation's researcher prompt while preserving its other custom instructions.
+Background lifecycle, fan-out, provider retries and existing web tools stay as
+implemented. Native search failures remain visible and are not automatically
+reclassified as invalid reports or replayed.
+
+The owner subsequently requested an explicit UI distinction between query
+breadth and research rounds. Label `max_keyword` **Maximum search queries** and
+show that each job currently makes one research pass. This is a wording change,
+not approval for an iterative researcher loop. Any future research-pass setting
+belongs in the research plugin; ordinary bot round/call controls and other
+interfaces remain unchanged.
+
 ## Configurable researcher fan-out (2026-09-23)
 
 The owner approved concurrent researchers per bot with a minimum/default of

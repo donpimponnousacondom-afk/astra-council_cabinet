@@ -1,5 +1,43 @@
 # Verification record
 
+## Researcher search breadth controls (2026-09-23)
+
+- Renamed the prepared `feat/next_feature` placeholder at merged `398a37d`
+  to `feat/research_search_controls`, preserving the owner's new CPA_proxy
+  operating note. No source checkout, merge, history rewrite or push was needed.
+- Verified Xiaomi's current Web search tool schema: `max_keyword` and `limit`
+  both accept 1–50; the API documents defaults of five. The plugin now exposes
+  separate controls with the owner's chosen defaults of three queries and five
+  results per query, saving effective limits in each job. Saved query counts,
+  custom prompts, unrelated fields and per-bot overrides remain intact.
+- Narrow guidance changes distinguish insufficient results/model-written tool
+  claims from structured native errors. No local search loop, background service
+  change, automatic paid retry, language policy or shell grant was added.
+- **112 backend tests passed**, covering native streamed/buffered requests,
+  defaults and older configurations, upper-bound values, per-bot overrides,
+  configuration rejection, source/error/private-reasoning preservation, report
+  validation, fan-out and dispatch handoff. **Two Playwright tests passed** on
+  isolated port 18376 with a `/tmp` dashboard build: both search fields display
+  correct defaults/bounds, reject blank/zero/51, save/reopen 50, and preserve
+  custom prompts and unrelated bot configuration. Existing job controls and
+  bot fan-out inheritance remain functional.
+- TypeScript, Vite, scoped Prettier, Ruff and `git diff --check` pass. All provider
+  and browser acceptance tests use synthetic responses and isolated test data;
+  no paid research or Discord test message was generated.
+- Deployment uses the committed-source shared-Screen refresh after checking for
+  idle turns/jobs; its `logs/next-feature.json` receipt records matching startup
+  and dashboard identities. The approved live configuration edit sets 3 × 5
+  and removes only the repeated-search requirement from the researcher prompt,
+  adding the agreed evidence/error guidance while preserving other custom text.
+  Real source quality and Xiaomi's native search availability remain live
+  acceptance checks for the owner's next research assignment.
+- Follow-up UI clarification changes only the researcher editor: **Maximum
+  search queries** replaces the ambiguous round-based label, and an explicit
+  notice states one research pass per job. No backend behavior or live settings
+  changed. The two existing browser tests passed again on isolated port 18378;
+  TypeScript, Vite, scoped formatting and diff checks also passed. Ordinary bot
+  round/call controls and the legacy interface were not edited.
+
 ## Background research lifecycle hardening (2026-09-23)
 
 - Branched the clean merged `6039d92` placeholder to
