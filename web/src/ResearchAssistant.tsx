@@ -46,10 +46,18 @@ export function ResearchSettings({
               131072,
             ],
             ["timeout_seconds", "Total research deadline (seconds)", 600, 7200],
-            ["max_keyword", "Search keyword limit", 1, 3],
+            ["max_keyword", "Search queries per search round (maximum)", 1, 3],
           ] as const
         ).map(([key, label, fallback, maximum]) => (
-          <Field key={key} label={label}>
+          <Field
+            key={key}
+            label={label}
+            hint={
+              key === "max_keyword"
+                ? 'MiMo can expand the assignment into this many search queries in one search round. A query can be a phrase such as "capital of France". This controls query count, not word count or research rounds.'
+                : undefined
+            }
+          >
             <input
               type="number"
               min={1}
@@ -86,10 +94,12 @@ export function ResearchSettings({
         />
       </Field>
       <Notice>
-        Jobs outlive the submitting turn. One active job per bot; two workers
-        globally. Follow-ups respect pauses and channel permissions. This
-        experiment runs in configured conversational channels; slash/panel
-        invocations are not supported.
+        Jobs outlive the submitting turn. One outstanding job per bot, including
+        an unread completion; two workers globally. Extra starts for that bot
+        are rejected until its job is finished and its completion is consumed.
+        Follow-ups respect pauses and channel permissions. This experiment runs
+        in configured conversational channels; slash/panel invocations are not
+        supported.
       </Notice>
     </>
   );

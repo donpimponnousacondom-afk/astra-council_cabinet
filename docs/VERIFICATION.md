@@ -1,5 +1,79 @@
 # Verification record
 
+## Loki memory/research live audit and dashboard wording (2026-09-23)
+
+- Renamed clean prepared `feat/next_feature` at `063358f` (main/origin/main)
+  to `hotfix/research_observability`. Read-only audit window:
+  **07:40–09:40 Europe/Madrid (+02:00)**. No paid diagnostic requests, Discord
+  messages, memory edits or runtime-configuration writes were made for the audit.
+- Memory maintenance turn `turn_67ad039a7c244cc19e0f`, events **54515–54578**,
+  ran from 09:10 to 09:14. Compared its first request's injected global notebook
+  with current saved notes: **28 → 23 notes; 46,125 → 35,361 characters**,
+  reclaiming **10,764 (23.3%)** and leaving **12,639** below the 48,000 target.
+  Nineteen successful mutations: eleven writes/replacements and eight deletes;
+  three new consolidated notes replaced overlapping historical entries. The
+  initial write reached 48,003, triggered the intended overshoot warning, and
+  the next deletion brought usage under the target. No rejected memory writes.
+- Qualitative review: merged project/history and behavioral notes; preserved and
+  expanded the prior search-fix explanation, including that `read_result` is an
+  operation, not a standalone tool. No notebook reset occurred. It is not an
+  accuracy certificate: a retained technical note says a tool round decrements
+  per call and top-level `max_tokens` covers visible output only. Those rules are
+  misleading in this harness; multiple calls share a round and output accounting
+  depends on the native provider. The note's 16K researcher ceiling also predates
+  the owner's later 65,535 configuration. Leave correction to the bot/operator.
+- Two live research jobs reached stored `completed`, both via profile model
+  `xiaomi/mimo-v2.6-flash` on provider **CPA_proxy**, not a direct MiMo transport.
+  Both were single-attempt requests with native search evidence and no reported
+  search errors. This verifies transport/usage capture, not report quality.
+
+  | Assignment | Request time | TTFT | TPS | Completion / reasoning tokens | Supplied sources | Outcome |
+  | --- | ---: | ---: | ---: | ---: | ---: | --- |
+  | Coyote dossier | 47.5 s | 16.45 s | 42.5 | 1,321 / 195 | 1 | Usable but thin report; unsupported material explicitly flagged |
+  | Luna comparison | 10.6 s | 8.28 s | 54.0 | 124 / 70 | 3 | Literal tool-call markup instead of a research report |
+
+  Completion includes reasoning; TPS excludes time before the first streamed
+  token. Recorded inference costs were $0.00110044 and $0.00041052 respectively;
+  search costs are unknown and excluded. Upstream usage reported one search/page
+  for the first and three for the second. No independent source-fact audit was
+  performed; these are saved request/result observations.
+- Coyote job `bg_619cd881192745b399b6` completed after its submitting turn ended,
+  then triggered exactly one follow-up (`turn_442162ed8cf34ff7a356`), which read
+  the result and delivered an answer. One initial invalid-JSON research call at
+  **54441** was repaired within that original turn before the successful start.
+- At **54677–54686**, Loki attempted five model-comparison assignments. Luna job
+  `bg_e1aa005ba2044664863b` was admitted; four subsequent starts were rejected by
+  the **one outstanding job per bot** rule before any worker/provider request.
+  Global capacity is two workers/eight queued-or-running jobs; unread completion
+  notifications also occupy a bot's admission slot. Rejected assignments are
+  not queued for later. No fan-out is implemented by this audit.
+- Luna result `req_c150179749314278af6d` contains two `<tool_call>` blocks as
+  ordinary content, empty native `tool_calls`, and `finish_reason=stop`. The
+  current predicate therefore sets `complete=true` despite there being no report.
+  This is an identified validation gap for follow-up; the evidence does not locate
+  the malformed output at the model versus proxy. Preserve raw evidence and do
+  not execute content as tools. The pending notification was revoked when the
+  owner disabled the plugin at **54696**, not lost in a worker crash.
+- Other window events: 14 sent turns, four cancelled and no failed turns;
+  one cancellation superseded an unsent draft with newer directed input, three
+  followed dashboard researcher configuration/enablement changes. No provider
+  failure/retry event occurred. Two Discord reconnects resumed in 556/279 ms.
+  No ordinary web-search retest in this window establishes resolution of Loki's
+  earlier recovery behavior.
+- Official [MiMo Web Search documentation](https://mimo.mi.com/docs/en-US/quick-start/usage-guide/text-generation/tool-calling/web-search)
+  checked again: `max_keyword` limits query expansions **within** a search round,
+  not round count or words in a query. Renamed the modern field to **Search queries
+  per search round (maximum)** with explanatory help, and clarified the existing
+  outstanding-job restriction. Wire values, limits and saved prompts are unchanged.
+  The request adapter still sends `limit: 1`; no new interpretation or control of
+  that separate native parameter is introduced here.
+- TypeScript check, Vite build, targeted Prettier and diff checks passed.
+  The existing researcher configuration/job-inspection Playwright test passed
+  on isolated port 18364 using `/tmp/hortator-research-observability-web` and
+  fixture data. No backend implementation changed. Deployment uses the clean
+  committed branch and shared-Screen refresh after active work finishes; the
+  external `logs/next-feature.json` receipt records final runtime/build identity.
+
 ## Search results lost to tool-context minimization (2026-09-22)
 
 - Renamed clean prepared `feat/next_feature`, at merged main/origin/main

@@ -16,7 +16,12 @@ changes an existing bot/profile on installation.
 
 The native request uses `/chat/completions`, `tools: [{type: "web_search",
 force_search: true, max_keyword: 1, limit: 1}]`. The operator can choose one to
-three keyword expansions. The selected profile supplies exact reasoning JSON and
+three query expansions per native search round. The dashboard calls this
+**Search queries per search round (maximum)**: a query may be a multiword phrase
+such as "capital of France". This sets neither word count nor research/model
+rounds. It maps unchanged to MiMo's `max_keyword`; the adapter still submits one
+completion request with native search, rather than running a local iterative
+research loop. The selected profile supplies exact reasoning JSON and
 streaming mode. Each job explicitly sends `max_completion_tokens`, replacing
 inherited output-cap fields on the wire copy only. It bounds reasoning plus
 visible output; upstream search-context tokens are separately billable. There is

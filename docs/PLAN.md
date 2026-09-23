@@ -1,5 +1,24 @@
 # Implementation and acceptance plan
 
+## Research and memory acceptance review (2026-09-23)
+
+The owner requested a two-hour live audit before deciding the next researcher
+changes. Clarify the dashboard's `max_keyword` label as **Search queries per
+search round (maximum)**, with a phrase example and an explicit distinction from
+word count/research rounds. Also clarify the existing single outstanding job
+rule, including unread completions. Saved settings, quotas, model-facing schemas
+and bot memories remain unchanged.
+
+Observed follow-ups, not implemented by this wording patch: researcher content
+can contain literal tool-call markup while native `tool_calls` is empty and
+`finish_reason=stop`, causing the current completion check to accept it as a
+report. Review truthful result validation before introducing fan-out. Multiple
+concurrent researchers per bot and an iterative research loop are separate
+decisions; the current adapter submits one request with native search. Loki's
+memory consolidation preserved the search-fix explanation, but some technical
+rules in his notes are still inaccurate and should be reviewed by the bot/owner.
+See the [dated audit](VERIFICATION.md).
+
 ## Search result retention and reread recovery (2026-09-22)
 
 The owner requested investigation of Loki's search complaints, authorized a fix
