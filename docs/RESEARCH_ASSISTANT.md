@@ -15,11 +15,17 @@ existing contracts. The plugin has no separate secret box. Nothing enables or
 changes an existing bot/profile on installation.
 
 The native request uses `/chat/completions`, `tools: [{type: "web_search",
-force_search: true, max_keyword: 1, limit: 1}]`. The operator can choose one to
-three query expansions per native search round. The dashboard calls this
-**Search queries per search round (maximum)**: a query may be a multiword phrase
-such as "capital of France". This sets neither word count nor research/model
-rounds. It maps unchanged to MiMo's `max_keyword`; the adapter still submits one
+force_search: true, max_keyword: 3, limit: 5}]` by default. The operator can
+choose 1–50 query expansions and 1–50 results per query. The dashboard calls these
+**Search queries per search round (maximum)** and **Results per search query
+(maximum)**. A query may be a multiword phrase such as "capital of France". These
+map unchanged to MiMo's `max_keyword` and `limit`; neither sets word count or
+research/model rounds. They are ceilings, not guaranteed useful or distinct
+sources. More queries can increase search charges; more returned content can
+increase input tokens. Each job saves its effective limits when submitted.
+Existing explicit values and per-bot overrides are preserved; a missing result
+limit uses five for new jobs. Older job payloads retain their historical
+one-result allowance, and restart never replays them. The adapter submits one
 completion request with native search, rather than running a local iterative
 research loop. The selected profile supplies exact reasoning JSON and
 streaming mode. Each job explicitly sends `max_completion_tokens`, replacing
@@ -28,13 +34,21 @@ visible output; upstream search-context tokens are separately billable. There is
 no inherited conversation summary or automatic compaction of research inputs.
 
 Configuration defaults: no selected profile, 16,384 output-token ceiling,
-600-second total deadline (including queue/retries, configurable 1–7,200), one
-keyword, four outstanding researchers per bot, automatic completion follow-up
-enabled. The system prompt is editable;
+600-second total deadline (including queue/retries, configurable 1–7,200), three
+search queries, five results per query, four outstanding researchers per bot,
+automatic completion follow-up enabled. The system prompt is editable;
 `{now}` uses the council timezone. Per-bot plugin JSON overrides use the usual
 shallow merge and validation. Profile changes cancel affected work. Sharing a
 provider with the main bot also shares its concurrency limit; use an independent
 provider when research must not occupy the bot's only inference slot.
+
+Default guidance asks the researcher to use the native search evidence supplied
+for its request and distinguish insufficient results from explicit search
+errors. It has no local tools to run repeated searches or open pages; ask for
+findings rather than a prescribed sequence of tool calls. A model-written claim
+that search is unavailable is not a structured provider error. Saved custom
+system prompts are not overwritten on upgrade. Remove requirements for repeated
+search rounds when tuning an existing prompt, preserving other operator text.
 
 **Outstanding researchers per bot (default)** sets `max_parallel_jobs` globally.
 **Bots → Capabilities → Outstanding researchers for this bot** optionally overrides
@@ -114,7 +128,8 @@ search-use counts. Search cost remains unknown rather than silently zero. Native
 search and model tokens may both be charged; do not assume the Token Plan or
 MiMo Code promotional search allowance covers an arbitrary bot integration.
 
-Official references checked 2026-09-22:
+Official references checked 2026-09-23 (the API's Web search tool schema documents
+both search bounds as 1–50; its separate defaults are five):
 - https://mimo.mi.com/docs/en-US/api/chat/openai-api
 - https://mimo.mi.com/docs/en-US/quick-start/usage-guide/text-generation/tool-calling/web-search
 - https://mimo.mi.com/docs/en-US/price/pay-as-you-go

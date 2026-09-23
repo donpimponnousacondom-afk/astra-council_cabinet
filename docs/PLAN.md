@@ -1,5 +1,20 @@
 # Implementation and acceptance plan
 
+## Researcher native search breadth (2026-09-23)
+
+The owner approved a narrow researcher-plugin patch: expose MiMo `limit` as
+results per search query, expand both `limit` and `max_keyword` to the documented
+1–50 range, and start with three queries and five results per query. These
+ceilings do not add researcher rounds or a local search/fetch loop. Preserve
+saved settings and per-bot overrides; freeze effective limits in each submitted
+job. Update default researcher and parent-tool guidance to distinguish limited
+coverage from explicit search failures. Existing custom prompts remain editable
+and are never overwritten by startup; apply the approved wording to this
+installation's researcher prompt while preserving its other custom instructions.
+Background lifecycle, fan-out, provider retries and existing web tools stay as
+implemented. Native search failures remain visible and are not automatically
+reclassified as invalid reports or replayed.
+
 ## Configurable researcher fan-out (2026-09-23)
 
 The owner approved concurrent researchers per bot with a minimum/default of

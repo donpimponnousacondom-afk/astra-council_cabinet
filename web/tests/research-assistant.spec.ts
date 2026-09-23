@@ -28,6 +28,37 @@ test("research configuration saves independently and bot Control inspects/cancel
     })
     .click();
   let dialog = page.getByRole("dialog");
+  const queries = dialog.getByLabel(
+    "Search queries per search round (maximum)",
+    { exact: true },
+  );
+  const results = dialog.getByLabel("Results per search query (maximum)", {
+    exact: true,
+  });
+  await expect(queries).toHaveValue("3");
+  await expect(results).toHaveValue("5");
+  for (const input of [queries, results]) {
+    await expect(input).toHaveAttribute("min", "1");
+    await expect(input).toHaveAttribute("max", "50");
+    for (const invalid of ["", "0", "51"]) {
+      await input.fill(invalid);
+      await dialog
+        .getByRole("button", { name: "Save changes", exact: true })
+        .click();
+      await expect(input).toHaveValue(invalid);
+      expect(
+        await input.evaluate((element: HTMLInputElement) =>
+          element.checkValidity(),
+        ),
+      ).toBe(false);
+      expect(
+        await (
+          await page.request.get("/api/config/plugins/research_assistant")
+        ).json(),
+      ).toEqual(pluginBefore);
+    }
+    await input.fill("50");
+  }
   const parallelLimit = dialog.getByLabel(
     "Outstanding researchers per bot (default)",
     { exact: true },
@@ -76,7 +107,18 @@ test("research configuration saves independently and bot Control inspects/cancel
     max_output_tokens: 4096,
     timeout_seconds: 900,
     max_parallel_jobs: 16,
+    max_keyword: 50,
+    limit: 50,
+    system_prompt: "Research carefully. Today is {now}.",
   });
+  await page
+    .getByRole("button", {
+      name: "Edit Sub-agent researcher · experimental",
+      exact: true,
+    })
+    .click();
+  await expect(queries).toHaveValue("50");
+  await expect(results).toHaveValue("50");
   const after = await (await page.request.get("/api/config/bots/ada")).json();
   expect(after).toEqual(before);
 

@@ -61,7 +61,7 @@ async def test_real_adapter_preserves_sources_usage_and_private_reasoning(kernel
         requests.append(body)
         assert body["model"] == "mimo-v2.6-flash"
         assert body["max_completion_tokens"] == 2048 and "max_tokens" not in body
-        assert body["tools"] == [{"type": "web_search", "force_search": True, "max_keyword": 1, "limit": 1}]
+        assert body["tools"] == [{"type": "web_search", "force_search": True, "max_keyword": 3, "limit": 5}]
         assert body["messages"][-1]["content"] == "Find official prices"
         assert "Hello council" not in str(body)
         usage = {
@@ -114,6 +114,60 @@ async def test_real_adapter_preserves_sources_usage_and_private_reasoning(kernel
     assert kernel.jobs.get(job["id"])["notification"] == "read"
     await call(kernel, context, **start())
     assert len(requests) == 1
+
+
+@pytest.mark.parametrize(
+    "saved,override,expected",
+    [
+        ({}, {}, (3, 5)),
+        ({"max_keyword": 2}, {}, (2, 5)),
+        ({"max_keyword": 50, "limit": 50}, {}, (50, 50)),
+        ({"max_keyword": 50, "limit": 50}, {"max_keyword": 1, "limit": 7}, (1, 7)),
+    ],
+)
+async def test_search_settings_inherit_and_reach_the_native_request(kernel, saved, override, expected):
+    context = setup(kernel, stream=False)
+    plugin = kernel.store.get("plugins", ID)
+    # Older saved configurations may omit the new result allowance entirely.
+    plugin["config"] = {"profile_id": "research", "system_prompt": "Keep my custom prompt.", **saved}
+    kernel.store.put("plugins", plugin)
+    bot = kernel.store.get("bots", "ada")
+    bot["plugin_config"][ID] = override
+    kernel.store.put("bots", bot)
+    context = ToolContext(kernel.store.get("bots", "ada"), context.channel_id, context.turn_id)
+    bodies = []
+
+    def respond(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": "Findings"}, "finish_reason": "stop"}]}
+        )
+
+    await install_client(kernel, respond)
+    started = await call(kernel, context, **start())
+    await finish(kernel)
+    job = kernel.jobs.get(started["job_id"])
+    assert job["state"] == "completed", job["error"]
+    payload = json.loads(job["payload"])
+    assert (payload["max_keyword"], payload["limit"]) == expected
+    assert len(bodies) == 1  # More results never add a local research loop.
+    assert bodies[0]["tools"] == [
+        {"type": "web_search", "force_search": True, "max_keyword": expected[0], "limit": expected[1]}
+    ]
+    assert bodies[0]["messages"][0]["content"] == "Keep my custom prompt."
+    assert kernel.store.get("plugins", ID)["config"] == plugin["config"]
+
+
+@pytest.mark.parametrize("field", ["max_keyword", "limit"])
+@pytest.mark.parametrize("value", [0, 51, True, None, 1.5, "5"])
+@pytest.mark.parametrize("per_bot", [False, True])
+async def test_search_settings_reject_invalid_limits(kernel, owner, field, value, per_bot):
+    setup(kernel)
+    kind, entity_id = ("bots", "ada") if per_bot else ("plugins", ID)
+    patch = {"plugin_config": {ID: {field: value}}} if per_bot else {"config": {field: value}}
+    with pytest.raises(ControlError, match=field):
+        await kernel.service.save(owner, kind, entity_id, patch)
+    assert not kernel.jobs.tasks
 
 
 async def test_discovery_validation_grants_and_slash_scope(kernel):
