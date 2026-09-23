@@ -14,6 +14,15 @@ and minimum four). Active work and pending notifications share that allowance,
 while provider concurrency remains independently enforced. Workers persist
 status/results and queue one ordinary completion turn, rather than posting
 Discord messages themselves.
+Optional synchronous `admit(context, job)` and `describe(job)` hooks support
+plugin-specific admission and scoped status metadata. Admission runs after
+ordinary scope/capacity checks, in the same SQLite savepoint as job insertion;
+failed inserts or rejected calls roll back plugin budget changes. Idempotent
+submission recovery does not call admission again. Completion turns cannot
+submit new work without a registered admission policy. The research plugin uses
+trusted claimed-result ancestry and a durable `max_research_batches` allowance
+(default three, initial dispatch included). Other plugins remain blocked from
+completion-triggered submissions unless they deliberately implement a policy.
 See [RESEARCH_ASSISTANT](RESEARCH_ASSISTANT.md) for setup/tool calls and
 [BACKGROUND_JOBS](BACKGROUND_JOBS.md) for lifecycle, quotas and revocation.
 

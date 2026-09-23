@@ -48,6 +48,12 @@ export function ResearchSettings({
             ["timeout_seconds", "Total research deadline (seconds)", 600, 7200],
             ["max_keyword", "Maximum search queries", 3, 50],
             ["limit", "Results per search query (maximum)", 5, 50],
+            [
+              "max_research_batches",
+              "Research batches per task (maximum)",
+              3,
+              undefined,
+            ],
           ] as const
         ).map(([key, label, fallback, maximum]) => (
           <Field
@@ -58,7 +64,9 @@ export function ResearchSettings({
                 ? 'Maximum queries MiMo may issue in a native search. A query can be a phrase such as "capital of France". This controls query count, not word count or research passes.'
                 : key === "limit"
                   ? "Maximum results returned per search query. More results can increase research input tokens. This is a ceiling, not a guarantee of that many distinct or useful sources."
-                  : undefined
+                  : key === "max_research_batches"
+                    ? "Includes the initial dispatch. All completion wake-ups for that task share this allowance. 3 permits the initial batch plus 2 batches of refined assignments; 1 disables follow-up dispatch. Each researcher still costs one tool call. Increasing it applies to new tasks; lowering it also limits existing tasks."
+                    : undefined
             }
           >
             <input
@@ -80,8 +88,11 @@ export function ResearchSettings({
       </div>
       <Notice>
         Each researcher currently makes one research pass: one model request
-        with native web search, followed by a report. These search limits do not
-        add extra passes or change the calling bot's tool rounds.
+        with native web search, followed by a report. The calling bot can
+        evaluate completed reports and dispatch more researchers within the
+        task's batch allowance, send a new progress message, then sleep again.
+        Search breadth, research batches and the calling bot's tool rounds are
+        separate limits.
       </Notice>
       <Field
         label="Outstanding researchers per bot (default)"

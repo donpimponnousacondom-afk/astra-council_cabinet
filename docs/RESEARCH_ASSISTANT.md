@@ -33,16 +33,46 @@ inherited output-cap fields on the wire copy only. It bounds reasoning plus
 visible output; upstream search-context tokens are separately billable. There is
 no inherited conversation summary or automatic compaction of research inputs.
 
-The researcher panel explicitly states **one research pass per job**: one model
-request with native search, then its report. There is currently no research-pass
-count setting. Provider retries repeat a failed request, not a new research
-iteration. The calling bot's normal tool rounds/calls and researcher concurrency
-are separate. Future research-pass controls belong within this plugin's editor;
-they must not change ordinary bot tool-round controls or other interfaces.
+Each researcher still performs **one research pass per job**: one model request
+with native search, then its report. Provider retries repeat a failed request,
+not a new research iteration. The calling bot evaluates those results and may
+dispatch refined assignments to new researchers. **Research batches per task
+(maximum)** configures `max_research_batches`: default **3**, including the
+initial dispatch plus up to two refinements; minimum one, with no fixed upper
+ceiling. A value of one disables follow-up dispatch. These controls belong to
+the research plugin; ordinary bot tool-round/call controls remain unchanged.
+
+All researchers accepted in one dispatch turn consume one batch together.
+Partial sibling completion waves and later descendants share the original
+task's durable allowance. Only results claimed by the current completion turn
+can supply its ancestry; the model cannot select another task to refill its
+budget. A fresh ordinary conversational turn can start a new research task.
+The initial ceiling is retained: raising the setting does not refill existing
+tasks, while lowering it applies to subsequent admissions. Rejected submissions
+and idempotent recovery do not consume another batch. When the allowance is
+exhausted, existing workers continue and the bot can read/report their results,
+but another completion cannot launch more researchers for that task. Jobs from
+before this feature have no recorded ancestry and remain report-only on wake-up.
+
+On a completion wake-up, the parent bot decides whether evidence is sufficient
+or narrower questions would help. Refined starts use the same capacity, per-call
+cost, acknowledgement and sleep workflow as the initial dispatch. Progress
+counts describe that dispatch batch; `research_cycle` status describes the
+whole task's used/remaining allowance. The runtime does not automatically retry
+weak reports or instruct worker researchers to delegate. Every acknowledgement
+and later progress/result is a **new message**, never an edit to an old answer.
+
+The plugin's `research_batches` SQLite ledger is included in full snapshots.
+Budget entries remain while any retained researcher references their task,
+including when its initial job has aged out; unreferenced tasks are pruned on
+subsequent research admission. Restart does not replay paid requests or reset
+saved allowances. Loki is an experimental user of this capability, not a special
+runtime identity; any granted bot can use it, and other bots keep their settings.
 
 Configuration defaults: no selected profile, 16,384 output-token ceiling,
 600-second total deadline (including queue/retries, configurable 1–7,200), three
 search queries, five results per query, four outstanding researchers per bot,
+three dispatch batches per task,
 automatic completion follow-up enabled. The system prompt is editable;
 `{now}` uses the council timezone. Per-bot plugin JSON overrides use the usual
 shallow merge and validation. Profile changes cancel affected work. Sharing a

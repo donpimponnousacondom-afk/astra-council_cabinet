@@ -6,7 +6,8 @@ Enable **Plugins → Sub-agent researcher · experimental**, select a dedicated 
 research profile/provider (with native Web Search enabled upstream), and grant
 the plugin under **Bots → Capabilities**. Existing bots keep their own model.
 The global editor configures the research output ceiling, total deadline,
-search queries per search round, results per query, outstanding researchers per bot, editable system
+search queries per search round, results per query, research batches per task,
+outstanding researchers per bot, editable system
 prompt and default completion notification. The researcher allowance defaults
 to four (minimum four, no fixed upper ceiling). **Bots → Capabilities** provides
 an optional per-bot override; blank uses the global default. Active jobs and
@@ -27,8 +28,12 @@ prompts survive upgrades; new jobs without an explicit result limit use five.
 Research guidance should distinguish thin coverage from explicit search errors,
 without demanding a local sequence of searches that the adapter does not run.
 The researcher panel identifies the current single research pass per job.
-There is no configurable research-pass count; ordinary bot tool rounds and
-parallel researcher capacity remain independent controls.
+**Research batches per task (maximum)** defaults to **3**: the initial dispatch
+plus up to two batches of refined assignments from the calling bot. Minimum one
+disables follow-up dispatch; there is no fixed upper ceiling. All completion
+waves of a task share its saved allowance. Raising it does not refill existing
+tasks; lowering it is respected. Ordinary bot tool rounds and parallel researcher
+capacity remain independent controls.
 
 With notifications enabled, submit independent researchers in one tool-call
 batch. The runtime stops typing and closes further tools after that batch, asks
@@ -37,7 +42,10 @@ turn ends. Job deadlines include that acknowledgement/provider wait. This also
 works when parent and children share a provider limited to one request.
 Completion waves coalesce settled siblings and include progress counts (for
 example, two of five settled). Each update is a **new message**, never an edit to
-the original acknowledgement. Remaining workers trigger later waves. The
+the original acknowledgement. Remaining workers trigger later waves. A waking
+bot may evaluate the evidence and dispatch narrower questions while task batches
+and capacity remain, then acknowledge the new batch and sleep again. A worker
+never launches its own agents. The
 editable **Background dispatch & progress** prompt controls presentation; runtime
 handoff and grants remain enforced if its text is disabled. Explicit notification
 opt-out retains the existing bounded polling behavior.
