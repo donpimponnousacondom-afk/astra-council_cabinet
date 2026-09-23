@@ -19,8 +19,19 @@ timing/token metrics and cancellation; the plugin editor shows all researcher
 jobs. No plugin-specific credential is required: the selected provider supplies
 its own key, never the conversational bot's key override.
 
-Workers continue after the submitting turn ends, without a typing indicator.
-Completion queues one ordinary scoped follow-up, including timer-zero bots;
+With notifications enabled, submit independent researchers in one tool-call
+batch. The runtime stops typing and closes further tools after that batch, asks
+the bot for a brief text acknowledgement, then releases queued workers when the
+turn ends. Job deadlines include that acknowledgement/provider wait. This also
+works when parent and children share a provider limited to one request.
+Completion waves coalesce settled siblings and include progress counts (for
+example, two of five settled). Each update is a **new message**, never an edit to
+the original acknowledgement. Remaining workers trigger later waves. The
+editable **Background dispatch & progress** prompt controls presentation; runtime
+handoff and grants remain enforced if its text is disabled. Explicit notification
+opt-out retains the existing bounded polling behavior.
+
+Completion queues ordinary scoped follow-ups, including timer-zero bots;
 pauses, grants, human-message priority, provider concurrency and budgets still
 apply. Slash/panel invocations are not supported by this first version. See
 [RESEARCH_ASSISTANT](RESEARCH_ASSISTANT.md) and [BACKGROUND_JOBS](BACKGROUND_JOBS.md)

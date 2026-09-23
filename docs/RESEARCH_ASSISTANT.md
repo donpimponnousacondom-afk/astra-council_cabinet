@@ -49,8 +49,12 @@ admitted channel plus up to 30 recent settled jobs.
 Each `start` creates exactly one researcher and consumes one tool call. For
 example, eight independent assignments require eight starts, an allowance of at
 least eight available slots and a bot call budget permitting eight calls. Starts
-return promptly and their workers run independently, subject to the selected
-provider's concurrency limit. There is no batch-start shortcut or extra tool
+return promptly. With completion notifications enabled, put independent starts
+in one tool-call batch: after that batch the runtime closes tools and asks for a
+brief text acknowledgement. Queued workers start when that turn ends, then run
+independently subject to the selected provider's concurrency limit. This avoids
+children occupying the parent's only provider slot before it can acknowledge.
+There is no batch-start shortcut or extra tool
 budget. Reading/claiming a finished job can free its slot, and each job retains
 its own deadline, output allowance, saved evidence and notification.
 
@@ -64,12 +68,17 @@ its own deadline, output allowance, saved evidence and notification.
 ```
 
 Empty arguments return full usage without starting work. `start` returns at once;
-the bot may answer/choose silence and end its typing indicator. Worker completion
-or failure queues one normal contextual follow-up, with human-directed messages
+the runtime stops typing at notified dispatch and requests the acknowledgement.
+Worker completion or failure queues contextual follow-ups, grouping settled
+siblings and supplying batch progress counts, with human-directed messages
 taking priority. Reading a finished job before its notification is claimed
 consumes that notification, avoiding an unnecessary extra turn. `wait` is bounded
-to 20 seconds, counts as a tool call, and cancellation of the wait does not cancel
-the worker. A repeated submission ID with the same assignment recovers its job;
+to 20 seconds outside dispatch/completion follow-ups, counts as a tool call, and
+cancellation of the wait does not cancel the worker. During those follow-ups it
+returns current status immediately: publish useful progress/findings in a **new
+message**, then let the remaining workers trigger later updates. No old Discord
+messages are edited. Notification opt-out retains explicit polling rather than
+automatic handoff/wakeups. A repeated submission ID with the same assignment recovers its job;
 different arguments require a new ID. This is local deduplication, not a promise
 that an upstream retry cannot bill another search.
 
@@ -92,8 +101,9 @@ An empty report, unhandled native tool calls, or a literal tool-call envelope in
 assistant content makes the job **failed**, with `complete: false`, an explicit
 `validation_error` and `kind: "invalid_researcher_output"`. The saved output,
 sources, usage and metrics remain readable through the same scoped result pages;
-private reasoning stays private. Plain discussion of tools and fenced examples
-are allowed. Content is never executed as a tool or automatically sent for a
+private reasoning stays private. Envelopes following a prose preface are also
+rejected; plain discussion of tools and fenced/inline/quoted examples are
+allowed. Content is never executed as a tool or automatically sent for a
 paid repair/retry. A normal partial report stopped by an output limit retains
 the existing incomplete-result behavior. Owner/timeout cancellation is handled
 independently; old request/job evidence is not reclassified or rewritten.

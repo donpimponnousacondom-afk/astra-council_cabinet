@@ -171,7 +171,7 @@ async def test_configuration_cancellation_joins_all_workers(kernel, owner, chang
     assert kernel.jobs.capacity("ada", ID)["outstanding_jobs"] == 0
 
 
-async def test_restart_marks_entire_fanout_interrupted_and_each_notification_claims_once(kernel):
+async def test_restart_marks_entire_fanout_interrupted_and_coalesces_notifications_once(kernel):
     context = setup(kernel)
     run = AsyncMock(return_value={})
     worker(kernel, run)
@@ -181,12 +181,16 @@ async def test_restart_marks_entire_fanout_interrupted_and_each_notification_cla
     kernel.store.execute("UPDATE background_jobs SET state='running',result=NULL,notification='none'")
     kernel.jobs.recover()  # Simulate durable state after a crash, without restarting any worker.
     assert not kernel.jobs.tasks and run.await_count == 4
-    for n in range(4):
-        job = kernel.jobs.pending(context.bot)
-        assert job["state"] == "interrupted"
-        assert kernel.jobs.claim(job, f"followup-{n}")
-        assert not kernel.jobs.claim(job, f"duplicate-{n}")
+    job = kernel.jobs.pending(context.bot)
+    assert job["state"] == "interrupted"
+    assert kernel.jobs.claim(job, "followup")
+    assert not kernel.jobs.claim(job, "duplicate")
+    assert len(kernel.jobs.notification(job)["jobs"]) == 4
     assert kernel.jobs.pending(context.bot) is None
+    assert {
+        row["continuation_turn_id"]
+        for row in kernel.store.rows("SELECT continuation_turn_id FROM background_jobs")
+    } == {"followup"}
     assert kernel.jobs.capacity("ada", ID)["available_slots"] == 4
 
 
@@ -226,20 +230,26 @@ async def test_provider_queue_wait_cannot_extend_a_research_job_deadline(kernel)
     plugin = kernel.store.get("plugins", ID)
     kernel.store.put("plugins", {**plugin, "config": {**plugin["config"], "timeout_seconds": 1}})
     entered, exited = [], []
+    active, peak = 0, 0
 
     async def respond(request):
+        nonlocal active, peak
         entered.append(request)
+        active += 1
+        peak = max(peak, active)
         try:
             await asyncio.Event().wait()
         finally:
             exited.append(request)
+            active -= 1
 
     await install_client(kernel, respond)
     for n in range(4):
         await call(kernel, context, **start(submission_id=f"job-{n}"))
     async with asyncio.timeout(3):
         await finish(kernel)
-    assert len(entered) == len(exited) == 1
+    assert 1 <= len(entered) == len(exited) <= 4
+    assert peak == 1
     assert not kernel.jobs.tasks and kernel.pool.active["openrouter"] == 0
     jobs = kernel.jobs.inventory(bot_id="ada")
     assert len(jobs) == 4
@@ -279,7 +289,7 @@ async def test_engine_charges_one_call_per_researcher_and_preserves_round_budget
             assert all(report["job_id"] for report in reports)
         else:
             assert all("maximum 4 per round" in report["error"] for report in reports)
-        assert ID not in [item["function"]["name"] for item in body["tools"]]
+        assert ID not in [item["function"]["name"] for item in body.get("tools", [])]
         return completion("Research requested")
 
     await install_client(kernel, respond)
