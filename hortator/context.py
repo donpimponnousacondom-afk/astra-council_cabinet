@@ -199,11 +199,20 @@ class ContextBuilder:
             values["activation"] = bot["activation"]
         if bot.get("background_completion"):
             values["background_completion"] = bot["background_completion"]
+        if bot.get("background_handoff"):
+            values["background_handoff"] = bot["background_handoff"]
         if self.application_emojis is not None:
             values["application_emojis"] = self.application_emojis.prompt(bot)
         custom = render(bot["dynamic_prompt"], values)
+        facts = dict(values)
+        for key in ("background_completion", "background_handoff"):
+            if key in facts:
+                facts[key] = {
+                    "progress": facts[key].get("progress"),
+                    "origin_turn_id": facts[key].get("origin_turn_id"),
+                }
         values.update(
-            runtime_facts=dumps(values),
+            runtime_facts=dumps(facts),
             dynamic_prompt=custom,
             silence_action=" or call council_silence alone" if bot.get("allow_silence", True) else "",
         )
@@ -213,6 +222,26 @@ class ContextBuilder:
         if bot.get("background_completion"):
             item = self.prompt(
                 bot, "background_completion", {"background_job": dumps(bot["background_completion"])}
+            )
+            if item:
+                layers.append(item)
+        background_state = bot.get("background_handoff") or bot.get("background_completion")
+        if background_state:
+            if not bot.get("background_handoff"):
+                # Full receipts already live in background_completion. Do not
+                # repeat them three times through facts and guidance layers.
+                background_state = {
+                    "progress": background_state.get("progress"),
+                    "newly_settled": len(background_state.get("jobs", [])),
+                    "previously_notified": background_state.get("previously_notified", 0),
+                }
+            item = self.prompt(
+                bot,
+                "background_updates",
+                {
+                    "background_phase": "dispatch" if bot.get("background_handoff") else "completion",
+                    "background_state": dumps(background_state),
+                },
             )
             if item:
                 layers.append(item)

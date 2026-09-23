@@ -18,6 +18,12 @@ from .timekeeping import council_timezone, local_timestamp
 
 ACTIVE = ("queued", "running")
 RESULT_LIMIT = 2 * 1024 * 1024
+NOTICE_LIMIT = 12000  # Compact control metadata, never a report or private reasoning.
+CONTROL_COLUMNS = (
+    "id,plugin,bot_id,channel_id,origin_turn_id,submission_id,created_at,deadline,updated_at,"
+    "state,payload,error,notify,notification,continuation_turn_id,reply_to,"
+    "json_extract(result,'$.complete') AS report_complete"
+)
 
 
 class JobResultError(ControlError):
@@ -34,6 +40,7 @@ class BackgroundJobs:
         self.handlers = {}
         self.limits = {}
         self.tasks = {}
+        self.origin_gates = {}
         self.background = None
         self.engine = None
         self.closed = False
@@ -47,6 +54,10 @@ class BackgroundJobs:
             continuation_turn_id TEXT, reply_to TEXT,
             UNIQUE(bot_id,channel_id,plugin,submission_id))""")
         store.execute("CREATE INDEX IF NOT EXISTS background_job_owner ON background_jobs(bot_id,state)")
+        store.execute(
+            "CREATE INDEX IF NOT EXISTS background_job_batch "
+            "ON background_jobs(bot_id,channel_id,plugin,origin_turn_id)"
+        )
 
     def register(self, name, *, run, check, limit=None):
         if name in self.handlers:
@@ -82,9 +93,19 @@ class BackgroundJobs:
         self.cleanup()
 
     def cleanup(self):
+        # Keep the entire batch while any sibling is outstanding, so progress
+        # counts do not shrink when an early result is read or reported.
+        settled_batch = (
+            "NOT EXISTS (SELECT 1 FROM background_jobs sibling WHERE "
+            "sibling.bot_id=background_jobs.bot_id AND sibling.channel_id=background_jobs.channel_id "
+            "AND sibling.plugin=background_jobs.plugin AND sibling.origin_turn_id=background_jobs.origin_turn_id "
+            "AND (sibling.state IN ('queued','running') OR sibling.notification='pending' "
+            "OR EXISTS (SELECT 1 FROM turns WHERE status='running' AND "
+            "(id=sibling.origin_turn_id OR id=sibling.continuation_turn_id))))"
+        )
         self.store.execute(
             "DELETE FROM background_jobs WHERE state NOT IN ('queued','running') "
-            "AND notification<>'pending' AND updated_at<?",
+            "AND notification<>'pending' AND updated_at<? AND " + settled_batch,
             (time.time() - 7 * 86400,),
         )
         # Rolling history, not a permanent admission roadblock.
@@ -92,7 +113,7 @@ class BackgroundJobs:
             self.store.execute(
                 "DELETE FROM background_jobs WHERE id IN (SELECT id FROM background_jobs "
                 "WHERE bot_id=? AND state NOT IN ('queued','running') AND notification<>'pending' "
-                "ORDER BY updated_at DESC LIMIT -1 OFFSET 100)",
+                "AND " + settled_batch + " ORDER BY updated_at DESC LIMIT -1 OFFSET 100)",
                 (row["bot_id"],),
             )
 
@@ -180,8 +201,11 @@ class BackgroundJobs:
             job,
         )
         self.emit(job, "queued", **self.capacity(job["bot_id"], plugin))
+        gate = None
+        if self.store.one("SELECT 1 FROM turns WHERE id=? AND status='running'", (context.turn_id,)):
+            gate = self.origin_gates.setdefault(context.turn_id, asyncio.Event())
         self.tasks[job["id"]] = self.background.spawn(
-            self.run(job), name=f"background-job:{job['id']}", bot_id=job["bot_id"]
+            self.run(job, gate=gate), name=f"background-job:{job['id']}", bot_id=job["bot_id"]
         )
         self.tasks[job["id"]].add_done_callback(lambda _: self.tasks.pop(job["id"], None))
         return self.status(self.get(job["id"]))
@@ -209,9 +233,15 @@ class BackgroundJobs:
         )
         self.emit(job, state, error=self.store.redact(error) if error else None, **diagnostics)
 
-    async def run(self, job):
+    async def run(self, job, *, gate=None):
         try:
             async with asyncio.timeout(max(0, job["deadline"] - time.time())):
+                # Release the conversational provider slot for the dispatch
+                # acknowledgement first, even when parent and children share a
+                # provider allowing only one request. No paid work is replayed.
+                if gate is not None:
+                    self.check(job)
+                    await gate.wait()
                 self.check(job)
                 self.store.execute(
                     "UPDATE background_jobs SET state='running',updated_at=? WHERE id=?",
@@ -251,6 +281,19 @@ class BackgroundJobs:
         finally:
             self.tasks.pop(job["id"], None)
 
+    def release_turn(self, turn_id):
+        gate = self.origin_gates.pop(turn_id, None)
+        if gate:
+            gate.set()
+
+    def begin_batch(self, turn_id):
+        self.origin_gates[turn_id] = asyncio.Event()
+
+    def release_batch(self, turn_id):
+        gate = self.origin_gates.get(turn_id)
+        if gate:
+            gate.set()
+
     def owned(self, job_id, context, plugin):
         job = self.get(job_id)
         if not job or (job["bot_id"], job["channel_id"], job["plugin"]) != (
@@ -266,6 +309,9 @@ class BackgroundJobs:
         result = json.loads(job["result"]) if job.get("result") else {}
         return {
             "job_id": job["id"],
+            "submission_id": job["submission_id"],
+            "plugin": job["plugin"],
+            "origin_turn_id": job["origin_turn_id"],
             "state": job["state"],
             "error": job.get("error"),
             "elapsed_seconds": round(
@@ -273,11 +319,78 @@ class BackgroundJobs:
             ),
             "deadline": local_timestamp(job["deadline"], council_timezone(self.store)),
             "notification": job.get("notification", "none"),
+            "continuation_turn_id": job.get("continuation_turn_id"),
+            "report_complete": result.get("complete"),
             "notify_on_completion": bool(job["notify"]),
             "poll_after_seconds": 10 if job["state"] in ACTIVE else None,
             "metrics": result.get("metrics"),
             "next": {"operation": "read_result", "job_id": job["id"], "offset": 0, "length": 6000},
             "capacity": self.capacity(job["bot_id"], job["plugin"]),
+        }
+
+    def batch(self, job):
+        return self.store.rows(
+            f"SELECT {CONTROL_COLUMNS} FROM background_jobs WHERE bot_id=? AND channel_id=? AND plugin=? "
+            "AND origin_turn_id=? ORDER BY created_at,id",
+            (job["bot_id"], job["channel_id"], job["plugin"], job["origin_turn_id"]),
+        )
+
+    @staticmethod
+    def receipt(job):
+        complete = job.get("report_complete")
+        if "report_complete" not in job and job.get("result"):
+            complete = json.loads(job["result"]).get("complete")
+        return {
+            "job_id": job["id"],
+            "submission_id": job["submission_id"],
+            "plugin": job["plugin"],
+            "state": job["state"],
+            "assignment": json.loads(job["payload"]).get("task", "")[:256],
+            "error": (job.get("error") or "")[:400],
+            "notify_on_completion": bool(job["notify"]),
+            "report_complete": None if complete is None else bool(complete),
+        }
+
+    @staticmethod
+    def progress(rows):
+        rows = [row for row in rows if row["notify"]]
+        active = sum(row["state"] in ACTIVE for row in rows)
+        return {
+            "total": len(rows),
+            "settled": len(rows) - active,
+            "active": active,
+            "completed": sum(row["state"] == "completed" for row in rows),
+            "failed": sum(row["state"] in ("failed", "interrupted") for row in rows),
+            "cancelled": sum(row["state"] == "cancelled" for row in rows),
+            "incomplete_reports": sum(row.get("report_complete") == 0 for row in rows),
+        }
+
+    def compact_receipts(self, rows):
+        receipts = []
+        for row in rows:
+            receipt = self.receipt(row)
+            if len(dumps([*receipts, receipt])) > NOTICE_LIMIT:
+                break
+            receipts.append(receipt)
+        return receipts
+
+    def handoff(self, context):
+        """Authoritative control state, independent of trimmed tool exchanges."""
+        rows = self.store.rows(
+            f"SELECT {CONTROL_COLUMNS} FROM background_jobs WHERE bot_id=? AND channel_id=? AND origin_turn_id=? "
+            "ORDER BY created_at,id",
+            (context.bot["id"], context.channel_id, context.turn_id),
+        )
+        if not any(row["notify"] for row in rows):
+            return None
+        receipts = self.compact_receipts(rows)
+        return {
+            "origin_turn_id": context.turn_id,
+            "scope": "All jobs dispatched by this turn; progress counts notification-enabled jobs across plugins.",
+            "progress": self.progress(rows),
+            "jobs": receipts,
+            "omitted_receipts": len(rows) - len(receipts),
+            "recovery": "Use the job plugin's list operation in this channel to recover every job.",
         }
 
     def pending(self, bot):
@@ -303,20 +416,41 @@ class BackgroundJobs:
             return job
 
     def claim(self, job, turn_id):
-        return (
-            self.store.execute(
-                "UPDATE background_jobs SET notification='claimed',continuation_turn_id=? WHERE id=? AND notification='pending'",
-                (turn_id, job["id"]),
-            ).rowcount
-            == 1
+        # One synchronous SQLite transaction; no worker can settle between the
+        # snapshot and claim. Oversized groups remain pending for a later turn.
+        current = self.get(job["id"])
+        if not current or current["notification"] != "pending":
+            return False
+        rows = [current] + [
+            r for r in self.batch(current) if r["id"] != current["id"] and r["notification"] == "pending"
+        ]
+        selected = self.compact_receipts(rows)
+        by_id = {row["id"]: row for row in rows}
+        for receipt in selected:
+            self.check(by_id[receipt["job_id"]])
+        ids = [receipt["job_id"] for receipt in selected]
+        self.store.execute(
+            "UPDATE background_jobs SET notification='claimed',continuation_turn_id=? "
+            "WHERE notification='pending' AND id IN (" + ",".join("?" for _ in ids) + ")",
+            (turn_id, *ids),
         )
+        return True
 
     def notification(self, job):
-        payload = json.loads(job["payload"])
+        job = self.get(job["id"])
+        rows = self.batch(job)
+        claimed = [r for r in rows if r["continuation_turn_id"] == job["continuation_turn_id"]]
         return {
             **self.status(job),
-            "assignment": payload.get("task", ""),
-            "origin_turn_id": job["origin_turn_id"],
+            "assignment": json.loads(job["payload"]).get("task", "")[:256],
+            "jobs": self.compact_receipts(claimed),
+            "progress": self.progress(rows),
+            "pending_notifications": sum(r["notification"] == "pending" for r in rows),
+            "previously_notified": sum(
+                bool(r["continuation_turn_id"]) and r["continuation_turn_id"] != job["continuation_turn_id"]
+                for r in rows
+            ),
+            "recovery": "Read each settled job through its plugin using operation=read_result and job_id. Use list for the full inventory.",
         }
 
     async def cancel(self, bot_ids, reason):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import re
 import time
 from dataclasses import replace
 
@@ -51,8 +52,10 @@ DESCRIPTION = (
     "start returns a durable job_id immediately; the worker keeps running after you finish your turn. "
     "Give clear questions, relevant context, desired sources and a max_output_tokens budget including "
     "reasoning. The researcher cannot see your conversation, notes or tools unless you include relevant text. "
-    "Use other tools meanwhile, or finish with a brief acknowledgment or council_silence if available. "
-    "With notify_on_completion enabled, completion/failure wakes one follow-up in this channel, even "
+    "With notify_on_completion enabled, submit all independent assignments together in ONE tool-call batch. "
+    "After that batch the runtime closes tools for this turn: give a brief ordinary text acknowledgement, "
+    "then stop. Workers continue without your typing indicator or polling. Completion/failure wakes "
+    "a follow-up for the settled jobs in this channel, even "
     "with your timer off. Status/wait/read_result/list/cancel recover the saved work. wait accepts up "
     "to 20 seconds; avoid repeated rapid polls, which consume your tool rounds. Result text is a model "
     "synthesis, not verified source truth; inspect its sources and search errors. Metrics include "
@@ -62,6 +65,8 @@ DESCRIPTION = (
     "fan out independent assignments with separate start calls inside your normal round/call budget. "
     "Active jobs and pending completions share this bot's configured allowance across channels; "
     "inspect capacity before submitting more. Provider concurrency may make admitted jobs wait. "
+    "Follow-ups report useful progress and findings in NEW messages, never edits to old messages. "
+    "Read the newly settled jobs; do not wait for remaining workers, which wake later follow-ups. "
     "No recursive submissions from completion follow-ups. "
     "This experiment currently starts jobs only in configured conversational channels, not slash/panel "
     "invocations or paused one-shot turns. Example: "
@@ -105,6 +110,72 @@ PARAMETERS = {
         for operation, (required, allowed) in OPERATIONS.items()
     ],
 }
+
+
+_TOOL_ENVELOPE = re.compile(
+    r"<\s*tool_call(?:\s[^<>]*?)?\s*>\s*<(?:function\b|parameter\b)"
+    r"|<\s*tool_call(?:\s[^<>]*?)?\s*>\s*\{[\s\S]*?\}\s*</\s*tool_call\s*>"
+    r"|<\s*function(?:\s*=\s*[\w.-]+|\s+name\s*=\s*['\"]?[\w.-]+['\"]?)\s*>"
+    r"\s*(?:<\s*parameter\b|[^<>]*</\s*function\s*>)",
+    re.IGNORECASE | re.DOTALL,
+)
+_BARE_TOOL_OPEN = re.compile(r"(?:^|\n)\s*<\s*tool_call(?:\s[^<>]*?)?\s*>\s*$", re.IGNORECASE)
+_INLINE_CODE = re.compile(r"(`+)(?!`)[^`\n]*?\1(?!`)")
+_QUOTED_MARKUP = re.compile(r"(['\"])(?=<\s*(?:tool_call|function)\b)[^\n]*?\1", re.IGNORECASE)
+_KNOWN_TOOL_NAMES = frozenset({"council_speak", "council_silence", "web_search"})
+
+
+def _json_tool_wrapper(text: str) -> bool:
+    """Only classify a whole JSON object with an explicit tool-call shape."""
+    try:
+        value = json.loads(text)
+    except ValueError, TypeError:
+        return False
+    if not isinstance(value, dict):
+        return False
+    calls = value.get("tool_calls")
+    if isinstance(calls, list) and any(isinstance(call, dict) for call in calls):
+        return True
+    function = value.get("function")
+    if (
+        isinstance(function, dict)
+        and isinstance(function.get("name"), str)
+        and function["name"] in _KNOWN_TOOL_NAMES
+    ):
+        return True
+    name = value.get("tool", value.get("name"))
+    return isinstance(name, str) and (
+        name == "council_speak"
+        or (name in _KNOWN_TOOL_NAMES and ("arguments" in value or "parameters" in value))
+    )
+
+
+def literal_tool_call_envelope(content: str) -> bool:
+    """Recognize unhandled tool envelopes in visible report text, never execute them.
+
+    Markdown examples and quoted source excerpts are evidence, not researcher
+    instructions. Keep the saved report untouched; filtering is validation only.
+    """
+    visible = []
+    fence_char = None
+    fence_width = 0
+    for line in content.splitlines():
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if fence_char:
+            if marker and marker.group(1)[0] == fence_char and len(marker.group(1)) >= fence_width:
+                fence_char = None
+            visible.append("[quoted example]")
+            continue
+        if marker:
+            fence_char, fence_width = marker.group(1)[0], len(marker.group(1))
+            visible.append("[quoted example]")
+            continue
+        if re.match(r"^\s*>", line):
+            visible.append("[quoted example]")
+            continue
+        visible.append(_QUOTED_MARKUP.sub(" ", _INLINE_CODE.sub(" ", line)))
+    text = "\n".join(visible)
+    return bool(_TOOL_ENVELOPE.search(text) or _BARE_TOOL_OPEN.search(text) or _json_tool_wrapper(text))
 
 
 def validate_config(config, store):
@@ -222,7 +293,7 @@ class ResearchAssistant:
             )
             return {
                 **result,
-                "note": "Research runs independently. You may finish this turn; automatic follow-up is subject to current grants and pause/budget gates.",
+                "note": "Research runs independently. With notification enabled, this tool batch is followed by a text-only acknowledgement and the turn ends. Later findings use new messages; follow-up remains subject to current grants and pause/budget gates.",
             }
         if operation == "list":
             rows = self.store.rows(
@@ -241,7 +312,10 @@ class ResearchAssistant:
                 visible.append(self.jobs.status(row))
             return {"jobs": visible, "capacity": self.jobs.capacity(context.bot["id"], ID)}
         job = self.jobs.owned(args["job_id"], context, ID)
-        if operation == "wait":
+        wait_skipped = operation == "wait" and (
+            context.bot.get("background_completion") or self.jobs.handoff(context)
+        )
+        if operation == "wait" and not wait_skipped:
             deadline = asyncio.get_running_loop().time() + args.get("seconds", 10)
             while job["state"] in ("queued", "running") and asyncio.get_running_loop().time() < deadline:
                 await asyncio.sleep(min(0.25, max(0, deadline - asyncio.get_running_loop().time())))
@@ -250,6 +324,10 @@ class ResearchAssistant:
             await self.jobs.cancel_job(job, "Cancelled through research_assistant")
             job = self.jobs.owned(job["id"], context, ID)
         result = self.jobs.status(job)
+        if wait_skipped:
+            result["note"] = (
+                "No waiting during dispatch or completion follow-ups. Report current progress in a new answer; pending notifications wake a later turn."
+            )
         if operation != "read_result" or not job["result"]:
             return result
         # Stable Unicode-character pages of the complete report, citations and
@@ -274,10 +352,6 @@ class ResearchAssistant:
         }
 
     async def run(self, job):
-        # Use the same narrow envelope check as ordinary answers. It recognizes
-        # response wrappers, not mentions/fenced examples, and never executes text.
-        from .runtime import wrapped_reply
-
         p = json.loads(job["payload"])
         bot = self.store.get("bots", job["bot_id"])
         profile = copy.deepcopy(self.store.get("profiles", p["profile_id"]))
@@ -321,7 +395,7 @@ class ResearchAssistant:
         issue = None
         if result.tool_calls:
             issue = "Researcher returned unhandled tool calls instead of a final report"
-        elif wrapped_reply(result.content):
+        elif literal_tool_call_envelope(result.content):
             issue = "Researcher returned literal tool-call markup instead of a final report"
         elif not result.content.strip():
             issue = "Researcher returned no visible report"
@@ -334,7 +408,7 @@ class ResearchAssistant:
             "sources": search.get("annotations", []),
             "search_errors": search.get("errors", []),
             "search_usage": result.usage.get("web_search_usage"),
-            "note": "Sources are provider-supplied. Missing citations/usage does not verify that a search succeeded. A truncated report is marked incomplete.",
+            "note": "Sources are provider-supplied. Missing citations/usage does not verify that a search succeeded. A non-stop finish reason is marked incomplete.",
             "request_id": result.request_id,
             "model": profile["model"],
             "provider_id": profile["provider_id"],

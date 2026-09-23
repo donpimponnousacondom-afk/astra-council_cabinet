@@ -20,6 +20,25 @@ tool budgets, prompts and memories are not rewritten. Live owner testing should
 fan out four brief assignments, then inspect admission, provider slot waits,
 individual results and completion follow-ups before increasing the allowance.
 
+## Background dispatch and progress contract (2026-09-23)
+
+The owner requires a short dispatch acknowledgement, no continued typing while
+researchers work, and fresh progress/result messages rather than edits to old
+answers. Notified dispatch completes its accepted tool-call batch then permits
+one text-only acknowledgement. Owned workers wait for the origin turn to settle
+before taking provider slots, preserving responsiveness with single-slot
+providers; original deadlines still include this queue. Notification opt-out
+preserves explicit polling. Completion waves coalesce only same-origin,
+same-bot/channel/plugin jobs, carry bounded durable receipts and cumulative
+counts, and never replay failed follow-ups. New human requests retain priority.
+
+Adversarial review includes GPT-6 Luna at maximum reasoning and independent
+GPT-6 Sol implementation/test passes. The scope includes receipt retention under
+tool-history trimming, prefaced malformed tool envelopes, cancellation/finalizer
+ownership, current grants, restart without paid replay and batch retention.
+Existing notes/personality/provider settings remain operator-owned; no live
+notes are rewritten to mask these defects.
+
 ## Research and memory acceptance review (2026-09-23)
 
 The owner requested a two-hour live audit before deciding the next researcher

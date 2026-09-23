@@ -7,7 +7,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 
-from .concurrency import cancel_and_wait, task_group, error_text
+from .concurrency import cancel_and_wait, join_tasks, task_group, error_text
 from .context import ContextBuilder
 from .addressing import human_directed_elsewhere
 from .footer import render_footer
@@ -374,41 +374,59 @@ class Engine:
             raise ControlError("Channel is outside this bot's configured scope")
         turn_id = uid("turn_")
         if completed_job:
-            self.jobs.check(completed_job)
-            if not self.jobs.claim(completed_job, turn_id):
-                raise ControlError("Background completion was already consumed", 409)
-            bot = {**bot, "background_completion": self.jobs.notification(completed_job)}
-        if single_shot:
-            bot = {**bot, "_single_shot_turn": turn_id}
-        profile, provider = self.configuration(bot)
-        activation = self.claim_attention(bot, channel_id, turn_id) if human_directed else None
-        if activation:
-            bot = {**bot, "activation": activation}
-        self.store.execute(
-            "INSERT INTO turns(id,bot_id,channel_id,profile_id,provider_id,model,started_at,status,trigger,revision) VALUES(?,?,?,?,?,?,?,?,?,?)",
-            (
-                turn_id,
-                bot["id"],
-                channel_id,
-                profile["id"],
-                provider["id"],
-                profile["model"],
-                time.time(),
-                "running",
-                "manual_compaction"
-                if compact_only
-                else "manual_trigger"
-                if single_shot
-                else activation["kind"]
-                if activation
-                else "background_completion"
-                if completed_job
-                else "owner_message"
-                if bot["role"] == "hortator"
-                else "timer",
-                bot["revision"],
-            ),
-        )
+            self.store.execute("BEGIN IMMEDIATE")
+        try:
+            if completed_job:
+                self.jobs.check(completed_job)
+                if not self.jobs.claim(completed_job, turn_id):
+                    raise ControlError("Background completion was already consumed", 409)
+                bot = {**bot, "background_completion": self.jobs.notification(completed_job)}
+            if single_shot:
+                bot = {**bot, "_single_shot_turn": turn_id}
+            profile, provider = self.configuration(bot)
+            activation = self.claim_attention(bot, channel_id, turn_id) if human_directed else None
+            if activation:
+                bot = {**bot, "activation": activation}
+            self.store.execute(
+                "INSERT INTO turns(id,bot_id,channel_id,profile_id,provider_id,model,started_at,status,trigger,revision) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (
+                    turn_id,
+                    bot["id"],
+                    channel_id,
+                    profile["id"],
+                    provider["id"],
+                    profile["model"],
+                    time.time(),
+                    "running",
+                    "manual_compaction"
+                    if compact_only
+                    else "manual_trigger"
+                    if single_shot
+                    else activation["kind"]
+                    if activation
+                    else "background_completion"
+                    if completed_job
+                    else "owner_message"
+                    if bot["role"] == "hortator"
+                    else "timer",
+                    bot["revision"],
+                ),
+            )
+            if completed_job:
+                self.store.execute("COMMIT")
+        except BaseException:
+            if completed_job:
+                self.store.execute("ROLLBACK")
+            raise
+        if completed_job:
+            notice = bot["background_completion"]
+            self.jobs.emit(
+                completed_job,
+                "notification_claimed",
+                continuation_turn_id=turn_id,
+                job_count=len(notice["jobs"]),
+                **notice["progress"],
+            )
         self.store.execute(
             "UPDATE bot_runtime SET next_at=? WHERE bot_id=?",
             (time.time() + bot["interval_seconds"], bot["id"]),
@@ -451,18 +469,21 @@ class Engine:
                 self.tasks.pop(bot["id"], None)
             if self.single_shots.get(bot["id"]) == turn_id:
                 self.single_shots.pop(bot["id"], None)
-                # Cancellation can arrive before run_turn enters its finalizer.
-                state = self.store.one("SELECT status FROM turns WHERE id=?", (turn_id,))
-                if state and state["status"] == "running":
-                    status = "cancelled" if completed.cancelled() else "failed"
-                    error = "Trigger stopped before normal turn completion"
-                    self.store.execute(
-                        "UPDATE turns SET status=?,error=?,ended_at=? WHERE id=?",
-                        (status, error, time.time(), turn_id),
-                    )
-                    self.store.emit(
-                        "turn.ended", {"status": status, "error": error}, bot_id=bot["id"], turn_id=turn_id
-                    )
+            # Any turn can be cancelled before entering its finalizer. Do not
+            # leave durable job handoffs/notifications waiting on a ghost turn.
+            state = self.store.one("SELECT status FROM turns WHERE id=?", (turn_id,))
+            if state and state["status"] == "running":
+                status = "cancelled" if completed.cancelled() else "failed"
+                error = "Turn stopped before normal turn completion"
+                self.store.execute(
+                    "UPDATE turns SET status=?,error=?,ended_at=? WHERE id=?",
+                    (status, error, time.time(), turn_id),
+                )
+                self.store.emit(
+                    "turn.ended", {"status": status, "error": error}, bot_id=bot["id"], turn_id=turn_id
+                )
+            if self.jobs:
+                self.jobs.release_turn(turn_id)
 
         task.add_done_callback(finished)
         return turn_id
@@ -534,6 +555,7 @@ class Engine:
                 origin_job = self.jobs.get(bot["background_completion"]["job_id"]) if self.jobs else None
                 reply_to = origin_job["reply_to"] if origin_job else None
             reply_repairs = 0
+            background_handoff = False
 
             async def budgeted(awaitable):
                 try:
@@ -558,18 +580,26 @@ class Engine:
                     raise ControlError(
                         "Extended task time budget exhausted; saved local files remain available"
                     )
-                available_tools = silence_tools + (
-                    self.registry.schemas(context) if round_index < round_limit else []
+                available_tools = (
+                    []
+                    if background_handoff
+                    else silence_tools + (self.registry.schemas(context) if round_index < round_limit else [])
                 )
                 # Most chat turns need no attachment schema. Expose preparation only
                 # after a real artifact exists, and keep it inside the ordinary budget.
-                can_attach = round_index < round_limit and self.store.one(
-                    "SELECT id FROM artifacts WHERE bot_id=? AND turn_id=? LIMIT 1",
-                    (bot["id"], turn_id),
+                can_attach = (
+                    not background_handoff
+                    and round_index < round_limit
+                    and self.store.one(
+                        "SELECT id FROM artifacts WHERE bot_id=? AND turn_id=? LIMIT 1",
+                        (bot["id"], turn_id),
+                    )
                 )
                 if can_attach:
                     available_tools.append(ATTACH)
                 budget_bot = {**bot, "max_tool_rounds": round_limit, "max_calls_per_round": calls_limit}
+                if background_handoff:
+                    budget_bot["background_handoff"] = self.jobs.handoff(context)
                 if task_extension_used:
                     budget_bot["active_task_budget"] = {
                         "plugin": task_plugin,
@@ -730,6 +760,11 @@ class Engine:
                     break
                 if len({c["id"] for c in result.tool_calls}) != len(result.tool_calls):
                     raise ControlError("Provider returned duplicate tool-call IDs; no actions executed")
+                if background_handoff:
+                    raise ControlError(
+                        "Background dispatch acknowledgement requested text only; provider returned tool calls. "
+                        "No further actions executed; accepted jobs continue and retain their completion notifications."
+                    )
                 names = [call["function"]["name"] for call in result.tool_calls]
                 terminal = any(name in ("council_speak", "council_silence") for name in names)
                 batch_error = None
@@ -748,6 +783,8 @@ class Engine:
                     )
                 extras.append(result.message())
                 finished = False
+                if self.jobs:
+                    self.jobs.begin_batch(turn_id)
                 for call in result.tool_calls:
                     name = call["function"]["name"]
                     definition = (
@@ -953,6 +990,23 @@ class Engine:
                     )
                 if finished:
                     break
+                handoff = self.jobs.handoff(context) if self.jobs else None
+                if handoff:
+                    # Complete the accepted batch, then one text-only acknowledgement.
+                    # Worker ownership and deadlines never depend on this turn.
+                    background_handoff = True
+                    round_limit = round_index + 1
+                    if typing_task:
+                        await cancel_and_wait(typing_task)
+                        typing_task = None
+                    self.store.emit(
+                        "background_job.handoff",
+                        {"channel_id": channel_id, **handoff["progress"]},
+                        bot_id=bot["id"],
+                        turn_id=turn_id,
+                    )
+                elif self.jobs:
+                    self.jobs.release_batch(turn_id)
                 round_index += 1
             else:
                 raise ControlError(
@@ -1000,6 +1054,8 @@ class Engine:
                 "UPDATE turns SET status=?,decision=?,error=?,ended_at=? WHERE id=?",
                 (status, decision, error, time.time(), turn_id),
             )
+            if self.jobs:
+                self.jobs.release_turn(turn_id)
             # No catch-up bursts; activation interval restarts when work settles.
             current = self.store.get("bots", bot["id"])
             interval = current["interval_seconds"] if current else bot["interval_seconds"]
@@ -1294,7 +1350,9 @@ class Engine:
         if self.jobs:
             await self.jobs.cancel(bot_ids, reason)
         if tasks:
-            await cancel_and_wait(*tasks)
+            # Already cancelled above. A second cancellation can interrupt the
+            # turn's finally block while it joins typing/provider cleanup.
+            await join_tasks(*tasks)
 
     async def close(self):
         self.closed = True

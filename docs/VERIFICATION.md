@@ -1,5 +1,47 @@
 # Verification record
 
+## Background research lifecycle hardening (2026-09-23)
+
+- Branched the clean merged `6039d92` placeholder to
+  `feat/background_research_lifecycle`. The owner requested real dispatch/return
+  behavior and new progress messages, never edits of old answers. GPT-6 Sol
+  independently implemented receipt/report defenses and lifecycle tests;
+  GPT-6 Luna at maximum reasoning reviewed the implementation adversarially.
+- Notified dispatch now finishes its accepted batch, stops renewing typing,
+  and requests one text-only acknowledgement. All new workers in a mixed batch
+  wait behind that acknowledgement; an entirely notification-disabled batch
+  releases workers after its tool batch for explicit polling. Parent completion
+  releases independent workers without renewing deadlines. Accepted work and
+  notifications survive a failed acknowledgement; no text tool call is executed.
+- Completion waves atomically claim same-origin/bot/channel/plugin siblings
+  alongside creating their turn, retain bounded durable receipts and cumulative
+  progress, and send through the ordinary new-message outbox. Overflow stays
+  pending. Receipt data is not copied three times into prompt layers. Retention
+  protects siblings while a worker, notification or reporting turn needs them.
+- Fixed a double-cancellation bug exposed by reset tests: cancellation could
+  interrupt typing cleanup and leave a turn marked running. Turn tasks are now
+  joined after their first cancellation; all pre-entry cancellations receive
+  terminal bookkeeping, including release of dispatch gates.
+- Literal XML/JSON tool envelopes following a prose preface fail research
+  validation while preserving output, metrics and private diagnostic evidence.
+  Quoted/fenced examples and ordinary JSON findings remain accepted. Partial
+  reports retain their explicit incomplete status; job receipts expose it.
+- **Final focused suite: 131 passed**, covering five/sixteen-job handoff, mixed
+  notification settings, partial two-of-five and final waves, failed siblings,
+  malformed acknowledgements, notice overflow, scoped atomic claim rollback,
+  retention, deadline expiry before paid work, single prompt injection, receipt
+  trimming, report validation, reset/grant cancellation, human supersession,
+  provider concurrency, restart without replay and prompt switches.
+- The broader suite run returned **1,378 passed, one skipped, one failure**.
+  The failure is pre-existing: `test_five_attempts_and_three_missing_receipts_stop_without_work`
+  expects five slash acknowledgement attempts, while both this checkout and
+  baseline `6039d92` define `ACK_ATTEMPTS = 30` and a 90 ms gap. No slash settings
+  were changed for this background-job task. Ruff and `git diff --check` pass.
+- All provider/Discord acceptance scenarios above use mocks and isolated test
+  databases. No paid probe, live memory rewrite, grant/profile adjustment or
+  forced interruption of Loki's in-flight turn was used for validation. Live
+  conversational acceptance remains an owner test after deployment.
+
 ## Configurable researcher fan-out (2026-09-23)
 
 - Continued the active unmerged `hotfix/research_observability` branch. Kept
