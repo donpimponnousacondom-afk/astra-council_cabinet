@@ -41,6 +41,12 @@
   databases. No paid probe, live memory rewrite, grant/profile adjustment or
   forced interruption of Loki's in-flight turn was used for validation. Live
   conversational acceptance remains an owner test after deployment.
+- Luna's final review found no remaining lifecycle blocker. Its last wording
+  correction names prior notifications `previously_claimed`, not "notified":
+  a claimed follow-up can fail before delivery. The final terminology adjustment
+  passed the 28 handoff/batch/prompt regression tests. Restart is guarded by zero
+  active turns/outstanding jobs, using the shared Screen refresh workflow and
+  matching dashboard/server build identities.
 
 ## Configurable researcher fan-out (2026-09-23)
 

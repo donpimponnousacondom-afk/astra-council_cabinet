@@ -233,7 +233,7 @@ class ContextBuilder:
                 background_state = {
                     "progress": background_state.get("progress"),
                     "newly_settled": len(background_state.get("jobs", [])),
-                    "previously_notified": background_state.get("previously_notified", 0),
+                    "previously_claimed": background_state.get("previously_claimed", 0),
                 }
             item = self.prompt(
                 bot,

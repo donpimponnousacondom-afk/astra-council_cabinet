@@ -446,7 +446,7 @@ class BackgroundJobs:
             "jobs": self.compact_receipts(claimed),
             "progress": self.progress(rows),
             "pending_notifications": sum(r["notification"] == "pending" for r in rows),
-            "previously_notified": sum(
+            "previously_claimed": sum(
                 bool(r["continuation_turn_id"]) and r["continuation_turn_id"] != job["continuation_turn_id"]
                 for r in rows
             ),
