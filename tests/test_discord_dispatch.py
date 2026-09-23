@@ -203,8 +203,8 @@ async def test_connector_sends_strict_reply_and_suppresses_mentions(kernel):
 async def test_owner_turn_posts_to_target_then_answers_normally_in_origin(kernel):
     import httpx
 
-    from test_provider import install_client
-    from test_runtime import completion, settle
+    from support.provider import install_client
+    from support.runtime import completion, settle
 
     setup(kernel)
     kernel.engine.transport.send.side_effect = ["888888888888888888", "888888888888888889"]

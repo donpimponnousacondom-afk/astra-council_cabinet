@@ -6,9 +6,9 @@ import httpx
 import pytest
 
 from hortator.research_assistant import literal_tool_call_envelope
-from test_background_jobs import finish
-from test_provider import Fragments, install_client
-from test_research_assistant import call, setup, start
+from support.background_jobs import finish
+from support.provider import Fragments, install_client
+from support.research_assistant import call, setup, start
 
 
 @pytest.mark.parametrize(

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from conftest import configured, ingest
 from hortator.diagnostics import read_diagnostics
 from hortator.models import ControlError, Profile
-from test_provider import Fragments, call_args, install_client
+from support.provider import Fragments, call_args, install_client
 
 CHANNEL = "222222222222222222"
 CAPS = ("max_tokens", "max_completion_tokens", "max_output_tokens")

@@ -8,13 +8,13 @@ import pytest
 from hortator.models import ControlError
 from hortator.plugins import ToolContext
 from hortator.research_cycles import ResearchCycles
-from test_background_handoff import configure
-from test_background_jobs import finish
-from test_provider import install_client
-from test_research_assistant import ID, call, setup, start
-from test_research_fanout import worker
-from test_runtime import completion, settle
-from test_runtime_feedback import reply, tool
+from support.background_handoff import configure
+from support.background_jobs import finish
+from support.provider import install_client
+from support.research_assistant import ID, call, setup, start
+from support.research_fanout import worker
+from support.runtime import completion, settle
+from support.runtime_feedback import reply, tool
 
 
 def claim(kernel, context, job_id, turn_id):

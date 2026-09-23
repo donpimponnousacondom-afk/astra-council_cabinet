@@ -10,9 +10,9 @@ from PIL import Image
 from hortator.plugins import ToolContext
 from hortator.store import dumps
 from hortator.vision import validate_image
-from test_provider import install_client
-from test_runtime import completion
-from test_runtime_feedback import ready, reply, responses, tool
+from support.provider import install_client
+from support.runtime import completion
+from support.runtime_feedback import ready, reply, responses, tool
 
 
 def enable(kernel, names):

@@ -6,9 +6,9 @@ from conftest import configured
 from hortator.app import create_app
 from hortator.models import ControlError
 from hortator.provider import ProviderError
-from test_console import output, read_all_evidence
-from test_provider import call_args, install_client
-from test_runtime import completion
+from support.console import output, read_all_evidence
+from support.provider import call_args, install_client
+from support.runtime import completion
 
 
 @pytest.mark.parametrize("header_name", ["User-Agent", "user-agent", "USER-AGENT"])

@@ -5,27 +5,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from conftest import configured, ingest
 from hortator.background_jobs import JobResultError
 from hortator.models import ControlError
 from hortator.plugins import ToolContext
-from test_provider import install_client
-from test_runtime import completion, settle
-
-
-def setup(k, run):
-    bot = configured(k, interval_seconds=0, enabled_plugins=["memory"])
-    ingest(k)
-    k.jobs.register("memory", run=run, check=lambda _: None)
-    k.engine.transport = AsyncMock()
-    k.engine.transport.send.return_value = "777777777777777777"
-    return ToolContext(bot, "222222222222222222", "origin")
-
-
-async def finish(k):
-    tasks = list(k.jobs.tasks.values())
-    for task in tasks:
-        await task
+from support.provider import install_client
+from support.runtime import completion, settle
+from support.background_jobs import finish, setup
 
 
 async def test_job_survives_submitter_and_completion_runs_once_with_timer_off(kernel):
@@ -163,7 +148,7 @@ async def test_cancel_before_worker_enters_and_redact_assignment(kernel):
 
 
 async def test_human_priority_preserves_job_then_failed_followup_is_not_replayed(kernel):
-    from test_addressing import message
+    from support.addressing import message
 
     context = setup(kernel, AsyncMock(return_value={"report": "Ready"}))
     result = kernel.jobs.submit(context, "memory", "a", {"task": "Research"}, seconds=60)

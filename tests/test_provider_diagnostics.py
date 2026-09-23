@@ -9,10 +9,10 @@ from conftest import configured
 from hortator.app import create_app
 from hortator.diagnostics import read_diagnostics
 from hortator.provider import ProviderError
-from test_console import output, read_all_evidence
-from test_provider import Fragments, call_args, install_client
-from test_runtime import completion, settle
-from test_runtime_feedback import ready, reply, tool
+from support.console import output, read_all_evidence
+from support.provider import Fragments, call_args, install_client
+from support.runtime import completion, settle
+from support.runtime_feedback import ready, reply, tool
 
 
 @pytest.mark.parametrize("streamed", [True, False])

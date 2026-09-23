@@ -5,23 +5,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from conftest import configured
 from hortator.models import ControlError
 from hortator.plugins import ToolContext
 from hortator.store import dumps
 from hortator.working_set import bound_exchanges, prompt_exchanges
-from test_provider import install_client
-from test_runtime import settle
-from test_runtime_feedback import ready, reply, responses, tool, enable_documents
-
-
-def grant(kernel, *names, **changes):
-    bot = configured(kernel, enabled_plugins=list(names), **changes)
-    for name in names:
-        plugin = kernel.store.get("plugins", name)
-        plugin.pop("revision")
-        kernel.store.put("plugins", {**plugin, "enabled": True})
-    return ToolContext(bot, "222222222222222222", "turn-agentic")
+from support.provider import install_client
+from support.runtime import settle
+from support.runtime_feedback import ready, reply, responses, tool, enable_documents
+from support.agentic_runtime import grant
 
 
 @pytest.mark.parametrize(

@@ -7,9 +7,9 @@ import httpx
 import pytest
 
 from conftest import configured, ingest
-from test_provider import install_client, call_args
-from test_runtime import completion, settle
-from test_slash_commands import enable, interaction
+from support.provider import install_client, call_args
+from support.runtime import completion, settle
+from support.slash_commands import enable, interaction
 from hortator.models import Provider
 from hortator.provider import ProviderError
 

@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
-import re
 import time
 from dataclasses import replace
 
+from .answer_validation import literal_tool_call_envelope
 from .background_jobs import JobResultError
 from .models import ControlError
 from .prompt_templates import render
@@ -126,72 +126,6 @@ PARAMETERS = {
 }
 
 
-_TOOL_ENVELOPE = re.compile(
-    r"<\s*tool_call(?:\s[^<>]*?)?\s*>\s*<(?:function\b|parameter\b)"
-    r"|<\s*tool_call(?:\s[^<>]*?)?\s*>\s*\{[\s\S]*?\}\s*</\s*tool_call\s*>"
-    r"|<\s*function(?:\s*=\s*[\w.-]+|\s+name\s*=\s*['\"]?[\w.-]+['\"]?)\s*>"
-    r"\s*(?:<\s*parameter\b|[^<>]*</\s*function\s*>)",
-    re.IGNORECASE | re.DOTALL,
-)
-_BARE_TOOL_OPEN = re.compile(r"(?:^|\n)\s*<\s*tool_call(?:\s[^<>]*?)?\s*>\s*$", re.IGNORECASE)
-_INLINE_CODE = re.compile(r"(`+)(?!`)[^`\n]*?\1(?!`)")
-_QUOTED_MARKUP = re.compile(r"(['\"])(?=<\s*(?:tool_call|function)\b)[^\n]*?\1", re.IGNORECASE)
-_KNOWN_TOOL_NAMES = frozenset({"council_speak", "council_silence", "web_search"})
-
-
-def _json_tool_wrapper(text: str) -> bool:
-    """Only classify a whole JSON object with an explicit tool-call shape."""
-    try:
-        value = json.loads(text)
-    except ValueError, TypeError:
-        return False
-    if not isinstance(value, dict):
-        return False
-    calls = value.get("tool_calls")
-    if isinstance(calls, list) and any(isinstance(call, dict) for call in calls):
-        return True
-    function = value.get("function")
-    if (
-        isinstance(function, dict)
-        and isinstance(function.get("name"), str)
-        and function["name"] in _KNOWN_TOOL_NAMES
-    ):
-        return True
-    name = value.get("tool", value.get("name"))
-    return isinstance(name, str) and (
-        name == "council_speak"
-        or (name in _KNOWN_TOOL_NAMES and ("arguments" in value or "parameters" in value))
-    )
-
-
-def literal_tool_call_envelope(content: str) -> bool:
-    """Recognize unhandled tool envelopes in visible report text, never execute them.
-
-    Markdown examples and quoted source excerpts are evidence, not researcher
-    instructions. Keep the saved report untouched; filtering is validation only.
-    """
-    visible = []
-    fence_char = None
-    fence_width = 0
-    for line in content.splitlines():
-        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
-        if fence_char:
-            if marker and marker.group(1)[0] == fence_char and len(marker.group(1)) >= fence_width:
-                fence_char = None
-            visible.append("[quoted example]")
-            continue
-        if marker:
-            fence_char, fence_width = marker.group(1)[0], len(marker.group(1))
-            visible.append("[quoted example]")
-            continue
-        if re.match(r"^\s*>", line):
-            visible.append("[quoted example]")
-            continue
-        visible.append(_QUOTED_MARKUP.sub(" ", _INLINE_CODE.sub(" ", line)))
-    text = "\n".join(visible)
-    return bool(_TOOL_ENVELOPE.search(text) or _BARE_TOOL_OPEN.search(text) or _json_tool_wrapper(text))
-
-
 def validate_config(config, store):
     errors = errors_for(CONFIG_SCHEMA, config)
     if (
@@ -225,9 +159,43 @@ class ResearchAssistant:
         self.cycles = ResearchCycles(self)
         registry.register(
             PluginSpec(
-                ID, "Sub-agent researcher · experimental", DESCRIPTION, PARAMETERS, self.call, DEFAULTS
+                ID,
+                "Sub-agent researcher · experimental",
+                DESCRIPTION,
+                PARAMETERS,
+                self.call,
+                DEFAULTS,
+                context_spec=self.spec_for,
+                validate=self.validate,
+                references=self.references,
+                bind=lambda kernel: self.bind(kernel.jobs, kernel.pool),
+                keyless=True,
+                installed_description=True,
             )
         )
+
+    def validate(self, kind, entity, store):
+        if kind == "plugins" and entity["id"] == ID:
+            validate_config(entity["config"], store)
+            for bot in store.list("bots"):
+                validate_config(
+                    {**DEFAULTS, **entity["config"], **bot.get("plugin_config", {}).get(ID, {})}, store
+                )
+        elif kind == "bots" and ID in entity.get("plugin_config", {}):
+            base = store.get("plugins", ID) or {}
+            validate_config({**DEFAULTS, **base.get("config", {}), **entity["plugin_config"][ID]}, store)
+
+    def references(self, kind, entity_id):
+        if kind != "profiles":
+            return []
+        references = []
+        plugin = self.store.get("plugins", ID) or {}
+        if plugin.get("config", {}).get("profile_id") == entity_id:
+            references.append(f"plugins/{ID}")
+        for bot in self.store.list("bots"):
+            if bot.get("plugin_config", {}).get(ID, {}).get("profile_id") == entity_id:
+                references.append(f"bots/{bot['id']}/{ID}")
+        return references
 
     def bind(self, jobs, pool):
         self.jobs, self.pool = jobs, pool
@@ -429,11 +397,7 @@ class ResearchAssistant:
         )
         self.jobs.check(job)
         row = self.store.one("SELECT * FROM requests WHERE id=?", (result.request_id,))
-        event = self.store.one(
-            "SELECT data FROM events WHERE request_id=? AND kind='request.completed' ORDER BY seq DESC LIMIT 1",
-            (result.request_id,),
-        )
-        metrics = json.loads(event["data"]) if event else {}
+        metrics = result.metrics
         search = result.metadata.get("native_web_search", {})
         issue = None
         if result.tool_calls:
@@ -456,8 +420,8 @@ class ResearchAssistant:
             "model": profile["model"],
             "provider_id": profile["provider_id"],
             "metrics": {
-                "duration_ms": row["duration_ms"],
-                "ttft_ms": row["ttft_ms"],
+                "duration_ms": metrics.get("duration_ms"),
+                "ttft_ms": metrics.get("ttft_ms"),
                 "tps": metrics.get("tps"),
                 "tps_source": metrics.get("tps_source", "unavailable"),
                 "tokens": metrics.get("token_counts"),

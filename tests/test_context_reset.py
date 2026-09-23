@@ -148,9 +148,9 @@ async def test_reset_is_not_available_to_model_inspection_or_other_people(kernel
 
 
 async def test_slash_prompt_remains_fresh_after_all_channel_reset(kernel, owner):
-    from test_slash_commands import enable, interaction
-    from test_provider import install_client
-    from test_runtime import completion, settle
+    from support.slash_commands import enable, interaction
+    from support.provider import install_client
+    from support.runtime import completion, settle
 
     bot = enable(kernel)
     await reset(kernel, owner)
@@ -171,7 +171,7 @@ async def test_slash_prompt_remains_fresh_after_all_channel_reset(kernel, owner)
 
 
 async def test_pending_slash_ack_cannot_start_old_work_after_reset(kernel, owner):
-    from test_slash_commands import enable, interaction
+    from support.slash_commands import enable, interaction
     from unittest.mock import AsyncMock
 
     bot = enable(kernel)

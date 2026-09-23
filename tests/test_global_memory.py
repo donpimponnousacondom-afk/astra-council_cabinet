@@ -7,6 +7,7 @@ from hortator.global_memory import PARAMETERS, GlobalMemory, register
 from hortator.models import ControlError
 from hortator.plugins import ToolContext
 from hortator.tool_feedback import errors_for
+from support.global_memory import enabled, write
 
 
 @pytest.fixture
@@ -16,21 +17,6 @@ def memory(kernel):
         register(kernel.registry)
         kernel.service.seed_plugins()
     return kernel.registry.global_memory
-
-
-def enabled(kernel, *, bot_id="ada", limit=48_000):
-    plugin = kernel.store.get("plugins", "global_memory")
-    plugin.pop("revision")
-    kernel.store.put("plugins", {**plugin, "enabled": True})
-    return configured(
-        kernel, bot_id=bot_id, enabled_plugins=["global_memory"], global_memory_char_limit=limit
-    )
-
-
-async def write(kernel, context, key, value):
-    return await kernel.registry.call(
-        "global_memory", {"operation": "write", "key": key, "value": value}, context, f"write-{key}"
-    )
 
 
 async def test_disabled_on_registration_and_both_global_and_bot_grant_required(kernel, memory):

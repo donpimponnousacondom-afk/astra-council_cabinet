@@ -6,36 +6,14 @@ import httpx
 import pytest
 
 from conftest import configured, ingest
-from test_provider import install_client
-from test_runtime import completion, settle
-from test_slash_commands import interaction
+from support.provider import install_client
+from support.runtime import completion, settle
+from support.slash_commands import interaction
 from hortator.discord_panels import DiscordPanels, PARAMETERS, DESCRIPTION, panel_view
 from hortator.models import ControlError
 from hortator.plugins import ToolContext
 from hortator.tool_feedback import feedback
-
-CHANNEL = "222222222222222222"
-BUTTONS = [{"label": "Brief me", "prompt": "Give me a factual briefing", "style": "primary"}]
-
-
-def enable(k, **changes):
-    bot = configured(k, enabled_plugins=["discord_panel", "document_site"], **changes)
-    for name in bot["enabled_plugins"]:
-        plugin = k.store.get("plugins", name)
-        plugin.pop("revision")
-        plugin["enabled"] = True
-        k.store.put("plugins", plugin)
-    return bot
-
-
-async def prepare(k, bot, turn="panel-turn", **changes):
-    context = ToolContext(bot, CHANNEL, turn)
-    args = {"operation": "prepare", "title": "👑 Loki’s desk", "buttons": BUTTONS, **changes}
-    result = await k.registry.call("discord_panel", args, context, "panel-call")
-    assert result.get("prepared"), result
-    row = k.registry.panels.prepared(context)
-    assert row
-    return context, row
+from support.discord_panels import BUTTONS, CHANNEL, enable, prepare
 
 
 async def active(k, bot):
@@ -215,7 +193,7 @@ async def test_grant_revoked_during_ack_and_busy_slot_reject(kernel):
 
 
 async def test_slash_can_deliver_panel_with_files_and_full_answer_attachment(kernel):
-    from test_slash_commands import enable as enable_slash
+    from support.slash_commands import enable as enable_slash
 
     bot = enable_slash(kernel)
     current = kernel.store.get("bots", "ada")
@@ -428,7 +406,7 @@ async def test_panel_operator_cancellation_and_busy_slot_are_observed(kernel, ow
 
 
 async def test_hortator_panel_does_not_widen_director_scope(kernel):
-    from test_discord_formatting import prepare_bot
+    from support.typing import prepare_bot
 
     bot, channel_id = prepare_bot(kernel, "hortator")
     bot.pop("revision")

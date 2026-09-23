@@ -5,11 +5,10 @@ from urllib.parse import quote
 import httpx
 import pytest
 
-from conftest import configured
 from hortator.console import scope_for
 from hortator.models import ControlError
-from hortator.plugins import ToolContext
 from hortator.web_search import MAX_BYTES, SearchFailure, brave_results, duck_results, result_url
+from support.web_search import call, setup
 
 
 def html_results(urls):
@@ -22,27 +21,6 @@ def html_results(urls):
         )
         + "</div></body></html>"
     )
-
-
-def setup(kernel, monkeypatch, handler, *, key="", config=None):
-    bot = configured(kernel, enabled_plugins=["web_search"])
-    plugin = kernel.store.get("plugins", "web_search")
-    plugin.update(enabled=True, config={**plugin["config"], **(config or {})})
-    kernel.store.put("plugins", plugin)
-    if key:
-        kernel.vault.put("plugin/web_search/api_key", key)
-    original = httpx.AsyncClient
-
-    def client(**kwargs):
-        assert kwargs == {"trust_env": False, "follow_redirects": False}
-        return original(transport=httpx.MockTransport(handler), **kwargs)
-
-    monkeypatch.setattr(httpx, "AsyncClient", client)
-    return ToolContext(bot, "channel", "turn-search")
-
-
-async def call(kernel, context, **args):
-    return await kernel.registry.call("web_search", {"query": "test search", **args}, context, "search-call")
 
 
 def test_duck_html_extracts_visible_nested_text_unwraps_links_and_rejects_unsafe_urls():

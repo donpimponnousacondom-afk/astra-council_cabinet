@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 from conftest import configured, ingest
 from hortator.app import create_app
 from hortator.models import OWNER_ID
-from test_addressing import message, pair, receive
-from test_provider import install_client
-from test_runtime import completion, settle
+from support.addressing import message, pair, receive
+from support.provider import install_client
+from support.runtime import completion, settle
 
 
 def test_api_accepts_zero_timer_preserves_cooldown_and_rejects_negative(tmp_path):

@@ -10,8 +10,8 @@ from conftest import configured, ingest
 from hortator.models import ControlError
 from hortator.security import Actor
 from hortator.concurrency import cancel_and_wait
-from test_provider import install_client
-from test_runtime import completion, settle
+from support.provider import install_client
+from support.runtime import completion, settle
 
 
 def setup(k, *, enabled=True, interval=0):

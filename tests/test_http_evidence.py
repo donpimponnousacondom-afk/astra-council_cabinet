@@ -8,7 +8,7 @@ from conftest import configured
 from hortator.console import OperationalConsole
 from hortator.http_evidence import headers_evidence
 from hortator.plugins import ToolContext
-from test_web_search import setup, call as search_call
+from support.web_search import setup, call as search_call
 
 
 @pytest.mark.parametrize(

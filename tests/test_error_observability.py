@@ -12,10 +12,10 @@ from conftest import configured, ingest
 from hortator.discord_gateway import CouncilClient
 from hortator.provider import ProviderError
 from hortator.shell_runner import ShellRunner
-from test_console import output
-from test_provider import call_args, install_client
-from test_provider_streaming import packet, stored, wire
-from test_typing import connect_channel, prepare_bot
+from support.console import output
+from support.provider import call_args, install_client
+from support.provider_streaming import packet, stored, wire
+from support.typing import connect_channel, prepare_bot
 
 
 @pytest.mark.parametrize("mode", ["headers", "json", "sse"])

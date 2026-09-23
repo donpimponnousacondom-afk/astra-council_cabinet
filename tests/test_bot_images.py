@@ -9,9 +9,9 @@ from conftest import configured
 from hortator.discord_gateway import CouncilClient
 from hortator.models import Bot, ControlError, OWNER_ID
 from hortator.vision import ImageCache, image_count
-from test_provider import install_client
-from test_typing import prepare_bot
-from test_vision import attachment, cached
+from support.provider import install_client
+from support.typing import prepare_bot
+from support.vision import attachment, cached
 
 
 async def test_bot_image_defaults_and_api_save_leave_shared_profile_unchanged(kernel, owner):

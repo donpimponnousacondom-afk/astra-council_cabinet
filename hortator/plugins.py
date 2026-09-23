@@ -243,6 +243,12 @@ class PluginSpec:
     defaults: dict
     owner_only: bool = False
     model_tool: bool = True
+    context_spec: Callable[[ToolContext], "PluginSpec"] | None = None
+    validate: Callable[[str, dict, Any], None] | None = None
+    references: Callable[[str, str], list[str]] | None = None
+    bind: Callable[[Any], None] | None = None
+    keyless: bool = False
+    installed_description: bool = False
 
 
 class Registry:
@@ -455,6 +461,36 @@ class Registry:
         from .research_assistant import ResearchAssistant
 
         self.research = ResearchAssistant(self)
+        # Built-in catalog policy is declared at installation, not in Service.
+        for name in (
+            "memory",
+            "global_memory",
+            "slash_commands",
+            "discord_panel",
+            "reasoning_viewer",
+            "council_inspect",
+            "discord_send",
+            "document_site",
+            "workspace",
+            "shell",
+            "web_fetch",
+        ):
+            self.specs[name].keyless = True
+        for name in (
+            "shell",
+            "web_search",
+            "memory",
+            "global_memory",
+            "council_inspect",
+            "document_site",
+            "discord_panel",
+            "reasoning_viewer",
+        ):
+            self.specs[name].installed_description = True
+        self.specs["memory"].context_spec = self.memory_spec
+        self.specs["shell"].context_spec = self.shell_spec
+        self.specs["global_memory"].context_spec = self.global_memory.spec_for
+        self.specs["web_search"].validate = self.validate_search
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
             entry.load()(self)
 
@@ -487,41 +523,66 @@ class Registry:
 
     def spec_for(self, name, context):
         spec = self.specs[name]
-        if name == "research_assistant":
-            return self.research.spec_for(context)
-        if name == "shell":
-            from .shell_runner import limits
+        return spec.context_spec(context) if spec.context_spec else spec
 
-            config = limits(
-                {
-                    **self.store.get("plugins", name)["config"],
-                    **context.bot["plugin_config"].get(name, {}),
-                }
-            )
-            seconds = config["timeout_seconds"]
-            return replace(
-                spec,
-                description=spec.description + f" Current command time limit: {seconds} seconds.",
-                parameters={
-                    **spec.parameters,
-                    "properties": {
-                        **spec.parameters["properties"],
-                        "timeout_seconds": {
-                            **spec.parameters["properties"]["timeout_seconds"],
-                            "maximum": seconds,
-                        },
+    def validate_configuration(self, kind, entity):
+        for spec in self.specs.values():
+            if spec.validate:
+                spec.validate(kind, entity, self.store)
+
+    def references(self, kind, entity_id):
+        return [
+            reference
+            for spec in self.specs.values()
+            if spec.references
+            for reference in spec.references(kind, entity_id)
+        ]
+
+    def bind(self, kernel):
+        for spec in self.specs.values():
+            if spec.bind:
+                spec.bind(kernel)
+
+    def validate_search(self, kind, entity, store):
+        from .web_search import validate_config
+
+        if kind == "plugins" and entity["id"] == "web_search":
+            validate_config(entity["config"])
+        elif kind == "bots" and "web_search" in entity["plugin_config"]:
+            validate_config(entity["plugin_config"]["web_search"])
+
+    def shell_spec(self, context):
+        from .shell_runner import limits
+
+        spec = self.specs["shell"]
+        config = limits(
+            {
+                **self.store.get("plugins", "shell")["config"],
+                **context.bot["plugin_config"].get("shell", {}),
+            }
+        )
+        seconds = config["timeout_seconds"]
+        return replace(
+            spec,
+            description=spec.description + f" Current command time limit: {seconds} seconds.",
+            parameters={
+                **spec.parameters,
+                "properties": {
+                    **spec.parameters["properties"],
+                    "timeout_seconds": {
+                        **spec.parameters["properties"]["timeout_seconds"],
+                        "maximum": seconds,
                     },
                 },
-            )
-        if name == "global_memory":
-            return self.global_memory.spec_for(context)
-        if name == "memory":
-            return replace(
-                spec,
-                description=MEMORY_DESCRIPTION
-                + describe_budget(budget_for(self.store, context.bot, context.channel_id)),
-            )
-        return spec
+            },
+        )
+
+    def memory_spec(self, context):
+        return replace(
+            self.specs["memory"],
+            description=MEMORY_DESCRIPTION
+            + describe_budget(budget_for(self.store, context.bot, context.channel_id)),
+        )
 
     def schemas(self, context):
         return [

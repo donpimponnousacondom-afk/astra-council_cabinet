@@ -6,31 +6,13 @@ import pytest
 
 from hortator.background_jobs import JobResultError
 from hortator.plugins import ToolContext
-from test_background_jobs import finish
-from test_provider import install_client
-from test_research_assistant import ID, setup, start
-from test_research_fanout import set_limit, worker
-from test_runtime import completion, settle
-from test_runtime_feedback import reply, tool
-
-
-def configure(kernel, count):
-    setup(kernel)
-    bot = kernel.store.get("bots", "ada")
-    kernel.store.put(
-        "bots",
-        {
-            **bot,
-            "interval_seconds": 1,
-            "max_tool_rounds": 3,
-            "max_calls_per_round": count,
-            "tool_working_set_tokens": 6000,
-            "cooldown_seconds": 0,
-        },
-    )
-    set_limit(kernel, max(4, count))
-    kernel.engine.transport = AsyncMock()
-    kernel.engine.transport.send.return_value = "777777777777777777"
+from support.background_jobs import finish
+from support.provider import install_client
+from support.research_assistant import ID, start
+from support.research_fanout import worker
+from support.runtime import completion, settle
+from support.runtime_feedback import reply, tool
+from support.background_handoff import configure
 
 
 def calls(count, *, notify=True):

@@ -11,9 +11,9 @@ import pytest
 
 from hortator import slash_commands as slash
 from hortator.concurrency import cancel_and_wait
-from test_provider import install_client
-from test_runtime import completion, settle
-from test_slash_commands import enable, interaction
+from support.provider import install_client
+from support.runtime import completion, settle
+from support.slash_commands import enable, interaction
 
 
 def http_error(status, code=0):

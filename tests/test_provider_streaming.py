@@ -10,33 +10,8 @@ from conftest import configured
 from hortator.chat_response import ChatResponse, SSEReader
 from hortator.diagnostics import read_diagnostics
 from hortator.provider import ProviderError
-from test_provider import Fragments, call_args, install_client
-
-
-def packet(delta=None, finish=None):
-    return {"choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
-
-
-def wire(*packets, done=True):
-    text = "".join("data: " + json.dumps(p, ensure_ascii=False) + "\n\n" for p in packets)
-    return (text + ("data: [DONE]\n\n" if done else "")).encode()
-
-
-async def respond(kernel, data, **kwargs):
-    await install_client(
-        kernel,
-        lambda r: httpx.Response(
-            200,
-            headers={"content-type": "Text/Event-Stream; charset=utf-8"},
-            stream=Fragments(data),
-            **kwargs,
-        ),
-    )
-
-
-def stored(kernel):
-    row = kernel.store.one("SELECT * FROM requests ORDER BY started_at DESC LIMIT 1")
-    return row, read_diagnostics(kernel.store, row["id"])
+from support.provider import Fragments, call_args, install_client
+from support.provider_streaming import packet, respond, stored, wire
 
 
 @pytest.mark.parametrize("newline", ["\n", "\r", "\r\n"])

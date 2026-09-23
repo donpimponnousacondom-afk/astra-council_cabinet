@@ -6,7 +6,7 @@ import pytest
 
 from hortator.plugins import ToolContext
 from hortator.store import dumps
-from test_background_jobs import finish, setup
+from support.background_jobs import finish, setup
 
 
 def context_for(base, *, channel=None, origin=None):

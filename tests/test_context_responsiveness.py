@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from conftest import configured, ingest
-from test_provider import install_client
+from support.provider import install_client
 from hortator.models import ControlError
 from hortator.timekeeping import local_timestamp, present_times
 

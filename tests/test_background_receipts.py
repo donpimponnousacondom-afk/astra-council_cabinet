@@ -3,7 +3,7 @@ import pytest
 
 from hortator.store import dumps
 from hortator.working_set import bound_exchanges, prompt_exchanges
-from test_runtime_feedback import tool
+from support.runtime_feedback import tool
 
 
 def job_batch(count, *, report=False):

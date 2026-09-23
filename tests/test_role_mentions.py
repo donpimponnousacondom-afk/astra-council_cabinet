@@ -7,9 +7,9 @@ import pytest
 from conftest import configured
 from hortator.addressing import for_viewer, merge_live_roles
 from hortator.models import OWNER_ID
-from test_addressing import CHANNEL, message, pair
-from test_provider import install_client
-from test_runtime import completion, settle
+from support.addressing import CHANNEL, message, pair
+from support.provider import install_client
+from support.runtime import completion, settle
 
 
 ROLE = 666666666666666666

@@ -6,21 +6,7 @@ import pytest
 
 from conftest import configured
 from hortator.provider import ProviderError, strip_reasoning
-
-
-class Fragments(httpx.AsyncByteStream):
-    def __init__(self, data):
-        self.data = data
-
-    async def __aiter__(self):
-        for start in range(0, len(self.data), 7):
-            yield self.data[start : start + 7]
-            await asyncio.sleep(0)
-
-
-async def install_client(k, handler):
-    await k.pool.client.aclose()
-    k.pool.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+from support.provider import Fragments, call_args, install_client
 
 
 async def test_public_model_discovery_does_not_validate_auth_or_reset_completion_health(kernel):
@@ -41,17 +27,6 @@ async def test_public_model_discovery_does_not_validate_auth_or_reset_completion
     assert "does not verify credentials" in result["note"]
     assert kernel.store.health(provider["id"]) == before
     assert [(r.method, r.url.path) for r in requests] == [("GET", "/v1/models")]
-
-
-def call_args(k, bot):
-    return dict(
-        bot=bot,
-        profile=k.store.get("profiles", "balanced"),
-        messages=[{"role": "system", "content": "test"}],
-        tools=[],
-        turn_id="turn-test",
-        context={"estimated_tokens": 30},
-    )
 
 
 async def test_fragmented_stream_preserves_options_and_records_usage(kernel):
@@ -289,7 +264,7 @@ async def test_cost_threshold_checked_between_requests(kernel):
 
 
 async def test_http_413_logs_exact_serialized_body_and_documented_limit(kernel):
-    from test_console import output
+    from support.console import output
     from hortator.diagnostics import read_diagnostics
 
     bot = configured(kernel)
