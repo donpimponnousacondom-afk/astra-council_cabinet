@@ -1,5 +1,28 @@
 # Verification record
 
+## Slash acknowledgement contract aligned with merged tuning (2026-09-23)
+
+- **Source:** `hotfix/slash_ack_contract`, based on merged `a93538b`, with this
+  contract-only patch. The owner explicitly retained PR #44's 30 attempts and
+  90 ms retry gaps inside the original 2.9-second window. Running constants and
+  behavior are unchanged; the source edit corrects their stale comment.
+- **Focused backend:** 53 slash tests passed in 10.83 seconds. The formerly
+  failing exhaustion test now pins 30 deferrals and three receipt reads. A
+  separate assertion pins the real defaults before the fixture removes retry
+  sleeps. Existing stale-interaction, cancellation, receipt and no-work-on-
+  failure cases remain covered.
+- **Full backend:** `uv run pytest -q --durations=10` completed with **1,456
+  passed, one skipped, two dependency deprecation warnings in 304.15 seconds**.
+  The audit's known failing test is resolved; no warning suppression was added.
+- **Static checks:** Ruff lint and format checks passed across `hortator`,
+  `tests` and `scripts`; `git diff --check` passed. **Frontend:** not rerun;
+  no UI or frontend dependency change.
+- **Live checks:** no Discord/provider probes, configuration writes or runtime
+  restart. Current contract documents and standing instructions are aligned;
+  earlier verification evidence remains historical. `/audit/` is ignored and
+  its three supplied files retain their original hashes. CI and broader audit
+  changes remain separate work.
+
 ## Shared research-task dispatch budget (2026-09-23)
 
 - Renamed the clean, merged `1c12e9e` placeholder to

@@ -49,9 +49,12 @@ The handler defers the interaction before starting model work. Discord requires 
 
 The local acknowledgement cutoff is **2.9 seconds from interaction creation**,
 replacing the former one-shot 2.5-second wait. Earlier gateway/handler delay is
-included; retries do not get another three seconds. Up to **five deferral calls**
-are allowed for quick connection/timeout/server failures, with 25 ms between
-attempts while time remains. discord.py also manages its own HTTP retries and
+included; retries do not get another three seconds. Up to **thirty deferral calls**
+are allowed for quick connection/timeout/server failures, with 90 ms between
+attempts while time remains. Thirty is a ceiling, not a promise of thirty calls:
+HTTP latency and the remaining shared deadline can stop retries earlier. The
+owner confirmed this later merged tuning on 2026-09-23, superseding the earlier
+five-attempt/25-ms policy. discord.py also manages its own HTTP retries and
 rate limits inside this outer deadline; application attempt counts are not a
 count of every wire request. Authentication/permission/expired-interaction and
 local programming errors are not blindly retried.
@@ -93,7 +96,7 @@ These are separate clocks, not interchangeable retry delays:
 | Setting | What it limits |
 | --- | --- |
 | `ACK_SECONDS = 2.9` | The entire initial acknowledgement window, including time already elapsed since creation; Discord requires acknowledgement within three seconds. |
-| `ACK_RETRY_DELAY = 0.025` | 25 ms between quick transient acknowledgement failures, with at most five calls inside the same window. It does not cancel a pending call every 25 ms. |
+| `ACK_RETRY_DELAY = 0.090` | 90 ms between quick transient acknowledgement failures, with at most thirty calls inside the same window. It does not cancel a pending call every 90 ms. |
 | `ACK_RECEIPT_SECONDS = 5` | Each read-only lookup of a possibly accepted acknowledgement; separately limited to three lookups. |
 | `asyncio.timeout(30)` in `SlashEngine.deliver` | Final delivery of the already-generated answer/files through `edit_original_response`, including uploads, HTTP waiting and library retries. It is not an inference timeout. |
 | `MAX_SECONDS = 14 * 60` | The whole slash invocation, including acknowledgement, provider/tool work and answer delivery; reserves a minute before Discord's 15-minute token expiry. |

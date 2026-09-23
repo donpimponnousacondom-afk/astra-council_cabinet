@@ -1,5 +1,15 @@
 # Implementation and acceptance plan
 
+## Slash acknowledgement contract reconciliation (2026-09-23)
+
+The owner confirmed that PR #44 was his deliberate manual tuning and is authoritative: at most 30
+transient acknowledgement attempts with 90 ms gaps, all within the existing
+2.9-second window measured from interaction creation. Preserve running behavior;
+align the test, comment and current documentation. The earlier five-attempt/25-ms
+policy remains historical, not the current contract. Receipt recovery, provider
+retries and ordinary message handling remain unchanged. CI and the remaining
+audit recommendations are separate proposed work.
+
 ## Conversational bot coordinates successive research batches (2026-09-23)
 
 The owner clarified the desired next behavior: the conversational bot launches
@@ -266,6 +276,9 @@ The owner clarified clean slate means moving one bot's conversation pointer to *
 The owner needs text-only and vision-enabled bots sharing one provider/model profile, without inferring upstream vision support. Add `bots.allow_images` (default true) and the modern **Receive image inputs** capability. Off skips automatic downloads for that bot and excludes even shared cached pixels from its requests; attachment metadata and written observations remain. The provider boundary rejects stray image parts. Profile image-count/byte budgets stay independent and positive; different positive budgets can use cloned profiles with the same upstream model. No existing bot configuration, context checkpoint or shared image cache is changed by installing this feature. Legacy UI remains frozen.
 
 ## Slash acknowledgement recovery and readable console time (2026-09-15)
+
+The retry counts/gaps recorded below describe the earlier policy, superseded by
+the owner's 2026-09-23 contract confirmation at the top of this document.
 
 Follow-up tuning: the owner requested stronger boldness and contrast between
 timestamp/body rather than white timestamps. Use bold soft blue for time, bold

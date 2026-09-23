@@ -590,11 +590,11 @@ available; a close code alone still cannot establish a network/provider cause.
 Client supervisor failures show the failed login/identity/gateway phase and
 reconnect delay. The supervisor retains its existing 5–120 second backoff.
 
-Slash acknowledgement uses a shared **2.9-second initial window**, up to five
+Slash acknowledgement uses a shared **2.9-second initial window**, up to thirty
 quick transient deferral attempts, and up to three read-only receipt lookups if
 Discord acceptance is uncertain. It never gives each attempt a fresh window or
 extends Discord's three-second initial-response rule. Deferral retry gaps are
-25 ms after a failure, not per-request timeouts. Recovery continues model
+90 ms after a failure, not per-request timeouts. Recovery continues model
 work only after confirming the expected existing deferred response. The `d`
 scope and `f` expanded events expose attempts, channel/interaction IDs, HTTP
 status, Discord code and exception causes without tokens. Final answer delivery

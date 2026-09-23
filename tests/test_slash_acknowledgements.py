@@ -32,8 +32,14 @@ def receipt(item, *, loading=True, private=True):
 
 @pytest.fixture(autouse=True)
 def quick_retries(monkeypatch):
+    configured = (slash.ACK_ATTEMPTS, slash.ACK_RETRY_DELAY, slash.ACK_SECONDS)
     monkeypatch.setattr(slash, "ACK_RETRY_DELAY", 0)
     monkeypatch.setattr(slash, "ACK_RECEIPT_DELAY", 0)
+    return configured
+
+
+def test_acknowledgement_retry_contract(quick_retries):
+    assert quick_retries == (30, 0.090, 2.9)
 
 
 def events(kernel, kind):
@@ -159,12 +165,12 @@ async def test_nontransient_refusal_never_retries_or_runs_provider(kernel, error
     assert "no model or tool work was started" in data["reason"]
 
 
-async def test_five_attempts_and_three_missing_receipts_stop_without_work(kernel):
+async def test_thirty_attempts_and_three_missing_receipts_stop_without_work(kernel):
     item = interaction(enable(kernel))
     item.response.defer.side_effect = OSError("unreachable")
     item.original_response = AsyncMock(side_effect=http_error(404, 10015))
     await kernel.connector.slash.receive("ada", item)
-    assert item.response.defer.await_count == 5
+    assert item.response.defer.await_count == 30
     assert item.original_response.await_count == 3
     assert len(events(kernel, "discord.slash_ack_failed")) == 1
     assert not kernel.store.rows("SELECT * FROM requests")
