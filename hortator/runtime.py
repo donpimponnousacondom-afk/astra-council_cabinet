@@ -257,17 +257,18 @@ class Engine:
             if not self.available(bot):
                 continue
             completed_job = self.jobs.pending(bot) if self.jobs and not attention else None
-            # Keep observing input. Only human attention or a settled background
-            # job starts a timer-off scheduler turn.
+            scheduled_wake = self.registry.pending_wake(bot) if not attention and not completed_job else None
+            # Human attention, settled jobs and due plugin alarms can wake a
+            # timer-off bot. Ordinary chatter still cannot.
             # Do not change pick_channel:
             # owner-requested compaction also uses it to select a context.
-            if bot["interval_seconds"] == 0 and not attention and not completed_job:
+            if bot["interval_seconds"] == 0 and not attention and not completed_job and not scheduled_wake:
                 continue
             state = self.store.runtime(bot["id"])
             if (
                 state["gateway_status"] != "online"
                 or state["retry_until"] > now
-                or (state["next_at"] > now and not attention and not completed_job)
+                or (state["next_at"] > now and not attention and not completed_job and not scheduled_wake)
             ):
                 continue
             profile, provider = self.configuration(bot)
@@ -277,7 +278,11 @@ class Engine:
             channel_id = (
                 attention[0]["channel_id"]
                 if attention
-                else (completed_job["channel_id"] if completed_job else self.pick_channel(bot))
+                else completed_job["channel_id"]
+                if completed_job
+                else scheduled_wake["channel_id"]
+                if scheduled_wake
+                else self.pick_channel(bot)
             )
             if not channel_id:
                 continue
@@ -294,7 +299,13 @@ class Engine:
                     level="warning",
                 )
                 continue
-            self.launch(bot, channel_id, human_directed=bool(attention), completed_job=completed_job)
+            self.launch(
+                bot,
+                channel_id,
+                human_directed=bool(attention),
+                completed_job=completed_job,
+                scheduled_wake=scheduled_wake,
+            )
 
     async def loop(self):
         while not self.closed:
@@ -351,6 +362,7 @@ class Engine:
         human_directed=False,
         single_shot=False,
         completed_job=None,
+        scheduled_wake=None,
     ):
         if bot["id"] in self.tasks:
             raise ControlError("Bot already has an active turn", 409)
@@ -359,9 +371,16 @@ class Engine:
         if not self.channel_allowed(bot, channel_id):
             raise ControlError("Channel is outside this bot's configured scope")
         turn_id = uid("turn_")
-        if completed_job:
+        if completed_job or scheduled_wake:
             self.store.execute("BEGIN IMMEDIATE")
         try:
+            if scheduled_wake:
+                if (
+                    scheduled_wake["candidate"]["bot_id"] != bot["id"]
+                    or scheduled_wake["channel_id"] != channel_id
+                ):
+                    raise ControlError("Scheduled wake scope mismatch")
+                bot = {**bot, "scheduled_wake": self.registry.claim_wake(scheduled_wake, turn_id)}
             if completed_job:
                 self.jobs.check(completed_job)
                 if not self.jobs.claim(completed_job, turn_id):
@@ -392,18 +411,31 @@ class Engine:
                     if activation
                     else "background_completion"
                     if completed_job
+                    else "scheduled_alarm"
+                    if scheduled_wake
                     else "owner_message"
                     if bot["role"] == "hortator"
                     else "timer",
                     bot["revision"],
                 ),
             )
-            if completed_job:
+            if completed_job or scheduled_wake:
                 self.store.execute("COMMIT")
         except BaseException:
-            if completed_job:
+            if completed_job or scheduled_wake:
                 self.store.execute("ROLLBACK")
             raise
+        if scheduled_wake:
+            notice = bot["scheduled_wake"]
+            self.store.emit(
+                "scheduled_alarm.claimed",
+                {
+                    **{key: value for key, value in notice.items() if key != "message"},
+                    "channel_id": channel_id,
+                },
+                bot_id=bot["id"],
+                turn_id=turn_id,
+            )
         if completed_job:
             notice = bot["background_completion"]
             self.jobs.emit(
@@ -434,6 +466,11 @@ class Engine:
                 **(
                     {"trigger": "background_completion", "job_id": completed_job["id"]}
                     if completed_job
+                    else {}
+                ),
+                **(
+                    {"trigger": "scheduled_alarm", "plugin": scheduled_wake["plugin"]}
+                    if scheduled_wake
                     else {}
                 ),
             },
@@ -1167,7 +1204,7 @@ class Engine:
             # bot may be responding to a human while this draft waits its cadence.
             wait = (
                 0
-                if priority or self.is_single_shot(bot)
+                if priority or self.is_single_shot(bot) or bot.get("scheduled_wake")
                 else self.store.runtime(bot["id"])["last_sent"] + bot["cooldown_seconds"] - time.time()
             )
             if wait > 0:

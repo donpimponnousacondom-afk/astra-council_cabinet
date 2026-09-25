@@ -197,6 +197,10 @@ class ContextBuilder:
             values["task_budget"] = bot["active_task_budget"]
         if bot.get("activation"):
             values["activation"] = bot["activation"]
+        if bot.get("scheduled_wake"):
+            values["scheduled_alarm"] = {
+                key: value for key, value in bot["scheduled_wake"].items() if key != "message"
+            }
         if bot.get("background_completion"):
             values["background_completion"] = bot["background_completion"]
         if bot.get("background_handoff"):
@@ -219,6 +223,10 @@ class ContextBuilder:
         layers = [
             item for key in ("runtime_facts", "dynamic_prompt") if (item := self.prompt(bot, key, values))
         ]
+        if bot.get("scheduled_wake"):
+            item = self.prompt(bot, "scheduled_alarm", {"alarm": dumps(bot["scheduled_wake"])})
+            if item:
+                layers.append(item)
         if bot.get("background_completion"):
             item = self.prompt(
                 bot, "background_completion", {"background_job": dumps(bot["background_completion"])}

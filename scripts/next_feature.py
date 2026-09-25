@@ -33,7 +33,9 @@ def say(message):
     print(f"[hortator-next-feature] {message}", flush=True)
 
 
-def run(args, root=ROOT, *, visible=False, timeout=60):
+def run(args, root=None, *, visible=False, timeout=60):
+    # Process inspection and Screen control need no repository cwd. Repository
+    # operations always pass their verified root explicitly.
     environment = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GH_PROMPT_DISABLED": "1"}
     environment.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
     child = subprocess.Popen(

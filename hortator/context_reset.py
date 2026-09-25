@@ -33,6 +33,7 @@ async def reset(service, actor, bot_id, data):
                 args.append(channel_id)
             store.execute("BEGIN IMMEDIATE")
             try:
+                service.registry.reset_wakes(bot_id, channel_id)
                 if not channel_id:
                     store.execute("DELETE FROM context_resets WHERE bot_id=?", (bot_id,))
                 store.execute(

@@ -4,6 +4,115 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Remaining hosted Screen working-directory failure (2026-09-25)
+
+- **Source:** follow-up on `feat/secretary` at `a90dc3e`, dirty during the
+  focused run. The operator explicitly authorized pushing the correction and
+  squash-merging PR #67 after successful checks for this task.
+- **Hosted evidence:** runs `36167822411` and `36167818587` each reported
+  **1 failed, 1,485 passed, 19 skipped**. The first portability patch got the
+  disposable Screen session started, but its subsequent control command still
+  inherited `run()`'s default `/home/codexy/codex/astra-council_cabinet` working
+  directory. That directory exists locally and is absent on hosted runners.
+  This was missed by the earlier local validation; it was not a Secretary
+  scheduling or reminder-editing failure.
+- **Correction:** commands without repository work inherit the caller's working
+  directory. Git/build operations still supply the verified root explicitly;
+  the deployment's canonical root, launcher and shared terminal are unchanged.
+- **Regression evidence:** the new inherited/explicit-directory test failed
+  before the fix, reproducing the hidden path dependency locally. After the
+  fix, Ruff lint/format passed and `uv run pytest -q tests/test_next_feature.py`
+  passed **19 tests in 2.13 seconds**, including real isolated Screen shutdown
+  and preservation of unrelated foreground commands.
+- **Scope:** focused local integration, no live Discord/provider or reminder
+  changes. No check was skipped to repair CI. Remote validation and merge must
+  be established from PR #67's checks on the pushed revision; this entry does
+  not claim the earlier failed runs passed. Local logs are ignored files under
+  `/tmp/secretary-ci-{latest-pr,latest-push,cwd-red}.log`.
+
+## Secretary owner editing and portable CI terminal fixture (2026-09-25)
+
+- **Source:** follow-up on unmerged `feat/secretary` at `1ca6e24`, with the
+  changes uncommitted during validation. No workflow gate was removed or relaxed.
+- **Hosted failure:** PR #67 runs `36164120038` (pull request) and `36164090595`
+  (push) both failed `test_real_screen_stop_preserves_shell_and_ignores_unrelated_commands`:
+  **1 failed, 1,485 passed, 19 skipped** each. The disposable Screen fixture used
+  `/home/codexy/.screenrc`, absent on GitHub's runner. It now creates a test-only
+  configuration and a short, private socket directory; the real shared Screen
+  configuration and runtime are untouched by the test. The first local attempt
+  used a pytest-nested socket path that exceeded the Unix socket limit; the short
+  temporary directory corrected that before the passing runs below. A separate
+  isolated reproduction confirmed that a missing Screen config returns exit 0
+  but creates no session, matching the hosted failure.
+- **Focused backend:** `uv run pytest -q tests/test_secretary.py
+  tests/test_next_feature.py`: **48 passed**, two existing TestClient/AnyIO
+  deprecation warnings, 9.26 seconds. Owner update/cancel remain authenticated,
+  revision-checked and usable with the plugin disabled. Editing preserves the
+  due time/state, including cancelled reminders.
+- **Full gate:** `./scripts/check.sh`, exit 0 in **470.73 seconds**; source
+  `1ca6e24` dirty at start and finish. Full backend collection: **1,504 passed,
+  one opt-in public-download skip, zero failures** in 341.43 seconds. Ruff
+  lint/format, four verification-runner self-tests, frontend formatting and
+  TypeScript/Vite build passed. Full Playwright: **62 passed in 2.0 minutes**.
+- **Focused dashboard:** TypeScript/Vite build passed; Secretary Playwright
+  suite **2 passed in 5.5 seconds**. Coverage includes message/repeat edits,
+  one-off conversion, snooze/cancel, empty-text rejection, unsaved navigation,
+  pending-save protection and retaining a draft after HTTP 409. The initial
+  test used Escape after disabling its focused button, which leaves focus
+  outside the dialog; the final assertion uses the explicit Close control.
+- **Browser review:** agent-browser loaded the isolated fixture dashboard,
+  inspected the populated reminder editor with a browser-only fixture and found
+  both fields, no error overlay and no browser errors. The editor and populated
+  owner-ledger screenshots were reviewed. Responses in browser tests
+  are mocked; backend API tests exercise real fixture transactions. No live
+  Discord/provider request or reminder mutation is part of this verification.
+- **Evidence:** ignored/local `/tmp/secretary-owner-{focused,browser,build,check}.log`,
+  `test-results/verification/`, and `web/test-results/secretary-*/`.
+  Remote checks must rerun after the owner pushes the follow-up; the earlier red
+  checks are not presented as green.
+
+## Experimental Secretary alarms and snooze (2026-09-25)
+
+- **Source:** `feat/secretary`, prepared by renaming the clean `feat/next_feature`
+  placeholder at `afc91474c0ed878698e726570286d80c15a1e8cc`. The integrated
+  `./scripts/check.sh` run began/ended on that revision plus the uncommitted
+  implementation (dirty/dirty); it is not a clean-commit validation claim.
+- **Full check:** exit 0, 486.00 seconds. Full backend collection: **1,503 passed,
+  one skipped, zero failures**, 349.40 seconds. The skip remains the opt-in public
+  package download. Two upstream TestClient/AnyIO deprecations remain visible.
+  Ruff check/format, four verification-runner tests, locked dependency setup,
+  frontend formatting and TypeScript/Vite build all passed. Full Playwright:
+  **61 passed in 2.1 minutes** against isolated port-18000 fixture data.
+- **Final focused follow-ups:** bounded model-ledger pagination and explicit
+  usage examples were added during the broad run; the final Secretary suite
+  passed **30 tests in 7.18 seconds**. This is separate focused evidence, not
+  30 additional tests in the recorded full collection. The final panel layout
+  was rebuilt and its browser test rerun: **1 passed in 4.3 seconds**. Preliminary
+  fixture assumptions and TSX prop mismatches were corrected before these passes.
+- **Coverage:** idle waiting without workers/typing, fresh timer-off turns,
+  cadence/cooldown bypass, ordinary admission gates, human priority, recurring
+  downtime coalescing, snooze/update/cancel, ownership, quotas, date validation,
+  idempotent creation, usage/paging, atomic stale-claim rejection, failed/silent/
+  cancelled occurrences, restart persistence, inactive retention, scoped clean
+  slate, API session/CSRF/revision protection and dashboard controls.
+- **Browser review:** agent-browser inspected the isolated test dashboard,
+  Secretary settings and empty ledger; no browser errors or error overlay.
+  Playwright's final populated-ledger screenshot was inspected after simplifying
+  the operator introduction and fixing the reminder row layout. Evidence is
+  ignored/local: `test-results/verification/result.json`, its JUnit file,
+  `web/test-results/secretary-*/secretary-ledger.png`, and
+  `/tmp/hortator-secretary-{check,focused,browser,final-build}.log`.
+- **Live preparation:** no running turns, researchers or pending completion
+  wakes at inspection. The existing runtime captured a consistent pre-upgrade
+  snapshot `20260925T164441738809Z-84968ff34564` under the external snapshots
+  directory, identifying clean pre-upgrade source `afc9147`, and resumed with
+  `paused=false`. No live bot grants, memories or provider settings were edited.
+- **Limits:** automated provider/Discord responses are fixtures; no paid model
+  call or live reminder message was sent. Secretary ships disabled. Natural-
+  language scheduling and live Discord delivery remain operator acceptance.
+  Deployment follows the existing commit/build/shared-Screen refresh procedure;
+  its external `logs/next-feature.json` receipt records the deployed identities.
+
 ## Audit hardening and preservation review (2026-09-23)
 
 - **Source:** `feat/audit_hardening`; slash contract fix `3a010f6` and integrated
