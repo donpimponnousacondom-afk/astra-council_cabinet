@@ -4,6 +4,32 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Remaining hosted Screen working-directory failure (2026-09-25)
+
+- **Source:** follow-up on `feat/secretary` at `a90dc3e`, dirty during the
+  focused run. The operator explicitly authorized pushing the correction and
+  squash-merging PR #67 after successful checks for this task.
+- **Hosted evidence:** runs `36167822411` and `36167818587` each reported
+  **1 failed, 1,485 passed, 19 skipped**. The first portability patch got the
+  disposable Screen session started, but its subsequent control command still
+  inherited `run()`'s default `/home/codexy/codex/astra-council_cabinet` working
+  directory. That directory exists locally and is absent on hosted runners.
+  This was missed by the earlier local validation; it was not a Secretary
+  scheduling or reminder-editing failure.
+- **Correction:** commands without repository work inherit the caller's working
+  directory. Git/build operations still supply the verified root explicitly;
+  the deployment's canonical root, launcher and shared terminal are unchanged.
+- **Regression evidence:** the new inherited/explicit-directory test failed
+  before the fix, reproducing the hidden path dependency locally. After the
+  fix, Ruff lint/format passed and `uv run pytest -q tests/test_next_feature.py`
+  passed **19 tests in 2.13 seconds**, including real isolated Screen shutdown
+  and preservation of unrelated foreground commands.
+- **Scope:** focused local integration, no live Discord/provider or reminder
+  changes. No check was skipped to repair CI. Remote validation and merge must
+  be established from PR #67's checks on the pushed revision; this entry does
+  not claim the earlier failed runs passed. Local logs are ignored files under
+  `/tmp/secretary-ci-{latest-pr,latest-push,cwd-red}.log`.
+
 ## Secretary owner editing and portable CI terminal fixture (2026-09-25)
 
 - **Source:** follow-up on unmerged `feat/secretary` at `1ca6e24`, with the

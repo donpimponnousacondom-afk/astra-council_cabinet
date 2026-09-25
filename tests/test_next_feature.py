@@ -270,6 +270,17 @@ def test_subprocess_timeout_kills_spawned_group(tmp_path):
         pytest.fail("Timed-out build left a running child")
 
 
+def test_non_repository_commands_inherit_caller_directory(tmp_path, monkeypatch):
+    # Screen/ss commands must also work on CI without the deployment checkout.
+    # Git and build calls supply their verified repository explicitly.
+    monkeypatch.chdir(tmp_path)
+    command = [sys.executable, "-c", "import os; print(os.getcwd())"]
+    assert workflow.run(command) == str(tmp_path)
+    explicit = tmp_path / "explicit-checkout"
+    explicit.mkdir()
+    assert workflow.run(command, explicit) == str(explicit)
+
+
 @pytest.fixture
 def isolated_screen(tmp_path, monkeypatch):
     # A disposable test terminal must not depend on the deployment account's
