@@ -19,6 +19,7 @@ import { PricingEditor } from "./Pricing";
 import { GlobalMemoryPanel } from "./GlobalMemory";
 import { SlashCommandSetup } from "./SlashCommands";
 import { BotControl } from "./BotControl";
+import { SecretaryPanel, SecretarySettings } from "./Secretary";
 import {
   BackgroundJobsPanel,
   ResearchBotSettings,
@@ -1024,6 +1025,14 @@ export function Editor({
                         key={`jobs-${entity.id}`}
                         botId={entity.id}
                       />
+                      {entity.enabled_plugins?.includes("secretary") && (
+                        <SecretaryPanel
+                          key={`secretary-${entity.id}`}
+                          botId={entity.id}
+                          rooms={dashboard.rooms}
+                          disabled={dirty}
+                        />
+                      )}
                     </>
                   ) : (
                     <Notice>Save the bot before using live controls.</Notice>
@@ -1531,7 +1540,9 @@ export function Editor({
                 id="capabilities"
                 title="Plugin configuration & tools"
               >
-                <p className="muted">{draft.description}</p>
+                {draft.id !== "secretary" && (
+                  <p className="muted">{draft.description}</p>
+                )}
                 <Switch
                   label="Enable plugin globally"
                   checked={!!draft.enabled}
@@ -1615,6 +1626,15 @@ export function Editor({
                       onChange={(value) => set("config", value)}
                     />
                     <BackgroundJobsPanel plugin="research_assistant" />
+                  </>
+                )}
+                {draft.id === "secretary" && (
+                  <>
+                    <SecretarySettings
+                      config={draft.config || {}}
+                      onChange={(value) => set("config", value)}
+                    />
+                    <SecretaryPanel rooms={dashboard.rooms} />
                   </>
                 )}
                 {draft.id === "document_site" && (

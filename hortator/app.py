@@ -392,6 +392,33 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
         actor.require_owner()
         return k.jobs.inventory(bot_id=bot_id, plugin=plugin)
 
+    @app.get("/api/secretary")
+    async def reminders(bot_id: str | None = None, actor=Depends(authenticated), k=Depends(kernel)):
+        actor.require_owner()
+        return k.registry.secretary.inventory(bot_id=bot_id)
+
+    @app.post("/api/secretary/{reminder_id}")
+    async def change_reminder(reminder_id: str, body: dict, actor=Depends(authenticated), k=Depends(kernel)):
+        actor.require_owner()
+        async with k.service.lock:
+            secretary = k.registry.secretary
+            row = secretary.get(reminder_id)
+            if type(body.get("revision")) is not int or body["revision"] != row["revision"]:
+                raise ControlError("Reminder changed; refresh before editing", 409)
+            if body.get("operation") not in ("cancel", "snooze", "update") or "reminder_id" in body:
+                raise ControlError("Choose cancel, snooze or update")
+            bot = k.service.entity("bots", row["bot_id"])
+            return secretary.mutate(
+                {
+                    **{key: value for key, value in body.items() if key != "revision"},
+                    "reminder_id": reminder_id,
+                },
+                bot,
+                row["channel_id"],
+                "",
+                owner=True,
+            )
+
     @app.get("/api/background-jobs/{job_id}")
     async def background_job(
         job_id: str,

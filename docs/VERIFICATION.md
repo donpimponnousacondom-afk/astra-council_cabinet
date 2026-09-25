@@ -4,6 +4,48 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Experimental Secretary alarms and snooze (2026-09-25)
+
+- **Source:** `feat/secretary`, prepared by renaming the clean `feat/next_feature`
+  placeholder at `afc91474c0ed878698e726570286d80c15a1e8cc`. The integrated
+  `./scripts/check.sh` run began/ended on that revision plus the uncommitted
+  implementation (dirty/dirty); it is not a clean-commit validation claim.
+- **Full check:** exit 0, 486.00 seconds. Full backend collection: **1,503 passed,
+  one skipped, zero failures**, 349.40 seconds. The skip remains the opt-in public
+  package download. Two upstream TestClient/AnyIO deprecations remain visible.
+  Ruff check/format, four verification-runner tests, locked dependency setup,
+  frontend formatting and TypeScript/Vite build all passed. Full Playwright:
+  **61 passed in 2.1 minutes** against isolated port-18000 fixture data.
+- **Final focused follow-ups:** bounded model-ledger pagination and explicit
+  usage examples were added during the broad run; the final Secretary suite
+  passed **30 tests in 7.18 seconds**. This is separate focused evidence, not
+  30 additional tests in the recorded full collection. The final panel layout
+  was rebuilt and its browser test rerun: **1 passed in 4.3 seconds**. Preliminary
+  fixture assumptions and TSX prop mismatches were corrected before these passes.
+- **Coverage:** idle waiting without workers/typing, fresh timer-off turns,
+  cadence/cooldown bypass, ordinary admission gates, human priority, recurring
+  downtime coalescing, snooze/update/cancel, ownership, quotas, date validation,
+  idempotent creation, usage/paging, atomic stale-claim rejection, failed/silent/
+  cancelled occurrences, restart persistence, inactive retention, scoped clean
+  slate, API session/CSRF/revision protection and dashboard controls.
+- **Browser review:** agent-browser inspected the isolated test dashboard,
+  Secretary settings and empty ledger; no browser errors or error overlay.
+  Playwright's final populated-ledger screenshot was inspected after simplifying
+  the operator introduction and fixing the reminder row layout. Evidence is
+  ignored/local: `test-results/verification/result.json`, its JUnit file,
+  `web/test-results/secretary-*/secretary-ledger.png`, and
+  `/tmp/hortator-secretary-{check,focused,browser,final-build}.log`.
+- **Live preparation:** no running turns, researchers or pending completion
+  wakes at inspection. The existing runtime captured a consistent pre-upgrade
+  snapshot `20260925T164441738809Z-84968ff34564` under the external snapshots
+  directory, identifying clean pre-upgrade source `afc9147`, and resumed with
+  `paused=false`. No live bot grants, memories or provider settings were edited.
+- **Limits:** automated provider/Discord responses are fixtures; no paid model
+  call or live reminder message was sent. Secretary ships disabled. Natural-
+  language scheduling and live Discord delivery remain operator acceptance.
+  Deployment follows the existing commit/build/shared-Screen refresh procedure;
+  its external `logs/next-feature.json` receipt records the deployed identities.
+
 ## Audit hardening and preservation review (2026-09-23)
 
 - **Source:** `feat/audit_hardening`; slash contract fix `3a010f6` and integrated

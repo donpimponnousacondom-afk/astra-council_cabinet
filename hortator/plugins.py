@@ -9,7 +9,7 @@ import socket
 import time
 from dataclasses import dataclass, replace
 from html.parser import HTMLParser
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Protocol
 from urllib.parse import urljoin, urlparse
 
 import aiohttp
@@ -233,6 +233,14 @@ class ToolContext:
     owner_verified: bool = False
 
 
+class WakeSource(Protocol):
+    """Synchronous owner-thread hooks; claim runs inside the turn transaction."""
+
+    def pending(self, bot: dict) -> dict | None: ...
+    def claim(self, candidate: dict, turn_id: str) -> dict: ...
+    def reset(self, bot_id: str, channel_id: str | None = None) -> None: ...
+
+
 @dataclass
 class PluginSpec:
     id: str
@@ -249,6 +257,7 @@ class PluginSpec:
     bind: Callable[[Any], None] | None = None
     keyless: bool = False
     installed_description: bool = False
+    wake_source: WakeSource | None = None
 
 
 class Registry:
@@ -461,6 +470,9 @@ class Registry:
         from .research_assistant import ResearchAssistant
 
         self.research = ResearchAssistant(self)
+        from .secretary import Secretary
+
+        self.secretary = Secretary(self)
         # Built-in catalog policy is declared at installation, not in Service.
         for name in (
             "memory",
@@ -542,6 +554,27 @@ class Registry:
         for spec in self.specs.values():
             if spec.bind:
                 spec.bind(kernel)
+
+    def pending_wake(self, bot):
+        for spec in self.specs.values():
+            config = self.store.get("plugins", spec.id) if spec.wake_source else None
+            if (
+                spec.wake_source
+                and spec.id in bot["enabled_plugins"]
+                and config
+                and config["enabled"]
+                and (candidate := spec.wake_source.pending(bot))
+            ):
+                return {"plugin": spec.id, "candidate": candidate, "channel_id": candidate["channel_id"]}
+        return None
+
+    def claim_wake(self, wake, turn_id):
+        return self.specs[wake["plugin"]].wake_source.claim(wake["candidate"], turn_id)
+
+    def reset_wakes(self, bot_id, channel_id=None):
+        for spec in self.specs.values():
+            if spec.wake_source:
+                spec.wake_source.reset(bot_id, channel_id)
 
     def validate_search(self, kind, entity, store):
         from .web_search import validate_config

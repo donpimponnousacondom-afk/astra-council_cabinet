@@ -456,6 +456,8 @@ class Service:
             if references:
                 raise ControlError("Still referenced by: " + ", ".join(references), 409)
             affected = self.affected(kind, entity_id)
+            if kind == "bots":
+                self.registry.reset_wakes(entity_id)
             self.store.execute(
                 "INSERT OR REPLACE INTO entity_tombstones VALUES(?,?,?)", (kind, entity_id, time.time())
             )

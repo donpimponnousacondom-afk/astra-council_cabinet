@@ -2,6 +2,16 @@
 
 Plugins are ordinary installed Python packages with an `hortator.plugins` entry point. The runtime loads these trusted local packages at startup; it never installs or executes code named by a model or Discord message.
 
+The optional [Secretary](SECRETARY.md) uses `PluginSpec.wake_source` for durable
+alarms without a sleeping worker. Synchronous owner-thread `pending(bot)` returns
+an eligible candidate containing `bot_id`/`channel_id`; `claim(candidate, turn_id)`
+rechecks scope/revision and returns prompt metadata inside the turn-insertion
+transaction. `reset(bot_id, channel_id=None)` revokes pending wakes on clean
+slate or bot deletion. Hooks must not await, spawn tasks, publish before commit
+or perform external effects. Scheduler admission, task ownership and ordinary
+delivery remain in Engine. Global/bot grants gate candidate discovery. Existing
+plugins need no wake hook.
+
 The optional **Sub-agent researcher · experimental** exposes `research_assistant`
 and is disabled by default. It delegates to a separately configured MiMo profile
 without changing the conversational model or existing web tools. The reusable

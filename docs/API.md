@@ -1,5 +1,10 @@
 # Control API and Discord command parity
 
+The optional [Secretary](SECRETARY.md) exposes an owner-only reminder ledger at
+`GET /api/secretary` (optional `bot_id`), and revision-protected snooze/update/
+cancel through `POST /api/secretary/{id}`. Normal session, origin and CSRF checks
+apply. Model access uses the separately granted, bot/channel-scoped tool.
+
 The optional `reasoning_viewer` plugin uses the existing global plugin enablement
 and per-bot `enabled_plugins` fields. It is keyless and `model_tool=False`; no new
 HTTP endpoint exposes diagnostics. Discord callback bindings live in the

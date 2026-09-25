@@ -127,6 +127,7 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 | `shell` | Real isolated Bash/Python 3.14/Pillow jobs | No key; workspace grant plus ready Linux/Bubblewrap boundary; host networking and disposable packages |
 | `document_site` | Owned static documents, paged editing, revision recovery and automatic publication | Keyless bot tools; global SSH delivery settings, immutable revisions and private snapshot history |
 | `web_search` | Brave + DuckDuckGo search, fallback or combined | Brave key; DuckDuckGo keyless; engine/endpoint/count configurable |
+| `secretary` | Experimental reminders, snooze and recurring alarms that wake the bot | Keyless, off by default; [setup and behavior](docs/SECRETARY.md) |
 | `image_generation` | Image generation to a Discord attachment | OpenAI-style image endpoint, raw request JSON, key |
 | `tts` | Speech generation to an audio attachment | OpenAI-style speech endpoint, model/voice/options JSON, key |
 | `memory` | Persistent bot + channel scoped notes | No key; per-bot budget (default 48,000/channel), 5% temporary headroom, 8,000/note |

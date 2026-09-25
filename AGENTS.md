@@ -72,6 +72,7 @@ including superseded behavior, and must not be treated as current configuration.
 - Editable prompts, attribution and clean-slate controls: [PROMPTS.md](docs/PROMPTS.md).
 - Owned background jobs and completion dispatch: [BACKGROUND_JOBS.md](docs/BACKGROUND_JOBS.md).
 - Experimental researcher settings, capacity and task batches: [RESEARCH_ASSISTANT.md](docs/RESEARCH_ASSISTANT.md).
+- Experimental secretary reminders, snoozes and periodic alarms: [SECRETARY.md](docs/SECRETARY.md).
 - Opt-in owner-only reasoning viewer: [REASONING_VIEWER.md](docs/REASONING_VIEWER.md).
 - Consistent snapshots and selective recovery: [SNAPSHOTS.md](docs/SNAPSHOTS.md).
 - Private per-bot global memory: [GLOBAL_MEMORY.md](docs/GLOBAL_MEMORY.md).
