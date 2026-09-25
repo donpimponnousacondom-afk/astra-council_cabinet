@@ -4,6 +4,7 @@ Newest-first navigation including nested dated entries; original evidence is pre
 in place. Undated subheadings inherit their containing dated heading; undated sections
 appear last. Historical evidence is not current configuration.
 
+- [Secretary owner editing and portable CI terminal fixture (2026-09-25)](../VERIFICATION.md#secretary-owner-editing-and-portable-ci-terminal-fixture-2026-09-25)
 - [Experimental Secretary alarms and snooze (2026-09-25)](../VERIFICATION.md#experimental-secretary-alarms-and-snooze-2026-09-25)
 - [Audit hardening and preservation review (2026-09-23)](../VERIFICATION.md#audit-hardening-and-preservation-review-2026-09-23)
 - [Slash acknowledgement contract aligned with merged tuning (2026-09-23)](../VERIFICATION.md#slash-acknowledgement-contract-aligned-with-merged-tuning-2026-09-23)

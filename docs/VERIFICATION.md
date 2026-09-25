@@ -4,6 +4,47 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Secretary owner editing and portable CI terminal fixture (2026-09-25)
+
+- **Source:** follow-up on unmerged `feat/secretary` at `1ca6e24`, with the
+  changes uncommitted during validation. No workflow gate was removed or relaxed.
+- **Hosted failure:** PR #67 runs `36164120038` (pull request) and `36164090595`
+  (push) both failed `test_real_screen_stop_preserves_shell_and_ignores_unrelated_commands`:
+  **1 failed, 1,485 passed, 19 skipped** each. The disposable Screen fixture used
+  `/home/codexy/.screenrc`, absent on GitHub's runner. It now creates a test-only
+  configuration and a short, private socket directory; the real shared Screen
+  configuration and runtime are untouched by the test. The first local attempt
+  used a pytest-nested socket path that exceeded the Unix socket limit; the short
+  temporary directory corrected that before the passing runs below. A separate
+  isolated reproduction confirmed that a missing Screen config returns exit 0
+  but creates no session, matching the hosted failure.
+- **Focused backend:** `uv run pytest -q tests/test_secretary.py
+  tests/test_next_feature.py`: **48 passed**, two existing TestClient/AnyIO
+  deprecation warnings, 9.26 seconds. Owner update/cancel remain authenticated,
+  revision-checked and usable with the plugin disabled. Editing preserves the
+  due time/state, including cancelled reminders.
+- **Full gate:** `./scripts/check.sh`, exit 0 in **470.73 seconds**; source
+  `1ca6e24` dirty at start and finish. Full backend collection: **1,504 passed,
+  one opt-in public-download skip, zero failures** in 341.43 seconds. Ruff
+  lint/format, four verification-runner self-tests, frontend formatting and
+  TypeScript/Vite build passed. Full Playwright: **62 passed in 2.0 minutes**.
+- **Focused dashboard:** TypeScript/Vite build passed; Secretary Playwright
+  suite **2 passed in 5.5 seconds**. Coverage includes message/repeat edits,
+  one-off conversion, snooze/cancel, empty-text rejection, unsaved navigation,
+  pending-save protection and retaining a draft after HTTP 409. The initial
+  test used Escape after disabling its focused button, which leaves focus
+  outside the dialog; the final assertion uses the explicit Close control.
+- **Browser review:** agent-browser loaded the isolated fixture dashboard,
+  inspected the populated reminder editor with a browser-only fixture and found
+  both fields, no error overlay and no browser errors. The editor and populated
+  owner-ledger screenshots were reviewed. Responses in browser tests
+  are mocked; backend API tests exercise real fixture transactions. No live
+  Discord/provider request or reminder mutation is part of this verification.
+- **Evidence:** ignored/local `/tmp/secretary-owner-{focused,browser,build,check}.log`,
+  `test-results/verification/`, and `web/test-results/secretary-*/`.
+  Remote checks must rerun after the owner pushes the follow-up; the earlier red
+  checks are not presented as green.
+
 ## Experimental Secretary alarms and snooze (2026-09-25)
 
 - **Source:** `feat/secretary`, prepared by renaming the clean `feat/next_feature`

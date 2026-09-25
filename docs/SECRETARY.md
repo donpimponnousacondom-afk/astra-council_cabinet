@@ -72,9 +72,20 @@ finish with `{"operation":"cancel","reminder_id":"<saved ID>"}`.
 
 **Plugins → Secretary** exposes global settings and the ledger. **Bots →
 Control → Secretary reminders** shows a granted bot's ledger. Refresh shows
-current state and last turn outcome. Snooze/Cancel apply immediately with
-revision protection; save/discard bot drafts first. Channel labels use internal
-room names where available. Per-bot non-secret plugin JSON may override limits.
+current state and last turn outcome. **Edit reminder** changes the message and
+repeat interval (zero makes it one-off); **Save reminder** applies that edit
+without moving the due time or rearming inactive entries. **Snooze** moves the
+time/rearms an entry, and **Cancel reminder** stops future occurrences. These
+owner actions need no bot approval and remain available in the global ledger
+when the plugin or a bot's grant is disabled. Cancelled entries stay visible
+until retention cleanup; cancellation does not delete historical evidence.
+
+Changes use revision protection: if the bot or scheduler changes the reminder
+first, the save fails visibly and keeps your draft. Discard it and refresh to
+inspect the current version. Save/discard configuration drafts before changing
+reminders; reminder drafts have their own save button and navigation protection.
+Channel labels use internal room names where available. Per-bot non-secret plugin
+JSON may override limits.
 
 Defaults: `max_active_reminders: 100` per bot across channels (1–10,000),
 `min_repeat_seconds: 300` (60–31,536,000). Inactive entries free active capacity
@@ -107,3 +118,6 @@ with Loki: reminders, snoozes, reprogramming and periodic alarms. Use normal bot
 replies when due, without waiting inference/typing or model-specific behavior.
 Preserve current workflows/grants. Live enablement and natural-language
 acceptance remain operator actions.
+
+The operator must be able to inspect, edit, snooze and cancel saved reminders
+directly from the dashboard, independently of the bot's willingness to do so.

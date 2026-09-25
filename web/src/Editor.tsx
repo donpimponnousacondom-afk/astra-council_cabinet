@@ -195,6 +195,7 @@ export function Editor({
     Record<string, boolean>
   >({});
   const [globalNoteDirty, setGlobalNoteDirty] = useState(false);
+  const [secretaryDirty, setSecretaryDirty] = useState(false);
   const credentialDraftChanged = useCallback((id: string, pending: boolean) => {
     setPendingCredentials((previous) =>
       previous[id] === pending ? previous : { ...previous, [id]: pending },
@@ -219,12 +220,13 @@ export function Editor({
       : "identity",
   );
   const [activeSection, setActiveSection] = useState("identity");
-  const dirty =
+  const configurationDirty =
     baseline !== draftContent(draft) ||
     Object.values(pendingCredentials).some(Boolean) ||
     globalNoteDirty ||
     invalidJsonDraft ||
     !modelJsonValid;
+  const dirty = configurationDirty || secretaryDirty;
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
   const updateJsonDraftState = useCallback(() => {
@@ -409,6 +411,12 @@ export function Editor({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (operations.current.size) return;
+    if (secretaryDirty) {
+      setError(
+        "Save or discard the pending reminder edit first. Reminders use their own save button.",
+      );
+      return;
+    }
     if (globalNoteDirty) {
       setError(
         "Save or discard the pending global note first. Notes use their own save button in Global notes.",
@@ -484,6 +492,12 @@ export function Editor({
                 onClick={() => {
                   if (operations.current.size) return;
                   if (id === tab) return;
+                  if (secretaryDirty) {
+                    setError(
+                      "Save or discard the pending reminder edit before changing sections.",
+                    );
+                    return;
+                  }
                   const invalid =
                     form.current?.querySelector<HTMLTextAreaElement>(
                       ".json-input:invalid",
@@ -1030,7 +1044,9 @@ export function Editor({
                           key={`secretary-${entity.id}`}
                           botId={entity.id}
                           rooms={dashboard.rooms}
-                          disabled={dirty}
+                          disabled={configurationDirty}
+                          onDirtyChange={setSecretaryDirty}
+                          onBusyChange={operationChanged}
                         />
                       )}
                     </>
@@ -1634,7 +1650,12 @@ export function Editor({
                       config={draft.config || {}}
                       onChange={(value) => set("config", value)}
                     />
-                    <SecretaryPanel rooms={dashboard.rooms} />
+                    <SecretaryPanel
+                      rooms={dashboard.rooms}
+                      disabled={configurationDirty}
+                      onDirtyChange={setSecretaryDirty}
+                      onBusyChange={operationChanged}
+                    />
                   </>
                 )}
                 {draft.id === "document_site" && (

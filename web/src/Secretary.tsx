@@ -88,18 +88,30 @@ export function SecretaryPanel({
   botId,
   rooms,
   disabled = false,
+  onDirtyChange,
+  onBusyChange,
 }: {
   botId?: string;
   rooms: RecordData[];
   disabled?: boolean;
+  onDirtyChange: (dirty: boolean) => void;
+  onBusyChange: (id: string, busy: boolean) => void;
 }) {
   const [items, setItems] = useState<Reminder[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [minutes, setMinutes] = useState("60");
+  const [editing, setEditing] = useState<Reminder | null>(null);
+  const [message, setMessage] = useState("");
+  const [repeat, setRepeat] = useState("0");
   const mounted = useRef(false);
   const generation = useRef(0);
+  const operationId = `secretary:${botId || "all"}`;
+  const dirty =
+    editing !== null &&
+    (message !== editing.message || repeat !== String(editing.repeat_seconds));
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const path = `/api/secretary${botId ? `?bot_id=${encodeURIComponent(botId)}` : ""}`;
 
   async function refresh() {
@@ -126,11 +138,17 @@ export function SecretaryPanel({
     return () => {
       mounted.current = false;
       generation.current++;
+      onDirtyChange(false);
+      onBusyChange(operationId, false);
     };
   }, [path]);
 
-  async function change(row: Reminder, operation: "cancel" | "snooze") {
+  async function change(
+    row: Reminder,
+    operation: "cancel" | "snooze" | "update",
+  ) {
     setBusy(true);
+    onBusyChange(operationId, true);
     setError("");
     const request = ++generation.current;
     try {
@@ -144,18 +162,26 @@ export function SecretaryPanel({
             ...(operation === "snooze"
               ? { after_seconds: Number(minutes) * 60 }
               : {}),
+            ...(operation === "update"
+              ? { message, repeat_seconds: Number(repeat) }
+              : {}),
           }),
         },
       );
-      if (mounted.current && request === generation.current)
+      if (mounted.current && request === generation.current) {
         setItems((rows) =>
           rows.map((item) => (item.id === row.id ? updated : item)),
         );
+        if (operation === "update") setEditing(null);
+      }
     } catch (e) {
       if (mounted.current && request === generation.current)
         setError(String(e));
     } finally {
-      if (mounted.current && request === generation.current) setBusy(false);
+      if (mounted.current && request === generation.current) {
+        setBusy(false);
+        onBusyChange(operationId, false);
+      }
     }
   }
   return (
@@ -175,7 +201,7 @@ export function SecretaryPanel({
         <div>
           <button
             type="button"
-            disabled={busy || loading}
+            disabled={busy || loading || editing !== null}
             onClick={() => void refresh()}
           >
             Refresh reminders
@@ -204,12 +230,78 @@ export function SecretaryPanel({
               : "One-off"}
             {row.last_turn_status && ` · Last turn: ${row.last_turn_status}`}
           </p>
+          {editing?.id === row.id && (
+            <div className="stack secretary-edit">
+              <Field label="Reminder message">
+                <textarea
+                  rows={4}
+                  maxLength={4000}
+                  disabled={busy || disabled}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                />
+              </Field>
+              <Field label="Repeat every (seconds; 0 = one-off)">
+                <input
+                  type="number"
+                  min={0}
+                  max={31536000}
+                  step={1}
+                  disabled={busy || disabled}
+                  value={repeat}
+                  onChange={(e) => setRepeat(e.target.value)}
+                />
+              </Field>
+              <small>
+                Repeats must meet the configured minimum. Editing keeps the due
+                time and state; use Snooze to move the alarm or rearm it.
+              </small>
+              <div>
+                <button
+                  type="button"
+                  disabled={
+                    disabled ||
+                    busy ||
+                    !dirty ||
+                    !message.trim() ||
+                    repeat === "" ||
+                    !Number.isInteger(Number(repeat)) ||
+                    Number(repeat) < 0 ||
+                    Number(repeat) > 31536000
+                  }
+                  onClick={() => void change(editing, "update")}
+                >
+                  Save reminder
+                </button>{" "}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setEditing(null)}
+                >
+                  Discard edit
+                </button>
+              </div>
+            </div>
+          )}
+          <button
+            type="button"
+            disabled={disabled || busy || loading || editing !== null}
+            onClick={() => {
+              setEditing(row);
+              setMessage(row.message);
+              setRepeat(String(row.repeat_seconds));
+              setError("");
+            }}
+          >
+            Edit reminder
+          </button>{" "}
           <button
             type="button"
             disabled={
               disabled ||
               busy ||
               loading ||
+              editing !== null ||
               !Number.isInteger(Number(minutes)) ||
               Number(minutes) < 1 ||
               Number(minutes) > 5256000
@@ -220,7 +312,13 @@ export function SecretaryPanel({
           </button>{" "}
           <button
             type="button"
-            disabled={disabled || busy || loading || row.state !== "scheduled"}
+            disabled={
+              disabled ||
+              busy ||
+              loading ||
+              editing !== null ||
+              row.state !== "scheduled"
+            }
             onClick={() => void change(row, "cancel")}
           >
             Cancel reminder
@@ -233,8 +331,7 @@ export function SecretaryPanel({
       </small>
       {disabled && (
         <Notice>
-          Save or discard the bot’s configuration draft before changing
-          reminders.
+          Save or discard the configuration draft before changing reminders.
         </Notice>
       )}
     </section>

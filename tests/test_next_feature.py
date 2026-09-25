@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import time
+from tempfile import TemporaryDirectory
 
 import pytest
 
@@ -269,13 +270,28 @@ def test_subprocess_timeout_kills_spawned_group(tmp_path):
         pytest.fail("Timed-out build left a running child")
 
 
-def test_real_screen_stop_preserves_shell_and_ignores_unrelated_commands(tmp_path, monkeypatch):
+@pytest.fixture
+def isolated_screen(tmp_path, monkeypatch):
+    # A disposable test terminal must not depend on the deployment account's
+    # Screen configuration (which does not exist on hosted CI runners).
+    screenrc = tmp_path / "screenrc"
+    screenrc.write_text("startup_message off\ndefscrollback 1000\n")
+    # Screen's Unix socket includes its session name; a nested pytest path can
+    # exceed the OS path limit. Also isolate discovery from the real council.
+    with TemporaryDirectory(prefix="screen-test-") as sockets:
+        monkeypatch.setenv("SCREENDIR", sockets)
+        yield screenrc
+
+
+def test_real_screen_stop_preserves_shell_and_ignores_unrelated_commands(
+    tmp_path, monkeypatch, isolated_screen
+):
     if not shutil.which("screen"):
         pytest.skip("GNU Screen is required for terminal integration")
     root = tmp_path
     name = f"hortator-next-test-{os.getpid()}"
     subprocess.run(
-        ["screen", "-c", "/home/codexy/.screenrc", "-dmS", name, "-t", "dashboard", "bash", "--login", "-i"],
+        ["screen", "-c", str(isolated_screen), "-dmS", name, "-t", "dashboard", "bash", "--login", "-i"],
         cwd=root,
         check=True,
     )

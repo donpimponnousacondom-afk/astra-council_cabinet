@@ -375,3 +375,38 @@ def test_owner_api_auth_csrf_and_stale_revision(tmp_path):
         assert client.get("/api/secretary?bot_id=curie").json() == []
         result = client.get("/api/secretary?bot_id=ada").json()
         assert len(result) == 1 and result[0]["id"] == row["id"]
+        due = result[0]["due_at"]
+
+        def disable_plugin():
+            store = app.state.kernel.store
+            store.put("plugins", {**store.get("plugins", "secretary"), "enabled": False})
+
+        client.portal.call(disable_plugin)
+        update = {
+            "operation": "update",
+            "message": "The owner's corrected reminder",
+            "repeat_seconds": 3600,
+            "revision": result[0]["revision"],
+        }
+        response = client.post(path, json=update, headers=headers)
+        assert response.status_code == 200
+        updated = response.json()
+        assert updated["message"] == update["message"]
+        assert updated["repeat_seconds"] == 3600
+        assert updated["state"] == "scheduled" and updated["due_at"] == due
+        assert client.post(path, json=update, headers=headers).status_code == 409
+        response = client.post(
+            path,
+            json={"operation": "cancel", "revision": updated["revision"]},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        cancelled = response.json()
+        assert cancelled["state"] == "cancelled"
+        response = client.post(
+            path, json={**update, "revision": cancelled["revision"], "repeat_seconds": 0}, headers=headers
+        )
+        assert response.status_code == 200
+        assert response.json()["state"] == "cancelled"
+        assert response.json()["repeat_seconds"] == 0
+        assert response.json()["due_at"] == due
