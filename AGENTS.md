@@ -82,6 +82,7 @@ including superseded behavior, and must not be treated as current configuration.
 - HTTP response evidence: [HTTP_EVIDENCE.md](docs/HTTP_EVIDENCE.md).
 - Tools, ordinary answers, council inspection and private channel memory: [TOOLS.md](docs/TOOLS.md).
 - Editable prompts, attribution and clean-slate controls: [PROMPTS.md](docs/PROMPTS.md).
+- Opt-in Engram conversation state and history reduction: [ENGRAMS.md](docs/ENGRAMS.md).
 - Owned background jobs and completion dispatch: [BACKGROUND_JOBS.md](docs/BACKGROUND_JOBS.md).
 - Experimental researcher settings, capacity and task batches: [RESEARCH_ASSISTANT.md](docs/RESEARCH_ASSISTANT.md).
 - Experimental secretary reminders, snoozes and periodic alarms: [SECRETARY.md](docs/SECRETARY.md).

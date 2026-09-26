@@ -12,6 +12,7 @@ from .concurrency import error_text
 from .models import ControlError, OWNER_ID
 from .memory_budget import budget_for
 from .store import dumps
+from .transcript import render_transcript
 from .vision import (
     ImageCache,
     IMAGE_TOKEN_RESERVE,
@@ -26,10 +27,11 @@ from .vision_turn import select_images, current_inputs, with_inputs, attachment_
 
 
 class ContextBuilder:
-    def __init__(self, store, pool, global_memory=None, application_emojis=None):
+    def __init__(self, store, pool, global_memory=None, application_emojis=None, engrams=None):
         self.store, self.pool = store, pool
         self.global_memory = global_memory
         self.application_emojis = application_emojis
+        self.engrams = engrams
         self.images = ImageCache(store)
         self.encoder = tiktoken.get_encoding("cl100k_base")
         self.token_slots = asyncio.Semaphore(2)
@@ -85,7 +87,9 @@ class ContextBuilder:
                         template["content"],
                         {
                             **(profile or {}).get("_compaction_values", {}),
-                            "transcript": dumps(transcript[:count]),
+                            "transcript": render_transcript(
+                                transcript[:count], (profile or {}).get("_transcript_format", "structured")
+                            ),
                         },
                     ),
                 }
@@ -123,6 +127,12 @@ class ContextBuilder:
         return {**base, **(values or {})}
 
     def prompt(self, bot, key, values=None, *, variant="", raw=False):
+        if (
+            not variant
+            and bot.get("transcript_format") == "conversation"
+            and key in ("transcript", "compaction_instructions")
+        ):
+            variant = "conversation"
         return prompt_layer(self.store, bot, key, self.prompt_values(bot, values), variant=variant, raw=raw)
 
     def layers(self, bot, channel_id):
@@ -291,7 +301,17 @@ class ContextBuilder:
         ]
 
     async def assemble(
-        self, bot, profile, channel_id, rows, summary, round_index=0, extras=None, tools=None, image_plan=None
+        self,
+        bot,
+        profile,
+        channel_id,
+        rows,
+        summary,
+        round_index=0,
+        extras=None,
+        tools=None,
+        image_plan=None,
+        engram=None,
     ):
         rows = self.visible_rows(bot, rows)
         if image_plan is None or not bot.get("allow_images", True):
@@ -323,8 +343,12 @@ class ContextBuilder:
                 layers.append(item)
                 messages.append({"role": item["role"], "content": item["content"]})
         transcript = await self.conversation_async(rows, bot, inputs)
+        async with self.token_slots:
+            rendered_transcript = await asyncio.to_thread(
+                render_transcript, transcript, bot.get("transcript_format", "structured")
+            )
         values = {
-            "transcript": dumps(transcript),
+            "transcript": rendered_transcript,
             "latest_message": dumps(transcript[-1]) if transcript else "",
             "latest_content": transcript[-1]["content"] if transcript else "",
             "image_omissions": "\nImage input budget omitted these new attachments (metadata remains; do not claim to see their pixels): "
@@ -361,6 +385,16 @@ class ContextBuilder:
             else:
                 append(item)
         layers.extend(dynamic)
+        if engram is not None:
+            values = self.engrams.prompt_values(engram)
+            for key in ("engram_instructions", "engram_state"):
+                item = self.prompt(bot, key, values)
+                if item:
+                    layers.append(item)
+                    messages.append({"role": item["role"], "content": item["content"]})
+            protocol = {"id": "engram_protocol", "role": "system", "content": self.engrams.protocol(engram)}
+            layers.append(protocol)
+            messages.append({"role": protocol["role"], "content": protocol["content"]})
         if not messages:
             raise ControlError(
                 "All prompt layers are disabled or empty; enable conversation input or supply a prompt"
@@ -368,6 +402,7 @@ class ContextBuilder:
         estimate = await self.estimate_async(messages, tools or [])
         meta = {
             "channel_id": channel_id,
+            "transcript_format": bot.get("transcript_format", "structured"),
             "message_ids": [r["discord_id"] for r in included_rows],
             "message_sequences": [r["seq"] for r in included_rows],
             "source_message_ids": [r["discord_id"] for r in rows],
@@ -386,17 +421,50 @@ class ContextBuilder:
             "round": round_index,
             "rounds_remaining": max(0, bot["max_tool_rounds"] - round_index),
         }
+        if engram is not None:
+            if any(row["seq"] not in meta["message_sequences"] for row in rows) or (
+                summary and meta["summary"] != summary
+            ):
+                raise ControlError(
+                    "Engram updates require the complete selected transcript and retained summary; "
+                    "restore their prompt placeholders or disable the engram plugin. No history was discarded"
+                )
+            meta["engram"] = {
+                "nonce": engram["nonce"],
+                "revision": engram["revision"],
+                "covered_through": engram["covered_through"],
+                "reduce_history": engram["config"]["reduce_history"],
+            }
         return messages, meta
 
     async def prepare(self, bot, profile, channel_id, turn_id, tools, force=False):
         context = self.store.context(bot["id"], channel_id)
+        engram = (
+            self.engrams.capture(bot, channel_id, turn_id, context) if self.engrams and not force else None
+        )
+        if engram is not None:
+            state_layer = self.prompt(bot, "engram_state", self.engrams.prompt_values(engram))
+            instructions = self.prompt(bot, "engram_instructions", self.engrams.prompt_values(engram))
+            if not instructions or not state_layer or "engram_state" not in state_layer["variables"]:
+                raise ControlError(
+                    "Engram instructions and state placements must be enabled, and state must retain "
+                    "{engram_state}; re-enable those prompt layers or disable the engram plugin. "
+                    "No history was discarded"
+                )
+        reduce_history = bool(engram and engram["config"]["reduce_history"])
+        replace_summary = bool(
+            reduce_history
+            and self.engrams.can_replace_summary(engram, context["checkpoint"], context["summary"])
+        )
         tail = (
             self.store.one("SELECT max(seq) AS seq FROM messages WHERE channel_id=?", (channel_id,))["seq"]
             or 0
         )
         # Page through all uncompressed input. Do not silently drop old messages when a busy room grows.
         rows = []
-        cursor = context["checkpoint"]
+        # An acknowledged engram may replace an older summary, but its recent
+        # tail still consists of real transcript rows, including pre-checkpoint rows.
+        cursor = 0 if replace_summary else context["checkpoint"]
         while cursor < tail:
             page = self.store.transcript(channel_id, after=cursor, through=tail, limit=1000)
             if not page:
@@ -404,6 +472,9 @@ class ContextBuilder:
             rows.extend(self.store.filter_context_rows(bot["id"], page))
             cursor = page[-1]["seq"]
             await asyncio.sleep(0)
+        if reduce_history:
+            rows = self.engrams.select_rows(engram, rows)
+        summary = "" if replace_summary else context["summary"]
         if bot.get("allow_images", True):
             try:
                 async with asyncio.timeout(60):
@@ -418,7 +489,7 @@ class ContextBuilder:
             rows, context["last_seen"], profile, allow_images=bot.get("allow_images", True)
         )
         messages, meta = await self.assemble(
-            bot, profile, channel_id, rows, context["summary"], tools=tools, image_plan=image_plan
+            bot, profile, channel_id, rows, summary, tools=tools, image_plan=image_plan, engram=engram
         )
         if image_plan["historical_images"] or image_plan["budget_omitted"] or image_plan["disabled_images"]:
             self.store.emit(
@@ -472,6 +543,10 @@ class ContextBuilder:
             triggers.append("image_count")
         if image_bytes(messages) > max_image_bytes:
             triggers.append("image_bytes")
+        # Engram reduction never moves the ordinary compaction checkpoint. An
+        # unseen backlog remains input until acknowledged; failure keeps it all.
+        if reduce_history:
+            triggers = []
         if triggers:
             if not rows:
                 raise ControlError(
@@ -489,6 +564,7 @@ class ContextBuilder:
                     context["summary"],
                     tools=tools,
                     image_plan=image_plan,
+                    engram=engram,
                 )
                 if tail_meta["estimated_tokens"] * factor + profile[
                     "summary_tokens"
@@ -553,6 +629,7 @@ class ContextBuilder:
                         **profile,
                         "_compaction_transcript": template,
                         "_compaction_values": self.prompt_values(bot, values),
+                        "_transcript_format": bot.get("transcript_format", "structured"),
                     }
                     output_reserve = max(profile["summary_tokens"], output_cap or 0)
                     budget = int((profile["context_window"] - output_reserve) / factor * 0.85)
@@ -570,7 +647,9 @@ class ContextBuilder:
                                     template["content"],
                                     {
                                         **batch_profile["_compaction_values"],
-                                        "transcript": dumps(transcript[:1]),
+                                        "transcript": render_transcript(
+                                            transcript[:1], bot.get("transcript_format", "structured")
+                                        ),
                                     },
                                 ),
                             }
@@ -666,8 +745,20 @@ class ContextBuilder:
                         )
                     summary = result.content
                     pending = pending[count:]
+                checkpoint = old_rows[-1]["seq"]
+                if engram is not None:
+                    engram = self.engrams.capture(
+                        bot, channel_id, turn_id, {**context, "summary": summary, "checkpoint": checkpoint}
+                    )
                 messages, meta = await self.assemble(
-                    bot, profile, channel_id, recent, summary, tools=tools, image_plan=image_plan
+                    bot,
+                    profile,
+                    channel_id,
+                    recent,
+                    summary,
+                    tools=tools,
+                    image_plan=image_plan,
+                    engram=engram,
                 )
                 if (
                     meta["estimated_tokens"] * factor + profile["response_tokens"]
@@ -676,7 +767,6 @@ class ContextBuilder:
                     raise ControlError(
                         "Compacted context still exceeds the model budget; previous context is retained"
                     )
-                checkpoint = old_rows[-1]["seq"]
                 # Commit only after every batch succeeds. The original transcript is never rewritten.
                 self.store.execute(
                     "UPDATE contexts SET summary=?,checkpoint=?,compactions=compactions+1,estimated_tokens=?,updated_at=? WHERE bot_id=? AND channel_id=?",
@@ -727,4 +817,6 @@ class ContextBuilder:
             (meta["estimated_tokens"], time.time(), bot["id"], channel_id),
         )
         self.store.emit("context.assembled", meta, bot_id=bot["id"], turn_id=turn_id)
-        return rows, context["summary"], tail, meta
+        if engram is not None:
+            meta["_engram_snapshot"] = engram
+        return rows, "" if replace_summary else context["summary"], tail, meta

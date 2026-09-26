@@ -35,6 +35,39 @@ still apply to overrides. Memory-budget variants are both shown because the
 current conversation/usage is not selected in this editor. Plugin/runtime scope
 and current saved grants are rechecked during actual execution.
 
+### Experimental conversation text
+
+**Bots → bot → Prompts → Conversation format** selects either the existing
+**Structured records** (default) or **Conversation text · experimental**. This is
+a presentation choice for both ordinary generation and compaction, independent
+of the [Engram experiment](ENGRAMS.md). Existing bot settings are not migrated.
+
+Conversation text uses a participant legend with verified user IDs, compact
+speaker/recipient labels, one message reference, dates grouped by day/UTC offset,
+and times displayed to seconds. Message bodies are quoted as untrusted conversation
+content. Replies retain the target ID and an earlier excerpt when the target is
+outside the supplied batch; an already visible parent's body is not repeated.
+Role-directed mentions and unresolved recipients remain explicit. Actual image
+parts, attachment links and image availability/resize notices remain intact.
+Repeated sequence/age fields, null/boolean flags and cached image hashes are not
+printed in the conversation text. Stored Discord records and historical requests
+retain the full metadata and original timestamp precision.
+
+The format selects editable `runtime-transcript-conversation` and
+`runtime-compaction-instructions-conversation` default variants. Explicit per-bot
+template overrides still win. `{transcript}` expands to the selected presentation;
+`{latest_message}` remains the structured latest record, while `{latest_content}`
+remains just its text. The new compaction guidance asks for a concise continuity
+note with relevant facts, attribution, corrections and open work, and retains
+dates/references when useful instead of copying routine metadata. Existing edited
+templates are not overwritten. Token planning measures the selected text, including
+compaction batch fitting; switching back restores structured generation immediately.
+
+This changes no history boundary or summary by itself. Subsequent compactions can
+gradually replace existing summaries; it does not reset context or rewrite old
+notes. Compaction still receives no image pixels, and fresh image inputs still
+survive compaction within their current generation turn. See [VISION](VISION.md).
+
 ### Placement reference
 
 | Layer | Source and conditions |

@@ -395,7 +395,9 @@ class Snapshots:
         }
         if scope == "bot" and include_context:
             receipt["context_warning"] = (
-                "Newer shared channel transcripts remain and can re-enter context. Use a full restore/new channel for an exact experimental replay."
+                "Newer shared channel transcripts remain and can re-enter context. "
+                "Rolling engram state and pending candidates were cleared for the restored scope. "
+                "Use a full restore/new channel for an exact experimental replay."
             )
         self.pause(receipt)
         return receipt
@@ -588,6 +590,26 @@ class Snapshots:
                 row[0] for row in source.execute("SELECT name FROM sqlite_master WHERE type='table'")
             }
             if include_context:
+                # Selective restore rewinds conversation checkpoints against the
+                # live transcript. Its existing rolling state can describe a
+                # later history, so invalidate only this restored scope. Full
+                # restores include the complete engram tables with the database.
+                current_tables = {
+                    row[0] for row in target.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                }
+                clause, args = "bot_id=?", [bot_id]
+                if channel_id:
+                    clause += " AND channel_id=?"
+                    args.append(channel_id)
+                for table in ("engram_states", "engram_candidates"):
+                    if table in current_tables:
+                        target.execute(f"DELETE FROM {table} WHERE {clause}", args)
+                if "engram_epochs" in current_tables:
+                    target.execute(
+                        "INSERT INTO engram_epochs(bot_id,channel_id,epoch) VALUES(?,?,1) "
+                        "ON CONFLICT(bot_id,channel_id) DO UPDATE SET epoch=engram_epochs.epoch+1",
+                        (bot_id, channel_id or "*"),
+                    )
                 # Restore the effective cutoff alongside checkpoints. Materialize a
                 # channel override so a newer all-channel reset cannot hide restored history.
                 if channel_id:

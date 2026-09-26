@@ -10,6 +10,14 @@ current checkout or running configuration.
 
 ## Current work and acceptance
 
+- The owner requested two independent opt-in experiments (2026-09-26): readable
+  attributed [conversation text](PROMPTS.md#experimental-conversation-text) for
+  generation/compaction, and [Engram rolling memory](ENGRAMS.md). Existing bots
+  keep structured input and no Engram grant. Engram history reduction is a second
+  explicit opt-in, initially false even when the plugin is enabled. Start live
+  memory trials on a disposable/empty-context bot; do not reduce Loki's existing
+  context as part of implementation. Keep full operational metadata on disk.
+
 - The experimental [Secretary](SECRETARY.md) provides one persistent ledger per
   bot across contexts, with explicit delivery destinations, snoozes and recurring
   alarms through ordinary bot turns. It is off by default;

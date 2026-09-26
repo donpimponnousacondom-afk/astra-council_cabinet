@@ -132,6 +132,51 @@ def test_bot_notes_only_and_explicit_global_restore(snapshot_data):
         assert db.execute("SELECT summary FROM contexts WHERE bot_id='ada' LIMIT 1").fetchone()[0] == ""
 
 
+def test_selective_context_restore_clears_only_matching_engrams(snapshot_data):
+    manager, directory, fingerprint = snapshot_data
+    manifest = manager.capture("Before engram state")
+    with sqlite3.connect(directory / "council.sqlite3") as db:
+        for index, (bot, channel) in enumerate(
+            (("ada", "channel-a"), ("ada", "channel-b"), ("socrates", "channel-a"))
+        ):
+            db.execute(
+                "INSERT INTO engram_states(bot_id,channel_id,revision,epoch,summary_hash,mem,updated_at) "
+                "VALUES(?,?,1,'0:0','','State after snapshot',1)",
+                (bot, channel),
+            )
+            db.execute(
+                "INSERT INTO engram_candidates(id,bot_id,channel_id,turn_id,request_id,status,snapshot,state,"
+                "covered_through,summary_checkpoint,summary_hash,state_chars,state_tokens,created_at) "
+                "VALUES(?,?,?,?,?,'staged','{}','{}',0,0,'',0,0,1)",
+                (f"candidate{index}", bot, channel, f"turn{index}", f"request{index}"),
+            )
+    manager.restore(manifest["id"], fingerprint, scope="bot", bot_id="ada", channel_id="channel-a")
+    with sqlite3.connect(directory / "council.sqlite3") as db:
+        assert db.execute("SELECT count(*) FROM engram_states").fetchone()[0] == 3
+        assert db.execute("SELECT count(*) FROM engram_candidates").fetchone()[0] == 3
+    receipt = manager.restore(
+        manifest["id"],
+        fingerprint,
+        scope="bot",
+        bot_id="ada",
+        channel_id="channel-a",
+        include_context=True,
+    )
+    assert "engram" in receipt["context_warning"]
+    with sqlite3.connect(directory / "council.sqlite3") as db:
+        for table in ("engram_states", "engram_candidates"):
+            assert db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 2
+            assert not db.execute(
+                f"SELECT 1 FROM {table} WHERE bot_id='ada' AND channel_id='channel-a'"
+            ).fetchone()
+        assert (
+            db.execute(
+                "SELECT epoch FROM engram_epochs WHERE bot_id='ada' AND channel_id='channel-a'"
+            ).fetchone()[0]
+            == 1
+        )
+
+
 def test_full_restore_preserves_recovery_and_lock(snapshot_data):
     manager, directory, fingerprint = snapshot_data
     lock = directory / "runtime.lock"

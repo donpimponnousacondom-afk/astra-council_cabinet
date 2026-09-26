@@ -194,6 +194,7 @@ class Bot(Entity):
         default=DEFAULT_MEMORY_CHAR_LIMIT, ge=1, le=MAX_MEMORY_CHAR_LIMIT, strict=True
     )
     prompt_ids: list[str] = Field(default_factory=list, max_length=30)
+    transcript_format: Literal["structured", "conversation"] = "structured"
     disabled_prompt_layers: list[str] = Field(default_factory=list, max_length=len(LAYER_KEYS))
     prompt_layer_overrides: dict[str, str] = Field(default_factory=dict, max_length=len(LAYER_KEYS))
 

@@ -465,6 +465,9 @@ class Registry:
         from .global_memory import register as register_global_memory
 
         register_global_memory(self)
+        from .engrams import register as register_engrams
+
+        register_engrams(self)
         from .slash_commands import register as register_slash
 
         register_slash(self)

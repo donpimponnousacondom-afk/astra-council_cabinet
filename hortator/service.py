@@ -458,6 +458,7 @@ class Service:
             affected = self.affected(kind, entity_id)
             if kind == "bots":
                 self.registry.reset_wakes(entity_id)
+                self.registry.engrams.reset(entity_id)
             self.store.execute(
                 "INSERT OR REPLACE INTO entity_tombstones VALUES(?,?,?)", (kind, entity_id, time.time())
             )
@@ -629,6 +630,39 @@ class Service:
     def global_memory_view(self, bot_id):
         return self.vault.redact(self.registry.global_memory.inspect(bot_id))
 
+    def engram_view(self, bot_id, channel_id=None):
+        self.entity("bots", bot_id)
+        return self.vault.redact(self.registry.engrams.inspect(bot_id, channel_id))
+
+    async def engram_reset(self, actor, bot_id, data):
+        actor.require_owner()
+        if not isinstance(data, dict) or set(data) - {"confirm_bot_id", "channel_id"}:
+            raise ControlError("Unknown engram reset parameters")
+        if data.get("confirm_bot_id") != bot_id:
+            raise ControlError("Confirm the exact bot ID before clearing its engrams")
+        channel_id = data.get("channel_id")
+        if channel_id is not None and (
+            not isinstance(channel_id, str) or not channel_id or channel_id == "*"
+        ):
+            raise ControlError("Choose an existing channel, or omit channel_id for all channels")
+        async with self.lock:
+            self.entity("bots", bot_id)
+            if channel_id and not self.store.one(
+                "SELECT 1 FROM contexts WHERE bot_id=? AND channel_id=?", (bot_id, channel_id)
+            ):
+                raise ControlError("This bot has no context in the selected channel", 404)
+            self.engine.resetting.add(bot_id)
+            try:
+                await self.engine.cancel([bot_id], "Owner requested an engram reset")
+                self.registry.engrams.reset(bot_id, channel_id)
+                result = {"bot_id": bot_id, "channel_id": channel_id, "reset": True}
+                self.store.emit(
+                    "engram.reset", {**result, "actor": actor.label}, bot_id=bot_id, level="warning"
+                )
+                return result
+            finally:
+                self.engine.resetting.discard(bot_id)
+
     async def global_memory_change(self, actor, bot_id, args):
         actor.require_owner()
         async with self.lock:
@@ -678,9 +712,9 @@ class Service:
         return value
 
     def inspect_model(self, resource, entity_id=None, channel_id=None):
-        from .council_inspector import inspect
+        from .council_inspector import inspect, without_private_engrams
 
-        return inspect(self, resource, entity_id, channel_id)
+        return without_private_engrams(inspect(self, resource, entity_id, channel_id))
 
     def inspect(self, resource, entity_id=None, channel_id=None):
         if resource == "version":

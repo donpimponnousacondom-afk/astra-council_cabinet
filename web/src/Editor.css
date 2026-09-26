@@ -1,4 +1,11 @@
 /* Modern workbench editors. Legacy has its own frozen component and styles. */
+.dialog-dock .engram-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .dialog-dock {
   position: fixed;
   inset: 65px 0 23px auto;

@@ -34,7 +34,7 @@ export function BotControl({
     if (pending.current || dirty || confirmation !== bot.id) return;
     if (
       !window.confirm(
-        `Forget all messages before now for ${bot.name} in ${channel ? `${channelName(channel)} (${channel})` : "all channels"}? Active work will be cancelled and retained summaries cleared. Memories and other bots are unchanged. There is no undo button.`,
+        `Forget all messages before now for ${bot.name} in ${channel ? `${channelName(channel)} (${channel})` : "all channels"}? Active work will be cancelled and retained summaries and engrams cleared. Private/global notes and other bots are unchanged. There is no undo button.`,
       )
     )
       return;
@@ -69,15 +69,15 @@ export function BotControl({
       ))}
       <Notice>
         Cancel this bot's active work, erase its retained conversation summaries
-        and ignore messages from before this moment. Reconnect history and old
-        reply previews stay excluded. Other bots and Discord history are
-        unaffected. New messages are admitted normally; explicitly quoted or
-        fetched old material can still be reintroduced.
+        and engrams, and ignore messages from before this moment. Reconnect
+        history and old reply previews stay excluded. Other bots and Discord
+        history are unaffected. New messages are admitted normally; explicitly
+        quoted or fetched old material can still be reintroduced.
       </Notice>
       <p className="danger-text">
-        This changes live state immediately and has no undo button. Memories,
-        files, prompts, provider settings and credentials remain unchanged.
-        Messages already sent cannot be recalled.
+        This changes live state immediately and has no undo button.
+        Private/global notes, files, prompts, provider settings and credentials
+        remain unchanged. Messages already sent cannot be recalled.
       </p>
       <Field
         label="Reset scope"
@@ -97,9 +97,9 @@ export function BotControl({
         </select>
       </Field>
       <p className="muted">
-        Memories survive and continue to enter the prompt. Manage them
-        separately in the memory controls. Historical evidence and saved files
-        also survive.
+        Private/global notes survive and continue to enter the prompt. Manage
+        them separately in the memory controls. Historical evidence and saved
+        files also survive.
       </p>
       <Field
         label="Confirm bot ID"
@@ -131,8 +131,8 @@ export function BotControl({
       )}
       {receipt && (
         <p role="status">
-          Clean slate set at {dateLabel(receipt.after_at)}. Memories and other
-          bots are unchanged.
+          Clean slate set at {dateLabel(receipt.after_at)}. Private/global notes
+          and other bots are unchanged.
         </p>
       )}
     </section>
