@@ -4,6 +4,59 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Context audit remediation and complete regression gate (2026-09-26)
+
+```text
+Commit: 2f55dbe2f4caebe95384495b3553526e423748c3; dirty at start/end: false/false
+Backend scope: full collection
+Backend result: 1635 passed, 0 failed, 0 errors, 1 skipped; exit 0; command 353.393 seconds
+Frontend format/build: passed; exits 0/0; durations 1.854/5.375 seconds
+Browser tests: 67 passed; full Playwright collection; command 124.794 seconds
+Evidence: test-results/verification/result.json; /tmp/context-audit-remediation-full-check.log; preserved in ignored audit/2026-09-26/04-remediation/evidence/
+Classification: mocked Discord/provider adapters, local integration, isolated browser fixtures and offline transcript-token measurement
+Live checks: read-only saved-request replay; no provider call or Discord delivery
+Limitations: public HTTPS/package-install test skipped by opt-in policy; no live attribution/recall, billing or latency acceptance
+```
+
+- The complete gate passed in 487.123 seconds, including locked dependencies,
+  Ruff/format, runner self-tests, backend collection, frontend build and browsers.
+  No source changed during the run. Two existing dependency deprecation warnings
+  remain informational. Focused transcript/intake/compaction and Engram suites
+  also passed (19 and 49 tests respectively).
+- The external review, "Not losing things like tears in the rain", identified
+  omissions in the optional readable format. Fixes preserve unresolved-reply
+  status from actual intake records, image failure reasons, external bot/webhook
+  identity and routed delivery attribution. Participant legends identify the
+  viewer and verified owner without granting authority from display names.
+  Displayed line separators/controls normalize before quoting; raw records remain
+  unchanged. Resized-image display omits only the redundant original hash.
+- Conversation compaction instructions and the fixed renderer legend require
+  durable names/IDs, relevant prior facts and recipient attribution. Tests exercise
+  multiple batches whose temporary participant labels change meaning. Engram's
+  fixed protocol repeats the durable-identity rule even under edited defaults or
+  per-bot overrides; this guidance is not a semantic model-output guarantee.
+- Revised offline cl100k_base transcript counts are 11,049 → 5,204 (52.9%),
+  270,352 → 97,113 (64.1%), and 246,974 → 84,170 (65.9%). Other prompt layers,
+  tools and provider tokenization are excluded. Existing calibration population
+  and rejected-compaction retry/cost policy remain separate measured follow-ups;
+  checkpoints and accepted-summary safeguards are unchanged.
+- The owner lifted the audit hold and authorized PR review/merge and deployment.
+  Structured transcripts remain the default and Engram remains independently
+  disabled; this authorization does not enable experiments or rewrite live bot
+  configuration/context. A future Engram trial requires an empty separate bot
+  scope, no other memory grants and explicit reduction, with all uncovered input
+  retained. Conversation input must remain enabled.
+- [PR #71](https://github.com/donpimponnousacondom-afk/astra-council_cabinet/pull/71)
+  is the publication location for hosted checks and the independent review digest.
+  Both hosted checks
+  passed at the application commit above; later-head review/checks must be
+  verified before merge. The local reviewer skill now requires actual producer
+  shapes and independent generation/compaction/state prompt paths after the
+  earlier review missed those cases. Its structure validation passed. The ignored
+  audit response records every finding, disposition and remaining trial question;
+  final merge/backup/deployment receipts belong alongside it, not in speculative
+  readiness claims here.
+
 ## Opt-in conversation text and Engram memory (2026-09-26)
 
 ```text
