@@ -893,12 +893,12 @@ export function Editor({
                     {numeric(
                       "memory_char_limit",
                       "Private memory budget (characters per channel)",
-                      "1–48,000 characters per channel; default 48,000. Small overshoots get 5% headroom, then the bot must shrink or delete notes before adding more. Each note allows at most 8,000 characters. Zero and negative values are invalid. Uncheck Private memory to stop memory tools and automatic note injection; stored notes stay available for inspection.",
+                      "1–128,000 characters per channel; default 48,000. Small overshoots get 5% headroom, then the bot must shrink or delete notes before adding more. Each note allows at most 8,000 characters. Zero and negative values are invalid. Uncheck Private memory to stop memory tools and automatic note injection; stored notes stay available for inspection.",
                     )}
                     {numeric(
                       "global_memory_char_limit",
                       "Global memory budget (characters across channels)",
-                      "Independent allowance for this bot's global_memory plugin: 1–48,000, default 48,000, with 5% temporary headroom. Shared across this bot's channels, never other bots. Disable its plugin grant to stop tool access and automatic global-note injection while retaining notes.",
+                      "Independent allowance for this bot's global_memory plugin: 1–128,000, default 48,000, with 5% temporary headroom. Shared across this bot's channels, never other bots. Disable its plugin grant to stop tool access and automatic global-note injection while retaining notes.",
                     )}
                     <div className="form-grid">
                       {numeric(

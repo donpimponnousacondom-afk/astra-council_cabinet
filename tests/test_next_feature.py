@@ -261,8 +261,8 @@ def test_subprocess_timeout_kills_spawned_group(tmp_path):
         path = Path(f"/proc/{pid}/stat")
         try:
             state = path.read_text().rsplit(")", 1)[1].split()[0]
-        except FileNotFoundError:
-            break  # The child can exit between checking /proc and opening stat.
+        except FileNotFoundError, ProcessLookupError:
+            break  # The child can exit before open (ENOENT) or during read (ESRCH).
         if state == "Z":
             break
         time.sleep(0.05)

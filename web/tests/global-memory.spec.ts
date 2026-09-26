@@ -37,6 +37,48 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible();
 });
 
+test("both memory ceilings accept 128000 without changing other bots or grants", async ({
+  page,
+}) => {
+  const id = "wb-memory-ceilings";
+  const other = await (
+    await page.request.get("/api/config/bots/hortator")
+  ).json();
+  await addBot(page, id);
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByRole("button", { name: "Capabilities", exact: true })
+    .click();
+  await dialog
+    .getByLabel("Private memory budget (characters per channel)", {
+      exact: true,
+    })
+    .fill("128000");
+  await dialog
+    .getByLabel("Global memory budget (characters across channels)", {
+      exact: true,
+    })
+    .fill("128000");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  const saved = await (await page.request.get(`/api/config/bots/${id}`)).json();
+  expect(saved.memory_char_limit).toBe(128000);
+  expect(saved.global_memory_char_limit).toBe(128000);
+  expect(saved.enabled_plugins).toEqual([]);
+  expect(saved.enabled).toBe(false);
+  const otherAfter = await (
+    await page.request.get("/api/config/bots/hortator")
+  ).json();
+  expect(otherAfter.revision).toBe(other.revision);
+  expect(otherAfter.memory_char_limit).toBe(other.memory_char_limit);
+  expect(otherAfter.global_memory_char_limit).toBe(
+    other.global_memory_char_limit,
+  );
+  expect(otherAfter.enabled_plugins).toEqual(other.enabled_plugins);
+});
+
 test("global notes work without channel contexts; quota stays per bot and notes can be edited while disabled", async ({
   page,
 }, testInfo) => {
@@ -52,8 +94,8 @@ test("global notes work without channel contexts; quota stays per bot and notes 
   );
   await expect(budget).toHaveValue("48000");
   await expect(budget).toHaveAttribute("min", "1");
-  await expect(budget).toHaveAttribute("max", "48000");
-  for (const invalid of ["0", "-1", "48001", ""]) {
+  await expect(budget).toHaveAttribute("max", "128000");
+  for (const invalid of ["0", "-1", "128001", ""]) {
     await budget.fill(invalid);
     expect(
       await budget.evaluate((input: HTMLInputElement) => input.checkValidity()),

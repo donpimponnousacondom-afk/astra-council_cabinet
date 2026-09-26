@@ -56,7 +56,7 @@ async def test_existing_bots_get_public_default_and_per_bot_quota_is_independent
     assert kernel.store.get("bots", "socrates") == other
 
 
-@pytest.mark.parametrize("limit", [0, -1, 48_001, 1.5, True, "1000", None])
+@pytest.mark.parametrize("limit", [0, -1, 128_001, 1.5, True, "1000", None])
 async def test_shared_bot_schema_and_config_api_reject_invalid_global_quotas(kernel, owner, limit):
     old = kernel.store.get("bots", "ada")
     value = {key: val for key, val in old.items() if key != "revision"}
@@ -133,4 +133,4 @@ def test_authenticated_global_memory_api_has_no_context_prerequisite_and_enforce
         parsed = json.loads(wrong.json()["error"])
         assert parsed["error_count"] >= 3 and "usage" in parsed
         schema = client.get("/api/config-schemas").json()["bots"]["properties"]["global_memory_char_limit"]
-        assert (schema["minimum"], schema["maximum"], schema["default"]) == (1, 48_000, 48_000)
+        assert (schema["minimum"], schema["maximum"], schema["default"]) == (1, 128_000, 48_000)

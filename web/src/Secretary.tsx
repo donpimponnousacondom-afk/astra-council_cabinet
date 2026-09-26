@@ -32,13 +32,17 @@ export function SecretarySettings({
   return (
     <>
       <Notice>
-        Experimental reminder ledger. Grant Secretary to each bot that should
-        schedule alarms. Reminders survive restarts and wake the bot in the
-        original conversation, even with its timer off. Private /prompt and
-        /prompt outside configured rooms notify you in a private DM. Secretary
-        also enables owner-only DM replies; no server ID is needed. Paused bots
-        wait until resumed. Each wake uses the bot’s normal model and turn
-        budget.
+        One global reminder ledger per bot, accessible from all its
+        conversations. Grant Secretary to each bot that should schedule alarms.
+        Reminders survive restarts and wake the bot at their saved destination,
+        even with its timer off. The bot can explicitly choose an allowed
+        channel or your private DM. Changing conversations does not move
+        existing alarms. Private /prompt and /prompt outside configured rooms
+        notify you in a private DM. Secretary also enables owner-only DM
+        replies; no server ID is needed. Paused bots wait until resumed. Each
+        wake uses the bot’s normal model and turn budget. This ledger is not
+        private per user: the bot can retrieve private reminders in shared
+        chats.
       </Notice>
       <div className="form-grid">
         {(

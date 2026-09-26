@@ -1,6 +1,7 @@
 """Shared per-bot note accounting and bounded consolidation headroom."""
 
 DEFAULT_MEMORY_CHAR_LIMIT = 48_000
+MAX_MEMORY_CHAR_LIMIT = 128_000
 NOTE_CHAR_LIMIT = 8_000
 
 

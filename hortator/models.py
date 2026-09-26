@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .footer import DEFAULT_FOOTER_TEMPLATE, footer_settings, validate_template
-from .memory_budget import DEFAULT_MEMORY_CHAR_LIMIT
+from .memory_budget import DEFAULT_MEMORY_CHAR_LIMIT, MAX_MEMORY_CHAR_LIMIT
 from .prompt_templates import LAYER_KEYS
 
 OWNER_ID = "1482143139828596916"
@@ -188,10 +188,10 @@ class Bot(Entity):
     allow_silence: bool = True
     allow_images: bool = True
     memory_char_limit: int = Field(
-        default=DEFAULT_MEMORY_CHAR_LIMIT, ge=1, le=DEFAULT_MEMORY_CHAR_LIMIT, strict=True
+        default=DEFAULT_MEMORY_CHAR_LIMIT, ge=1, le=MAX_MEMORY_CHAR_LIMIT, strict=True
     )
     global_memory_char_limit: int = Field(
-        default=DEFAULT_MEMORY_CHAR_LIMIT, ge=1, le=DEFAULT_MEMORY_CHAR_LIMIT, strict=True
+        default=DEFAULT_MEMORY_CHAR_LIMIT, ge=1, le=MAX_MEMORY_CHAR_LIMIT, strict=True
     )
     prompt_ids: list[str] = Field(default_factory=list, max_length=30)
     disabled_prompt_layers: list[str] = Field(default_factory=list, max_length=len(LAYER_KEYS))

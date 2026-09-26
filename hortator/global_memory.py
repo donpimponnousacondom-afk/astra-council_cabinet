@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from dataclasses import replace
 
-from .memory_budget import DEFAULT_MEMORY_CHAR_LIMIT, NOTE_CHAR_LIMIT, hard_limit
+from .memory_budget import DEFAULT_MEMORY_CHAR_LIMIT, MAX_MEMORY_CHAR_LIMIT, NOTE_CHAR_LIMIT, hard_limit
 from .models import ControlError
 from .store import dumps
 from .timekeeping import council_timezone, present_times
@@ -114,9 +114,9 @@ class GlobalMemory:
         }
 
     def validate_budget(self, bot_id, limit):
-        if type(limit) is not int or not 1 <= limit <= DEFAULT_MEMORY_CHAR_LIMIT:
+        if type(limit) is not int or not 1 <= limit <= MAX_MEMORY_CHAR_LIMIT:
             raise ControlError(
-                f"global_memory_char_limit must be an integer from 1 to {DEFAULT_MEMORY_CHAR_LIMIT:,}; disable the plugin to stop global memory"
+                f"global_memory_char_limit must be an integer from 1 to {MAX_MEMORY_CHAR_LIMIT:,}; disable the plugin to stop global memory"
             )
         used = sum(len(note["value"]) for note in self.notes(bot_id))
         if used > hard_limit(limit):
@@ -309,7 +309,7 @@ def register(registry):
         PLUGIN_ID,
         "Global memory (private to this bot)",
         DESCRIPTION
-        + f"Per-bot budget: 1–{DEFAULT_MEMORY_CHAR_LIMIT:,} characters, default {DEFAULT_MEMORY_CHAR_LIMIT:,}, with 5% temporary headroom and at most {NOTE_CHAR_LIMIT:,} per note. Disable this plugin to stop both tools and automatic cross-channel note injection; stored notes remain intact.",
+        + f"Per-bot budget: 1–{MAX_MEMORY_CHAR_LIMIT:,} characters, default {DEFAULT_MEMORY_CHAR_LIMIT:,}, with 5% temporary headroom and at most {NOTE_CHAR_LIMIT:,} per note. Disable this plugin to stop both tools and automatic cross-channel note injection; stored notes remain intact.",
         PARAMETERS,
         memory.call,
         {},

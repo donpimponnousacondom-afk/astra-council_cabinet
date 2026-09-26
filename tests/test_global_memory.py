@@ -168,7 +168,7 @@ async def test_operator_edits_use_same_budget_and_preserve_disabled_notes_and_pr
     assert memory.notes(bot["id"])[0]["source_channel_id"] is None
 
 
-@pytest.mark.parametrize("limit", [0, -1, 48_001, 1.5, True, "1000", None])
+@pytest.mark.parametrize("limit", [0, -1, 128_001, 1.5, True, "1000", None])
 async def test_invalid_budget_sentinels_and_types_rejected(kernel, memory, limit):
     bot = enabled(kernel)
     with pytest.raises(ControlError, match="integer from 1"):
