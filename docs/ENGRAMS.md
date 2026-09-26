@@ -47,6 +47,15 @@ is active; invalid configuration fails before a provider request. Fixed structur
 protocol guidance follows those editable layers. It cannot be disabled by editing
 the prose while retaining the feature.
 
+Engram also requires the **complete selected transcript and retained summary** to
+be represented in the actual request. A disabled conversation layer or a
+`{latest_content}` / `{latest_message}`-only override that omits other selected
+messages rejects the turn before inference, even with history reduction off.
+Use the plugin's recent-message/history-reduction settings for its bounded-input
+experiment. Latest-only prompt experiments remain available with Engram disabled.
+This input-configuration rejection is distinct from an invalid returned state:
+the latter may still deliver its safe ordinary answer without advancing memory.
+
 The final completion consists of ordinary visible answer text followed by a
 nonce-bound terminal block:
 

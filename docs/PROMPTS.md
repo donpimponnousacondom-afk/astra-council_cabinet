@@ -103,6 +103,10 @@ Common generated-template fields: `{bot_name}`, `{bot_id}`, `{discord_user_id}`,
 
 For a minimal text experiment, create a `transcript` template containing `{latest_content}` with role `user`. Select that override on the experimental bot, disable the other generated layers, and deselect additional shared prompts you do not want. Use that bot's existing plugin, image and silence controls to omit tool schemas or pixels. This does not edit its underlying shared model profile.
 
+Run that latest-only experiment with [Engram](ENGRAMS.md) disabled. Engram requires
+all selected messages and the retained summary in the actual request so its
+coverage cannot acknowledge omitted input; use its own retention controls instead.
+
 Actual assistant/tool exchanges, native continuation fields, tool schemas and returned tool results remain protocol/data, not editable instruction templates. Granted tools still carry their schemas and complete error/usage feedback. An entirely empty request fails locally before a paid provider call. Trajectory records capture the actual ordered messages, enabled templates/roles/revisions/hashes and omitted layer keys; disabled stored summaries are not mislabeled as injected summaries.
 
 Compaction source wrappers must include `{transcript}` and, when there is an existing summary, `{summary}` in the corresponding placement. Disabling or omitting those inputs pauses compaction with an explicit error and preserves its old checkpoint; it never silently discards accumulated history. Compaction instructions can be independently edited/disabled. Template rendering and measured budgets use the actual selected roles and text. Fresh image selections remain valid across text compaction for the current turn, as before.
