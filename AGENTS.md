@@ -10,6 +10,18 @@
 - **NEVER PUSH TO MAIN.** Do not commit or merge into `main`. Do not push any branch unless the user explicitly asks. The local `core.hooksPath=.githooks` setting installs an additional pre-push guard for `refs/heads/main`; do not bypass it. On a new clone, install it with `git config core.hooksPath .githooks`.
 - Never stage runtime data, credentials, logs, caches, dependencies, build output or test screenshots. The migration commit removes previously tracked copies from the current tree while preserving local files. Earlier commits still contain those copies; do not rewrite history or rotate credentials without a separately scoped task.
 
+- After finishing an implementation, spawn an independent PR-review sub-agent and
+  have it babysit the published PR's checks. This is the owner's standing review
+  experiment, requested on 2026-09-26. Follow the local
+  [council-pr-babysitter skill](/home/codexy/.codex/skills/council-pr-babysitter/SKILL.md)
+  for the selected reviewer, strict brief, evidence and escalation rules, and
+  [PR review procedure](docs/OPERATIONS.md#independent-pr-review-and-check-monitoring).
+  If no PR is published, review the local commit and state that CI monitoring has
+  not started. The parent validates findings and owns edits/publication; the
+  reviewer must not race it in the shared checkout. Existing push/merge permission
+  boundaries still apply. Improve the skill from demonstrated review problems,
+  and bring recurring model limitations to the owner before switching models.
+
 ## Read before continuing
 
 Read `README.md` and `docs/OPERATIONS.md`. Consult `docs/PLAN.md` for the researched design, `docs/VERIFICATION.md` for actual test evidence, and `docs/API.md` / `docs/PLUGINS.md` for the control and extension contracts. Continue the existing implementation; do not replace it with a new scaffold or assume this is still a planning exercise.

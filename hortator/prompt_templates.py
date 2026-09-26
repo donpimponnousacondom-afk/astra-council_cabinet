@@ -303,13 +303,111 @@ def layer(store, bot, key, values, *, variant="", raw=False):
     }
 
 
+# Inspection metadata only. ContextBuilder/SlashContexts still own assembly.
+# Keep these stages aligned with their request order (covered by request tests).
+INSPECTION_STAGES = {
+    "instructions": (
+        "identity",
+        "tool_guidance",
+        "image_guidance",
+        "image_disabled",
+        "director",
+        "universal",
+    ),
+    "bot": ("persona", "silence_policy", "memory_budget", "memory", "global_memory_budget", "global_memory"),
+    "input": ("slash_invocation", "panel_invocation", "summary", "transcript"),
+    "exchanges": ("reply_repair",),
+    "tail": (
+        "runtime_facts",
+        "dynamic_prompt",
+        "scheduled_alarm",
+        "background_completion",
+        "background_updates",
+    ),
+    "compaction": ("compaction_instructions", "compaction_summary", "compaction_transcript"),
+}
+INSPECTION_RULES = {
+    "director": {"role": "hortator", "when": "Only bots with the Hortator role."},
+    "image_disabled": {"images_disabled": True, "when": "Only when this bot's image inputs are disabled."},
+    "silence_policy": {"when": "The default variant follows this bot's intentional-silence setting."},
+    "memory_budget": {
+        "plugin": "memory",
+        "when": "Channel memory granted and globally enabled; variant follows the channel's current quota usage.",
+    },
+    "memory": {
+        "plugin": "memory",
+        "conditional": True,
+        "when": "Channel memory granted and globally enabled, with saved notes in the current channel.",
+    },
+    "global_memory_budget": {
+        "plugin": "global_memory",
+        "when": "Global memory granted and globally enabled; variant follows this bot's current quota usage.",
+    },
+    "global_memory": {
+        "plugin": "global_memory",
+        "conditional": True,
+        "when": "Global memory granted and globally enabled, with saved notes for this bot.",
+    },
+    "slash_invocation": {
+        "plugin": "slash_commands",
+        "conditional": True,
+        "when": "Only a fresh /prompt invocation. Its prompt supplies the conversation input; channel history is not loaded.",
+    },
+    "panel_invocation": {
+        "plugin": "discord_panel",
+        "conditional": True,
+        "when": "Only an authorized panel invocation. Its prompt supplies the conversation input.",
+    },
+    "summary": {"conditional": True, "when": "Only when the conversation has a retained summary."},
+    "reply_repair": {
+        "conditional": True,
+        "when": "Only a bounded retry after a tool-wrapped answer; appended to the accumulated exchanges before the dynamic tail.",
+    },
+    "scheduled_alarm": {
+        "plugin": "secretary",
+        "conditional": True,
+        "when": "Only a due Secretary alarm wake-up, after permission and delivery-scope checks.",
+    },
+    "background_completion": {
+        "conditional": True,
+        "when": "Only an eligible background-job completion follow-up; enabling this text does not enable any job plugin.",
+    },
+    "background_updates": {
+        "conditional": True,
+        "when": "Only a background dispatch acknowledgement or completion follow-up; enabling this text does not start background work.",
+    },
+    "compaction_instructions": {
+        "conditional": True,
+        "when": "Only a separate compaction request, never ordinary reply generation.",
+    },
+    "compaction_summary": {
+        "conditional": True,
+        "when": "Only a separate compaction request; the retained summary may be empty on first compaction.",
+    },
+    "compaction_transcript": {
+        "conditional": True,
+        "when": "Only a separate compaction request, with the selected history batch.",
+    },
+}
+
+
 def catalog():
+    placement = {
+        key: {"stage": stage, "position": index}
+        for stage, keys in INSPECTION_STAGES.items()
+        for index, key in enumerate(keys)
+    }
     return [
         {
             "id": key,
             "name": next(p["name"] for p in DEFAULT_PROMPTS if p["runtime_layer"] == key),
             "templates": [p for p in DEFAULT_PROMPTS if p["runtime_layer"] == key],
             "placeholders": sorted(PLACEHOLDERS),
+            "inspection": {
+                **placement[key],
+                "when": "Included when enabled and its rendered text is nonempty.",
+                **INSPECTION_RULES.get(key, {}),
+            },
         }
         for key in LAYER_KEYS
     ]

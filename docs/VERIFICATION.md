@@ -4,6 +4,75 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Independent PR-review workflow setup (2026-09-26)
+
+```text
+Commit: df322f7f79db186db329b14156ae82469d244161 plus workflow documentation; dirty at start/end: true/true
+Backend scope: not run; application and test sources unchanged by this setup
+Backend result: not run
+Frontend format/build: not run; no frontend changes
+Browser tests: not run
+Evidence: local skill quick_validate.py exit 0; git diff --check exit 0; PR #70 review/check digest
+Classification: workflow/skill validation and read-only GitHub inspection
+Live checks: none; runtime and bot configuration untouched
+Limitations: skill validation checks structure, not review quality; one review cannot establish recurring model performance
+```
+
+- Installed the local `council-pr-babysitter` skill and recorded the standing
+  delegation rule in AGENTS and OPERATIONS. Reviewer selection and its full brief
+  live in the skill; this does not install a council bot plugin or change grants.
+- Launched the owner's requested `gpt-6-luna` reviewer at `max` reasoning with
+  explicit user scope, pinned base/head, evidence limits and a read-only role.
+  The parent validates findings and owns any edits and GitHub comments. Published
+  digests identify the reviewed SHA; old checks cannot certify a newer head.
+- [PR #70](https://github.com/donpimponnousacondom-afk/astra-council_cabinet/pull/70)
+  holds the review outcome and current hosted-check links. Before this setup,
+  its `df322f7` head had both required checks passing. That observation does not
+  claim the later documentation head has passed, or that review guarantees no bugs.
+
+## Prompt-layer inspector and assembly order (2026-09-26)
+
+```text
+Commit: 065d602ec080ec6f6e473bb35fcfd773d667c777 plus feat/prompt-layer-inspector changes; dirty at start/end: true/true
+Backend scope: full collection
+Backend result: 1545 passed, 0 failed, 0 errors, 1 skipped; exit 0; command 364.549 seconds
+Frontend format/build: passed; exits 0/0; durations 1.892/5.482 seconds
+Browser tests: 64 passed; full Playwright collection; command 125.366 seconds
+Evidence: test-results/verification/result.json; /tmp/prompt-layer-inspector-full-check.log
+Classification: mocked Discord/provider adapters plus local integration and browser fixtures
+Live checks: read-only Loki role/layer flags and pre-deployment configuration fingerprint
+Limitations: opt-in public HTTPS/package-install test skipped; no paid inference or live Discord delivery exercised
+```
+
+- Added read-only catalog placement/eligibility metadata and an inline inspector
+  behind generated layer names. The bot editor lists assembly stages, inserts
+  shared templates in selected order, and separates compaction. Runtime renderers,
+  default prompt text, context assembly, grants and saved configurations are unchanged.
+- Inspectors show saved template text/roles/IDs/revisions, overrides, automatic
+  variants, draft personality/tail sources and unresolved placeholders. Status
+  labels distinguish permission to inject from configuration/event applicability,
+  disabled text and empty sources. Drafts and expanded inspection survive polling;
+  a dashboard/server metadata mismatch produces an explicit notice.
+- Backend regressions compare inspection placement with assembled ordinary,
+  slash and panel requests, including memory, event tails and intervening repair
+  text. Focused prompt suite: 17 passed. Browser coverage exercises keyboard
+  expansion, unsaved source previews, shared selection order, plugin/role/image
+  gates, global plugin disablement on refresh, silence variants, blank overrides,
+  zero inspection mutations and cancelled-draft preservation. The existing prompt
+  toggle/override/reset test also passes in the full collection.
+- Initial new-test runs needed fixture corrections: the dynamic-tail ordering
+  fixture had an empty tail (correctly omitted), and the browser test used an
+  incorrect refresh-button accessible name. Corrected focused checks and the final
+  full gate passed. Two dependency deprecation warnings remain informational.
+- The isolated browser screenshot was visually inspected at 1440×1000; the compact
+  docked layout retains its row controls and expands readable template/source
+  details in place. Evidence remains ignored under
+  `web/test-results/prompt-inspector-prompt-in-8446e--gates-and-preserves-drafts/`.
+- A read-only live check confirmed Loki has role `council` with director text
+  checked: the existing runtime role gate skips that layer. The dynamic tail
+  already follows personality and conversation/tool exchanges; alphabetical
+  presentation had obscured this order.
+
 ## Global Secretary ledger and configurable memory ceilings (2026-09-26)
 
 ```text

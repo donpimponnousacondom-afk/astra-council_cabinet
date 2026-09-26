@@ -8,7 +8,34 @@ Generated instructions are ordinary persisted prompt records, with a **Message r
 
 Edit a default to change its inheriting bots. To specialize one bot, create/clone a template, select the same placement, then choose it under **Bots → bot → Prompts → Injected prompt layers**. Uncheck a layer to omit it. The bulk switches affect generated layers; additional shared prompts retain their separate selection/order. Empty text also omits a layer. A missing or incorrectly placed override fails explicitly instead of silently injecting a fallback.
 
-The placements are:
+### Inspecting a bot's prompt composition
+
+In **Bots → bot → Prompts**, click a generated layer's name to expand its
+read-only inspector. It shows the selected saved template (including operator
+edits), role, ID/revision, default variants or per-bot override, conditions, and
+referenced personality/global/dynamic source text. Personality and dynamic sources
+reflect the current unsaved draft. Inspection never saves a draft or loads live
+conversation/private-note content; **Trajectory** remains the evidence of the
+exact request sent to a provider.
+
+The compact list follows assembly placement, not the alphabetical library order:
+shared generated instructions → selected additional shared prompts in their saved
+order → personality and memory → invocation guidance and conversation input →
+accumulated assistant/tool exchanges and any repair → dynamic tail and wake-up
+context. Compaction layers appear separately in their own request order. Adjacent
+text of the same role may be combined into one provider message. Inspection does
+not change this existing runtime order.
+
+Checked means the layer is permitted **when applicable**, not necessarily
+injected. **Eligible** means configuration allows it; **Turn only** still requires
+the indicated event or context. **Not applicable** explains a role, image setting,
+missing plugin grant or global plugin disablement. **Disabled** is an unchecked
+layer; **Empty** means the template/configured source emits nothing. Conditions
+still apply to overrides. Memory-budget variants are both shown because the
+current conversation/usage is not selected in this editor. Plugin/runtime scope
+and current saved grants are rechecked during actual execution.
+
+### Placement reference
 
 | Layer | Source and conditions |
 | --- | --- |
