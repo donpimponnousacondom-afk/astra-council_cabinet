@@ -17,6 +17,11 @@ current checkout or running configuration.
   explicit opt-in, initially false even when the plugin is enabled. Start live
   memory trials on a disposable/empty-context bot; do not reduce Loki's existing
   context as part of implementation. Keep full operational metadata on disk.
+  Before rollout, the owner requires a second independent context/compaction
+  audit (2026-09-26), titled "Not losing things like tears in the rain". Hold
+  context/compaction implementation changes and runtime deployment pending that
+  review; Engram local validation may finish separately. The ignored `audit/`
+  index links its brief and evidence. No live opt-in is implied by a test pass.
 
 - The experimental [Secretary](SECRETARY.md) provides one persistent ledger per
   bot across contexts, with explicit delivery destinations, snoozes and recurring

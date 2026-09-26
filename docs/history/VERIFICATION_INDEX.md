@@ -4,6 +4,7 @@ Newest-first navigation including nested dated entries; original evidence is pre
 in place. Undated subheadings inherit their containing dated heading; undated sections
 appear last. Historical evidence is not current configuration.
 
+- [Opt-in conversation text and Engram memory (2026-09-26)](../VERIFICATION.md#opt-in-conversation-text-and-engram-memory-2026-09-26)
 - [Independent PR-review workflow setup (2026-09-26)](../VERIFICATION.md#independent-pr-review-workflow-setup-2026-09-26)
 - [Prompt-layer inspector and assembly order (2026-09-26)](../VERIFICATION.md#prompt-layer-inspector-and-assembly-order-2026-09-26)
 - [Global Secretary ledger and configurable memory ceilings (2026-09-26)](../VERIFICATION.md#global-secretary-ledger-and-configurable-memory-ceilings-2026-09-26)
