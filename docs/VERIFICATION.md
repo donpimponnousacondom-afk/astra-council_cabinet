@@ -4,6 +4,32 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Independent PR-review workflow setup (2026-09-26)
+
+```text
+Commit: df322f7f79db186db329b14156ae82469d244161 plus workflow documentation; dirty at start/end: true/true
+Backend scope: not run; application and test sources unchanged by this setup
+Backend result: not run
+Frontend format/build: not run; no frontend changes
+Browser tests: not run
+Evidence: local skill quick_validate.py exit 0; git diff --check exit 0; PR #70 review/check digest
+Classification: workflow/skill validation and read-only GitHub inspection
+Live checks: none; runtime and bot configuration untouched
+Limitations: skill validation checks structure, not review quality; one review cannot establish recurring model performance
+```
+
+- Installed the local `council-pr-babysitter` skill and recorded the standing
+  delegation rule in AGENTS and OPERATIONS. Reviewer selection and its full brief
+  live in the skill; this does not install a council bot plugin or change grants.
+- Launched the owner's requested `gpt-6-luna` reviewer at `max` reasoning with
+  explicit user scope, pinned base/head, evidence limits and a read-only role.
+  The parent validates findings and owns any edits and GitHub comments. Published
+  digests identify the reviewed SHA; old checks cannot certify a newer head.
+- [PR #70](https://github.com/donpimponnousacondom-afk/astra-council_cabinet/pull/70)
+  holds the review outcome and current hosted-check links. Before this setup,
+  its `df322f7` head had both required checks passing. That observation does not
+  claim the later documentation head has passed, or that review guarantees no bugs.
+
 ## Prompt-layer inspector and assembly order (2026-09-26)
 
 ```text

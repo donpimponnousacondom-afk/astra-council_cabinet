@@ -2,6 +2,30 @@
 
 All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The user handles PRs with GitHub **Squash and merge**; after a merge, update main with a fast-forward pull and create a fresh task branch. Never push to main or push any branch without an explicit request.
 
+## Independent PR review and check monitoring
+
+After finishing implementation, prepare a short digest of user intent, scope,
+base/head commits and measured verification, then delegate an independent review
+and CI watch. The owner requested this standing experiment on 2026-09-26. The
+installed [council-pr-babysitter skill](/home/codexy/.codex/skills/council-pr-babysitter/SKILL.md)
+owns the reviewer selection and detailed brief. It is a local Codex skill outside
+Git, not a council bot plugin, and does not grant bots any new capability.
+
+The reviewer reports concrete regressions with file/line, trigger, consequence
+and evidence. The implementing agent verifies and fixes confirmed in-scope
+problems, then requests review of the new commit and watches its checks. Green
+checks and a verdict belong to a specific PR head; new commits need fresh evidence.
+Publish an authorized concise review digest with that SHA, CI links, findings and
+validation limits. Keep comments distinct from formal GitHub approval. Squash
+merging remains an owner action unless explicitly delegated; review permission
+does not bypass the existing publication rules or required checks.
+
+Use real review outcomes to refine the skill. Distinguish prompt/model mistakes
+from application bugs and CI infrastructure problems. Repeated issues despite a
+targeted correction should be reported with examples before changing reviewers.
+Do not claim a completed reviewer continues watching; finish with the actual PR
+state, reviewed head and outstanding actions.
+
 ## Plugins and experiments
 
 Enable the optional researcher through **Plugins → Sub-agent researcher · experimental**,
