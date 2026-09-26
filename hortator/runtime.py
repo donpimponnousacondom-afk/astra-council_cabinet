@@ -111,6 +111,8 @@ class Engine:
             "SELECT 1 FROM contexts WHERE bot_id=? AND channel_id=?", (bot["id"], channel_id)
         ):
             return False
+        if self.store.is_owner_dm(bot, channel_id) and self.registry.owner_dm_enabled(bot):
+            return True
         if bot["role"] != "hortator":
             return self.room_for(bot, channel_id) is not None
         row = self.store.one(
@@ -163,7 +165,15 @@ class Engine:
                         (channel_id, context["last_seen"], OWNER_ID),
                     )
                 )
-            if not force and not unseen and (not bot["evaluate_when_idle"] or bot["role"] == "hortator"):
+            if (
+                not force
+                and not unseen
+                and (
+                    not bot["evaluate_when_idle"]
+                    or bot["role"] == "hortator"
+                    or self.store.is_owner_dm(bot, channel_id)
+                )
+            ):
                 continue
             boundary = self.store.context_boundary(bot["id"], channel_id)
             if boundary and not self.store.one(
@@ -205,7 +215,11 @@ class Engine:
         row = pending[0]
         target = next(t for t in json.loads(row["addressing"])["targets"] if t.get("bot_id") == bot["id"])
         activation = {
-            "kind": "human_reply" if "reply" in target["via"] else "human_mention",
+            "kind": "human_reply"
+            if "reply" in target["via"]
+            else "owner_message"
+            if "dm" in target["via"]
+            else "human_mention",
             "message_id": row["discord_id"],
             "channel_id": channel_id,
             "author_id": row["author_id"],

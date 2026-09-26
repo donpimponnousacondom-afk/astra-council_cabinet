@@ -258,6 +258,7 @@ class PluginSpec:
     keyless: bool = False
     installed_description: bool = False
     wake_source: WakeSource | None = None
+    owner_dm: bool = False
 
 
 class Registry:
@@ -554,6 +555,13 @@ class Registry:
         for spec in self.specs.values():
             if spec.bind:
                 spec.bind(kernel)
+
+    def owner_dm_enabled(self, bot):
+        """Explicit plugin grant for conversation with the immutable human owner."""
+        return any(
+            spec.owner_dm and self.allowed(spec.id, ToolContext(bot, "", "", True))
+            for spec in self.specs.values()
+        )
 
     def pending_wake(self, bot):
         for spec in self.specs.values():

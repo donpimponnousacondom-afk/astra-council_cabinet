@@ -7,7 +7,7 @@ import copy
 from dataclasses import replace
 from datetime import datetime
 
-from .models import ControlError
+from .models import ControlError, OWNER_ID
 from .store import uid
 from .timekeeping import council_timezone, local_timestamp
 from .tool_feedback import errors_for
@@ -23,13 +23,18 @@ CONFIG_SCHEMA = {
     },
 }
 DESCRIPTION = (
-    "Secretary: schedule reminders, recurring alarms and snoozes for this bot in THIS conversation. "
+    "Secretary: schedule reminders, recurring alarms and snoozes for this bot. "
+    "Ordinary conversations keep their destination. Public /prompt in a configured room uses that room; "
+    "private /prompt and /prompt outside configured rooms use the human owner's private DM, even across servers. "
+    "The receipt identifies the destination. list and later changes use that same destination's ledger. "
     "Use schedule with a unique key, a self-contained message and exactly one of at (ISO 8601 with "
     "explicit UTC offset) or after_seconds. Interpret human dates using the runtime clock/timezone; "
     "ask if the intended time is unclear. Optional repeat_seconds repeats until cancelled; omit for "
     "one reminder. Never create repetition unless requested. The saved alarm wakes you with its "
     "message and current conversation; you write a NEW ordinary response. Do not wait or poll: "
-    "acknowledge the actual saved time and finish your turn. Waiting holds no worker or typing indicator. "
+    "acknowledge the actual saved time AND destination and finish your turn. Only a successful Secretary "
+    "receipt confirms an alarm; a failed call or memory note does not schedule anything. "
+    "Waiting holds no worker or typing indicator. "
     "Delivery can be late while paused, offline, busy or budget-limited. list/status inspect the ledger; "
     "snooze moves a reminder to at/after_seconds (also rearms a fired reminder), update changes its "
     "message or repeat_seconds (0 makes it one-off), cancel stops future occurrences. Snooze preserves "
@@ -38,7 +43,7 @@ DESCRIPTION = (
     "An occurrence is claimed once, even if inference/delivery fails or you choose silence; status shows "
     "the last turn outcome. No automatic delivery retry. Cancellation does not recall a turn already started. "
     'Example: {"operation":"schedule","key":"check-usage","message":"Remind root to check usage",'
-    '"after_seconds":3600}. No cross-channel or other-bot access. {} returns usage only.'
+    '"after_seconds":3600}. No arbitrary destination or other-bot access. {} returns usage only.'
 )
 FIELDS = {
     "operation": {"type": "string", "enum": ["schedule", "list", "status", "snooze", "update", "cancel"]},
@@ -129,6 +134,7 @@ class Secretary:
                 keyless=True,
                 installed_description=True,
                 wake_source=self,
+                owner_dm=True,
                 context_spec=self.spec_for,
             )
         )
@@ -195,6 +201,7 @@ class Secretary:
         return {
             **row,
             "reminder_id": row["id"],
+            "destination": self.destination(row["bot_id"], row["channel_id"]),
             "timezone": zone,
             "due_at": local_timestamp(row["due_at"], zone),
             **{
@@ -202,6 +209,16 @@ class Secretary:
                 for key in ("created_at", "updated_at", "last_fired_at")
             },
             "last_turn_status": turn["status"] if turn else None,
+        }
+
+    def destination(self, bot_id, channel_id):
+        private = self.store.one(
+            "SELECT 1 FROM owner_dm_channels WHERE bot_id=? AND channel_id=?", (bot_id, channel_id)
+        )
+        return {
+            "kind": "owner_dm" if private else "conversation",
+            "channel_id": channel_id,
+            **({"recipient_id": OWNER_ID, "label": "Private DM to owner"} if private else {}),
         }
 
     def inventory(self, bot_id=None, channel_id=None):
@@ -238,6 +255,7 @@ class Secretary:
                             "state",
                             "repeat_seconds",
                             "last_turn_status",
+                            "destination",
                         )
                     },
                     "message_preview": row["message"][:240],
@@ -291,6 +309,7 @@ class Secretary:
             "due_at": local_timestamp(row["due_at"], council_timezone(self.store)),
             "repeat_seconds": row["repeat_seconds"],
             "late_seconds": round(now - row["due_at"]),
+            "destination": self.destination(row["bot_id"], row["channel_id"]),
         }
         self.store.execute(
             "UPDATE secretary_reminders SET state=?,due_at=?,last_turn_id=?,last_fired_at=?,updated_at=?,revision=revision+1 WHERE id=?",
@@ -433,4 +452,57 @@ class Secretary:
         return self.receipt(result)
 
     async def call(self, args, context, config, key):
-        return self.mutate(args, context.bot, context.channel_id, context.turn_id)
+        from .plugins import ToolContext
+
+        bot, channel_id = context.bot, context.channel_id
+        if bot.get("invocation", {}).get("kind") == "slash":
+            # Use authenticated, durable ingress evidence, never a tool argument or a guessed ID.
+            invocation = self.store.one(
+                "SELECT * FROM slash_invocations WHERE turn_id=? AND bot_id=? AND actor_id=?",
+                (context.turn_id, bot["id"], OWNER_ID),
+            )
+            if not invocation or invocation["application_id"] != bot["application_id"]:
+                raise ControlError("Secretary needs a verified owner slash invocation")
+            source = invocation["channel_id"]
+            configured_room = (
+                not invocation["private"]
+                and bot["role"] != "hortator"
+                and any(
+                    room["id"] in bot["room_ids"]
+                    and room["guild_id"] == invocation["guild_id"]
+                    and room["channel_id"] == source
+                    for room in self.store.list("rooms")
+                )
+            )
+            if configured_room:
+                # A verified slash can be the first observation of a configured room.
+                # It still contributes no ambient history to the isolated slash turn.
+                self.store.execute(
+                    "INSERT INTO channels(id,guild_id) VALUES(?,?) ON CONFLICT(id) DO NOTHING",
+                    (source, invocation["guild_id"]),
+                )
+            if not invocation["private"] and (
+                self.engine.channel_allowed(bot, source)
+                or bot["role"] != "hortator"
+                and self.engine.room_for(bot, source)
+            ):
+                channel_id = source
+                self.store.context(bot["id"], channel_id)
+            else:
+                errors = errors_for(PARAMETERS, args)
+                if errors:
+                    raise ControlError("Invalid Secretary arguments")
+                saved = self.store.one(
+                    "SELECT channel_id FROM owner_dm_channels WHERE bot_id=? AND application_id=?",
+                    (bot["id"], bot["application_id"]),
+                )
+                if saved:
+                    channel_id = saved["channel_id"]
+                    self.store.context(bot["id"], channel_id)
+                else:
+                    if not self.engine.transport:
+                        raise ControlError("Discord connector is unavailable to resolve the owner's DM")
+                    channel_id = await self.engine.transport.owner_dm(bot)
+            if not self.registry.allowed(ID, ToolContext(bot, channel_id, context.turn_id, True)):
+                raise ControlError("Secretary grant changed while resolving the destination")
+        return self.mutate(args, bot, channel_id, context.turn_id)

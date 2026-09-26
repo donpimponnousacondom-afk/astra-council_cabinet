@@ -138,3 +138,9 @@ pagination, downloads, revocation and the narrow Discord diagnostic exception.
 The `keyless` and `installed_description` booleans default false. They control catalog presentation: whether the credential field is needed and whether the current installed description supersedes saved seeded text. They do not grant capabilities, change credential resolution, or authorize model access. Existing plugins without hooks retain their previous behavior; no hook is required to register a normal tool.
 
 Core validation for shared workspace/document constraints and shell's additional workspace grant remain explicit. Hooks are not a dependency resolver or a new permission system. Background jobs remain a Kernel-owned service even with no researcher registered; removing the researcher removes its worker/contract hooks, not the service or its durable records. See [service construction and ownership](CONCURRENCY.md#service-construction-and-binding).
+
+`PluginSpec.owner_dm` defaults false. A globally enabled, per-bot granted plugin
+may opt into exact-owner one-to-one DM intake and delivery. The connector persists
+verified bot/application/channel bindings; the scheduler still checks contexts,
+current grants and normal admission. This admits no group DMs, arbitrary recipients
+or ambient server scope. Secretary uses it for [private reminders](SECRETARY.md).

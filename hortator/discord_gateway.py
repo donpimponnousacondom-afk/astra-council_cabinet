@@ -457,6 +457,12 @@ class DiscordManager:
                 return f"owner:{bot['id']}"
             return None
         if not message.guild:
+            if (
+                owner_message(message)
+                and getattr(message.channel, "type", None) == discord.ChannelType.private
+                and self.service.engine.registry.owner_dm_enabled(bot)
+            ):
+                return f"owner:{bot['id']}"
             return None
         for room in self.store.list("rooms"):
             if (
@@ -501,7 +507,13 @@ class DiscordManager:
         return self.scope(
             bot,
             SimpleNamespace(
-                channel=SimpleNamespace(id=row["channel_id"], parent_id=channel["parent_id"]),
+                channel=SimpleNamespace(
+                    id=row["channel_id"],
+                    parent_id=channel["parent_id"],
+                    type=discord.ChannelType.private
+                    if self.store.is_owner_dm(bot, row["channel_id"])
+                    else None,
+                ),
                 guild=SimpleNamespace(id=channel["guild_id"]) if channel["guild_id"] else None,
                 author=SimpleNamespace(
                     id=row["author_id"],
@@ -599,6 +611,12 @@ class DiscordManager:
         scope = self.scope(bot, message)
         if not scope:
             return
+        if (
+            not message.guild
+            and owner_message(message)
+            and (getattr(message.channel, "type", None) == discord.ChannelType.private)
+        ):
+            self.store.remember_owner_dm(bot, str(message.channel.id))
         if message.content.lstrip().startswith("!"):
             if bot["role"] == "hortator" and not historical:
                 await self.command(bot, message)
@@ -1100,6 +1118,31 @@ class DiscordManager:
             raise ControlError("Configuration must be a JSON object")
         return result
 
+    async def owner_dm(self, bot):
+        """Resolve the fixed owner recipient; never take a model-supplied destination."""
+        if not self.service.engine.registry.owner_dm_enabled(bot):
+            raise ControlError("Owner DM capability is not enabled")
+        client = self.clients.get(bot["id"])
+        if not client or not client.is_ready():
+            raise ControlError("Discord gateway is not ready to resolve the owner's DM")
+        async with asyncio.timeout(15):
+            user = client.get_user(int(OWNER_ID)) or await client.fetch_user(int(OWNER_ID))
+            channel = await user.create_dm()
+        if (
+            not isinstance(channel, discord.DMChannel)
+            or str(getattr(channel.recipient, "id", "")) != OWNER_ID
+        ):
+            raise ControlError("Discord did not return the owner's private DM")
+        current = self.store.get("bots", bot["id"])
+        if (
+            not current
+            or current["application_id"] != bot["application_id"]
+            or not (self.service.engine.registry.owner_dm_enabled(current))
+        ):
+            raise ControlError("Owner DM capability changed while resolving the destination")
+        self.store.remember_owner_dm(current, str(channel.id))
+        return str(channel.id)
+
     async def typing(self, bot, channel_id, *, turn_id):
         reported_failure = False
         while not self.closed:
@@ -1180,6 +1223,16 @@ class DiscordManager:
         files = []
         try:
             channel = client.get_channel(int(channel_id)) or await client.fetch_channel(int(channel_id))
+            if self.store.is_owner_dm(bot, channel_id):
+                current = self.store.get("bots", bot["id"])
+                if (
+                    not isinstance(channel, discord.DMChannel)
+                    or str(getattr(channel.recipient, "id", "")) != OWNER_ID
+                    or not current
+                    or current["application_id"] != bot["application_id"]
+                    or not self.service.engine.channel_allowed(current, channel_id)
+                ):
+                    raise DeliveryError("Owner DM destination or capability is no longer valid")
             if isinstance(channel, discord.ForumChannel):
                 raise DeliveryError("Forum messages must target a thread; create one with !thread")
             files = [discord.File(path) for path in paths]

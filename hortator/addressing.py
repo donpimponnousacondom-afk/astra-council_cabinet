@@ -85,6 +85,19 @@ async def capture(store, vault, message, *, historical=False, receiving_bot_id=N
     author = str(message.author.id)
     kind = "webhook" if message.webhook_id else "bot" if message.author.bot or author in known else "human"
     targets = {}
+    from .models import OWNER_ID
+
+    receiving = store.get("bots", receiving_bot_id) if receiving_bot_id else None
+    if (
+        receiving
+        and kind == "human"
+        and author == OWNER_ID
+        and not getattr(message, "guild", None)
+        and store.is_owner_dm(receiving, str(message.channel.id))
+    ):
+        identity = next((item for item in known.values() if item["bot_id"] == receiving_bot_id), None)
+        if identity:
+            targets[identity["user_id"]] = {**identity, "via": ["dm"]}
     for user in getattr(message, "mentions", []):
         user_id = str(user.id)
         targets[user_id] = {

@@ -4,6 +4,7 @@ Newest-first navigation including nested dated entries; original evidence is pre
 in place. Undated subheadings inherit their containing dated heading; undated sections
 appear last. Historical evidence is not current configuration.
 
+- [Secretary slash routing and private owner DMs (2026-09-26)](../VERIFICATION.md#secretary-slash-routing-and-private-owner-dms-2026-09-26)
 - [Remaining hosted Screen working-directory failure (2026-09-25)](../VERIFICATION.md#remaining-hosted-screen-working-directory-failure-2026-09-25)
 - [Secretary owner editing and portable CI terminal fixture (2026-09-25)](../VERIFICATION.md#secretary-owner-editing-and-portable-ci-terminal-fixture-2026-09-25)
 - [Experimental Secretary alarms and snooze (2026-09-25)](../VERIFICATION.md#experimental-secretary-alarms-and-snooze-2026-09-25)
