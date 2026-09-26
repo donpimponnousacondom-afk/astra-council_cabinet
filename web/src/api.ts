@@ -29,6 +29,15 @@ export type Dashboard = {
     name: string;
     templates: RecordData[];
     placeholders: string[];
+    inspection: {
+      stage: string;
+      position: number;
+      when: string;
+      conditional?: boolean;
+      plugin?: string;
+      role?: string;
+      images_disabled?: boolean;
+    };
   }[];
   plugins: RecordData[];
   rooms: RecordData[];

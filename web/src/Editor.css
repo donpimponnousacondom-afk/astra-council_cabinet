@@ -516,16 +516,17 @@
 }
 .prompt-layer-row {
   display: grid;
-  grid-template-columns: minmax(210px, 1fr) minmax(190px, 1fr);
+  grid-template-columns: minmax(200px, 1fr) 100px minmax(165px, 1fr);
   align-items: center;
   gap: 12px;
   min-height: 34px;
   border-bottom: 1px solid var(--border);
 }
-.prompt-layer-row label {
+.prompt-layer-name {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
+  min-width: 0;
 }
 .prompt-layer-row input[type="checkbox"] {
   flex: 0 0 14px;
@@ -535,6 +536,48 @@
 .prompt-layer-row select {
   min-width: 0;
   width: 100%;
+}
+.prompt-inspect-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 4px 0;
+}
+.prompt-inspect-button svg {
+  flex-shrink: 0;
+}
+.prompt-inspect-button:hover,
+.prompt-inspect-button[aria-expanded="true"] {
+  color: var(--link, #9cdcfe);
+}
+.prompt-layer-status {
+  color: var(--muted);
+  font-size: 10px;
+}
+.prompt-stage {
+  font-size: 11px;
+  margin: 16px 0 6px;
+  color: var(--link, #9cdcfe);
+}
+.prompt-layer-inspection {
+  padding: 8px 12px;
+  background: var(--bg);
+  border-left: 2px solid var(--accent, #007acc);
+  overflow-wrap: anywhere;
+}
+.prompt-layer-inspection p {
+  margin: 5px 0;
+}
+.prompt-layer-inspection pre {
+  white-space: pre-wrap;
+  max-height: 280px;
+}
+.prompt-shared-insertion {
+  padding: 0 0 4px 22px;
 }
 
 .bot-reset-panel .danger-text {

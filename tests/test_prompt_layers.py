@@ -4,7 +4,7 @@ import pytest
 
 from conftest import configured, ingest
 from hortator.models import ControlError
-from hortator.prompt_templates import DEFAULT_PROMPTS, LAYER_KEYS
+from hortator.prompt_templates import DEFAULT_PROMPTS, LAYER_KEYS, INSPECTION_STAGES, catalog
 
 CHANNEL = "222222222222222222"
 
@@ -13,6 +13,71 @@ async def assemble(k, bot, summary=""):
     return await k.engine.contexts.assemble(
         bot, k.store.get("profiles", "balanced"), CHANNEL, k.store.transcript(CHANNEL), summary
     )
+
+
+async def test_inspector_order_matches_assembled_context_and_conditional_gates(kernel):
+    bot = configured(
+        kernel,
+        role="hortator",
+        enabled_plugins=["memory", "global_memory"],
+        allow_images=False,
+        dynamic_prompt="test tail",
+    )
+    plugin = kernel.store.get("plugins", "global_memory")
+    kernel.store.put("plugins", {**plugin, "enabled": True})
+    kernel.store.execute("INSERT INTO memories VALUES(?,?,?,?,?)", ("ada", CHANNEL, "k", "channel note", 1))
+    kernel.store.execute(
+        "INSERT INTO global_memories VALUES(?,?,?,?,?)", ("ada", "k", "global note", CHANNEL, 1)
+    )
+    ingest(kernel)
+    bot = {
+        **bot,
+        "scheduled_wake": {"message": "test reminder"},
+        "background_completion": {"jobs": [], "progress": {}},
+    }
+    _, meta = await assemble(kernel, bot, "retained summary")
+    actual = [p["id"] for p in meta["prompt_layers"] if not p["id"].startswith("prompt:")]
+    expected = [key for keys in INSPECTION_STAGES.values() for key in keys if key in actual]
+    assert expected == actual
+    assert {
+        "director",
+        "image_disabled",
+        "memory",
+        "global_memory",
+        "scheduled_alarm",
+        "background_updates",
+    } <= set(actual)
+    assert actual.index("persona") < actual.index("transcript") < actual.index("dynamic_prompt")
+    assert set(LAYER_KEYS) == {key for keys in INSPECTION_STAGES.values() for key in keys}
+
+    ordinary = {**bot, "role": "council", "allow_images": True, "enabled_plugins": []}
+    static = {p["id"] for p in kernel.engine.contexts.layers(ordinary, CHANNEL)}
+    assert not {"director", "image_disabled", "memory", "global_memory"} & static
+    rules = {p["id"]: p["inspection"] for p in catalog()}
+    assert rules["director"]["role"] != ordinary["role"]
+    assert rules["memory"]["plugin"] not in ordinary["enabled_plugins"]
+    assert rules["global_memory"]["plugin"] not in ordinary["enabled_plugins"]
+
+
+@pytest.mark.parametrize("kind", ["slash", "panel"])
+async def test_inspector_invocation_and_exchange_positions_match_requests(kernel, kind):
+    from hortator.slash_commands import SlashContexts
+
+    bot = configured(kernel, persona="PERSONALITY_MARKER", dynamic_prompt="TAIL_MARKER")
+    contexts = SlashContexts(kernel.store, kernel.pool, {"kind": kind}, None)
+    messages, meta = await contexts.assemble(
+        bot,
+        kernel.store.get("profiles", "balanced"),
+        CHANNEL,
+        [],
+        "",
+        extras=[{"role": "system", "content": "REPAIR_MARKER"}],
+    )
+    keys = [p["id"] for p in meta["prompt_layers"] if not p["id"].startswith("prompt:")]
+    assert keys == [key for stage in INSPECTION_STAGES.values() for key in stage if key in keys]
+    assert keys.index(kind + "_invocation") < keys.index("transcript")
+    content = "\n".join(message["content"] for message in messages)
+    assert content.index("PERSONALITY_MARKER") < content.index("REPAIR_MARKER") < content.index("TAIL_MARKER")
 
 
 async def test_all_generated_layers_editable_and_seed_never_overwrites(kernel, owner):

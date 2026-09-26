@@ -15,6 +15,7 @@ import { api, control, credential, dateLabel, kindLabel, num } from "./api";
 import type { Dashboard, Kind, RecordData } from "./api";
 import { ReasoningEditor, reasoningFields } from "./Reasoning";
 import { FooterEditor } from "./Footer";
+import { PromptLayers } from "./PromptLayers";
 import { PricingEditor } from "./Pricing";
 import { GlobalMemoryPanel } from "./GlobalMemory";
 import { SlashCommandSetup } from "./SlashCommands";
@@ -697,91 +698,11 @@ export function Editor({
                       protocol data. Disable their plugins to remove those
                       tools.
                     </Notice>
-                    <fieldset className="prompt-layer-controls">
-                      <legend>Injected prompt layers</legend>
-                      <div className="inline-actions">
-                        <button
-                          type="button"
-                          onClick={() => set("disabled_prompt_layers", [])}
-                        >
-                          Enable generated layers
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            set(
-                              "disabled_prompt_layers",
-                              (dashboard.prompt_layers || []).map((p) => p.id),
-                            )
-                          }
-                        >
-                          Disable generated layers
-                        </button>
-                      </div>
-                      <p className="muted small-text">
-                        Checked layers apply when relevant. Blank templates
-                        inject nothing. Overrides use a template with the same
-                        placement. Disabling compaction input pauses compaction
-                        without erasing its checkpoint.
-                      </p>
-                      {(dashboard.prompt_layers || []).map((layer) => (
-                        <div className="prompt-layer-row" key={layer.id}>
-                          <label>
-                            <input
-                              type="checkbox"
-                              aria-label={`Include ${layer.name}`}
-                              checked={
-                                !(draft.disabled_prompt_layers || []).includes(
-                                  layer.id,
-                                )
-                              }
-                              onChange={(e) =>
-                                set(
-                                  "disabled_prompt_layers",
-                                  e.target.checked
-                                    ? (
-                                        draft.disabled_prompt_layers || []
-                                      ).filter(
-                                        (key: string) => key !== layer.id,
-                                      )
-                                    : [
-                                        ...(draft.disabled_prompt_layers || []),
-                                        layer.id,
-                                      ],
-                                )
-                              }
-                            />
-                            <span>{layer.name}</span>
-                          </label>
-                          <select
-                            aria-label={`Template for ${layer.name}`}
-                            value={
-                              draft.prompt_layer_overrides?.[layer.id] || ""
-                            }
-                            onChange={(e) => {
-                              const overrides = {
-                                ...(draft.prompt_layer_overrides || {}),
-                              };
-                              if (e.target.value)
-                                overrides[layer.id] = e.target.value;
-                              else delete overrides[layer.id];
-                              set("prompt_layer_overrides", overrides);
-                            }}
-                          >
-                            <option value="">
-                              Default · automatic variant
-                            </option>
-                            {dashboard.prompts
-                              .filter((p) => p.runtime_layer === layer.id)
-                              .map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name} · {p.role || "system"}
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-                      ))}
-                    </fieldset>
+                    <PromptLayers
+                      draft={draft}
+                      dashboard={dashboard}
+                      set={set}
+                    />
                   </>
                 )}
                 {tab === "tools" && (
