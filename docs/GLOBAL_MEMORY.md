@@ -8,7 +8,7 @@ The original `memory` plugin remains separate. Its notes are scoped to a bot and
 
 1. Enable **Plugins → Global memory (private to this bot)** globally.
 2. Grant that capability in **Bots → Edit bot → Capabilities** for the intended bot.
-3. Set its **Global memory budget** to a positive integer from **1 to 48,000**, default **48,000**. This is one total across its channels, not a separate allowance per channel.
+3. Set its **Global memory budget** to a positive integer from **1 to 128,000**, default **48,000**. This is one total across its channels, not a separate allowance per channel.
 
 The plugin is disabled globally on first registration and is not automatically granted to existing bots. Disabling either the global plugin switch or that bot's grant removes its tool and automatic global-note prompt layers on subsequent rounds, without deleting its stored notes. The authenticated owner can still inspect and edit retained notes. Zero, negative and “unlimited” budget sentinels are rejected; the plugin switch controls enablement.
 
@@ -106,3 +106,4 @@ The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
 
 - The owner selected global memories private to each bot across its channels. Keep this a separate opt-in plugin and quota from private channel notes; never turn it into a notebook shared between bots. Companion slash ingress is also opt-in and must preserve existing ordinary bot behavior and Hortator's owner/control-channel restrictions. No existing plugin grants, credentials, prompts or bot records are changed merely by installing these features.
+- On 2026-09-26 the owner raised the configurable channel/global memory ceiling to 128,000 characters for experimentation. Keep the 48,000 defaults, existing saved budgets, 8,000-character note bound and 5% consolidation headroom unchanged; this unlock does not change configuration.

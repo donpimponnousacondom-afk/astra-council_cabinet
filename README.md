@@ -69,7 +69,7 @@ Discord application creation, token issuance, and authorization are Developer Po
 
 Only Discord snowflake **`1482143139828596916`** (`.normal.man.`, “The Boss”) can command or converse with Hortator. This is a code constant checked against gateway identity. Display names, roles, server ownership, quoted instructions, and webhook authors never grant access. Other humans can converse with ordinary council members according to room policy.
 
-Set **Bots → Edit bot → Capabilities → Private memory budget (characters per channel)** to an integer from **1 to 48,000**, default **48,000**. A 5% temporary allowance avoids rejecting small overshoots; the bot then receives a warning and must shrink/delete notes before adding more. Disable **Private memory** to stop its tools and automatic note injection while retaining stored notes. Other tool grants remain independent. [Memory operations](docs/OPERATIONS.md#private-memory-budgets).
+Set **Bots → Edit bot → Capabilities → Private memory budget (characters per channel)** to an integer from **1 to 128,000**, default **48,000**. A 5% temporary allowance avoids rejecting small overshoots; the bot then receives a warning and must shrink/delete notes before adding more. Disable **Private memory** to stop its tools and automatic note injection while retaining stored notes. Other tool grants remain independent. [Memory operations](docs/OPERATIONS.md#private-memory-budgets).
 
 ## Fine control of providers and models
 

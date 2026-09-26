@@ -187,11 +187,13 @@ async def test_scope_idempotency_quota_and_usage(kernel):
         schedule(kernel, context, message="Different")
     with pytest.raises(ControlError, match="allowance"):
         schedule(kernel, context, key="second")
-    for bot, channel in [(context.bot, "other"), ({**context.bot, "id": "loki"}, CHANNEL)]:
-        with pytest.raises(ControlError, match="not found"):
-            kernel.registry.secretary.mutate(
-                {"operation": "cancel", "reminder_id": row["id"]}, bot, channel, "evil"
-            )
+    with pytest.raises(ControlError, match="not found"):
+        kernel.registry.secretary.mutate(
+            {"operation": "cancel", "reminder_id": row["id"]},
+            {**context.bot, "id": "loki"},
+            CHANNEL,
+            "evil",
+        )
     config = kernel.store.get("plugins", "secretary")
     kernel.store.put("plugins", {**config, "enabled": False})
     result = await kernel.registry.call("secretary", {"operation": "list"}, context, "revoked")
@@ -376,6 +378,19 @@ def test_owner_api_auth_csrf_and_stale_revision(tmp_path):
         result = client.get("/api/secretary?bot_id=ada").json()
         assert len(result) == 1 and result[0]["id"] == row["id"]
         due = result[0]["due_at"]
+
+        def observe_dm():
+            store = app.state.kernel.store
+            store.remember_owner_dm(store.get("bots", "ada"), "666666666666666666")
+
+        client.portal.call(observe_dm)
+        move = {"operation": "update", "destination": "owner_dm", "revision": result[0]["revision"]}
+        response = client.post(path, json=move, headers=headers)
+        assert response.status_code == 200
+        result[0] = response.json()
+        assert result[0]["channel_id"] == "666666666666666666"
+        assert result[0]["due_at"] == due and result[0]["state"] == "scheduled"
+        assert client.post(path, json=move, headers=headers).status_code == 409
 
         def disable_plugin():
             store = app.state.kernel.store

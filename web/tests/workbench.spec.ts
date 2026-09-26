@@ -501,8 +501,8 @@ test("bot memory budget, silence and footer controls persist in a docked editor 
   const otherBot = await record(page, "bots", "hortator");
   await expect(memoryBudget).toHaveValue("48000");
   await expect(memoryBudget).toHaveAttribute("min", "1");
-  await expect(memoryBudget).toHaveAttribute("max", "48000");
-  for (const invalid of ["0", "-1", "48001", ""]) {
+  await expect(memoryBudget).toHaveAttribute("max", "128000");
+  for (const invalid of ["0", "-1", "128001", ""]) {
     await memoryBudget.fill(invalid);
     await dialog
       .getByRole("button", { name: "Save changes", exact: true })

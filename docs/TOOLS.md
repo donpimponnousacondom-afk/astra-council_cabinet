@@ -12,7 +12,7 @@ The model receives this instruction in its shared runtime prompt and each advert
 
 ## Private memory allowance and repair
 
-The built-in `memory` tool receives the bot's `memory_char_limit` (1–48,000,
+The built-in `memory` tool receives the bot's `memory_char_limit` (1–128,000,
 default 48,000) per channel. Tool descriptions and refreshed prompt guidance show
 actual used/remaining characters. `read`, `write` and `delete` results contain a
 `budget` object with `limit_chars`, `used_chars`, `remaining_chars`, `grace_chars`,
@@ -124,4 +124,4 @@ Existing decision dates and qualifications below remain authoritative.
 
 - Preserve the shared empty-argument usage and complete argument-error contract in [docs/TOOLS.md](TOOLS.md) for every tool/plugin, including terminal tools. Do not replace it with first-error validation or unbounded repair retries.
 
-- Private memory uses per-bot `memory_char_limit` (integer 1–48,000, default 48,000) in the modern Capabilities editor and shared API schema. Zero/negative/unlimited sentinels are forbidden: disable the memory plugin to stop both tools and automatic note injection, retaining notes for owner inspection/re-enabling. Keep the 8,000-character per-note bound. Allow a temporary 5% aggregate overshoot; return actual usage and consolidation guidance in tool descriptions/results and each new prompt. While over budget, accept only shrinking writes or deletes until back within budget. Preserve scoped ownership, replacement accounting and identical owner/tool enforcement; never silently truncate or rewrite notes. See docs/OPERATIONS.md and docs/TOOLS.md.
+- Private memory uses per-bot `memory_char_limit` (integer 1–128,000, default 48,000) in the modern Capabilities editor and shared API schema. Zero/negative/unlimited sentinels are forbidden: disable the memory plugin to stop both tools and automatic note injection, retaining notes for owner inspection/re-enabling. Keep the 8,000-character per-note bound. Allow a temporary 5% aggregate overshoot; return actual usage and consolidation guidance in tool descriptions/results and each new prompt. While over budget, accept only shrinking writes or deletes until back within budget. Preserve scoped ownership, replacement accounting and identical owner/tool enforcement; never silently truncate or rewrite notes. See docs/OPERATIONS.md and docs/TOOLS.md.

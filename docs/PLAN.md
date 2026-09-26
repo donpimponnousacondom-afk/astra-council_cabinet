@@ -10,8 +10,9 @@ current checkout or running configuration.
 
 ## Current work and acceptance
 
-- The experimental [Secretary](SECRETARY.md) provides scoped persisted reminders,
-  snoozes and recurring alarms through ordinary bot turns. It is off by default;
+- The experimental [Secretary](SECRETARY.md) provides one persistent ledger per
+  bot across contexts, with explicit delivery destinations, snoozes and recurring
+  alarms through ordinary bot turns. It is off by default;
   live opt-in and reminder acceptance remain operator actions.
 - The audit remediation implements bounded runtime/plugin/test-support changes,
   structured verification and preserved documentation contracts. Follow

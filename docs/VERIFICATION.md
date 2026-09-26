@@ -4,6 +4,56 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Global Secretary ledger and configurable memory ceilings (2026-09-26)
+
+```text
+Commit: eecd50f1d5f9d854e5b8ed5377aff810e7f71c87 plus feat/secretary-global-ledger changes; dirty at start/end: true/true
+Backend scope: full collection
+Backend result: 1542 passed, 0 failed, 0 errors, 1 skipped; exit 0; command 349.290 seconds
+Frontend format/build: passed; exits 0/0; durations 1.809/5.314 seconds
+Browser tests: 63 passed; full Playwright collection; command 117.916 seconds
+Evidence: test-results/verification/result.json; /tmp/secretary-global-full-check.log
+Classification: mocked Discord/provider adapters plus local integration and browser fixtures
+Live checks: read-only configuration/reminder inventory and pre-migration application snapshot
+Limitations: opt-in public HTTPS/package-install test skipped; live Discord reminder delivery not exercised
+```
+
+- Secretary now has one ledger per bot across rooms, DMs and slash contexts,
+  independent of global memory. Listing and ID-based changes retain bot isolation.
+  Snoozing/editing elsewhere preserves the saved delivery route. Explicit
+  `destination` choices and `destinations` discovery let a bot choose a permitted
+  observed channel or the fixed owner's DM; current/default slash routing remains.
+  Dashboard guidance documents bot-wide visibility, including private reminders.
+- Keys are unique per bot. The upgrade preserves every alarm and handles legacy
+  collisions with deterministic key suffixes, without deleting, merging or
+  rescheduling rows. Tests cover collisions with existing suffixed keys, repeated
+  migrations, cross-context retries, parallel calls, revision protection during
+  DM resolution, revoked grants/rooms and clean-slate boundaries. Owner API edits
+  still enforce authentication, CSRF and revisions, including explicit moves.
+- The configurable private/global memory maximum is 128,000 characters. Defaults
+  remain 48,000, with unchanged per-note and consolidation rules. Regressions save
+  the new maximum through the owner service and dashboard, write through both
+  tools to the budget/headroom boundary, reject oversized notes and preserve
+  other budgets/grants. No live configuration was edited for this change.
+- Initial full backend run: 1541 passed, 1 failed, 1 skipped. The failed subprocess
+  cleanup test encountered Linux ESRCH while reading a child that had just exited;
+  its fixture previously handled only ENOENT. Both exit races now count as a gone
+  child; application timeout/cleanup behavior is unchanged. An isolated rerun
+  passed. A subsequent gate stopped at formatting of that exception tuple; after
+  formatting, the final full gate passed in 476.019 seconds. Initial evidence is
+  retained locally in `/tmp/secretary-global-first-check.log` and
+  `/tmp/secretary-global-first-result.json`.
+- Agent-browser opened the isolated fixture dashboard, navigated to Secretary,
+  and inspected both docked and maximized layouts. The updated notice, settings
+  and ledger rendered, with no page errors, error overlay or horizontal overflow.
+  Screenshots were visually checked and remain under ignored
+  `test-results/secretary-global/`. React review found no new hooks, effects,
+  network calls or state introduced by the two TSX text changes.
+- Consistent pre-migration snapshot:
+  `/home/codexy/.local/share/hortator-snapshots/20260926T064405699468Z-d2a18c361d14`,
+  source `eecd50f1d5f9d854e5b8ed5377aff810e7f71c87`, 1,655 files,
+  3,720,975,979 bytes. No snapshot restore or synthetic Discord message was used.
+
 ## Secretary slash routing and private owner DMs (2026-09-26)
 
 ```text

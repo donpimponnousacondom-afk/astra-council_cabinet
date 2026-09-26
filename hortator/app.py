@@ -408,15 +408,16 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
             if body.get("operation") not in ("cancel", "snooze", "update") or "reminder_id" in body:
                 raise ControlError("Choose cancel, snooze or update")
             bot = k.service.entity("bots", row["bot_id"])
-            return secretary.mutate(
+            from .plugins import ToolContext
+
+            return await secretary.apply(
                 {
                     **{key: value for key, value in body.items() if key != "revision"},
                     "reminder_id": reminder_id,
                 },
-                bot,
-                row["channel_id"],
-                "",
+                ToolContext(bot, row["channel_id"], "", True),
                 owner=True,
+                revision=body["revision"],
             )
 
     @app.get("/api/background-jobs/{job_id}")

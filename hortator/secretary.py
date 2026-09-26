@@ -1,4 +1,4 @@
-"""Durable, bot/channel-scoped alarms. Waiting consumes no worker or inference."""
+"""One durable reminder ledger per bot, with explicit delivery destinations."""
 
 from __future__ import annotations
 
@@ -24,9 +24,16 @@ CONFIG_SCHEMA = {
 }
 DESCRIPTION = (
     "Secretary: schedule reminders, recurring alarms and snoozes for this bot. "
+    "You have ONE global ledger across all your conversations, independent of memory grants. "
+    "list/status/snooze/update/cancel work from any context; other bots' ledgers are inaccessible. "
+    "List before scheduling something remembered elsewhere; do not duplicate an alarm just because you changed channels. "
+    "Ledger visibility is separate from delivery: snooze/edit keeps the saved destination unless explicitly changed. "
+    "For schedule/update, destination can be current, owner_dm, or channel with channel_id. "
+    "Use destinations to discover permitted channels; never guess IDs. Only choose a public destination when intended. "
+    "Private reminder contents are visible to you globally: do not volunteer private details in a shared channel. "
     "Ordinary conversations keep their destination. Public /prompt in a configured room uses that room; "
     "private /prompt and /prompt outside configured rooms use the human owner's private DM, even across servers. "
-    "The receipt identifies the destination. list and later changes use that same destination's ledger. "
+    "Without an explicit destination, schedule follows those defaults. The receipt identifies the destination. "
     "Use schedule with a unique key, a self-contained message and exactly one of at (ISO 8601 with "
     "explicit UTC offset) or after_seconds. Interpret human dates using the runtime clock/timezone; "
     "ask if the intended time is unclear. Optional repeat_seconds repeats until cancelled; omit for "
@@ -37,7 +44,7 @@ DESCRIPTION = (
     "Waiting holds no worker or typing indicator. "
     "Delivery can be late while paused, offline, busy or budget-limited. list/status inspect the ledger; "
     "snooze moves a reminder to at/after_seconds (also rearms a fired reminder), update changes its "
-    "message or repeat_seconds (0 makes it one-off), cancel stops future occurrences. Snooze preserves "
+    "message, destination or repeat_seconds (0 makes it one-off), cancel stops future occurrences. Snooze preserves "
     "the repeat interval unless explicitly changed. List first to find a reminder_id; never guess it. "
     "Reusing a schedule key recovers the existing reminder without rearming it; change it with snooze/update. "
     "An occurrence is claimed once, even if inference/delivery fails or you choose silence; status shows "
@@ -46,7 +53,10 @@ DESCRIPTION = (
     '"after_seconds":3600}. No arbitrary destination or other-bot access. {} returns usage only.'
 )
 FIELDS = {
-    "operation": {"type": "string", "enum": ["schedule", "list", "status", "snooze", "update", "cancel"]},
+    "operation": {
+        "type": "string",
+        "enum": ["schedule", "list", "destinations", "status", "snooze", "update", "cancel"],
+    },
     "key": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": r"^[a-zA-Z0-9_.-]+$"},
     "message": {"type": "string", "minLength": 1, "maxLength": 4000, "pattern": r"\S"},
     "at": {"type": "string", "minLength": 1, "maxLength": 50},
@@ -55,13 +65,19 @@ FIELDS = {
     "reminder_id": {"type": "string", "pattern": "^alarm_[a-f0-9]{20}$"},
     "offset": {"type": "integer", "minimum": 0},
     "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+    "destination": {"type": "string", "enum": ["current", "owner_dm", "channel"]},
+    "channel_id": {"type": "string", "pattern": r"^[0-9]{17,20}$"},
 }
 OPERATIONS = {
-    "schedule": (["key", "message"], ["key", "message", "at", "after_seconds", "repeat_seconds"]),
+    "schedule": (
+        ["key", "message"],
+        ["key", "message", "at", "after_seconds", "repeat_seconds", "destination", "channel_id"],
+    ),
     "list": ([], ["offset", "limit"]),
+    "destinations": ([], ["offset", "limit"]),
     "status": (["reminder_id"], ["reminder_id"]),
     "snooze": (["reminder_id"], ["reminder_id", "at", "after_seconds", "repeat_seconds"]),
-    "update": (["reminder_id"], ["reminder_id", "message", "repeat_seconds"]),
+    "update": (["reminder_id"], ["reminder_id", "message", "repeat_seconds", "destination", "channel_id"]),
     "cancel": (["reminder_id"], ["reminder_id"]),
 }
 PARAMETERS = {
@@ -80,6 +96,8 @@ PARAMETERS = {
         {"operation": "status", "reminder_id": "alarm_01234567890123456789"},
         {"operation": "update", "reminder_id": "alarm_01234567890123456789", "repeat_seconds": 0},
         {"operation": "cancel", "reminder_id": "alarm_01234567890123456789"},
+        {"operation": "destinations"},
+        {"operation": "update", "reminder_id": "alarm_01234567890123456789", "destination": "owner_dm"},
     ],
     "allOf": [
         {
@@ -93,13 +111,26 @@ PARAMETERS = {
                     else {}
                 ),
                 **(
-                    {"anyOf": [{"required": ["message"]}, {"required": ["repeat_seconds"]}]}
+                    {
+                        "anyOf": [
+                            {"required": ["message"]},
+                            {"required": ["repeat_seconds"]},
+                            {"required": ["destination"]},
+                        ]
+                    }
                     if operation == "update"
                     else {}
                 ),
             },
         }
         for operation, (required, allowed) in OPERATIONS.items()
+    ]
+    + [
+        {
+            "if": {"properties": {"destination": {"const": "channel"}}, "required": ["destination"]},
+            "then": {"required": ["channel_id"]},
+            "else": {"properties": {"channel_id": False}},
+        }
     ],
 }
 
@@ -121,6 +152,7 @@ class Secretary:
         self.store.execute(
             "CREATE INDEX IF NOT EXISTS secretary_due ON secretary_reminders(bot_id,state,due_at)"
         )
+        self.global_keys()
         registry.register(
             PluginSpec(
                 ID,
@@ -141,6 +173,50 @@ class Secretary:
 
     def bind(self, kernel):
         self.engine = kernel.engine
+
+    def global_keys(self):
+        """Preserve every legacy alarm while upgrading channel-local key uniqueness."""
+        if self.store.one("SELECT 1 FROM sqlite_master WHERE name='secretary_bot_key'"):
+            return
+        self.store.execute("SAVEPOINT secretary_keys")
+        try:
+            rows = self.store.rows(
+                "SELECT * FROM secretary_reminders ORDER BY bot_id,key,state='scheduled' DESC,created_at,id"
+            )
+            occupied = {(row["bot_id"], row["key"]) for row in rows}
+            seen = set()
+            for row in rows:
+                pair = (row["bot_id"], row["key"])
+                if pair not in seen:
+                    seen.add(pair)
+                    continue
+                counter = 0
+                while True:
+                    suffix = f"-{row['id']}" + (f"-{counter}" if counter else "")
+                    key = row["key"][: 100 - len(suffix)] + suffix
+                    if (row["bot_id"], key) not in occupied:
+                        break
+                    counter += 1
+                occupied.add((row["bot_id"], key))
+                self.store.execute(
+                    "UPDATE secretary_reminders SET key=?,revision=revision+1 WHERE id=?", (key, row["id"])
+                )
+                self.store.emit(
+                    "secretary.key_migrated",
+                    {
+                        "reminder_id": row["id"],
+                        "old_key": row["key"],
+                        "key": key,
+                        "channel_id": row["channel_id"],
+                    },
+                    bot_id=row["bot_id"],
+                )
+            self.store.execute("CREATE UNIQUE INDEX secretary_bot_key ON secretary_reminders(bot_id,key)")
+        except BaseException:
+            self.store.execute("ROLLBACK TO secretary_keys")
+            raise
+        finally:
+            self.store.execute("RELEASE secretary_keys")
 
     def configuration(self, bot):
         return {
@@ -215,10 +291,18 @@ class Secretary:
         private = self.store.one(
             "SELECT 1 FROM owner_dm_channels WHERE bot_id=? AND channel_id=?", (bot_id, channel_id)
         )
+        bot = self.store.get("bots", bot_id)
+        room = self.engine.room_for(bot, channel_id) if bot and self.engine else None
         return {
             "kind": "owner_dm" if private else "conversation",
             "channel_id": channel_id,
-            **({"recipient_id": OWNER_ID, "label": "Private DM to owner"} if private else {}),
+            **(
+                {"recipient_id": OWNER_ID, "label": "Private DM to owner"}
+                if private
+                else {
+                    "label": room["name"] if room and room["channel_id"] == channel_id else channel_id,
+                }
+            ),
         }
 
     def inventory(self, bot_id=None, channel_id=None):
@@ -230,16 +314,16 @@ class Secretary:
         )
         return [self.receipt(row) for row in rows]
 
-    def listing(self, bot_id, channel_id, args):
+    def listing(self, bot_id, args):
         offset, limit = args.get("offset", 0), args.get("limit", 20)
         total = self.store.one(
-            "SELECT count(*) AS n FROM secretary_reminders WHERE bot_id=? AND channel_id=?",
-            (bot_id, channel_id),
+            "SELECT count(*) AS n FROM secretary_reminders WHERE bot_id=?",
+            (bot_id,),
         )["n"]
         rows = self.store.rows(
-            "SELECT * FROM secretary_reminders WHERE bot_id=? AND channel_id=? "
+            "SELECT * FROM secretary_reminders WHERE bot_id=? "
             "ORDER BY state='scheduled' DESC,due_at,id LIMIT ? OFFSET ?",
-            (bot_id, channel_id, limit, offset),
+            (bot_id, limit, offset),
         )
         items = []
         for row in rows:
@@ -267,7 +351,34 @@ class Secretary:
             "total": total,
             "offset": offset,
             "next_offset": offset + len(rows) if offset + len(rows) < total else None,
-            "notice": "Use status with reminder_id for full reminder text.",
+            "scope": "bot",
+            "notice": "Your global ledger across all conversations. Saved destinations remain unchanged. "
+            "Use status with reminder_id for full text; do not expose private details unnecessarily in shared chats.",
+        }
+
+    def destinations(self, bot, args):
+        current = self.store.get("bots", bot["id"])
+        channels = [
+            row["channel_id"]
+            for row in self.store.rows(
+                "SELECT channel_id FROM contexts WHERE bot_id=? ORDER BY channel_id", (bot["id"],)
+            )
+            if self.engine.channel_allowed(bot, row["channel_id"])
+            and current
+            and self.engine.channel_allowed(current, row["channel_id"])
+            and not self.store.is_owner_dm(bot, row["channel_id"])
+        ]
+        offset, limit = args.get("offset", 0), args.get("limit", 20)
+        return {
+            "owner_dm": {"destination": "owner_dm", "recipient_id": OWNER_ID},
+            "channels": [
+                {**self.destination(bot["id"], channel), "destination": "channel"}
+                for channel in channels[offset : offset + limit]
+            ],
+            "total": len(channels),
+            "offset": offset,
+            "next_offset": offset + limit if offset + limit < len(channels) else None,
+            "notice": "Choose a listed channel_id or owner_dm. Existing alarms keep their saved destination unless update explicitly changes it.",
         }
 
     def eligible(self, row):
@@ -353,7 +464,7 @@ class Secretary:
         if count >= self.configuration(bot)["max_active_reminders"]:
             raise ControlError("Active reminder allowance reached; cancel an unwanted reminder first")
 
-    def mutate(self, args, bot, channel_id, turn_id, *, owner=False):
+    def mutate(self, args, bot, channel_id, turn_id, *, owner=False, destination_channel=None):
         errors = errors_for(PARAMETERS, args)
         if errors:
             raise ControlError(
@@ -362,14 +473,20 @@ class Secretary:
         self.clean()
         operation = args["operation"]
         if operation == "list":
-            return self.listing(bot["id"], channel_id, args)
+            return self.listing(bot["id"], args)
+        if operation == "destinations":
+            return self.destinations(bot, args)
+        if "destination" in args and destination_channel is None:
+            raise ControlError("Delivery destination must be resolved before changing a reminder")
         row = None
         if operation != "schedule":
             row = self.get(args["reminder_id"])
-            if row["bot_id"] != bot["id"] or row["channel_id"] != channel_id:
-                raise ControlError("Reminder not found in this bot and conversation", 404)
+            if row["bot_id"] != bot["id"]:
+                raise ControlError("Reminder not found in this bot's ledger", 404)
             if operation == "status":
                 return self.receipt(row)
+        source_channel = channel_id
+        channel_id = destination_channel or (row["channel_id"] if row else channel_id)
         repeat = args.get("repeat_seconds", row["repeat_seconds"] if row else 0)
         if (
             operation in ("schedule", "snooze", "update")
@@ -381,22 +498,34 @@ class Secretary:
             )
         if operation == "schedule":
             existing = self.store.one(
-                "SELECT * FROM secretary_reminders WHERE bot_id=? AND channel_id=? AND key=?",
-                (bot["id"], channel_id, args["key"]),
+                "SELECT * FROM secretary_reminders WHERE bot_id=? AND key=?",
+                (bot["id"], args["key"]),
             )
             if existing:
                 if existing["message"] != args["message"] or existing["repeat_seconds"] != repeat:
                     raise ControlError(
                         "Schedule key already exists with different content; use update/snooze or a new key"
                     )
+                if "destination" in args and channel_id != existing["channel_id"]:
+                    raise ControlError(
+                        "Schedule key already exists at another destination; use update to move it"
+                    )
                 return self.receipt(existing)
-        if operation in ("schedule", "snooze"):
-            if not self.engine.channel_allowed(bot, channel_id):
+        if operation in ("schedule", "snooze") or "destination" in args:
+            current = self.store.get("bots", bot["id"])
+            if (
+                not current
+                or current["application_id"] != bot["application_id"]
+                or not self.engine.channel_allowed(bot, channel_id)
+                or not self.engine.channel_allowed(current, channel_id)
+            ):
                 raise ControlError("Reminders need an observed conversation in this bot's configured scope")
             if row:
-                boundary = self.store.context_boundary(bot["id"], channel_id)
-                if boundary and row["created_at"] <= boundary["after_at"]:
-                    raise ControlError("This reminder predates a clean slate; create a new reminder")
+                for channel in {row["channel_id"], channel_id}:
+                    boundary = self.store.context_boundary(bot["id"], channel)
+                    if boundary and row["created_at"] <= boundary["after_at"]:
+                        raise ControlError("This reminder predates a clean slate; create a new reminder")
+        if operation in ("schedule", "snooze"):
             if not row or row["state"] != "scheduled":
                 self.capacity(bot)
             due = self.due(args)
@@ -421,7 +550,7 @@ class Secretary:
         else:
             reminder_id = row["id"]
             self.store.execute(
-                "UPDATE secretary_reminders SET message=?,due_at=?,repeat_seconds=?,state=?,updated_at=?,revision=revision+1 WHERE id=?",
+                "UPDATE secretary_reminders SET message=?,due_at=?,repeat_seconds=?,state=?,updated_at=?,channel_id=?,revision=revision+1 WHERE id=?",
                 (
                     args.get("message", row["message"]),
                     due if operation == "snooze" else row["due_at"],
@@ -432,6 +561,7 @@ class Secretary:
                     if operation == "snooze"
                     else row["state"],
                     now,
+                    channel_id,
                     reminder_id,
                 ),
             )
@@ -445,18 +575,38 @@ class Secretary:
                 "due_at": result["due_at"],
                 "repeat_seconds": result["repeat_seconds"],
                 "actor": "dashboard" if owner else "bot",
+                "source_channel_id": source_channel,
             },
             bot_id=bot["id"],
             turn_id=turn_id or None,
         )
         return self.receipt(result)
 
-    async def call(self, args, context, config, key):
-        from .plugins import ToolContext
+    async def private_channel(self, bot):
+        saved = self.store.one(
+            "SELECT channel_id FROM owner_dm_channels WHERE bot_id=? AND application_id=?",
+            (bot["id"], bot["application_id"]),
+        )
+        if saved:
+            channel_id = saved["channel_id"]
+            self.store.context(bot["id"], channel_id)
+            return channel_id
+        if not self.engine.transport:
+            raise ControlError("Discord connector is unavailable to resolve the owner's DM")
+        return await self.engine.transport.owner_dm(bot)
 
+    async def resolve_destination(self, args, context):
         bot, channel_id = context.bot, context.channel_id
-        if bot.get("invocation", {}).get("kind") == "slash":
-            # Use authenticated, durable ingress evidence, never a tool argument or a guessed ID.
+        destination = args.get("destination", "current")
+        if destination == "owner_dm":
+            return await self.private_channel(bot)
+        if destination == "channel":
+            channel_id = args["channel_id"]
+            if self.store.is_owner_dm(bot, channel_id) or not self.engine.channel_allowed(bot, channel_id):
+                raise ControlError("Choose a permitted channel from destinations, or use owner_dm")
+            return channel_id
+        if bot.get("invocation", {}).get("kind") in ("slash", "panel"):
+            # Ingress evidence is authenticated; the model cannot invent a source or recipient.
             invocation = self.store.one(
                 "SELECT * FROM slash_invocations WHERE turn_id=? AND bot_id=? AND actor_id=?",
                 (context.turn_id, bot["id"], OWNER_ID),
@@ -475,8 +625,6 @@ class Secretary:
                 )
             )
             if configured_room:
-                # A verified slash can be the first observation of a configured room.
-                # It still contributes no ambient history to the isolated slash turn.
                 self.store.execute(
                     "INSERT INTO channels(id,guild_id) VALUES(?,?) ON CONFLICT(id) DO NOTHING",
                     (source, invocation["guild_id"]),
@@ -486,23 +634,49 @@ class Secretary:
                 or bot["role"] != "hortator"
                 and self.engine.room_for(bot, source)
             ):
-                channel_id = source
-                self.store.context(bot["id"], channel_id)
-            else:
-                errors = errors_for(PARAMETERS, args)
-                if errors:
-                    raise ControlError("Invalid Secretary arguments")
-                saved = self.store.one(
-                    "SELECT channel_id FROM owner_dm_channels WHERE bot_id=? AND application_id=?",
-                    (bot["id"], bot["application_id"]),
+                self.store.context(bot["id"], source)
+                return source
+            return await self.private_channel(bot)
+        return channel_id
+
+    async def apply(self, args, context, *, owner=False, revision=None):
+        """Resolve explicit delivery changes, then perform one synchronous ledger mutation."""
+        errors = errors_for(PARAMETERS, args)
+        if errors:
+            raise ControlError(
+                "Invalid Secretary arguments: " + "; ".join(f"{e['path']}: {e['message']}" for e in errors)
+            )
+        bot = context.bot
+        self.clean()
+        row = self.get(args["reminder_id"]) if "reminder_id" in args else None
+        if row and row["bot_id"] != bot["id"]:
+            raise ControlError("Reminder not found in this bot's ledger", 404)
+        if revision is not None and (not row or row["revision"] != revision):
+            raise ControlError("Reminder changed; refresh before editing", 409)
+        existing = (
+            self.store.one(
+                "SELECT 1 FROM secretary_reminders WHERE bot_id=? AND key=?", (bot["id"], args.get("key"))
+            )
+            if args["operation"] == "schedule"
+            else None
+        )
+        destination_channel = None
+        if "destination" in args or args["operation"] == "schedule" and not existing:
+            destination_channel = await self.resolve_destination(args, context)
+            if row and self.get(row["id"])["revision"] != row["revision"]:
+                raise ControlError(
+                    "Reminder changed while resolving its destination; refresh before editing", 409
                 )
-                if saved:
-                    channel_id = saved["channel_id"]
-                    self.store.context(bot["id"], channel_id)
-                else:
-                    if not self.engine.transport:
-                        raise ControlError("Discord connector is unavailable to resolve the owner's DM")
-                    channel_id = await self.engine.transport.owner_dm(bot)
-            if not self.registry.allowed(ID, ToolContext(bot, channel_id, context.turn_id, True)):
-                raise ControlError("Secretary grant changed while resolving the destination")
-        return self.mutate(args, bot, channel_id, context.turn_id)
+        if not owner and not self.registry.allowed(ID, context):
+            raise ControlError("Secretary grant changed while resolving the destination")
+        return self.mutate(
+            args,
+            bot,
+            context.channel_id,
+            context.turn_id,
+            owner=owner,
+            destination_channel=destination_channel,
+        )
+
+    async def call(self, args, context, config, key):
+        return await self.apply(args, context)

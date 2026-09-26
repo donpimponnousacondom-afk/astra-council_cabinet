@@ -17,7 +17,13 @@ import httpx
 from jsonschema import Draft202012Validator
 
 from .models import ControlError
-from .memory_budget import DEFAULT_MEMORY_CHAR_LIMIT, NOTE_CHAR_LIMIT, budget_for, describe_budget
+from .memory_budget import (
+    DEFAULT_MEMORY_CHAR_LIMIT,
+    MAX_MEMORY_CHAR_LIMIT,
+    NOTE_CHAR_LIMIT,
+    budget_for,
+    describe_budget,
+)
 from .fetched_documents import (
     DEFAULTS as FETCH_DEFAULTS,
     DESCRIPTION as FETCH_DESCRIPTION,
@@ -338,7 +344,7 @@ class Registry:
                 "memory",
                 "Private memory",
                 MEMORY_DESCRIPTION
-                + f"Each bot has a 1–{DEFAULT_MEMORY_CHAR_LIMIT:,} character budget per channel (default {DEFAULT_MEMORY_CHAR_LIMIT:,}), with 5% temporary headroom and at most {NOTE_CHAR_LIMIT:,} per note. Over budget, shrink/delete notes before adding more. Disable the plugin to stop memory tools and automatic note injection; stored notes are preserved.",
+                + f"Each bot has a 1–{MAX_MEMORY_CHAR_LIMIT:,} character budget per channel (default {DEFAULT_MEMORY_CHAR_LIMIT:,}), with 5% temporary headroom and at most {NOTE_CHAR_LIMIT:,} per note. Over budget, shrink/delete notes before adding more. Disable the plugin to stop memory tools and automatic note injection; stored notes are preserved.",
                 schema(
                     {
                         "operation": {

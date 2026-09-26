@@ -35,7 +35,7 @@ async def test_older_bots_default_to_48000_and_changes_are_per_bot(kernel, owner
     assert kernel.store.get("bots", "hortator") == other
 
 
-@pytest.mark.parametrize("limit", [0, -1, 48_001, 1.5, True, "1000", None])
+@pytest.mark.parametrize("limit", [0, -1, 128_001, 1.5, True, "1000", None])
 async def test_invalid_budgets_are_rejected_without_mutation(kernel, owner, limit):
     before = kernel.store.get("bots", "ada")
     raw = {key: value for key, value in before.items() if key != "revision"}
@@ -52,8 +52,8 @@ def test_authenticated_api_exposes_bounds_and_rejects_zero_even_when_plugin_disa
         client.post("/api/auth/login", json={"password": (tmp_path / "initial-password").read_text().strip()})
         csrf = client.get("/api/auth/session").json()["csrf"]
         schema = client.get("/api/config-schemas").json()["bots"]["properties"]["memory_char_limit"]
-        assert (schema["minimum"], schema["maximum"], schema["default"]) == (1, 48_000, 48_000)
-        for limit in [0, -1, 48_001]:
+        assert (schema["minimum"], schema["maximum"], schema["default"]) == (1, 128_000, 48_000)
+        for limit in [0, -1, 128_001]:
             response = client.post(
                 "/api/control",
                 headers={"X-CSRF-Token": csrf},
@@ -96,6 +96,34 @@ async def test_48000_budget_accepts_5_percent_once_then_requires_shrinking(kerne
     warnings = [event for event in kernel.store.events() if event["kind"] == "memory.budget_warning"]
     assert len(warnings) == 2
     assert all(event["data"]["channel_id"] == "channel" for event in warnings)
+
+
+@pytest.mark.parametrize("plugin", ["memory", "global_memory"])
+async def test_128000_budget_saves_and_enforces_unchanged_note_and_grace_rules(kernel, owner, plugin):
+    bot = configured(kernel, enabled_plugins=[plugin])
+    other = kernel.store.get("bots", "hortator")
+    field = "memory_char_limit" if plugin == "memory" else "global_memory_char_limit"
+    bot = await kernel.service.save(owner, "bots", bot["id"], {field: 128_000})
+    assert bot[field] == 128_000
+    untouched = "global_memory_char_limit" if plugin == "memory" else "memory_char_limit"
+    assert bot[untouched] == 48_000
+    assert kernel.store.get("bots", "hortator") == other
+    kernel.store.put("plugins", {**kernel.store.get("plugins", plugin), "enabled": True})
+    context = ToolContext(bot, "channel", "larger-budget")
+
+    async def save(key, value):
+        return await kernel.registry.call(
+            plugin, {"operation": "write", "key": key, "value": value}, context, f"save-{key}"
+        )
+
+    for index in range(16):
+        assert (await save(str(index), "é" * 8000))["saved"]
+    assert (await save("too-long", "x" * 8001))["ok"] is False
+    extra = await save("grace", "x" * 6400)
+    assert extra["saved"] and extra["budget"]["used_chars"] == 134_400
+    assert extra["budget"]["hard_limit_chars"] == 134_400
+    assert extra["budget"]["must_consolidate"]
+    assert (await save("extra", "x"))["ok"] is False
 
 
 async def test_no_cross_bot_or_channel_sharing_and_no_nul_or_unicode_undercount(kernel):
