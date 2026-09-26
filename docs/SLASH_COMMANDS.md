@@ -106,7 +106,9 @@ The shortest applicable deadline wins. Expiry of the final-delivery timeout leav
 the outbox uncertain because Discord may already have accepted the edit. Saved
 work/evidence are retained; the runtime does not blindly send another answer.
 
-The local slash deadline is **14 minutes from interaction creation**, reserving time for a final status notice. The bot's ordinary document/workspace settings may allow 7,200 seconds; those do **not** extend the slash platform deadline. A shorter configured provider deadline still applies. At expiry the runtime cancels provider/tool work, preserves saved notes/files and request evidence, and reports the local cause. It does not queue an invisible continuation or automatically restart the request. Long-lived background slash jobs are not implemented.
+The local slash deadline is **14 minutes from interaction creation**, reserving time for a final status notice. The bot's ordinary document/workspace settings may allow 7,200 seconds; those do **not** extend the slash platform deadline. A shorter configured provider deadline still applies. At expiry the runtime cancels provider/tool work, preserves saved notes/files and request evidence, and reports the local cause. It does not queue an invisible continuation or automatically restart the request. Long-lived background slash jobs are not implemented. The separately granted
+[Secretary](SECRETARY.md) can save a durable reminder with an explicit room/owner-DM
+destination; its later scheduled turn is independent of this interaction and token.
 
 Slash and ordinary turns share one active slot per bot and the existing global concurrency/hourly/cost/circuit checks. A busy bot receives no second generation; the deferred response explains that the owner should retry when it is free. `!stop loki` through Hortator or the dashboard's normal stop control cancels its slash work as well. Snapshot maintenance refuses new ingress and joins active work before manipulating state.
 

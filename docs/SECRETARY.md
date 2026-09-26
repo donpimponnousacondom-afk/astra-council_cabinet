@@ -11,7 +11,12 @@ Ask the bot to remind you at a time, snooze a task, or repeat an agreed reminder
 It saves the alarm, acknowledges the returned time and finishes its turn.
 Waiting creates no worker, provider request or typing indicator. Due alarms
 enter the existing scheduler and produce a **new ordinary bot turn** in their
-original conversation. They never edit an older message or post directly from
+saved destination. Ordinary conversations keep their channel. A public `/prompt`
+in a configured, accessible room uses that room; private `/prompt` and slash
+requests outside configured rooms use the immutable owner’s private DM with
+that bot, including requests from another server. An unobserved thread is not
+guessed from its ID and uses the DM fallback. The saved receipt and dashboard
+identify the destination. They never edit an older message or post directly from
 a timer. Normal Discord mention policy applies; no arbitrary destination or
 mass-mention permission is granted.
 
@@ -36,7 +41,11 @@ changed. Cancel stops future occurrences; a turn already started may still post.
 
 `{}` returns usage only. Normal tool budgets, validation and durable evidence
 apply. Model access is scoped to its bot and current channel. Scheduling needs
-an observed context within current grants; Hortator retains owner-only intake.
+an observed context within current grants or authenticated owner slash ingress.
+Slash routing comes from the saved invocation, never model-supplied channel or
+recipient IDs. Its fresh prompt context remains isolated from room/DM history.
+Only a successful Secretary receipt confirms an alarm; a memory write or failed
+schedule is not a reminder. Hortator retains owner-only intake.
 
 | Operation | Fields |
 | --- | --- |
@@ -84,7 +93,8 @@ Changes use revision protection: if the bot or scheduler changes the reminder
 first, the save fails visibly and keeps your draft. Discard it and refresh to
 inspect the current version. Save/discard configuration drafts before changing
 reminders; reminder drafts have their own save button and navigation protection.
-Channel labels use internal room names where available. Per-bot non-secret plugin
+Channel labels use internal room names where available; private destinations
+show **Private DM to owner**. Per-bot non-secret plugin
 JSON may override limits.
 
 Defaults: `max_active_reminders: 100` per bot across channels (1–10,000),
@@ -111,7 +121,33 @@ until restored; cancel them explicitly to retire them.
 text and associates its turn. Ordinary request/delivery/turn events supply the
 outcome. No existing log field ordering changes.
 
-## Owner decisions (2026-09-25)
+## Private DM operation
+
+Secretary’s global and per-bot grant also admits one-to-one messages from the
+immutable human owner to that bot. Discord supplies the DM channel; no server
+ID, dashboard room or manually copied snowflake is needed. Group DMs, other
+humans, webhooks and bot-authored messages do not gain intake permission.
+Owner messages wake the bot as directed input, even with its timer off, so
+ordinary replies can inspect, snooze or cancel its private reminders. Idle
+cadence never starts unsolicited DM chatter.
+
+The connector persists the verified DM channel with the bot/application identity
+in `owner_dm_channels`. Future alarms use the normal scheduler, fresh inference,
+outbox and delivery pipeline, independently of the expired slash interaction.
+DMs share one private reminder ledger per bot/owner, accessible from later private
+or outside-room `/prompt` calls. Room ledgers remain separate. Clean slate applies
+to the saved destination's scope (or all destinations for a full bot reset).
+
+Disabling Secretary defers private alarms and disables companion DM intake unless
+another granted capability explicitly allows it. Existing Hortator owner DMs
+retain their original policy. Discord can still refuse a DM; resolution failure
+prevents scheduling, while a later send failure is recorded in the usual delivery
+logs and last-turn outcome. There is no public fallback or implicit retry. The
+receipt confirms a saved schedule, not future deliverability. Opening the DM and
+messaging the bot lets the connector observe it; delivery is confirmed only by a
+successful send.
+
+## Owner decisions (2026-09-25; routing clarified 2026-09-26)
 
 Implement an experimental secretary for any granted bot, initially for testing
 with Loki: reminders, snoozes, reprogramming and periodic alarms. Use normal bot
@@ -121,3 +157,7 @@ acceptance remain operator actions.
 
 The operator must be able to inspect, edit, snooze and cancel saved reminders
 directly from the dashboard, independently of the bot's willingness to do so.
+
+For `/prompt` outside configured rooms, notify the owner privately, including
+commands from another server. Do not require a server ID for a DM or expose an
+arbitrary recipient selector. Preserve configured-room reminder delivery.

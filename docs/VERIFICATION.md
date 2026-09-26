@@ -4,6 +4,51 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Secretary slash routing and private owner DMs (2026-09-26)
+
+```text
+Commit: 98d680b330d9c29d3c00a00b5db96895c966c5d0 plus hotfix/secretary-slash-routing changes; dirty at start/end: true/true
+Backend scope: full collection
+Backend result: 1523 passed, 0 failed, 0 errors, 1 skipped; exit 0; pytest 331.95 seconds
+Frontend format/build: passed; exits 0/0; durations 1.783/5.337 seconds
+Browser tests: 62 passed; full Playwright collection; command 115.518 seconds
+Evidence: test-results/verification/result.json; /tmp/secretary-full-check.log
+Classification: mocked Discord/provider adapters plus local integration and browser fixtures
+Live checks: read-only incident diagnosis; application pre-change snapshot
+Limitations: opt-in public HTTPS/package-install test skipped; live reminder delivery not exercised
+```
+
+- The failed slash turn passed `slash:<bot>:<channel>` to the ordinary reminder
+  scope gate. The source was also outside configured rooms, so stripping the
+  prefix alone would not supply a valid future destination. No alarm was saved.
+- Owner-approved routing now resolves public configured-room slash requests to
+  that room, and private/outside-room requests to the immutable owner's DM.
+  The connector persists bot/application/channel bindings; no interaction token,
+  model-chosen recipient or public delivery fallback is used. Isolated slash
+  inference continues to exclude ambient room/DM history.
+- Secretary grants owner-only DM intake as well as scheduled delivery. Owner DM
+  messages receive directed priority even with the timer disabled; idle cadence
+  does not generate DM chatter. Grants, application identity and recipient checks
+  apply, and saved alarms retain ordinary scheduler/outbox failure semantics.
+- Eighteen new regressions cover real slash ingress with mocked provider calls,
+  delayed wakes into rooms/DMs, later private snoozes, restart persistence,
+  grant deferral, reset cancellation, refused DM resolution, wrong recipient,
+  identity changes, disabled grants, unrelated humans/webhooks/bots/group DMs and
+  unauthenticated synthetic slash contexts. The focused four-module selection
+  passed 109 tests; the final full gate passed in 457.724 seconds.
+- Playwright verifies the **Private DM to owner** label alongside editing,
+  snoozing, cancelling and revision protection. Agent-browser also opened the
+  isolated fixture dashboard and Secretary settings: meaningful page content,
+  updated DM guidance, no error overlay or page errors. Screenshots were visually
+  inspected and remain ignored/local. An initial browser connection preceded
+  fixture startup and was refused; verification succeeded after it was listening.
+- Consistent pre-migration application snapshot:
+  `/home/codexy/.local/share/hortator-snapshots/20260926T055357548289Z-ebb68da7cc50`;
+  source `98d680b330d9c29d3c00a00b5db96895c966c5d0`, 1,652 files,
+  3,703,114,182 bytes. No failed live reminder was recreated and no bot/provider
+  configuration was changed. Deployment startup identity remains available through
+  authenticated `/api/version` and the external refresh-helper receipt.
+
 ## Remaining hosted Screen working-directory failure (2026-09-25)
 
 - **Source:** follow-up on `feat/secretary` at `a90dc3e`, dirty during the

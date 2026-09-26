@@ -37,6 +37,8 @@ class Store:
         CREATE TABLE IF NOT EXISTS entity_tombstones (
           kind TEXT NOT NULL,id TEXT NOT NULL,deleted_at REAL NOT NULL,PRIMARY KEY(kind,id));
         CREATE TABLE IF NOT EXISTS channels (id TEXT PRIMARY KEY,guild_id TEXT,parent_id TEXT);
+        CREATE TABLE IF NOT EXISTS owner_dm_channels (
+          bot_id TEXT PRIMARY KEY,application_id TEXT NOT NULL,channel_id TEXT NOT NULL UNIQUE);
         INSERT OR IGNORE INTO schema_version VALUES(2);
         CREATE TABLE IF NOT EXISTS secrets (scope TEXT PRIMARY KEY, value BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS auth_sessions (
@@ -219,6 +221,25 @@ class Store:
             if not (b := boundaries[row["channel_id"]])
             or (row["seq"] > b["after_seq"] and row["at"] > b["after_at"])
         ]
+
+    def remember_owner_dm(self, bot, channel_id):
+        """Called only after the connector verifies a one-to-one owner DM."""
+        self.execute("INSERT INTO channels(id) VALUES(?) ON CONFLICT(id) DO NOTHING", (channel_id,))
+        self.execute(
+            "INSERT INTO owner_dm_channels VALUES(?,?,?) ON CONFLICT(bot_id) DO UPDATE SET "
+            "application_id=excluded.application_id,channel_id=excluded.channel_id",
+            (bot["id"], bot["application_id"], channel_id),
+        )
+        self.context(bot["id"], channel_id)
+
+    def is_owner_dm(self, bot, channel_id):
+        return bool(
+            self.one(
+                "SELECT 1 FROM owner_dm_channels d JOIN channels c ON c.id=d.channel_id "
+                "WHERE d.bot_id=? AND d.application_id=? AND d.channel_id=? AND c.guild_id IS NULL",
+                (bot["id"], bot["application_id"], channel_id),
+            )
+        )
 
     def ingest(
         self,

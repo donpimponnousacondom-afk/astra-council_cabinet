@@ -28,6 +28,7 @@ test("Secretary settings and owner ledger edits, snooze and cancellation", async
     id: "alarm_01234567890123456789",
     bot_id: "ada",
     channel_id: "222222222222222222",
+    destination: { kind: "owner_dm", label: "Private DM to owner" },
     key: "usage-review",
     message: "Remind root to review usage",
     due_at: "2030-01-01T21:00:00+01:00",
@@ -66,6 +67,7 @@ test("Secretary settings and owner ledger edits, snooze and cancellation", async
   ).toHaveValue("300");
   const ledger = dialog.getByRole("region", { name: "Secretary reminders" });
   await expect(ledger.getByText("Remind root to review usage")).toBeVisible();
+  await expect(ledger.getByText(/Private DM to owner/)).toBeVisible();
   await ledger.getByRole("button", { name: "Edit reminder" }).click();
   await ledger.getByLabel("Reminder message").fill(" ");
   await expect(

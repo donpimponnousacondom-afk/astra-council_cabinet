@@ -12,6 +12,7 @@ type Reminder = {
   id: string;
   bot_id: string;
   channel_id: string;
+  destination?: { kind: string; label?: string };
   key: string;
   message: string;
   due_at: string;
@@ -33,8 +34,11 @@ export function SecretarySettings({
       <Notice>
         Experimental reminder ledger. Grant Secretary to each bot that should
         schedule alarms. Reminders survive restarts and wake the bot in the
-        original conversation, even with its timer off. Paused bots wait until
-        resumed. Each wake uses the bot’s normal model and turn budget.
+        original conversation, even with its timer off. Private /prompt and
+        /prompt outside configured rooms notify you in a private DM. Secretary
+        also enables owner-only DM replies; no server ID is needed. Paused bots
+        wait until resumed. Each wake uses the bot’s normal model and turn
+        budget.
       </Notice>
       <div className="form-grid">
         {(
@@ -219,7 +223,8 @@ export function SecretaryPanel({
       {items.map((row) => (
         <article key={row.id} className="secretary-reminder">
           <strong>{row.key}</strong> · {row.state} · {row.bot_id} ·{" "}
-          {rooms.find((room) => room.channel_id === row.channel_id)?.name ||
+          {row.destination?.label ||
+            rooms.find((room) => room.channel_id === row.channel_id)?.name ||
             row.channel_id}
           <p style={{ whiteSpace: "pre-wrap" }}>{row.message}</p>
           <p>
