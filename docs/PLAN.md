@@ -37,6 +37,15 @@ future work. Extra branch-hook automation is deferred. These are planning notes,
 not authorization to change configuration, activate bots, remove the fallback,
 or run paid/live acceptance. See the dated history for original scope and rationale.
 
+## Deferred operational follow-ups
+
+- Owner deferred the recurring Loki DM history-import warning on 2026-09-26
+  (`discord.history_failed`, event `61308`, stage `validate_scope`, channel
+  `1553280213004062780`). Review the manually configured DM-as-guild-room entry:
+  startup history import rejects its guild/room association. Secretary's verified
+  owner-DM intake and reminder routing are separate. The warning predates the
+  global-ledger patch; no configuration correction or intake change was made.
+
 ## Where to continue
 
 | Work | Authoritative documents |
