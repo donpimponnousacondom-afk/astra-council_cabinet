@@ -39,8 +39,10 @@ and current saved grants are rechecked during actual execution.
 
 **Bots → bot → Prompts → Conversation format** selects either the existing
 **Structured records** (default) or **Conversation text · experimental**. This is
-a presentation choice for both ordinary generation and compaction, independent
-of the [Engram experiment](ENGRAMS.md). Existing bot settings are not migrated.
+a presentation choice for generation and compaction, independent of the
+[Engram experiment](ENGRAMS.md). Fresh slash/panel invocations also use the chosen
+format for their supplied message; this does not add channel history or Engram
+state to those routes. Existing bot settings are not migrated.
 
 Conversation text uses a participant legend with verified user IDs, compact
 speaker/recipient labels, one message reference, dates grouped by day/UTC offset,
@@ -49,6 +51,13 @@ content. Replies retain the target ID and an earlier excerpt when the target is
 outside the supplied batch; an already visible parent's body is not repeated.
 Role-directed mentions and unresolved recipients remain explicit. Actual image
 parts, attachment links and image availability/resize notices remain intact.
+Capture failures include their reason. External bots/webhooks remain identified,
+the viewing bot is marked "you", and routed posts retain their mode/source bot.
+Temporary participant labels must not be carried into replies, summaries or
+Engram state; use names and user IDs where names are ambiguous. This is model
+guidance, not proof that a particular model will preserve attribution correctly.
+Line separators are normalized before quoting and nonprinting control bytes are
+removed from displayed text; original message content remains stored unchanged.
 Repeated sequence/age fields, null/boolean flags and cached image hashes are not
 printed in the conversation text. Stored Discord records and historical requests
 retain the full metadata and original timestamp precision.
@@ -62,6 +71,12 @@ note with relevant facts, attribution, corrections and open work, and retains
 dates/references when useful instead of copying routine metadata. Existing edited
 templates are not overwritten. Token planning measures the selected text, including
 compaction batch fitting; switching back restores structured generation immediately.
+
+If an experimental template was already seeded before a wording update, compare
+and edit its saved text in Prompt library; startup never overwrites owner edits.
+Signed attachment URLs remain intact so granted tools can use their original
+references. Removing those URLs and format-specific token calibration are separate
+follow-ups, not part of this presentation change.
 
 This changes no history boundary or summary by itself. Subsequent compactions can
 gradually replace existing summaries; it does not reset context or rewrite old

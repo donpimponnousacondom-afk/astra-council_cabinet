@@ -26,6 +26,18 @@ enough output for both. There is no second inference or background memory worker
 This experiment can increase cost on short conversations because each final answer
 rewrites state. It does not guarantee recall, speed or savings for a particular model.
 
+For the owner's future isolated memory trial, create a new empty-context bot in a
+separate test conversation, with no global or private channel-memory grants or
+imported summary. After checking state capture, explicitly enable **Reduce history**
+and choose a small **Recent messages** value. That setting counts acknowledged
+messages, not conversational rounds: all uncovered messages are still included,
+so it is not a strict last-round-only cut. Keep **Conversation input**, **Engram
+memory instructions** and **Engram conversation memory** enabled, with their
+required placeholders intact. Reducing history through the plugin is the supported
+way to isolate memory; disabling transcript or state layers prevents safe coverage
+tracking. This trial is separate from conversation-format acceptance and does not
+change Loki or any existing council bot.
+
 Initial scope is ordinary room/thread/owner-DM turns. Slash and interactive-panel
 invocations keep their fresh-context behavior and do not read/update Engram state.
 Each bot/conversation has an independent state. This plugin does not make memory
@@ -45,7 +57,11 @@ injected at the end of ordinary turn context. The state template must retain
 `{engram_state}`, and both layers must remain enabled/nonempty while the plugin
 is active; invalid configuration fails before a provider request. Fixed structural
 protocol guidance follows those editable layers. It cannot be disabled by editing
-the prose while retaining the feature.
+the prose while retaining the feature. That fixed guidance requires durable
+attribution by participant names and user IDs in MEM/FACTS, never temporary
+transcript `P` labels: those labels can refer to different people on the next
+request. This is a model instruction, not a semantic identity validator; inspect
+state for misattribution during the trial.
 
 Engram also requires the **complete selected transcript and retained summary** to
 be represented in the actual request. A disabled conversation layer or a
@@ -141,5 +157,8 @@ weights or implement that architecture.
   history reduction; do not use implementation as permission to reduce Loki's context.
 - The owner will supply/refine their own Engram prompt later. Keep its factual
   memory guidance editable, with strict state/delivery validation in code.
+- Evaluate Engram separately on a fresh bot without other memory grants, using
+  explicit history reduction and a small recent-message tail while preserving all
+  uncovered input. Do not disable the required input/state layers to mimic this.
 - Loki is an alpha tester, not a special runtime case. Every eligible bot can use
   the same plugin with explicit grants; stable council bots retain their settings.

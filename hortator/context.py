@@ -88,7 +88,9 @@ class ContextBuilder:
                         {
                             **(profile or {}).get("_compaction_values", {}),
                             "transcript": render_transcript(
-                                transcript[:count], (profile or {}).get("_transcript_format", "structured")
+                                transcript[:count],
+                                (profile or {}).get("_transcript_format", "structured"),
+                                (profile or {}).get("_viewer_bot_id"),
                             ),
                         },
                     ),
@@ -345,7 +347,7 @@ class ContextBuilder:
         transcript = await self.conversation_async(rows, bot, inputs)
         async with self.token_slots:
             rendered_transcript = await asyncio.to_thread(
-                render_transcript, transcript, bot.get("transcript_format", "structured")
+                render_transcript, transcript, bot.get("transcript_format", "structured"), bot["id"]
             )
         values = {
             "transcript": rendered_transcript,
@@ -630,6 +632,7 @@ class ContextBuilder:
                         "_compaction_transcript": template,
                         "_compaction_values": self.prompt_values(bot, values),
                         "_transcript_format": bot.get("transcript_format", "structured"),
+                        "_viewer_bot_id": bot["id"],
                     }
                     output_reserve = max(profile["summary_tokens"], output_cap or 0)
                     budget = int((profile["context_window"] - output_reserve) / factor * 0.85)
@@ -648,7 +651,9 @@ class ContextBuilder:
                                     {
                                         **batch_profile["_compaction_values"],
                                         "transcript": render_transcript(
-                                            transcript[:1], bot.get("transcript_format", "structured")
+                                            transcript[:1],
+                                            bot.get("transcript_format", "structured"),
+                                            bot["id"],
                                         ),
                                     },
                                 ),

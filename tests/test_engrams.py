@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from conftest import configured
+from conftest import configured, ingest
 from hortator.engrams import (
     DEFAULTS,
     PLUGIN_ID,
@@ -236,6 +236,52 @@ async def test_registration_is_disabled_non_tool_and_requires_current_grants(ker
     assert memory.capture(bot, "panel:ada:room", "turn") is None
     kernel.store.put("bots", {**bot, "enabled_plugins": []})
     assert memory.capture(bot, "room", "turn") is None
+
+
+@pytest.mark.parametrize("customization", ["edit_default", "bot_override"])
+async def test_durable_identity_rule_survives_custom_engram_prompts(kernel, memory, owner, customization):
+    bot = enabled(kernel)
+    overrides = {}
+    for layer, content in (
+        ("engram_instructions", "Keep the next state concise."),
+        ("engram_state", "Prior notes: {engram_state}"),
+    ):
+        template_id = "runtime-" + layer.replace("_", "-")
+        if customization == "bot_override":
+            template_id = "custom-" + layer
+            overrides[layer] = template_id
+            await kernel.service.save(
+                owner,
+                "prompts",
+                template_id,
+                {"name": layer, "runtime_layer": layer, "role": "system", "content": content},
+                create=True,
+            )
+        else:
+            await kernel.service.save(owner, "prompts", template_id, {"content": content})
+    bot = await kernel.service.save(
+        owner,
+        "bots",
+        bot["id"],
+        {"transcript_format": "conversation", "prompt_layer_overrides": overrides},
+    )
+    channel_id = "222222222222222222"
+    ingest(kernel)
+    profile = kernel.store.get("profiles", "balanced")
+    rows, summary, _, original_meta = await kernel.engine.contexts.prepare(
+        bot, profile, channel_id, "identity-trial", []
+    )
+    messages, meta = await kernel.engine.contexts.assemble(
+        bot, profile, channel_id, rows, summary, engram=original_meta["_engram_snapshot"]
+    )
+    layers = {layer["id"]: layer for layer in meta["prompt_layers"]}
+    assert layers["engram_instructions"]["content"] == "Keep the next state concise."
+    assert layers["engram_state"]["content"].startswith("Prior notes: ")
+    protocol = layers["engram_protocol"]["content"]
+    assert "Identify people by their names and user IDs" in protocol
+    assert "never store temporary transcript P labels in MEM or FACTS" in protocol
+    assert "those labels are reassigned in every request" in protocol
+    assert messages[-1] == {"role": "system", "content": protocol}
 
 
 async def test_final_state_replaces_atomically_only_after_confirmed_delivery(kernel, memory):

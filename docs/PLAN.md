@@ -17,11 +17,14 @@ current checkout or running configuration.
   explicit opt-in, initially false even when the plugin is enabled. Start live
   memory trials on a disposable/empty-context bot; do not reduce Loki's existing
   context as part of implementation. Keep full operational metadata on disk.
-  Before rollout, the owner requires a second independent context/compaction
-  audit (2026-09-26), titled "Not losing things like tears in the rain". Hold
-  context/compaction implementation changes and runtime deployment pending that
-  review; Engram local validation may finish separately. The ignored `audit/`
-  index links its brief and evidence. No live opt-in is implied by a test pass.
+  The independent context/compaction audit (2026-09-26), "Not losing things like
+  tears in the rain", identified presentation/attribution fixes and found no
+  checkpoint or coverage defect. The owner authorized remediation, PR review and
+  merge after checks. Keep both experiments opt-in; live model acceptance remains
+  separate. Engram trials use a new, empty conversation with other memory plugins
+  off and its own recent-message/reduction controls, retaining all uncovered input.
+  The ignored `audit/` index links the review and responses. No live bot opt-in is
+  implied by the shipping authorization.
 
 - The experimental [Secretary](SECRETARY.md) provides one persistent ledger per
   bot across contexts, with explicit delivery destinations, snoozes and recurring
