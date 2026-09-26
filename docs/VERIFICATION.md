@@ -35,6 +35,15 @@ Limitations: public HTTPS/package-install test skipped by opt-in policy; no live
   multiple batches whose temporary participant labels change meaning. Engram's
   fixed protocol repeats the durable-identity rule even under edited defaults or
   per-bot overrides; this guidance is not a semantic model-output guarantee.
+- The subsequent Luna review at `fad68b0` found one remaining attribution gap:
+  reply-only external bot/webhook authors lost their type when the parent was
+  outside the selected batch. Four actual intake regressions reproduced the
+  missing field. Stored and fetched reply references now retain authenticated
+  author kind and the renderer carries it into participant labels. The follow-up
+  transcript/addressing/clean-slate collection passed **63 tests** in 14.22 seconds;
+  Ruff/format and diff checks passed. This follow-up postdates the complete gate
+  above, so that gate is not claimed as evidence for this later code. Final-head
+  CI and independent delta review must pass before merge.
 - Revised offline cl100k_base transcript counts are 11,049 → 5,204 (52.9%),
   270,352 → 97,113 (64.1%), and 246,974 → 84,170 (65.9%). Other prompt layers,
   tools and provider tokenization are excluded. Existing calibration population

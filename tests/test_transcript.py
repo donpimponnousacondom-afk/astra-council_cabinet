@@ -219,6 +219,52 @@ async def test_runtime_external_app_and_owner_spoof_keep_author_types(kernel):
     assert f'[user {bot["application_id"]}; bot "ada"; you]' in text
 
 
+@pytest.mark.parametrize("stored", [True, False])
+@pytest.mark.parametrize("kind", ["bot", "webhook"])
+async def test_runtime_reply_only_automated_author_keeps_identity(kernel, stored, kind):
+    bot = configured(kernel, transcript_format="conversation")
+    room = kernel.store.get("rooms", "council")
+    kernel.store.put("rooms", {**room, "allow_external_bots": True})
+    author_id = OWNER_ID if kind == "webhook" else "777777777777777777"
+    parent = message(
+        555555555555555551,
+        author=author_id,
+        bot=True,
+        webhook=777777777777777778 if kind == "webhook" else None,
+        content="Earlier automated statement",
+    )
+    if kind == "webhook":
+        parent.application_id = parent.webhook_id
+    child = message(
+        555555555555555552,
+        author="666666666666666666",
+        reply_to=parent.id,
+        content="Is that accurate?",
+    )
+    if stored:
+        await kernel.connector.receive(bot["id"], parent)
+        assert kernel.store.transcript(CHANNEL)[0]["addressing"]["author_kind"] == kind
+    else:
+        child.channel.fetch_message = AsyncMock(return_value=parent)
+    await kernel.connector.receive(bot["id"], child)
+    rows = kernel.store.transcript(CHANNEL)[-1:]
+    builder = kernel.engine.contexts
+    records = builder.conversation(rows, bot)
+    assert records[0]["addressing"]["reply_target"]["author_kind"] == kind
+    _, meta = await builder.assemble(bot, kernel.store.get("profiles", "balanced"), CHANNEL, rows, "")
+    transcript = next(p for p in meta["prompt_layers"] if p["id"] == "transcript")["content"]
+    _, batch, _, _ = builder.compaction_batch(
+        [], rows, records, 100000, {"_transcript_format": "conversation", "_viewer_bot_id": bot["id"]}
+    )
+    label = "webhook" if kind == "webhook" else "external bot"
+    for text in (transcript, batch[0]["content"]):
+        assert f"[user {author_id}; {label}]" in text
+        assert "verified owner" not in text
+        if stored:
+            assert "Earlier reply target from P2:" in text
+            assert "> Earlier automated statement" in text
+
+
 async def test_runtime_recipient_only_owner_is_identified_without_authority_from_names(kernel):
     bot = configured(kernel, transcript_format="conversation")
     incoming = message(555555555555555555, author="777777777777777777")

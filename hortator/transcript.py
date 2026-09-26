@@ -56,9 +56,19 @@ def render_transcript(records, style="structured", viewer_bot_id=None):
     for record in records:
         addressing = record.get("addressing", {})
         for target in addressing.get("targets", []):
-            participant(target.get("user_id"), target.get("name"), bot_id=target.get("bot_id"))
+            participant(
+                target.get("user_id"),
+                target.get("name"),
+                bot_id=target.get("bot_id"),
+                author_kind=target.get("author_kind"),
+            )
         target = addressing.get("reply_target") or {}
-        participant(target.get("user_id"), target.get("name"), bot_id=target.get("bot_id"))
+        participant(
+            target.get("user_id"),
+            target.get("name"),
+            bot_id=target.get("bot_id"),
+            author_kind=target.get("author_kind"),
+        )
 
     lines = [
         "Participants (P labels apply only to this log; use names and, when ambiguous, "
