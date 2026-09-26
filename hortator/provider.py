@@ -130,6 +130,16 @@ def safe_payload(value):
     return value
 
 
+def public_content(content, context):
+    """Keep opt-in private response suffixes out of model-readable evidence."""
+    content = strip_reasoning(content)
+    if context.get("engram"):
+        from .engrams import sanitize_response
+
+        return sanitize_response(content, context["engram"]["nonce"])
+    return content
+
+
 def envelope_error(error, *, private_key=False):
     """HTTP-200 error envelopes still carry request/auth/rate/server semantics.
 
@@ -734,6 +744,8 @@ class ProviderPool:
                         response_state.packet(response_state.decode(raw), streamed=False)
                         # Buffered responses have no measurable TTFT/TPS.
             response_state.finish()
+            if context.get("engram"):
+                result.response_diagnostics["engram_output"] = result.content
             record_diagnostics(self.store, self.vault, request_id, result, body, status="completed")
             duration = (time.perf_counter() - clock) * 1000
             # Reuse the footer's numeric-only counting for each completed request,
@@ -783,7 +795,7 @@ class ProviderPool:
                     "response": dumps(
                         self.vault.redact(
                             {
-                                "content": result.content,
+                                "content": public_content(result.content, context),
                                 "tool_calls": result.tool_calls,
                                 "finish_reason": result.finish_reason,
                                 "provider_metadata": result.metadata,
@@ -905,6 +917,8 @@ class ProviderPool:
                 },
             }
             message = self.vault.redact(str(exc))[:3000]
+            if context.get("engram"):
+                result.response_diagnostics["engram_output"] = result.content
             record_diagnostics(
                 self.store,
                 self.vault,
@@ -941,7 +955,7 @@ class ProviderPool:
                         self.vault.redact(
                             {
                                 "partial": True,
-                                "content": strip_reasoning(result.content),
+                                "content": public_content(result.content, context),
                                 "tool_calls": result.tool_calls,
                                 "finish_reason": result.finish_reason,
                                 "provider_metadata": result.metadata,

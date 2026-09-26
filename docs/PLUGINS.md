@@ -2,6 +2,12 @@
 
 Plugins are ordinary installed Python packages with an `hortator.plugins` entry point. The runtime loads these trusted local packages at startup; it never installs or executes code named by a model or Discord message.
 
+The opt-in [Engram experiment](ENGRAMS.md) is a non-tool capability for private
+factual state generated alongside an ordinary answer. It needs narrow context,
+completion and confirmed-delivery hooks; a regular tool handler cannot intercept
+assistant content. These hooks leave other plugins and ungranted bots unchanged.
+It creates no worker, inference request or model action tool of its own.
+
 The optional [Secretary](SECRETARY.md) uses `PluginSpec.wake_source` for durable
 alarms without a sleeping worker. Synchronous owner-thread `pending(bot)` returns
 an eligible candidate containing `bot_id`/`channel_id`; `claim(candidate, turn_id)`

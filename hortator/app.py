@@ -79,6 +79,7 @@ class Kernel:
             raise RuntimeError("Open Kernel.lifetime() before starting runtime services")
         self.started = True
         self.store.recover()
+        self.registry.engrams.recover()
         self.jobs.recover()
         self.connector.start()
         self.engine.start()
@@ -588,6 +589,17 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
     @app.get("/api/context/{bot_id}/{channel_id}")
     async def context(bot_id: str, channel_id: str, actor=Depends(authenticated), k=Depends(kernel)):
         return k.service.context(bot_id, channel_id)
+
+    @app.get("/api/engrams/{bot_id}")
+    async def engrams(
+        bot_id: str, channel_id: str | None = None, actor=Depends(authenticated), k=Depends(kernel)
+    ):
+        actor.require_owner()
+        return k.service.engram_view(bot_id, channel_id)
+
+    @app.post("/api/engrams/{bot_id}/reset")
+    async def reset_engrams(bot_id: str, body: dict, actor=Depends(authenticated), k=Depends(kernel)):
+        return await k.service.engram_reset(actor, bot_id, body)
 
     @app.get("/api/messages/{channel_id}")
     async def messages(

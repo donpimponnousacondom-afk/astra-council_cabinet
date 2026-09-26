@@ -1,5 +1,12 @@
 # Control API and Discord command parity
 
+The optional [Engram](ENGRAMS.md) exposes owner-only state inspection at
+`GET /api/engrams/{bot_id}` (optional `channel_id`) and explicit state reset at
+`POST /api/engrams/{bot_id}/reset`. Normal authentication, origin and CSRF checks
+apply. Reset requires `confirm_bot_id`; see the feature contract for scope and
+retention. `bots.transcript_format` independently selects `structured` (default)
+or experimental `conversation` presentation; see [PROMPTS](PROMPTS.md).
+
 The optional [Secretary](SECRETARY.md) exposes an owner-only reminder ledger at
 `GET /api/secretary` (optional `bot_id`), and revision-protected snooze/update/
 cancel through `POST /api/secretary/{id}`. Normal session, origin and CSRF checks

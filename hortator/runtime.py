@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import time
 from collections import defaultdict
@@ -44,7 +45,9 @@ class TurnSuperseded(ControlError):
 class Engine:
     def __init__(self, store, vault, pool, registry, transport=None):
         self.store, self.vault, self.pool, self.registry = store, vault, pool, registry
-        self.contexts = ContextBuilder(store, pool, registry.global_memory, registry.application_emojis)
+        self.contexts = ContextBuilder(
+            store, pool, registry.global_memory, registry.application_emojis, registry.engrams
+        )
         self.transport = transport
         self.tasks: dict[str, asyncio.Task] = {}
         self.room_locks = defaultdict(asyncio.Lock)
@@ -602,6 +605,7 @@ class Engine:
         status, decision, error = "failed", None, None
         retry_delay = 0
         typing_task = None
+        engram_candidate = None
         context = ToolContext(bot, channel_id, turn_id, owner_verified=bot["role"] == "hortator")
         try:
             if self.is_single_shot(bot):
@@ -622,6 +626,7 @@ class Engine:
             if compact_only:
                 status, decision = "completed", "compacted"
                 return
+            engram = original_meta.get("_engram_snapshot")
             activation = self.claim_attention(bot, channel_id, turn_id, through=through) or bot.get(
                 "activation"
             )
@@ -695,6 +700,7 @@ class Engine:
                     [],
                     available_tools,
                     image_plan=original_meta["image_plan"],
+                    engram=engram,
                 )
                 headroom = (
                     int(
@@ -721,6 +727,7 @@ class Engine:
                     prompt_exchanges(extras),
                     available_tools,
                     image_plan=original_meta["image_plan"],
+                    engram=engram,
                 )
                 meta.update(
                     checkpoint=original_meta["checkpoint"],
@@ -758,6 +765,13 @@ class Engine:
                         context=meta,
                     )
                 )
+                parsed_engram = None
+                if engram is not None:
+                    original_content = result.content
+                    result.content = self.registry.engrams.sanitize(engram, original_content)
+                    parsed_engram = await self.registry.engrams.parse(
+                        engram, original_content, final=not result.tool_calls
+                    )
                 if result.finish_reason in ("length", "content_filter"):
                     cap_name = (
                         "max_completion_tokens"
@@ -780,6 +794,19 @@ class Engine:
                     )
                     raise ControlError(message)
                 if not result.tool_calls:
+                    if parsed_engram is not None and parsed_engram.get("state") is None:
+                        self.store.emit(
+                            "engram.update_skipped",
+                            {
+                                "channel_id": channel_id,
+                                "reason": parsed_engram.get("invalid", "invalid update"),
+                                "coverage_unchanged": True,
+                            },
+                            bot_id=bot["id"],
+                            turn_id=turn_id,
+                            request_id=result.request_id,
+                            level="warning",
+                        )
                     if wrapped_reply(result.content):
                         self.store.emit(
                             "request.reply_rejected",
@@ -808,7 +835,61 @@ class Engine:
                         round_index += 1
                         continue
                     if result.content:
-                        await self.deliver(
+                        if (
+                            parsed_engram
+                            and parsed_engram.get("state") is not None
+                            and result.finish_reason == "stop"
+                        ):
+                            # Coverage describes only the actual represented
+                            # transcript/summary, never the room's current tail.
+                            represented = set(meta["message_sequences"])
+                            full_rows = all(row["seq"] in represented for row in rows)
+                            stored_context = self.store.context(bot["id"], channel_id)
+                            summary_included = not summary or meta["summary"] == summary
+                            if full_rows and summary_included:
+                                covered = max(
+                                    engram["covered_through"],
+                                    stored_context["checkpoint"] if summary else 0,
+                                    max(represented, default=0),
+                                )
+                                engram_candidate = self.registry.engrams.stage(
+                                    engram,
+                                    parsed_engram,
+                                    result.request_id,
+                                    covered_through=covered,
+                                    summary_checkpoint=stored_context["checkpoint"],
+                                    summary_hash=hashlib.sha256(
+                                        stored_context["summary"].encode()
+                                    ).hexdigest(),
+                                )
+                            else:
+                                self.store.emit(
+                                    "engram.update_skipped",
+                                    {
+                                        "channel_id": channel_id,
+                                        "reason": "incomplete_input_coverage",
+                                        "coverage_unchanged": True,
+                                    },
+                                    bot_id=bot["id"],
+                                    turn_id=turn_id,
+                                    request_id=result.request_id,
+                                    level="warning",
+                                )
+                        elif parsed_engram and parsed_engram.get("state") is not None:
+                            self.store.emit(
+                                "engram.update_skipped",
+                                {
+                                    "channel_id": channel_id,
+                                    "reason": "incomplete_final_boundary",
+                                    "finish_reason": result.finish_reason,
+                                    "coverage_unchanged": True,
+                                },
+                                bot_id=bot["id"],
+                                turn_id=turn_id,
+                                request_id=result.request_id,
+                                level="warning",
+                            )
+                        outbox_id = await self.deliver(
                             bot,
                             profile,
                             provider,
@@ -819,6 +900,8 @@ class Engine:
                             request_id=result.request_id,
                             draft_deadline=document_deadline,
                         )
+                        if engram_candidate is not None:
+                            self.registry.engrams.bind_outbox(engram_candidate, outbox_id)
                         status, decision = "sent", "reply" if reply_to else "speak"
                     else:
                         raise ControlError(
@@ -1130,6 +1213,8 @@ class Engine:
                 error=error,
                 retry_delay=retry_delay,
             )
+            if engram_candidate is not None and status == "sent":
+                self.registry.engrams.finalize(engram_candidate)
 
     async def deliver(
         self,
@@ -1355,6 +1440,7 @@ class Engine:
                     bot_id=bot["id"],
                     turn_id=context.turn_id,
                 )
+                return outbox_id
         except (Exception, asyncio.CancelledError) as exc:
             row = self.store.one("SELECT status FROM outbox WHERE id=?", (outbox_id,))
             uncertain = row["status"] == "sending" and (not isinstance(exc, DeliveryError) or exc.uncertain)

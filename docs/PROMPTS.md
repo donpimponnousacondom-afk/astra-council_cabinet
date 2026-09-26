@@ -35,6 +35,54 @@ still apply to overrides. Memory-budget variants are both shown because the
 current conversation/usage is not selected in this editor. Plugin/runtime scope
 and current saved grants are rechecked during actual execution.
 
+### Experimental conversation text
+
+**Bots → bot → Prompts → Conversation format** selects either the existing
+**Structured records** (default) or **Conversation text · experimental**. This is
+a presentation choice for generation and compaction, independent of the
+[Engram experiment](ENGRAMS.md). Fresh slash/panel invocations also use the chosen
+format for their supplied message; this does not add channel history or Engram
+state to those routes. Existing bot settings are not migrated.
+
+Conversation text uses a participant legend with verified user IDs, compact
+speaker/recipient labels, one message reference, dates grouped by day/UTC offset,
+and times displayed to seconds. Message bodies are quoted as untrusted conversation
+content. Replies retain the target ID and an earlier excerpt when the target is
+outside the supplied batch; an already visible parent's body is not repeated.
+Role-directed mentions and unresolved recipients remain explicit. Actual image
+parts, attachment links and image availability/resize notices remain intact.
+Capture failures include their reason. External bots/webhooks remain identified,
+the viewing bot is marked "you", and routed posts retain their mode/source bot.
+Temporary participant labels must not be carried into replies, summaries or
+Engram state; use names and user IDs where names are ambiguous. This is model
+guidance, not proof that a particular model will preserve attribution correctly.
+Line separators are normalized before quoting and nonprinting control bytes are
+removed from displayed text; original message content remains stored unchanged.
+Repeated sequence/age fields, null/boolean flags and cached image hashes are not
+printed in the conversation text. Stored Discord records and historical requests
+retain the full metadata and original timestamp precision.
+
+The format selects editable `runtime-transcript-conversation` and
+`runtime-compaction-instructions-conversation` default variants. Explicit per-bot
+template overrides still win. `{transcript}` expands to the selected presentation;
+`{latest_message}` remains the structured latest record, while `{latest_content}`
+remains just its text. The new compaction guidance asks for a concise continuity
+note with relevant facts, attribution, corrections and open work, and retains
+dates/references when useful instead of copying routine metadata. Existing edited
+templates are not overwritten. Token planning measures the selected text, including
+compaction batch fitting; switching back restores structured generation immediately.
+
+If an experimental template was already seeded before a wording update, compare
+and edit its saved text in Prompt library; startup never overwrites owner edits.
+Signed attachment URLs remain intact so granted tools can use their original
+references. Removing those URLs and format-specific token calibration are separate
+follow-ups, not part of this presentation change.
+
+This changes no history boundary or summary by itself. Subsequent compactions can
+gradually replace existing summaries; it does not reset context or rewrite old
+notes. Compaction still receives no image pixels, and fresh image inputs still
+survive compaction within their current generation turn. See [VISION](VISION.md).
+
 ### Placement reference
 
 | Layer | Source and conditions |
@@ -69,6 +117,10 @@ Common generated-template fields: `{bot_name}`, `{bot_id}`, `{discord_user_id}`,
 - Slash guidance: `{invocation}` is safe invocation metadata, never the interaction token.
 
 For a minimal text experiment, create a `transcript` template containing `{latest_content}` with role `user`. Select that override on the experimental bot, disable the other generated layers, and deselect additional shared prompts you do not want. Use that bot's existing plugin, image and silence controls to omit tool schemas or pixels. This does not edit its underlying shared model profile.
+
+Run that latest-only experiment with [Engram](ENGRAMS.md) disabled. Engram requires
+all selected messages and the retained summary in the actual request so its
+coverage cannot acknowledge omitted input; use its own retention controls instead.
 
 Actual assistant/tool exchanges, native continuation fields, tool schemas and returned tool results remain protocol/data, not editable instruction templates. Granted tools still carry their schemas and complete error/usage feedback. An entirely empty request fails locally before a paid provider call. Trajectory records capture the actual ordered messages, enabled templates/roles/revisions/hashes and omitted layer keys; disabled stored summaries are not mislabeled as injected summaries.
 

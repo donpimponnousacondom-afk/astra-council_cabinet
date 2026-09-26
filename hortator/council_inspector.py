@@ -21,6 +21,28 @@ def pick(value, *fields):
     return {field: value.get(field) for field in fields}
 
 
+def without_private_engrams(value):
+    """Owner diagnostics retain prompt evidence; model inspection cannot export it.
+
+    Request input can contain the scoped state both in a generated prompt layer
+    and its rendered message. Omit that input as a unit instead of scanning
+    arbitrary user/model text for a memory label.
+    """
+    if isinstance(value, list):
+        return [without_private_engrams(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    result = {key: without_private_engrams(item) for key, item in value.items()}
+    if isinstance(value.get("context"), dict) and value["context"].get("engram"):
+        result["body"] = {"omitted": "Private conversation engram request input"}
+    if value.get("engram"):
+        result.pop("prompt_layers", None)
+        result.pop("engram", None)
+    if str(value.get("kind", "")).startswith("engram."):
+        result["data"] = {"omitted": "Private conversation engram event"}
+    return result
+
+
 def roster(service):
     store = service.store
     profiles = {p["id"]: p for p in store.list("profiles")}

@@ -4,6 +4,117 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Context audit remediation and complete regression gate (2026-09-26)
+
+```text
+Commit: 2f55dbe2f4caebe95384495b3553526e423748c3; dirty at start/end: false/false
+Backend scope: full collection
+Backend result: 1635 passed, 0 failed, 0 errors, 1 skipped; exit 0; command 353.393 seconds
+Frontend format/build: passed; exits 0/0; durations 1.854/5.375 seconds
+Browser tests: 67 passed; full Playwright collection; command 124.794 seconds
+Evidence: test-results/verification/result.json; /tmp/context-audit-remediation-full-check.log; preserved in ignored audit/2026-09-26/04-remediation/evidence/
+Classification: mocked Discord/provider adapters, local integration, isolated browser fixtures and offline transcript-token measurement
+Live checks: read-only saved-request replay; no provider call or Discord delivery
+Limitations: public HTTPS/package-install test skipped by opt-in policy; no live attribution/recall, billing or latency acceptance
+```
+
+- The complete gate passed in 487.123 seconds, including locked dependencies,
+  Ruff/format, runner self-tests, backend collection, frontend build and browsers.
+  No source changed during the run. Two existing dependency deprecation warnings
+  remain informational. Focused transcript/intake/compaction and Engram suites
+  also passed (19 and 49 tests respectively).
+- The external review, "Not losing things like tears in the rain", identified
+  omissions in the optional readable format. Fixes preserve unresolved-reply
+  status from actual intake records, image failure reasons, external bot/webhook
+  identity and routed delivery attribution. Participant legends identify the
+  viewer and verified owner without granting authority from display names.
+  Displayed line separators/controls normalize before quoting; raw records remain
+  unchanged. Resized-image display omits only the redundant original hash.
+- Conversation compaction instructions and the fixed renderer legend require
+  durable names/IDs, relevant prior facts and recipient attribution. Tests exercise
+  multiple batches whose temporary participant labels change meaning. Engram's
+  fixed protocol repeats the durable-identity rule even under edited defaults or
+  per-bot overrides; this guidance is not a semantic model-output guarantee.
+- The subsequent Luna review at `fad68b0` found one remaining attribution gap:
+  reply-only external bot/webhook authors lost their type when the parent was
+  outside the selected batch. Four actual intake regressions reproduced the
+  missing field. Stored and fetched reply references now retain authenticated
+  author kind and the renderer carries it into participant labels. The follow-up
+  transcript/addressing/clean-slate collection passed **63 tests** in 14.22 seconds;
+  Ruff/format and diff checks passed. This follow-up postdates the complete gate
+  above, so that gate is not claimed as evidence for this later code. Final-head
+  CI and independent delta review must pass before merge.
+- Revised offline cl100k_base transcript counts are 11,049 → 5,204 (52.9%),
+  270,352 → 97,113 (64.1%), and 246,974 → 84,170 (65.9%). Other prompt layers,
+  tools and provider tokenization are excluded. Existing calibration population
+  and rejected-compaction retry/cost policy remain separate measured follow-ups;
+  checkpoints and accepted-summary safeguards are unchanged.
+- The owner lifted the audit hold and authorized PR review/merge and deployment.
+  Structured transcripts remain the default and Engram remains independently
+  disabled; this authorization does not enable experiments or rewrite live bot
+  configuration/context. A future Engram trial requires an empty separate bot
+  scope, no other memory grants and explicit reduction, with all uncovered input
+  retained. Conversation input must remain enabled.
+- [PR #71](https://github.com/donpimponnousacondom-afk/astra-council_cabinet/pull/71)
+  is the publication location for hosted checks and the independent review digest.
+  Both hosted checks
+  passed at the application commit above; later-head review/checks must be
+  verified before merge. The local reviewer skill now requires actual producer
+  shapes and independent generation/compaction/state prompt paths after the
+  earlier review missed those cases. Its structure validation passed. The ignored
+  audit response records every finding, disposition and remaining trial question;
+  final merge/backup/deployment receipts belong alongside it, not in speculative
+  readiness claims here.
+
+## Opt-in conversation text and Engram memory (2026-09-26)
+
+```text
+Commit: 2b7afcc4d4d1e0d0cefcb734b5e8a3a1a09c1991; gate started at 5fc3b2fe8d627f29383b4c9339769c2fdcfdc161 with the completed changes uncommitted; dirty at start/end: true/false
+Backend scope: full collection
+Backend result: 1621 passed, 0 failed, 0 errors, 1 skipped; exit 0; command 371.799 seconds
+Frontend format/build: passed; exits 0/0; durations 2.617/5.497 seconds
+Browser tests: 67 passed; full Playwright collection; command 128.802 seconds
+Evidence: test-results/verification/result.json; /tmp/conversation-context-engrams-check.log; archived under ignored audit/2026-09-26/01-context-compaction-brief/evidence/
+Classification: mocked Discord/provider adapters, local integration and isolated browser fixtures; offline text-token measurement
+Live checks: read-only selected saved requests and configuration fingerprints; no provider call or Discord delivery
+Limitations: public HTTPS/package-install test skipped by opt-in policy; no model recall, billed savings or latency acceptance; deployment held for external audit
+```
+
+- Full gate duration was 510.939 seconds, including Ruff/format, verification-runner
+  self-tests, backend collection, locked frontend install/build and browser tests.
+  Application files did not change during the gate: the completed working tree
+  was committed while tests ran. This is not a clean-start run at the final SHA.
+  Two existing dependency deprecation warnings remain informational.
+- Structured input remains the default. New coverage checks saved defaults,
+  duplicate/spoofed names, addressing, unresolved/external reply references,
+  attachment visibility and actual generation/compaction rendering, including
+  selected-format batch budgets and explicit template overrides. Complete source
+  records and current-turn image selection are retained.
+- Engram checks cover bounded MEM/FACTS parsing, malformed/incomplete/quoted
+  delimiters, private output suppression, confirmed-delivery state commit,
+  cancellation/uncertainty, revision/reset/config guards, recovery, owner auth/CSRF,
+  independent bot/channel scope, slash exclusion and selective snapshot invalidation.
+  Retention tests preserve all uncovered input and prior summaries until covered;
+  unfittable input fails without silently advancing a checkpoint.
+- Three new browser scenarios cover conversation selection/inspection, inherited
+  plugin limits with separate history-reduction controls, and owner state/reset
+  scope and confirmation. Screenshots of the conversation editor and Engram
+  overrides were visually inspected; these are isolated fixtures, not the live
+  council configuration.
+- Offline cl100k_base comparisons of saved transcript text measured 11,049 → 5,185
+  tokens for 24 generation messages (53.1%), 270,352 → 97,080 for 1,002 generation
+  messages (64.1%), and 246,974 → 84,124 for 907 compaction messages (65.9%). These
+  exclude other prompt layers/tool schemas and do not establish provider billing,
+  latency, attribution quality or memory recall. Per-field counts are not additive
+  whole-request costs. The larger saved provider input was not all metadata.
+- The owner requested the independent audit "Not losing things like tears in the
+  rain" before rollout. Its ignored, dated brief pins the implementation and
+  preserves test/measurement evidence. Context/compaction implementation and
+  deployment remain frozen pending that review. No live bot configuration, prompt,
+  memory or context was edited, and the backend was not restarted. Frontend checks
+  rebuilt checkout assets; that alone is not a matched runtime deployment. No new
+  branch was pushed and no hosted CI/readiness claim is made here.
+
 ## Independent PR-review workflow setup (2026-09-26)
 
 ```text

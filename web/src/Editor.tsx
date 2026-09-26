@@ -16,6 +16,8 @@ import type { Dashboard, Kind, RecordData } from "./api";
 import { ReasoningEditor, reasoningFields } from "./Reasoning";
 import { FooterEditor } from "./Footer";
 import { PromptLayers } from "./PromptLayers";
+import { EngramSettings, EngramBotSettings } from "./EngramSettings";
+import { EngramPanel } from "./EngramPanel";
 import { PricingEditor } from "./Pricing";
 import { GlobalMemoryPanel } from "./GlobalMemory";
 import { SlashCommandSetup } from "./SlashCommands";
@@ -690,6 +692,24 @@ export function Editor({
                       value={dashboard.settings.global_prompt}
                       label="Inherited global prompt"
                     />
+                    <Field
+                      label="Conversation format"
+                      hint="Applies to generation and compaction. Conversation text retains speaker and recipient attribution. Raw records stay stored; request evidence captures the text actually sent."
+                    >
+                      <select
+                        value={draft.transcript_format ?? "structured"}
+                        onChange={(e) =>
+                          set("transcript_format", e.target.value)
+                        }
+                      >
+                        <option value="structured">
+                          Structured records (current)
+                        </option>
+                        <option value="conversation">
+                          Conversation text · experimental
+                        </option>
+                      </select>
+                    </Field>
                     <Notice>
                       Edit generated templates in Prompt library. The switches
                       below control this bot's injected text and data; execution
@@ -833,6 +853,22 @@ export function Editor({
                         "Calls are executed in order, not in parallel.",
                       )}
                     </div>
+                    {(draft.enabled_plugins || []).includes("engram") && (
+                      <EngramBotSettings
+                        config={draft.plugin_config?.engram || {}}
+                        inherited={
+                          dashboard.plugins.find(
+                            (plugin) => plugin.id === "engram",
+                          )?.config || {}
+                        }
+                        onChange={(value) =>
+                          set("plugin_config", {
+                            ...draft.plugin_config,
+                            engram: value,
+                          })
+                        }
+                      />
+                    )}
                     {(draft.enabled_plugins || []).includes(
                       "research_assistant",
                     ) && (
@@ -959,6 +995,13 @@ export function Editor({
                       <BackgroundJobsPanel
                         key={`jobs-${entity.id}`}
                         botId={entity.id}
+                      />
+                      <EngramPanel
+                        key={`engram-${entity.id}`}
+                        bot={entity}
+                        rooms={dashboard.rooms}
+                        disabled={dirty}
+                        onBusyChange={operationChanged}
                       />
                       {entity.enabled_plugins?.includes("secretary") && (
                         <SecretaryPanel
@@ -1564,6 +1607,12 @@ export function Editor({
                     />
                     <BackgroundJobsPanel plugin="research_assistant" />
                   </>
+                )}
+                {draft.id === "engram" && (
+                  <EngramSettings
+                    config={draft.config || {}}
+                    onChange={(value) => set("config", value)}
+                  />
                 )}
                 {draft.id === "secretary" && (
                   <>

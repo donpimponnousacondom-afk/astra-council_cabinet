@@ -27,6 +27,18 @@ function selectedTemplates(
         ? "runtime-silence-policy-disabled"
         : "runtime-silence-policy",
     ];
+  else if (layer.id === "transcript")
+    ids = [
+      draft.transcript_format === "conversation"
+        ? "runtime-transcript-conversation"
+        : "runtime-transcript",
+    ];
+  else if (layer.id === "compaction_instructions")
+    ids = [
+      draft.transcript_format === "conversation"
+        ? "runtime-compaction-instructions-conversation"
+        : "runtime-compaction-instructions",
+    ];
   return ids.map(
     (id) =>
       dashboard.prompts.find((p) => p.id === id) ||

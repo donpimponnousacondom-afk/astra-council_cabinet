@@ -18,7 +18,7 @@ def identities(store, vault):
 
 def stored_reference(store, message_id, channel_id):
     row = store.one(
-        "SELECT discord_id,author_id,author_name,bot_id,content,deleted FROM messages WHERE discord_id=? AND channel_id=?",
+        "SELECT discord_id,author_id,author_name,bot_id,content,deleted,addressing FROM messages WHERE discord_id=? AND channel_id=?",
         (message_id, channel_id),
     )
     if not row:
@@ -28,6 +28,9 @@ def stored_reference(store, message_id, channel_id):
         "user_id": row["author_id"],
         "name": row["author_name"],
         "bot_id": row["bot_id"],
+        "author_kind": json.loads(row["addressing"]).get(
+            "author_kind", "bot" if row["bot_id"] else "unknown"
+        ),
         "preview": "[message deleted]" if row["deleted"] else row["content"][:600],
         "preview_truncated": not row["deleted"] and len(row["content"]) > 600,
     }
@@ -143,6 +146,13 @@ async def capture(store, vault, message, *, historical=False, receiving_bot_id=N
                     "message_id": reply_id,
                     **({} if getattr(resolved, "webhook_id", None) else known).get(
                         user_id, {"user_id": user_id, "name": resolved.author.display_name, "bot_id": None}
+                    ),
+                    "author_kind": (
+                        "webhook"
+                        if getattr(resolved, "webhook_id", None)
+                        else "bot"
+                        if resolved.author.bot or user_id in known
+                        else "human"
                     ),
                 }
                 # Reference identity is enough; do not fetch/embed arbitrary old attachments.
