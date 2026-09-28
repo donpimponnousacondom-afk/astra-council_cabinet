@@ -1,4 +1,4 @@
-"""Bounded Brave API and keyless DuckDuckGo HTML search with explicit partial results."""
+"""Bounded search engines with explicit provenance and preserved HTTP evidence."""
 
 from __future__ import annotations
 
@@ -16,11 +16,18 @@ from .models import ControlError
 from .http_evidence import HTTPResponse, headers_evidence, record_response
 from .tool_feedback import errors_for
 
-MODES = ["auto", "brave", "duckduckgo", "both"]
-DEFAULTS = {"endpoint": "https://api.search.brave.com/res/v1/web/search", "count": 5, "engine": "auto"}
+MODES = ["auto", "brave", "duckduckgo", "both", "ollama"]
+DEFAULTS = {
+    "endpoint": "https://api.search.brave.com/res/v1/web/search",
+    "count": 5,
+    "engine": "auto",
+    "ollama_provider_id": "",
+}
 DESCRIPTION = (
     "Search the web. Required: query. Optional engine: auto (Brave then DuckDuckGo on failure/empty), "
-    "brave, duckduckgo (no key), or both (combine both engines). If omitted, use the operator's default. "
+    "brave, duckduckgo (no key), both (Brave + DuckDuckGo), or ollama (direct search, no research agent). "
+    "Ollama uses the operator-selected Ollama provider credential, independently of your model. "
+    "If omitted, use the operator's default. "
     "count is results per engine, default 5, maximum 10. Example: "
     '{"query":"Python documentation","engine":"both","count":5}. '
     "Results are deduplicated with source engines; inspect engine_status and partial for failures. "
@@ -68,13 +75,15 @@ CONFIG_SCHEMA = {
         "engine": {"type": "string", "enum": MODES},
         "count": {"type": "integer", "minimum": 1, "maximum": 10},
         "endpoint": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "ollama_provider_id": {"type": "string", "maxLength": 100},
     },
 }
 DDG_URL = "https://html.duckduckgo.com/html/"
+OLLAMA_URL = "https://ollama.com/api/web_search"
 MAX_BYTES = 1_000_000
 
 
-def validate_config(config):
+def validate_config(config, store=None):
     errors = errors_for(CONFIG_SCHEMA, config)
     endpoint = config.get("endpoint", DEFAULTS["endpoint"])
     try:
@@ -96,6 +105,57 @@ def validate_config(config):
         raise ControlError(
             "Invalid web_search configuration: " + "; ".join(f"{e['path']}: {e['message']}" for e in errors)
         )
+    if store and (provider_id := config.get("ollama_provider_id")):
+        validate_ollama_provider(store.get("providers", provider_id))
+
+
+def validate_ollama_provider(provider):
+    """Only an explicit official Ollama credential source may authorize this API."""
+    try:
+        url = urlsplit(provider["base_url"])
+        if (
+            url.scheme != "https"
+            or url.hostname != "ollama.com"
+            or url.port not in (None, 443)
+            or url.username
+            or url.password
+            or url.query
+            or url.fragment
+        ):
+            raise ValueError()
+    except ValueError, TypeError, KeyError, AttributeError:
+        raise ControlError(
+            "Ollama search requires a saved provider with an official https://ollama.com base URL"
+        ) from None
+
+
+def provider_references(store, kind, entity_id):
+    if kind != "providers":
+        return []
+    plugin = store.get("plugins", "web_search") or {}
+    references = []
+    if plugin.get("config", {}).get("ollama_provider_id") == entity_id:
+        references.append("plugins/web_search")
+    for bot in store.list("bots"):
+        if bot.get("plugin_config", {}).get("web_search", {}).get("ollama_provider_id") == entity_id:
+            references.append(f"bots/{bot['id']}/web_search")
+    return references
+
+
+def ollama_key(config, store, vault):
+    provider_id = config.get("ollama_provider_id")
+    if not provider_id:
+        raise SearchFailure(
+            "configuration", "Select an Ollama credential provider in Plugins → Web search first"
+        )
+    try:
+        validate_ollama_provider(store.get("providers", provider_id))
+    except ControlError as exc:
+        raise SearchFailure("configuration", str(exc)) from exc
+    key = vault.get(f"provider/{provider_id}/api_key")
+    if not key:
+        raise SearchFailure("configuration", "Save the selected Ollama provider's API key in Providers")
+    return key
 
 
 class SearchFailure(Exception):
@@ -279,8 +339,42 @@ def brave_results(body, count):
         raise SearchFailure("response_format", f"Invalid Brave search response: {exc}") from exc
 
 
-async def download(client, url, params, headers):
-    async with client.stream("GET", url, params=params, headers=headers, timeout=25) as response:
+def ollama_results(body, count):
+    try:
+        data = json.loads(body)
+        if not isinstance(data, dict):
+            raise ValueError("Expected a JSON object")
+        if data.get("error"):
+            raise SearchFailure("upstream_error", "Ollama returned an error; inspect the HTTP response")
+        values = data.get("results")
+        if not isinstance(values, list):
+            raise ValueError("Expected results array")
+        results = []
+        for row in values[:count]:
+            if (
+                not isinstance(row, dict)
+                or not result_url(row.get("url"))
+                or not isinstance(row.get("title"), str)
+                or not isinstance(row.get("content"), str)
+            ):
+                raise ValueError("Invalid search result URL, title or content")
+            results.append(
+                {
+                    "title": text(row["title"], 300),
+                    "url": result_url(row["url"]),
+                    "description": text(row["content"], 1000),
+                }
+            )
+        return results
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise SearchFailure("response_format", f"Invalid Ollama search response: {exc}") from exc
+
+
+async def download(client, url, params, headers, *, body=None):
+    request = {"json": body} if body is not None else {}
+    async with client.stream(
+        "POST" if body is not None else "GET", url, params=params, headers=headers, timeout=25, **request
+    ) as response:
         data, complete = bytearray(), True
         transport_error = None
         try:
@@ -344,6 +438,18 @@ async def search(args, context, config, key, store, vault):
                         {"q": args["query"], "count": count},
                         {"X-Subscription-Token": key, "Accept": "application/json"},
                     )
+                elif name == "ollama":
+                    status["url"] = OLLAMA_URL
+                    response = await download(
+                        client,
+                        OLLAMA_URL,
+                        None,
+                        {
+                            "Authorization": f"Bearer {ollama_key(config, store, vault)}",
+                            "Accept": "application/json",
+                        },
+                        body={"query": args["query"], "max_results": count},
+                    )
                 else:
                     status["url"] = str(httpx.URL(DDG_URL).copy_merge_params({"q": args["query"]}))
                     response = await download(
@@ -359,11 +465,12 @@ async def search(args, context, config, key, store, vault):
                         "transport" if response.transport_error else "response_limit",
                         response.transport_error or response.local_issue,
                     )
-                results = (
-                    brave_results(response.data, count)
-                    if name == "brave"
-                    else duck_results(response.data, count)
-                )
+                if name == "ollama" and not 200 <= response.status < 300:
+                    raise SearchFailure(
+                        "http_status", f"Ollama returned HTTP {response.status}; inspect the HTTP response"
+                    )
+                parser = {"brave": brave_results, "duckduckgo": duck_results, "ollama": ollama_results}[name]
+                results = parser(response.data, count)
             status.update(status="ok", count=len(results))
         except SearchFailure as exc:
             results = []
