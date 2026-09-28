@@ -19,9 +19,20 @@ historical claims retain their original date and scope.
 - Private probe script and redacted results: ignored
   `audit/2026-09-28/01-ollama-search/`. Initial diagnostic script assumptions about
   the paged-read shape were corrected; final reads follow `next` until complete.
-- Full regression gate, remote CI and independent review are required before
-  rollout; their final outcome is recorded in the PR digest. No claim of live
-  bot acceptance or unlimited subscription allowance follows from these probes.
+- Full local gate on clean `c5fbd8c`: **1,660 backend tests passed, one intentional
+  public-network opt-in skip; 68 browser tests passed**. Ruff, formatting, verifier
+  self-tests and build passed. Evidence: ignored
+  `audit/2026-09-28/01-ollama-search/full-check.log` and `full-check-result.json`.
+- The first run exhausted shared `/tmp`; a disk-backed TMPDIR attempt hit the
+  agentic fixture's temporary-path guard. The successful full run used
+  `PYTEST_ADDOPTS='-o tmp_path_retention_policy=failed' ./scripts/check.sh`, now
+  the project default. Assertions and collection were unchanged. Failure logs
+  were retained; inactive project scratch was cleaned under owner authorization.
+- Both original-head CI checks passed. Independent GPT-6 Luna at max reasoning
+  found no correctness/security blockers; provider-picker filtering was optional
+  polish. Final-head CI/review and deployment outcomes are recorded in the PR
+  digest. No claim of live bot acceptance or unlimited subscription allowance
+  follows from these probes.
 
 ## Context audit remediation and complete regression gate (2026-09-26)
 
