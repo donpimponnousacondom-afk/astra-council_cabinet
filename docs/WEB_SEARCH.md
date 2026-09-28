@@ -1,6 +1,6 @@
-# Brave and DuckDuckGo search
+# Web search: Brave, DuckDuckGo and Ollama
 
-`web_search` is one granted plugin with two engines. Existing query-only calls remain valid. It defaults to `auto`: use Brave first, then DuckDuckGo if Brave fails or returns no web results. DuckDuckGo uses its [non-JavaScript HTML search](https://duckduckgo.com/duckduckgo-help-pages/features/non-javascript); this is not a paid API or an Instant Answers endpoint. It needs no key, but can return rate limits, challenges or a changed page format. These are reported as failures, never fabricated empty successes.
+`web_search` is one granted plugin with three engines. Existing query-only calls remain valid. It defaults to `auto`: use Brave first, then DuckDuckGo if Brave fails or returns no web results. DuckDuckGo uses its [non-JavaScript HTML search](https://duckduckgo.com/duckduckgo-help-pages/features/non-javascript); this is not a paid API or an Instant Answers endpoint. It needs no key, but can return rate limits, challenges or a changed page format. These are reported as failures, never fabricated empty successes.
 
 ## Operator setup
 
@@ -21,7 +21,44 @@ The non-secret configuration is shallow merged from built-in defaults, global pl
 }
 ```
 
-`engine` accepts `auto`, `brave`, `duckduckgo`, or `both`; `count` is an integer from 1 to 10 **per engine**. `endpoint` applies only to Brave and must be an HTTP(S) URL without embedded credentials or a fragment. It is operator configuration, not a model-selected fetch destination. Preserve endpoint overrides when changing modes. Saving validates global/per-bot fields without contacting either engine. Old records with only endpoint/count use Auto without a database rewrite.
+`engine` accepts `auto`, `brave`, `duckduckgo`, `both`, or `ollama`; `count` is an integer from 1 to 10 **per engine**. `endpoint` applies only to Brave and must be an HTTP(S) URL without embedded credentials or a fragment. It is operator configuration, not a model-selected fetch destination. Preserve endpoint overrides when changing modes. Saving validates global/per-bot fields without contacting either engine. Old records with only endpoint/count use Auto without a database rewrite.
+
+## Ollama setup
+
+Ollama is a direct search API, independent of the bot's generation model and the
+MiMo researcher. It does not create a research agent or background job. See the
+[official search contract](https://docs.ollama.com/capabilities/web-search).
+
+Save the account key in **Providers** on a provider with an official
+`https://ollama.com` base URL (normally `https://ollama.com/v1`). In **Plugins →
+Web search → Ollama credential provider**, select that provider and save changes.
+This reuses `provider/{id}/api_key`; the Brave plugin key and the bot's unrelated
+model-key override are never used for Ollama. No credential is copied into config
+or returned to the model. A missing key/provider is an actionable engine failure.
+The selected provider is a credential source only: its model settings, transport
+headers, custom paths and enabled flag do not control this search request.
+
+Choose **Ollama only** as a default, or let bots request `engine: "ollama"` per
+call. For one bot's default, set `plugin_config.web_search.engine` to `ollama` in
+**Bots → Capabilities → Advanced · per-bot plugin configuration**. It inherits the
+global `ollama_provider_id` unless explicitly overridden. Preserve other overrides.
+An empty provider ID clears the selection. Unknown or non-Ollama providers cannot
+be selected; referenced providers cannot be deleted or moved to a different origin
+until their search references are cleared.
+
+Requests use only `POST https://ollama.com/api/web_search` with `query` and
+`max_results` (the existing `count`). The destination is fixed, redirects are not
+followed, and there is no extra inference call. Provider endpoint overrides cannot
+redirect this credential. Responses map `content` to the bounded `description`;
+the complete captured response remains available through `read_result`. Non-2xx,
+malformed, interrupted, oversized and transport responses remain explicit failures;
+an actual empty results array is a successful empty search.
+
+**Auto and Both retain their Brave/DuckDuckGo behavior.** Ollama is not silently
+added to automatic fallback or combined search. Existing installations default to
+an unconfigured Ollama credential source; no grants or bot defaults change on
+upgrade. Search availability and account quotas follow Ollama's current plan;
+the harness does not infer search allowance from model-token subscriptions.
 
 ## Model calls and results
 
@@ -31,6 +68,7 @@ Call `{}` for complete usage without network access or credential lookup. A real
 {"query":"Python documentation"}
 {"query":"Python documentation","engine":"duckduckgo"}
 {"query":"Python documentation","engine":"brave","count":5}
+{"query":"Python documentation","engine":"ollama","count":5}
 {"query":"Python documentation","engine":"both","count":5}
 ```
 
@@ -72,3 +110,10 @@ The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
 
 - Web search supports Brave and keyless DuckDuckGo with Auto fallback, explicit engine selection and combined results. Preserve successful partial results, per-engine provenance/errors, bounded downloads/previews and credential separation; never forward the Brave key to DuckDuckGo or bypass a search challenge. See [docs/WEB_SEARCH.md](WEB_SEARCH.md). Memory guidance must show complete operation-bearing examples; do not infer a write from key/value alone. Shell guidance must name the separate `workspace.start` prerequisite. These refinements do not authorize clearing memories or resetting bot databases; the owner deferred that work.
+
+## Owner decision · 2026-09-28
+
+Add Ollama as a selectable search engine using the existing dashboard credential;
+live probes and rollout to Loki are authorized. Keep generation models and MiMo
+research unchanged. Other engines from the exploration remain deferred. Build the
+capability for any granted bot; Loki is the initial operator-selected tester.

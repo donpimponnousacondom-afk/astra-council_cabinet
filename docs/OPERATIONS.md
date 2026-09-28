@@ -118,6 +118,34 @@ The data directory is mode 0700; database/key/artifacts are owner-readable. **Th
 
 The application retains history instead of silently discarding observability. Monitor available disk space and back it up. Large contexts and many bots increase CPU, memory, database and provider usage; tune concurrency and cadence for the host. SQLite is appropriate for this single-host design; this implementation does not claim a horizontally distributed scheduler.
 
+## Verification scratch and cleanup
+
+Before a full gate, check space with `df -h /tmp` and inspect this task's scratch
+usage. A shared tmpfs can fill even when the repository disk has room. Pytest's
+project configuration uses `tmp_path_retention_policy = "failed"`: successful
+`tmp_path` fixtures are removed on teardown, while failed fixtures remain under
+pytest's normal retention rules. This changes no assertions or test selection.
+Some isolated agentic fixtures deliberately require `/tmp/` or `/private/tmp/`;
+moving `TMPDIR` elsewhere is not a substitute for respecting that safety guard.
+
+At task completion, clean the temporary resources created by this project:
+
+- Preserve useful logs, failed-check evidence and diagnostics under the ignored
+  dated `audit/` folder or external data storage before deleting their originals.
+- Inspect process command lines, working directories and open files. Do not
+  delete active test directories, runtime files, Screen sockets or another
+  agent/application's scratch. A matching filename alone is insufficient proof.
+- Remove confirmed inactive `hortator-e2e-*` fixtures and temporary generated
+  dashboard builds. Check the test server has stopped first; these fixtures are
+  separate from the persistent data directory. Never delete a Git worktree as
+  scratch without the repository's worktree/unmerged-work checks.
+- Record what was removed, where evidence was archived and any unresolved space
+  problem. Avoid blanket `/tmp` deletion and recurring system-wide cleanup jobs.
+
+The owner requested this workflow on 2026-09-28 after a full local gate exhausted
+the shared `/tmp` filesystem. Durable runtime data remains outside temporary
+storage at the location documented above.
+
 ## Branch changes and persistent storage
 
 Keep the database, encryption key, bootstrap password, artifacts, and logs in the external data directory. Some historical branches tracked `data/`; moving between those commits can replace or remove files inside the checkout even though the current branch ignores them. Never restore those historical files over the external live directory.

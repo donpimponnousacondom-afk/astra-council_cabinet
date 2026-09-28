@@ -28,7 +28,7 @@ import {
   ResearchBotSettings,
   ResearchSettings,
 } from "./ResearchAssistant";
-import { alphabetical } from "./ordering";
+import { alphabetical, byName } from "./ordering";
 import {
   DocumentBotSettings,
   DocumentPluginSettings,
@@ -1552,9 +1552,32 @@ export function Editor({
                           Both · combine Brave and DuckDuckGo
                         </option>
                         <option value="brave">Brave only</option>
+                        <option value="ollama">Ollama only</option>
                         <option value="duckduckgo">
                           DuckDuckGo only · no key
                         </option>
+                      </select>
+                    </Field>
+                    <Field
+                      label="Ollama credential provider"
+                      hint="Reuses this provider's saved API key for direct Ollama search. Your bot's model stays unchanged. Auto and Both still use Brave and DuckDuckGo."
+                    >
+                      <select
+                        value={draft.config?.ollama_provider_id || ""}
+                        onChange={(e) =>
+                          set("config", {
+                            ...draft.config,
+                            ollama_provider_id: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="">Not configured</option>
+                        {byName(dashboard.providers).map((provider) => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.name} · {provider.base_url}
+                            {provider.key_configured ? "" : " · no saved key"}
+                          </option>
+                        ))}
                       </select>
                     </Field>
                     <Field
@@ -1589,12 +1612,13 @@ export function Editor({
                         Brave API dashboard
                       </a>
                       , create a key under API Keys, then paste it into the API
-                      key field below and save the credential. Bots can select
-                      either engine or both per call. Auto falls back when Brave
-                      fails or has no results; Both preserves the other engine's
-                      results on a partial failure. DuckDuckGo's HTML search can
-                      return a rate limit or challenge, which is reported
-                      explicitly.
+                      key field below and save the credential. Ollama uses the
+                      provider selected above, which must have an official
+                      https://ollama.com base URL. Bots can select any engine
+                      per call. Auto falls back when Brave fails or has no
+                      results; Both preserves the other engine's results on a
+                      partial failure. DuckDuckGo's HTML search can return a
+                      rate limit or challenge, which is reported explicitly.
                     </Notice>
                   </>
                 )}

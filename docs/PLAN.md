@@ -46,6 +46,14 @@ current checkout or running configuration.
 - Full council activation and daily-use dashboard acceptance remain with the owner.
   Keep the frozen fallback until acceptance under [DASHBOARD.md](DASHBOARD.md).
 
+## Search coverage rollout · 2026-09-28
+
+Owner authorized direct Ollama search through the existing web-search plugin,
+using the stored account credential and Loki as the initial tester. Preserve
+other bots' defaults, generation providers and the MiMo researcher. Other search
+services remain exploratory. Current behavior and setup are owned by
+[WEB_SEARCH.md](WEB_SEARCH.md); test/live rollout evidence belongs in VERIFICATION.
+
 ## Deferred product work
 
 Separate-model/background compaction and a richer dashboard log panel remain

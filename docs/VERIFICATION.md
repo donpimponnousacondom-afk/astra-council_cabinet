@@ -4,6 +4,36 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Ollama direct web-search adapter (2026-09-28)
+
+- Focused existing search/plugin/HTTP-evidence/hook suites: **61 passed**.
+- New Ollama suite: **21 passed**, covering credential isolation, unchanged
+  Auto/Both behavior, bounded and malformed responses, HTTP errors, redirects,
+  cancellation, full evidence rereads and provider-reference validation.
+- Dashboard build, Ruff check and focused Playwright search settings test passed
+  (**1 browser test**). Browser/adapter fixtures do not establish live Discord use.
+- Authorized live probes used the stored Ollama account key with an isolated
+  temporary registry/database, never the live bot runner. Final two queries
+  returned HTTP 200 with three and five results in **612.0 / 770.4 ms**. Complete
+  evidence was recovered across two/eight pages. No model generation was invoked.
+- Private probe script and redacted results: ignored
+  `audit/2026-09-28/01-ollama-search/`. Initial diagnostic script assumptions about
+  the paged-read shape were corrected; final reads follow `next` until complete.
+- Full local gate on clean `c5fbd8c`: **1,660 backend tests passed, one intentional
+  public-network opt-in skip; 68 browser tests passed**. Ruff, formatting, verifier
+  self-tests and build passed. Evidence: ignored
+  `audit/2026-09-28/01-ollama-search/full-check.log` and `full-check-result.json`.
+- The first run exhausted shared `/tmp`; a disk-backed TMPDIR attempt hit the
+  agentic fixture's temporary-path guard. The successful full run used
+  `PYTEST_ADDOPTS='-o tmp_path_retention_policy=failed' ./scripts/check.sh`, now
+  the project default. Assertions and collection were unchanged. Failure logs
+  were retained; inactive project scratch was cleaned under owner authorization.
+- Both original-head CI checks passed. Independent GPT-6 Luna at max reasoning
+  found no correctness/security blockers; provider-picker filtering was optional
+  polish. Final-head CI/review and deployment outcomes are recorded in the PR
+  digest. No claim of live bot acceptance or unlimited subscription allowance
+  follows from these probes.
+
 ## Context audit remediation and complete regression gate (2026-09-26)
 
 ```text

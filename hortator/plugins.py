@@ -513,6 +513,7 @@ class Registry:
         self.specs["shell"].context_spec = self.shell_spec
         self.specs["global_memory"].context_spec = self.global_memory.spec_for
         self.specs["web_search"].validate = self.validate_search
+        self.specs["web_search"].references = self.search_references
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
             entry.load()(self)
 
@@ -594,12 +595,19 @@ class Registry:
                 spec.wake_source.reset(bot_id, channel_id)
 
     def validate_search(self, kind, entity, store):
-        from .web_search import validate_config
+        from .web_search import validate_config, validate_ollama_provider
 
         if kind == "plugins" and entity["id"] == "web_search":
-            validate_config(entity["config"])
+            validate_config(entity["config"], store)
         elif kind == "bots" and "web_search" in entity["plugin_config"]:
-            validate_config(entity["plugin_config"]["web_search"])
+            validate_config(entity["plugin_config"]["web_search"], store)
+        elif kind == "providers" and self.search_references(kind, entity["id"]):
+            validate_ollama_provider(entity)
+
+    def search_references(self, kind, entity_id):
+        from .web_search import provider_references
+
+        return provider_references(self.store, kind, entity_id)
 
     def shell_spec(self, context):
         from .shell_runner import limits
