@@ -4,6 +4,40 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Document-site coaching and owner security-policy record (2026-09-30)
+
+```text
+Commit: based on bd831ac44277fbdfe5f6dd2a06f067a43e15a4d1; working patch, dirty at start/end: true/true
+Backend scope: focused: tests/test_documents.py tests/test_document_editing.py tests/test_document_config.py tests/test_tool_feedback.py tests/test_publishing.py tests/test_publishing_receiver.py tests/test_publishing_integration.py
+Backend result: 201 passed; exit 0; 28.87 seconds
+Frontend format/build: not run (no frontend changes)
+Browser tests: not run
+Evidence: ignored audit/2026-09-30/01-document-site-coaching/local-checks.json
+Classification: synthetic tool inputs, local document integration, mocked SSH delivery and local receiver fixtures
+Live checks: diagnostic-only public HTTPS GETs before implementation; no model calls or deployment
+Limitations: focused selection, not a full-suite or CI pass; no live model acceptance of the revised wording
+```
+
+- Ruff lint/format and Git diff whitespace checks passed. Regression coverage
+  rejects file fields on create/start/edit through the actual registry before
+  handler execution; validates missing/colliding slug recovery hints; and follows
+  empty site → delivered CSS-only revision → saved and delivered homepage.
+- Before the patch, Loki's dossier CSS returned HTTP 200, 6,518 bytes, matching
+  its immutable local SHA-256; its directory returned 404 without `index.html`.
+  All five recorded publications in the six-hour diagnostic window had delivery
+  receipts. No queue rows, sites, configuration or live process were changed.
+- On the owner's later explicit inspection request, current publisher source
+  and its reachable committed history showed no equivalent content-based
+  credential tripwire. The shared `Vault.redact` Bearer heuristic was present
+  in initial commit `81c4686` (2026-09-07), preceding remote publishing `294a164`
+  (2026-09-08). An isolated evaluation of that source regexp preserved both
+  variable-reference forms above and redacted `Bearer EXAMPLE_TOKEN`. No actual
+  credentials were read, and no redaction policy was changed. This does not
+  establish the origin of the other project's scanner.
+- The owner-policy documentation commit `bd831ac` received independent GPT-6
+  Luna/max review with no actionable findings. Application-patch review is
+  separate; no remote CI or deployment is claimed by this entry.
+
 ## Ollama direct web-search adapter (2026-09-28)
 
 - Focused existing search/plugin/HTTP-evidence/hook suites: **61 passed**.

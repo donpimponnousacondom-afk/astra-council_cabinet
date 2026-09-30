@@ -55,8 +55,10 @@ def automatic(documents):
     ],
 )
 async def test_only_create_can_create_a_missing_site(documents, context, operation, args):
-    with pytest.raises(ControlError, match="Please use create"):
+    with pytest.raises(ControlError, match="Please use create") as error:
         await call(documents, context, operation, site="missing", **args)
+    assert json.dumps({"operation": "create", "site": "missing"}) in str(error.value)
+    assert "Then use write" in str(error.value)
     assert documents.store.rows("SELECT * FROM document_sites") == []
     assert documents.store.rows("SELECT * FROM document_revisions") == []
 
@@ -64,8 +66,10 @@ async def test_only_create_can_create_a_missing_site(documents, context, operati
 async def test_create_refuses_collision_and_resume_preserves_identity(documents, context):
     first = await call(documents, context, "create", site="summary", title="First title")
     assert first["document_task_started"]
-    with pytest.raises(ControlError, match="already taken"):
+    with pytest.raises(ControlError, match="already taken") as error:
         await call(documents, context, "create", site="summary", title="Replacement title")
+    assert json.dumps({"operation": "edit", "site": "summary"}) in str(error.value)
+    assert "Do not repeat create" in str(error.value)
     for operation in ("start", "edit"):
         result = await call(documents, context, operation, site="summary")
         assert result["title"] == "First title"
