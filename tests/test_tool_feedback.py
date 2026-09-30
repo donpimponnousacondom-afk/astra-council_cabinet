@@ -244,6 +244,42 @@ def test_conditional_document_operation_reports_all_its_missing_fields():
     assert result["usage"]["example"]["operation"] == "write"
 
 
+@pytest.mark.parametrize("operation", ["create", "start", "edit"])
+@pytest.mark.parametrize(
+    "ignored_args",
+    [
+        {"path": "index.html"},
+        {"content": "<h1>Report</h1>"},
+        {"path": "index.html", "content": ""},
+        {"revision": 1},
+        {"expected_revision": 0},
+    ],
+)
+async def test_document_creation_and_resume_reject_ignored_fields_without_side_effects(
+    kernel, monkeypatch, operation, ignored_args
+):
+    bot = configured(kernel, enabled_plugins=["document_site"])
+    plugin = kernel.store.get("plugins", "document_site")
+    kernel.store.put("plugins", {**plugin, "enabled": True})
+    context = ToolContext(bot, "channel", "turn-document-feedback")
+    spec = kernel.registry.specs["document_site"]
+    handler = AsyncMock(wraps=spec.handler)
+    monkeypatch.setattr(spec, "handler", handler)
+    result = await kernel.registry.call(
+        "document_site", {"operation": operation, "site": "report", **ignored_args}, context, "invalid-save"
+    )
+    assert result["executed"] is False
+    assert_full_usage(result, DOCUMENT_PARAMETERS)
+    assert result["usage"]["example"]["operation"] == operation
+    assert "EMPTY site" in result["usage"]["description"]
+    assert "Save each file with write" in result["usage"]["description"]
+    assert any(error["rule"] == "additionalProperties" for error in result["errors"])
+    handler.assert_not_awaited()
+    assert not kernel.store.rows("SELECT * FROM document_sites")
+    assert not kernel.store.rows("SELECT * FROM document_revisions")
+    assert not kernel.store.rows("SELECT * FROM document_sync_queue")
+
+
 @pytest.mark.parametrize("operation", OPERATIONS)
 def test_every_document_operation_has_a_schema_valid_usage_example(operation):
     details = usage("document_site", DOCUMENT_PARAMETERS, arguments={"operation": operation})

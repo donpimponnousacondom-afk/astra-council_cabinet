@@ -8,6 +8,25 @@ Deleted bot IDs are permanently retired. Their sites and revision history remain
 
 ## Create explicitly, resume deliberately
 
+`create` creates an **empty site**, never a file. It accepts `site` and optional
+`title`; `start`/`edit` accept only `site`. File fields such as `path` and `content`
+on these operations are rejected before execution with full usage, rather than
+silently ignored. Neither `revision` nor `expected_revision` belongs in a
+create/start/edit call. Once the site exists, `start`/`edit` are optional:
+read/write can address it directly. Use a separate `write` call to save each
+asset, preferably with `expected_revision` from the latest returned site state.
+Missing-site errors give a `create` example for that slug; collisions include
+the current revision, file count, whether `index.html` exists, and an `edit`
+example for the existing site. Do not create duplicate slugs to recover from a
+failed attempt to resume the same task.
+
+Tool descriptions and results coach every granted bot through creating, writing
+and checking delivery. Empty-site results explicitly say no files were saved.
+Results without `index.html` explain that CSS/JS delivery alone does not provide
+a website homepage. Standalone documents remain valid and use their exact file
+URL. Confirm that the requested files were saved as well as checking delivery;
+a successful transfer does not prove the model finished the user's task.
+
 Call the tool with `{}` to obtain complete usage, named field types and operation requirements. `create` creates a **new** slug, and refuses a duplicate with directions to choose another name or resume the existing site. `start` and its `edit` alias **only resume an existing site**; they fail politely when it is missing. `write`, imports and every other editing operation also require a site created beforehand. Never turn an edit or missing-file recovery into an implicit create.
 
 One successful `create`, `start` or `edit` may open the bot's configured extended document-task budget for that turn. This applies to autonomous work and permitted participants' requests alike. Repeating an operation or switching between document, workspace and web tasks never renews or stacks that extension. Provider limits, cancellation, bot enablement and grants still apply. See [TOOLS.md](TOOLS.md) for the shared budget, empty-argument discovery and complete error-reporting contract. These are intentional compatibility features for small models.
@@ -107,13 +126,40 @@ Receipts also distinguish historical delivery of a job from the revision current
 
 ## Storage, limits and recovery
 
-Metadata lives in `council.sqlite3`: `document_sites`, `document_revisions`, and `document_sync_queue`. Bytes live in `$HORTATOR_DATA_DIR/sites/<hash-of-bot-id>/<sha256-of-bytes>`, outside Git source control. These are immutable blobs, not a directly served directory. Files are 0600 and directories 0700. HTTP serving resolves only the selected published manifest; checksums and byte lengths are verified before reading or queuing a publication. Known credential strings are redacted from UTF-8 text, including base64 text and imports. This is not a general detector for every secret in user-provided media.
+Metadata lives in `council.sqlite3`: `document_sites`, `document_revisions`, and `document_sync_queue`. Bytes live in `$HORTATOR_DATA_DIR/sites/<hash-of-bot-id>/<sha256-of-bytes>`, outside Git source control. These are immutable blobs, not a directly served directory. Files are 0600 and directories 0700. HTTP serving resolves only the selected published manifest; checksums and byte lengths are verified before reading or queuing a publication. Shared vault redaction is applied to UTF-8 text, including base64 text and imports: it replaces known credential strings and also token-shaped text following `Bearer`. That existing heuristic can alter harmless literal examples such as `Bearer EXAMPLE_TOKEN`; `$OPENROUTER_API_KEY` and `${OPENROUTER_API_KEY}` pass through the heuristic unchanged. This rewrites matching text before storage; it is not a credential-pattern refusal in the sync worker or a general detector for every secret in user-provided media. Its policy is unchanged by the 2026-09-30 documentation and tool-coaching work.
 
 Writes fsync their blob before committing the revision and, in automatic mode, publication pointer and queue row in one SQLite transaction. A crash before metadata commit can leave an unreferenced blob but cannot expose a partial revision. Failed queue creation rolls back the entire save. No bot operation deletes files or revision history. Do not edit blobs manually.
 
 Limits are 100 sites per bot, 100 files and 50 MB per current site, 8 MB per file, and 250 MB stored bytes per bot including retained revisions. Text/base64 tool arguments are additionally bounded to 2,000,000 characters. History intentionally retains older bytes; operator-managed retention is a separate task, so monitor storage.
 
 Complete backups include the database, matching master key, `sites/`, SSH pins/public exports and `site_history/` with its private Git metadata alongside all other runtime data directories. Stop the foreground runtime in shared Screen for a consistent database/files snapshot; pausing model work alone does not stop every writer. Restoring only SQLite can leave manifests referring to missing blobs; restoring only site files loses ownership, revisions and delivery evidence. See [OPERATIONS.md](OPERATIONS.md) for recovery and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Mock tests and local previews do not establish live Discord output or remote delivery.
+
+## Owner decision on publication filters · 2026-09-30
+
+The owner supplied an exported session from another project's publisher incident.
+Its inherited credential regexp rejected harmless documentation containing
+`Authorization: Bearer $OPENROUTER_API_KEY`: it exempted `${...}` syntax but not
+`$VARIABLE`. The report recorded repeated publication failures and service
+restarts, with an error that did not identify the offending file. The triggering
+text was a variable reference, not an exposed credential. This is evidence from
+the supplied session, not a finding that Council has the same scanner.
+
+The owner explicitly authorized removing that other publisher's content-based
+credential detector while retaining SSH verification, destination ownership and
+filesystem protections. For Council, the instruction is to document the policy:
+agents must obtain authorization for security-policy changes and must not add or
+port speculative content filters under the cover of other work. The standing
+[owner-decision rule](../AGENTS.md#security-policy-decisions-belong-to-the-owner)
+applies. Existing known-value credential redaction and publication protections
+are unchanged by this documentation update; the other project's removal grant is
+not a Council implementation instruction. Keep the original session archive
+outside Git, rather than importing its logs or unrelated project instructions.
+
+After inspecting Council's shared Bearer redaction, the owner explicitly
+confirmed on 2026-09-30 that replacing matching text with `[REDACTED]` is acceptable
+and must remain. The rejected behavior is a speculative content-scanner tripwire
+that stops publication or the service. Do not remove or redesign the accepted
+redactor as remediation for the other project's incident.
 
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
 

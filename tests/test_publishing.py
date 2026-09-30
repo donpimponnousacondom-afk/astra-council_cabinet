@@ -108,6 +108,31 @@ async def test_automatic_save_snapshots_before_verified_delivery_and_exposes_cur
     assert (await document(publication, "status"))["synced_revision"] == 2
 
 
+async def test_delivered_css_is_not_reported_as_a_finished_homepage(publication):
+    k, _ = publication
+    empty = await document(publication, "create")
+    assert empty["file_count"] == 0 and not empty["draft_has_index"]
+    assert "Empty site: no files saved" in empty["notice"]
+    assert empty["public_url"] is None and not empty["delivery_current"]
+    await document(publication, "write", path="style.css", content="body { color: blue; }")
+    await k.publishing.tick()
+    css = await document(publication, "status")
+    assert css["remote_status"] == "delivered" and css["delivery_current"]
+    assert css["file_count"] == 1 and not css["draft_has_index"]
+    assert css["public_url"] == "https://council.example.test/ada/summary/style.css"
+    assert "No index.html saved" in css["notice"] and "not a homepage" in css["notice"]
+    page = await document(
+        publication, "write", path="index.html", content="<h1>Report</h1>", expected_revision=css["revision"]
+    )
+    assert page["draft_has_index"] and not page["delivery_current"]
+    assert page["public_url"] == css["public_url"]
+    await k.publishing.tick()
+    ready = await document(publication, "status")
+    assert ready["draft_has_index"] and ready["delivery_current"]
+    assert ready["public_url"] == "https://council.example.test/ada/summary/"
+    assert "No index.html saved" not in ready["notice"]
+
+
 async def test_network_failure_keeps_snapshot_and_retries_same_job_id(publication):
     k, _ = publication
     await document(publication, "create")

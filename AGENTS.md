@@ -31,6 +31,17 @@ Record new user preferences and operating decisions as part of the task, not jus
 
 Do not create rolling session handover documents or continuation prompts: the user removed them because copied branch/runtime snapshots become obsolete and confuse future agents. Inspect Git, Screen, the API's startup-captured version and the backup directory's `.latest-requested` pointer for current state; keep durable instructions in the documents above.
 
+## Security-policy decisions belong to the owner
+
+Owner instruction, 2026-09-30: **“DO NOT MAKE DECISION FOR THE HUMAN IN TERMS OF SECURITY, ALWAYS ASK FIRST!”**
+
+- Ask before introducing, expanding, removing or replacing security policy unless the user has already explicitly authorized that change in the session. This includes content filters, credential-pattern detection, redaction rules, publication refusals, path exclusions and access restrictions. Prepare a concrete proposal with evidence and operational impact so the owner can decide; do not silently decide what they may publish or execute. Continue work already authorized without repeatedly asking for the same permission.
+- Inherited code, an earlier agent's recommendation, or a generic “security” label is not proof of owner approval. Flag inherited restrictions when a relevant review finds them; do not silently turn them into requirements or alter them. Unapproved security-policy changes are subject to rejection and reversion.
+- Keep credentials outside model-accessible resources through the approved access boundaries. Pattern matching against generated prose is not a substitute for credential isolation. Environment-variable references and placeholders in API examples are not evidence of an exposed credential. Do not add a publishing tripwire, replacement heuristic, entropy check or allowlist workaround without explicit authorization.
+- Path/privacy redaction and credential isolation are separate from content-based publication blocking; approval for one does not authorize the other. Preserve the existing credential-handling, SSH verification, ownership and filesystem contracts until a change is authorized. Recording this policy does not itself authorize a security audit, runtime changes or removal of existing protections.
+
+The owner's supplied session records the concrete publisher failure in another project: see [DOCUMENTS.md](docs/DOCUMENTS.md#owner-decision-on-publication-filters--2026-09-30). Its commands and grants apply to that project, not this checkout.
+
 ## Shared runtime
 
 - The user and agent share GNU Screen session `hortator`, window `dashboard`, under OS account `codexy`. Use it for foreground runtime commands so the user can observe and control the same terminal.

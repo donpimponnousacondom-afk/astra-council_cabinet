@@ -61,7 +61,7 @@ PROPERTIES = {
     "content": {
         "type": "string",
         "maxLength": 2_000_000,
-        "description": "UTF-8 text or strict base64 according to encoding.",
+        "description": "File bytes for write/append only: UTF-8 text or strict base64 according to encoding. create/start/edit never save content.",
     },
     "encoding": {"type": "string", "enum": ["utf-8", "base64"], "default": "utf-8"},
     "revision": {
@@ -74,7 +74,7 @@ PROPERTIES = {
         "type": "integer",
         "minimum": 0,
         "maximum": 9007199254740991,
-        "description": "Current site revision observed before editing. Reject stale edits instead of overwriting newer work.",
+        "description": "Current site revision: optional but recommended for write/imports; required for append/replace/restore. Not accepted by create/start/edit. Use the latest returned revision after each save; stale edits are rejected.",
     },
     "offset": {
         "type": "integer",
@@ -160,20 +160,57 @@ PARAMETERS = {
     ]
     + [
         {
+            "if": {"properties": {"operation": {"const": operation}}, "required": ["operation"]},
+            "then": {
+                "properties": {field: {} for field in fields},
+                "additionalProperties": False,
+            },
+        }
+        for operation, fields in (
+            ("create", ("operation", "site", "title")),
+            ("start", ("operation", "site")),
+            ("edit", ("operation", "site")),
+        )
+    ]
+    + [
+        {
             "if": {"properties": {"operation": {"const": "append"}}, "required": ["operation"]},
             "then": {"properties": {"encoding": {"const": "utf-8"}}},
         }
     ],
+    "examples": [
+        {"operation": "create", "site": "my-report", "title": "My report"},
+        {
+            "operation": "write",
+            "site": "my-report",
+            "path": "index.html",
+            "content": "<!doctype html><title>My report</title><h1>My report</h1>",
+            "expected_revision": 0,
+        },
+        {"operation": "edit", "site": "my-report"},
+        {"operation": "status", "site": "my-report"},
+        {"operation": "publish", "site": "my-report"},
+    ],
 }
 DESCRIPTION = (
-    "Create and edit your own static sites and documents. Call {} for full usage. "
-    "create requires a new site slug; start/edit only resume an existing site, never create it. "
+    "Create and edit your own static sites and documents. Workflow: "
+    '1. For a NEW site call {"operation":"create","site":"my-report"}; this creates an EMPTY site, not a page. '
+    "create accepts only site and optional title; never pass path/content to create/start/edit. "
+    "2. Save each file with write, supplying the same site, path and content. "
+    "expected_revision is optional for write but recommended; use the latest site revision returned after each save. "
+    "A website needs index.html; CSS/JS alone is not a homepage. "
+    "3. Read status before reporting success; link the exact returned public_url. "
+    "start/edit accept only site, never revision or expected_revision, and return current state. "
+    "They are optional for an existing site: you can read/write directly. Read existing files before replacing them. "
+    "Do not repeat create or rename a site to bypass a collision. "
+    "If the site is missing, create that intended slug first, then write its files. Call {} for full usage. "
     "One successful create/start/edit may open the turn's extended task budget. "
     "Write separate HTML/CSS/JS/SVG assets. read returns bounded pages with a pinned next_read cursor; "
     "export with site/path and optional revision makes a current-turn attachment artifact; pass its artifact_id to discord_attach before your final text answer. It does not publish or require workspace/image generation. "
     "append/replace/restore require expected_revision and retain all history. list/status/history inspect your work. "
-    "When auto_publish is enabled, each save publishes locally and queues automatic remote sync; publish also queues explicitly. "
-    "Only remote_status=delivered with delivery_current=true confirms the current site is remotely live. "
+    "With auto_publish=true, each save publishes locally and queues remote sync; no separate publish call is needed. "
+    "With auto_publish=false, call publish after saving the files. publish queues delivery, not instant confirmation. "
+    "Only remote_status=delivered with delivery_current=true confirms the saved files are remotely live, not that the requested work is complete. "
     "Never claim a planned URL or queued revision was delivered. Your bot ID is fixed; other bots' work is read-only via public URLs."
     " published_files lists only public source assets; import_published copies one into your already-created site, never private drafts."
 )
@@ -372,8 +409,11 @@ class DocumentSites:
         )
         if not row:
             raise ControlError(
-                "Site not found for this bot. Please use create with a new site slug first; "
-                "start/edit never creates a missing site. Use list to see your existing sites."
+                f"Site not found for this bot: {slug}. Please use create if this is the intended new site: "
+                + json.dumps({"operation": "create", "site": slug})
+                + ". Then use write with site/path/content to save each file (index.html for a website). "
+                "start/edit never creates a missing site. If you meant an existing site, use list to find its exact slug. "
+                "Nothing was created, saved or published by this failed call."
             )
         return row
 
@@ -510,6 +550,18 @@ class DocumentSites:
             if delivered_entrypoint and delivered_entrypoint != "index.html":
                 public_url = f"{public_url.rstrip('/')}/{quote(delivered_entrypoint, safe='/')}"
         base = public_base((config or {}).get("public_base_url", ""))
+        if not manifest:
+            content_notice = (
+                "Empty site: no files saved. Use write with this site, path and content; "
+                "write index.html for a website. Creating/resuming a site does not save a page. "
+            )
+        elif "index.html" not in manifest:
+            content_notice = (
+                "No index.html saved. For a website, write index.html; delivered CSS/JS alone is not a homepage. "
+                "For a standalone document, use its exact returned file URL instead of the site root. "
+            )
+        else:
+            content_notice = ""
         result = {
             "site": site["slug"],
             "bot_id": site["bot_id"],
@@ -534,14 +586,16 @@ class DocumentSites:
             "public_url": public_url,
             "sync": queue,
             "planned_public_url": f"{base}/{site['bot_id']}/{site['slug']}/" if base else None,
-            "notice": (
+            "notice": content_notice
+            + (
                 "Each save publishes locally and queues automatic remote sync. "
                 if config.get("auto_publish") is True
                 else "Draft writes remain private until publish. "
             )
             + (
                 "public_url identifies the last confirmed delivery; delivery_current tells you whether it includes all current edits. "
-                "Queued, syncing or planned URLs do not prove delivery."
+                "Queued, syncing or planned URLs do not prove delivery. "
+                "Delivery confirms saved files, not completion of the requested task."
             ),
         }
         if include_files:
@@ -892,9 +946,20 @@ class DocumentSites:
                 "SELECT * FROM document_sites WHERE bot_id=? AND slug=?", (bot_id, slug)
             )
             if existing:
+                manifest = self._manifest(existing)
                 raise ControlError(
-                    "That site name is already taken in your bot's folder. Please choose another slug, "
-                    "or use start/edit to resume your existing site; create never overwrites it."
+                    f"That site name is already taken in your bot's folder: {slug}. "
+                    f"Current state: revision={existing['revision']}, file_count={len(manifest)}, "
+                    f"draft_has_index={str('index.html' in manifest).lower()}. "
+                    "To inspect/resume it, call "
+                    + json.dumps({"operation": "edit", "site": slug})
+                    + " using only site; start/edit need no revision argument. "
+                    "Resuming is optional: read/write can address this existing site directly. "
+                    "Read existing files before replacing them; write accepts optional expected_revision "
+                    "to reject stale edits. Use the latest site revision returned after each save. "
+                    "Do not repeat create or choose another slug for the same task. "
+                    "Choose a new slug only for a genuinely separate site. "
+                    "create never overwrites an existing site; nothing was changed by this failed call."
                 )
             if (
                 self.store.one("SELECT count(*) AS n FROM document_sites WHERE bot_id=?", (bot_id,))["n"]
