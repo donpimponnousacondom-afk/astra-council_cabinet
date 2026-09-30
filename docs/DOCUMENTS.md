@@ -151,6 +151,12 @@ are unchanged by this documentation update; the other project's removal grant is
 not a Council implementation instruction. Keep the original session archive
 outside Git, rather than importing its logs or unrelated project instructions.
 
+After inspecting Council's shared Bearer redaction, the owner explicitly
+confirmed on 2026-09-30 that replacing matching text with `[REDACTED]` is acceptable
+and must remain. The rejected behavior is a speculative content-scanner tripwire
+that stops publication or the service. Do not remove or redesign the accepted
+redactor as remediation for the other project's incident.
+
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
 
 The date marks relocation of standing instructions, not a new product decision.
