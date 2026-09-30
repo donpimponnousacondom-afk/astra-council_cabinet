@@ -115,6 +115,27 @@ Limits are 100 sites per bot, 100 files and 50 MB per current site, 8 MB per fil
 
 Complete backups include the database, matching master key, `sites/`, SSH pins/public exports and `site_history/` with its private Git metadata alongside all other runtime data directories. Stop the foreground runtime in shared Screen for a consistent database/files snapshot; pausing model work alone does not stop every writer. Restoring only SQLite can leave manifests referring to missing blobs; restoring only site files loses ownership, revisions and delivery evidence. See [OPERATIONS.md](OPERATIONS.md) for recovery and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Mock tests and local previews do not establish live Discord output or remote delivery.
 
+## Owner decision on publication filters · 2026-09-30
+
+The owner supplied an exported session from another project's publisher incident.
+Its inherited credential regexp rejected harmless documentation containing
+`Authorization: Bearer $OPENROUTER_API_KEY`: it exempted `${...}` syntax but not
+`$VARIABLE`. The report recorded repeated publication failures and service
+restarts, with an error that did not identify the offending file. The triggering
+text was a variable reference, not an exposed credential. This is evidence from
+the supplied session, not a finding that Council has the same scanner.
+
+The owner explicitly authorized removing that other publisher's content-based
+credential detector while retaining SSH verification, destination ownership and
+filesystem protections. For Council, the instruction is to document the policy:
+agents must obtain authorization for security-policy changes and must not add or
+port speculative content filters under the cover of other work. The standing
+[owner-decision rule](../AGENTS.md#security-policy-decisions-belong-to-the-owner)
+applies. Existing known-value credential redaction and publication protections
+are unchanged by this documentation update; the other project's removal grant is
+not a Council implementation instruction. Keep the original session archive
+outside Git, rather than importing its logs or unrelated project instructions.
+
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
 
 The date marks relocation of standing instructions, not a new product decision.
