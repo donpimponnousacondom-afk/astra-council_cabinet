@@ -70,11 +70,19 @@ async def test_create_refuses_collision_and_resume_preserves_identity(documents,
         await call(documents, context, "create", site="summary", title="Replacement title")
     assert json.dumps({"operation": "edit", "site": "summary"}) in str(error.value)
     assert "Do not repeat create" in str(error.value)
+    assert "revision=0, file_count=0, draft_has_index=false" in str(error.value)
     for operation in ("start", "edit"):
         result = await call(documents, context, operation, site="summary")
         assert result["title"] == "First title"
         assert result["document_task_started"] and result["revision"] == 0
     assert first["local_url"].endswith("/sites/dirac/summary/")
+    # Writes can omit the revision; a later collision must preserve the saved file and title.
+    await call(documents, context, "write", site="summary", path="index.html", content="Keep this page")
+    with pytest.raises(ControlError, match="already taken") as error:
+        await call(documents, context, "create", site="summary", title="Replacement title")
+    assert "revision=1, file_count=1, draft_has_index=true" in str(error.value)
+    assert documents.read_file("dirac", "summary", "index.html")[0] == b"Keep this page"
+    assert documents._site("dirac", "summary")["title"] == "First title"
 
 
 async def test_hortator_has_no_cross_bot_override_and_retired_names_stay_owned(documents, context):

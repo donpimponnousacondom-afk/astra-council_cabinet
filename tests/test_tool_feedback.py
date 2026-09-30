@@ -246,11 +246,17 @@ def test_conditional_document_operation_reports_all_its_missing_fields():
 
 @pytest.mark.parametrize("operation", ["create", "start", "edit"])
 @pytest.mark.parametrize(
-    "file_args",
-    [{"path": "index.html"}, {"content": "<h1>Report</h1>"}, {"path": "index.html", "content": ""}],
+    "ignored_args",
+    [
+        {"path": "index.html"},
+        {"content": "<h1>Report</h1>"},
+        {"path": "index.html", "content": ""},
+        {"revision": 1},
+        {"expected_revision": 0},
+    ],
 )
-async def test_document_creation_and_resume_reject_file_fields_without_side_effects(
-    kernel, monkeypatch, operation, file_args
+async def test_document_creation_and_resume_reject_ignored_fields_without_side_effects(
+    kernel, monkeypatch, operation, ignored_args
 ):
     bot = configured(kernel, enabled_plugins=["document_site"])
     plugin = kernel.store.get("plugins", "document_site")
@@ -260,7 +266,7 @@ async def test_document_creation_and_resume_reject_file_fields_without_side_effe
     handler = AsyncMock(wraps=spec.handler)
     monkeypatch.setattr(spec, "handler", handler)
     result = await kernel.registry.call(
-        "document_site", {"operation": operation, "site": "report", **file_args}, context, "invalid-save"
+        "document_site", {"operation": operation, "site": "report", **ignored_args}, context, "invalid-save"
     )
     assert result["executed"] is False
     assert_full_usage(result, DOCUMENT_PARAMETERS)

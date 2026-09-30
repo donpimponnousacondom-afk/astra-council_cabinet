@@ -4,6 +4,33 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Document-site postmortem feedback (2026-09-30)
+
+```text
+Commit: based on 6e9b7022e0410edbc13b13f60d884b12b68fee0d; working patch, dirty at start/end: true/true
+Backend scope: focused: tests/test_documents.py tests/test_document_editing.py tests/test_document_config.py tests/test_tool_feedback.py tests/test_publishing.py tests/test_publishing_receiver.py tests/test_publishing_integration.py
+Backend result: 207 passed; exit 0; 25.43 seconds
+Frontend format/build: not run (unchanged)
+Browser tests: not run
+Evidence: ignored audit/2026-09-30/01-document-site-coaching/postmortem-checks.json
+Classification: synthetic inputs, local integration and mocked delivery
+Live checks: none
+Limitations: not full-suite/CI or live model acceptance; model's retrospective report is feedback, not authoritative API evidence
+```
+
+- The owner relayed Loki's interpretation that create should atomically write
+  HTML, that resume/write required a revision, and that publish was always
+  necessary. Source/schema inspection confirmed only the first as the original
+  silent-ignore hazard. Revised guidance explicitly distinguishes optional
+  resume, recommended write revision checks and automatic/manual publication.
+- Collision errors now include actual revision, file count and homepage presence.
+  Tests cover empty and populated collisions without overwriting data, and
+  reject misplaced revision fields before handler execution. No authorization,
+  redaction, remote-delivery or saved bot configuration changed.
+- Ruff lint/format and diff checks passed. The previous local head `6e9b702`
+  received independent Luna/max review with no actionable findings; this
+  follow-up requires its own review. No publication or deployment is claimed.
+
 ## Document-site coaching and owner security-policy record (2026-09-30)
 
 ```text

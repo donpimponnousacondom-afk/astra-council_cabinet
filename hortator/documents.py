@@ -74,7 +74,7 @@ PROPERTIES = {
         "type": "integer",
         "minimum": 0,
         "maximum": 9007199254740991,
-        "description": "Current site revision observed before editing. Reject stale edits instead of overwriting newer work.",
+        "description": "Current site revision: optional but recommended for write/imports; required for append/replace/restore. Not accepted by create/start/edit. Use the latest returned revision after each save; stale edits are rejected.",
     },
     "offset": {
         "type": "integer",
@@ -196,16 +196,20 @@ DESCRIPTION = (
     "Create and edit your own static sites and documents. Workflow: "
     '1. For a NEW site call {"operation":"create","site":"my-report"}; this creates an EMPTY site, not a page. '
     "create accepts only site and optional title; never pass path/content to create/start/edit. "
-    "2. Save each file with write, supplying the same site, path, content and current expected_revision. "
+    "2. Save each file with write, supplying the same site, path and content. "
+    "expected_revision is optional for write but recommended; use the latest site revision returned after each save. "
     "A website needs index.html; CSS/JS alone is not a homepage. "
     "3. Read status before reporting success; link the exact returned public_url. "
-    "If the site exists, use start/edit to resume it, then read/write; do not repeat create or rename it to bypass a collision. "
+    "start/edit accept only site, never revision or expected_revision, and return current state. "
+    "They are optional for an existing site: you can read/write directly. Read existing files before replacing them. "
+    "Do not repeat create or rename a site to bypass a collision. "
     "If the site is missing, create that intended slug first, then write its files. Call {} for full usage. "
     "One successful create/start/edit may open the turn's extended task budget. "
     "Write separate HTML/CSS/JS/SVG assets. read returns bounded pages with a pinned next_read cursor; "
     "export with site/path and optional revision makes a current-turn attachment artifact; pass its artifact_id to discord_attach before your final text answer. It does not publish or require workspace/image generation. "
     "append/replace/restore require expected_revision and retain all history. list/status/history inspect your work. "
-    "When auto_publish is enabled, each save publishes locally and queues automatic remote sync; publish also queues explicitly. "
+    "With auto_publish=true, each save publishes locally and queues remote sync; no separate publish call is needed. "
+    "With auto_publish=false, call publish after saving the files. publish queues delivery, not instant confirmation. "
     "Only remote_status=delivered with delivery_current=true confirms the saved files are remotely live, not that the requested work is complete. "
     "Never claim a planned URL or queued revision was delivered. Your bot ID is fixed; other bots' work is read-only via public URLs."
     " published_files lists only public source assets; import_published copies one into your already-created site, never private drafts."
@@ -942,11 +946,17 @@ class DocumentSites:
                 "SELECT * FROM document_sites WHERE bot_id=? AND slug=?", (bot_id, slug)
             )
             if existing:
+                manifest = self._manifest(existing)
                 raise ControlError(
                     f"That site name is already taken in your bot's folder: {slug}. "
-                    "To continue this work, resume the existing site with "
+                    f"Current state: revision={existing['revision']}, file_count={len(manifest)}, "
+                    f"draft_has_index={str('index.html' in manifest).lower()}. "
+                    "To inspect/resume it, call "
                     + json.dumps({"operation": "edit", "site": slug})
-                    + ", then read/write its files using the returned revision. "
+                    + " using only site; start/edit need no revision argument. "
+                    "Resuming is optional: read/write can address this existing site directly. "
+                    "Read existing files before replacing them; write accepts optional expected_revision "
+                    "to reject stale edits. Use the latest site revision returned after each save. "
                     "Do not repeat create or choose another slug for the same task. "
                     "Choose a new slug only for a genuinely separate site. "
                     "create never overwrites an existing site; nothing was changed by this failed call."

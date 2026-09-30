@@ -11,10 +11,14 @@ Deleted bot IDs are permanently retired. Their sites and revision history remain
 `create` creates an **empty site**, never a file. It accepts `site` and optional
 `title`; `start`/`edit` accept only `site`. File fields such as `path` and `content`
 on these operations are rejected before execution with full usage, rather than
-silently ignored. Use a separate `write` call to save each asset, using the
-current site revision. Missing-site errors give a `create` example for that slug;
-collisions give an `edit` example for the existing site. Do not create duplicate
-slugs to recover from a failed attempt to resume the same task.
+silently ignored. Neither `revision` nor `expected_revision` belongs in a
+create/start/edit call. Once the site exists, `start`/`edit` are optional:
+read/write can address it directly. Use a separate `write` call to save each
+asset, preferably with `expected_revision` from the latest returned site state.
+Missing-site errors give a `create` example for that slug; collisions include
+the current revision, file count, whether `index.html` exists, and an `edit`
+example for the existing site. Do not create duplicate slugs to recover from a
+failed attempt to resume the same task.
 
 Tool descriptions and results coach every granted bot through creating, writing
 and checking delivery. Empty-site results explicitly say no files were saved.
