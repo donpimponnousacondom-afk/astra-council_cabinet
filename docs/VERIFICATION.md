@@ -4,6 +4,26 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Effective search-default guidance (2026-10-01)
+
+- Based on `86c659273d6d8dca188b4d6f62c6a88f253ed9cd`, branch
+  `hotfix/search-default-guidance`; evidence collected on the working patch.
+- Focused backend: **133 passed** in 22.10 s across search guidance, Brave/DDG,
+  Ollama, shared tool feedback, registry and plugin hooks. Ruff lint/format passed
+  for changed Python files. These are isolated fixtures and mocked HTTP endpoints,
+  not live provider requests or a full-suite claim.
+- New cases compare advertised schema/defaults and empty/invalid/JSON-error help
+  with actual query-only routing, including built-in defaults, global selection,
+  bot engine/count overrides and other-bot isolation. They execute the advertised
+  help example, check no help-time network/credential reads, preserve every engine
+  choice, and validate search/read-result examples against their real schema.
+- No frontend source, persisted prompt/configuration, engine routing behavior,
+  provider or compaction logic changed. The owner reported successful first live
+  compaction after the conversation-format rollout while this patch was being
+  tested; this is owner-reported acceptance, not a new agent-run compaction test.
+- Exact published-head CI, independent Luna/Sol review and deployment evidence
+  are recorded in the PR and ignored `audit/2026-10-01/05-search-default-guidance/`.
+
 ## Dashboard reporting responsiveness (2026-10-01)
 
 - Base: `9a2d5f917a83fac02376c3061776021cba2e4b90`; implementation branch

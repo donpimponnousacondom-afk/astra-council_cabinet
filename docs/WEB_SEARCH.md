@@ -23,6 +23,15 @@ The non-secret configuration is shallow merged from built-in defaults, global pl
 
 `engine` accepts `auto`, `brave`, `duckduckgo`, `both`, or `ollama`; `count` is an integer from 1 to 10 **per engine**. `endpoint` applies only to Brave and must be an HTTP(S) URL without embedded credentials or a fragment. It is operator configuration, not a model-selected fetch destination. Preserve endpoint overrides when changing modes. Saving validates global/per-bot fields without contacting either engine. Old records with only endpoint/count use Auto without a database rewrite.
 
+The model-facing tool states this bot's effective engine and count in its
+description and schema defaults. Its primary example supplies only `query`, so
+following it uses those saved defaults. Empty-call help and argument-error
+guidance use the same effective configuration and valid operation-specific
+examples. An explicit `engine` still overrides the default: `auto` always means
+Brave followed by DuckDuckGo on failure/empty, and `both` means Brave plus
+DuckDuckGo. Neither mode automatically includes Ollama. Engine defaults do not
+disable the other choices.
+
 ## Ollama setup
 
 Ollama is a direct search API, independent of the bot's generation model and the
@@ -117,3 +126,11 @@ Add Ollama as a selectable search engine using the existing dashboard credential
 live probes and rollout to Loki are authorized. Keep generation models and MiMo
 research unchanged. Other engines from the exploration remain deferred. Build the
 capability for any granted bot; Loki is the initial operator-selected tester.
+
+## Owner decision · 2026-10-01
+
+Correct backend tool guidance to expose each bot's effective defaults and stop
+the primary example from overriding them. Keep all search engines available,
+including DuckDuckGo. Do not add dashboard controls, engine priorities or change
+saved bot prompts/configuration for this wording fix. Loki's existing Ollama
+selection is one use of the general per-bot behavior.

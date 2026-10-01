@@ -512,6 +512,7 @@ class Registry:
         self.specs["memory"].context_spec = self.memory_spec
         self.specs["shell"].context_spec = self.shell_spec
         self.specs["global_memory"].context_spec = self.global_memory.spec_for
+        self.specs["web_search"].context_spec = self.search_spec
         self.specs["web_search"].validate = self.validate_search
         self.specs["web_search"].references = self.search_references
         for entry in importlib.metadata.entry_points(group="hortator.plugins"):
@@ -608,6 +609,31 @@ class Registry:
         from .web_search import provider_references
 
         return provider_references(self.store, kind, entity_id)
+
+    def search_spec(self, context):
+        spec = self.specs["web_search"]
+        config = {
+            **spec.defaults,
+            **self.store.get("plugins", "web_search")["config"],
+            **context.bot["plugin_config"].get("web_search", {}),
+        }
+        return replace(
+            spec,
+            description=(
+                f"Your configured search defaults: engine={config['engine']}, "
+                f"count={config['count']} per engine. " + spec.description
+            ),
+            parameters={
+                **spec.parameters,
+                "properties": {
+                    **spec.parameters["properties"],
+                    **{
+                        name: {**spec.parameters["properties"][name], "default": config[name]}
+                        for name in ("engine", "count")
+                    },
+                },
+            },
+        )
 
     def shell_spec(self, context):
         from .shell_runner import limits

@@ -63,6 +63,11 @@ other bots' defaults, generation providers and the MiMo researcher. Other search
 services remain exploratory. Current behavior and setup are owned by
 [WEB_SEARCH.md](WEB_SEARCH.md); test/live rollout evidence belongs in VERIFICATION.
 
+On 2026-10-01 the owner requested a backend guidance correction: show effective
+per-bot search defaults and demonstrate calls that respect them. Keep all engines
+and the existing dashboard interface; no priority or engine-disable controls.
+See the [search contract](WEB_SEARCH.md) for current selection semantics.
+
 ## Deferred product work
 
 Separate-model/background compaction and a richer dashboard log panel remain
