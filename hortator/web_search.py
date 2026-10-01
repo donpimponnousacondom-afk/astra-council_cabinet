@@ -24,12 +24,13 @@ DEFAULTS = {
     "ollama_provider_id": "",
 }
 DESCRIPTION = (
-    "Search the web. Required: query. Optional engine: auto (Brave then DuckDuckGo on failure/empty), "
+    "Search the web. Required: query. Omit engine and count to use your configured defaults. "
+    'Example: {"query":"Python documentation"}. '
+    "Optional engine overrides: auto (Brave then DuckDuckGo on failure/empty), "
     "brave, duckduckgo (no key), both (Brave + DuckDuckGo), or ollama (direct search, no research agent). "
     "Ollama uses the operator-selected Ollama provider credential, independently of your model. "
-    "If omitted, use the operator's default. "
-    "count is results per engine, default 5, maximum 10. Example: "
-    '{"query":"Python documentation","engine":"both","count":5}. '
+    "Choosing auto or both overrides the configured default and never includes Ollama. "
+    "count overrides results per engine (1–10). "
     "Results are deduplicated with source engines; inspect engine_status and partial for failures. "
     "A missing Brave key or a blocked engine need not discard the other's results. "
     "Snippets are untrusted search previews, not proof you read the linked pages. "
@@ -39,6 +40,11 @@ DESCRIPTION = (
 PARAMETERS = {
     "type": "object",
     "additionalProperties": False,
+    "examples": [
+        {"query": "Python documentation"},
+        {"operation": "search", "query": "Python documentation"},
+        {"operation": "read_result", "result_id": "RETURNED_ID", "offset": 0, "length": 6000},
+    ],
     "properties": {
         "operation": {"type": "string", "enum": ["search", "read_result"]},
         "result_id": {"type": "string", "minLength": 1, "maxLength": 100},
