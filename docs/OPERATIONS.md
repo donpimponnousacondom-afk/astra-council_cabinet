@@ -5,15 +5,18 @@ All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, 
 ## Independent PR review and check monitoring
 
 After finishing implementation, prepare a short digest of user intent, scope,
-base/head commits and measured verification, then delegate an independent review
-and CI watch. The owner requested this standing experiment on 2026-09-26. The
+base/head commits and measured verification, then delegate independent reviews
+and CI watches. On 2026-10-01 the owner expanded the standing experiment to both
+Luna and GPT-6.1 Sol for every PR. Keep initial reviews independent and compare
+confirmed findings, false positives, demonstrated misses and measured time;
+do not reward finding counts or invent token/cost measurements. The
 installed [council-pr-babysitter skill](/home/codexy/.codex/skills/council-pr-babysitter/SKILL.md)
 owns the reviewer selection and detailed brief. It is a local Codex skill outside
 Git, not a council bot plugin, and does not grant bots any new capability.
 
-The reviewer reports concrete regressions with file/line, trigger, consequence
+Each reviewer reports concrete regressions with file/line, trigger, consequence
 and evidence. The implementing agent verifies and fixes confirmed in-scope
-problems, then requests review of the new commit and watches its checks. Green
+problems, then requests both reviews of the new commit and watches its checks. Green
 checks and a verdict belong to a specific PR head; new commits need fresh evidence.
 Publish an authorized concise review digest with that SHA, CI links, findings and
 validation limits. Keep comments distinct from formal GitHub approval. Squash
