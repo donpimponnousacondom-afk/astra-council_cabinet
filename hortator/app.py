@@ -561,7 +561,14 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
                     k.auth.session(request.cookies.get("hortator_session"))
                 except ControlError:
                     return
-                rows = await k.reporting.run(Store.events, after=cursor, limit=200, summary=summary)
+                try:
+                    rows = await k.reporting.run(Store.events, after=cursor, limit=200, summary=summary)
+                except ControlError as error:
+                    if error.status != 503:
+                        raise
+                    # Headers are already sent. Close normally so EventSource
+                    # retries from its last delivered ID instead of an ASGI error.
+                    return
                 for event in rows:
                     cursor = event["seq"]
                     yield f"id: {cursor}\ndata: {json.dumps(event)}\n\n"

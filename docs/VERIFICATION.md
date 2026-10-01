@@ -28,6 +28,9 @@ historical claims retain their original date and scope.
   changes were made to obtain them. Earlier event-loop diagnostics identify the
   statistics query, but do not establish the full cause of the historic 27.8 s
   preparation pause.
+- Follow-up reporting/concurrency checks: **19 passed**, exit 0 (3.83 s), including
+  in-progress private diagnostic versioning and clean SSE closure on admission
+  pressure. These refine the implementation without changing persisted evidence.
 - Deployment requires a verified pre-migration backup. Owner-approved deletion
   of the separately inventoried pre-September-17 backups happens only after that
   recovery point is complete; it is separate from live-history retention.

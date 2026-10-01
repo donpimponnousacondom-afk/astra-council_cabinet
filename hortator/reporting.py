@@ -70,7 +70,8 @@ def turn_detail(store, turn_id, *, include_diagnostics=False, summary=False):
     if not turn:
         raise ControlError("Turn not found", 404)
     columns = (
-        "id,turn_id,bot_id,provider_id,profile_id,model,purpose,started_at,ended_at,status,ttft_ms,duration_ms,input_tokens,output_tokens,cost,error"
+        "id,turn_id,bot_id,provider_id,profile_id,model,purpose,started_at,ended_at,status,ttft_ms,duration_ms,input_tokens,output_tokens,cost,error,"
+        "(SELECT updated_at FROM request_diagnostics d WHERE d.request_id=requests.id) AS diagnostics_updated_at"
         if summary
         else "*"
     )

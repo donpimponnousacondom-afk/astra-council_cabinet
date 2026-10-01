@@ -77,12 +77,13 @@ retain all previous evidence, including private diagnostics and redaction.
 
 The active workbench uses summaries for background polling and event streams.
 Opening a detailed trajectory tab fetches full evidence; subsequent polls only
-refetch it when the summary changes. Opening an omitted event retrieves its full
+refetch it when the summary changes, including private-diagnostic update timestamps. Opening an omitted event retrieves its full
 payload. In-flight requests are cancelled when their inspector closes or changes
 target. These are presentation/read optimizations, not model context reductions.
 
 The reporting worker has bounded admission and returns 503 when full or closing;
-see [CONCURRENCY.md](CONCURRENCY.md#reporting-reads). Authentication and mutation
+an already-open SSE response closes normally so EventSource can reconnect with its cursor.
+See [CONCURRENCY.md](CONCURRENCY.md#reporting-reads). Authentication and mutation
 contracts are unchanged. The frozen legacy frontend keeps its full-response API.
 
 ## Configuration and controls

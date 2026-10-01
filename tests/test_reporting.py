@@ -229,3 +229,40 @@ async def test_reader_transaction_keeps_one_snapshot_while_writer_progresses(ker
         before, after = await task
     assert before == after
     assert kernel.store.one("SELECT count(*) AS n FROM events")["n"] == after + 1
+
+
+async def test_summary_tracks_live_private_diagnostic_updates_without_loading_body(kernel):
+    seed(kernel.store)
+    before = await kernel.reporting.run(turn_detail, "turn", summary=True)
+    assert before["requests"][0]["diagnostics_updated_at"] is None
+    kernel.store.execute(
+        "INSERT INTO request_diagnostics VALUES(?,?,?)",
+        ("request", json.dumps({"reasoning_content": "private progress"}), 100),
+    )
+    first = await kernel.reporting.run(turn_detail, "turn", summary=True)
+    kernel.store.execute("UPDATE request_diagnostics SET updated_at=101")
+    second = await kernel.reporting.run(turn_detail, "turn", summary=True)
+    assert first != second and "private progress" not in json.dumps(second)
+    assert second["requests"][0]["diagnostics_updated_at"] == 101
+
+
+async def test_sse_closes_cleanly_when_reporting_admission_is_full(kernel, monkeypatch, tmp_path):
+    app = create_app(tmp_path, start_runtime=False)
+    endpoint = next(r.endpoint for r in app.routes if getattr(r, "path", None) == "/api/events/stream")
+
+    class Request:
+        headers = {}
+        cookies = {}
+
+        async def is_disconnected(self):
+            return False
+
+    async def busy(*args, **kwargs):
+        raise ControlError("Reporting reads are busy", 503)
+
+    monkeypatch.setattr(kernel.auth, "session", lambda token: {})
+    monkeypatch.setattr(kernel.reporting, "run", busy)
+    response = await endpoint(Request(), after=3, summary=True, actor=None, k=kernel)
+    assert "connected" in await anext(response.body_iterator)
+    with pytest.raises(StopAsyncIteration):
+        await anext(response.body_iterator)
