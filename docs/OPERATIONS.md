@@ -118,6 +118,12 @@ The data directory is mode 0700; database/key/artifacts are owner-readable. **Th
 
 The application retains history instead of silently discarding observability. Monitor available disk space and back it up. Large contexts and many bots increase CPU, memory, database and provider usage; tune concurrency and cadence for the host. SQLite is appropriate for this single-host design; this implementation does not claim a horizontally distributed scheduler.
 
+Dashboard reporting uses a bounded read worker and summary polling; see
+[reporting ownership and migration](CONCURRENCY.md#reporting-reads) and
+[full evidence retrieval](API.md#reporting-summaries). The writer, bot state and
+Discord clients retain one runtime owner. Startup may take longer once when
+backfilling reporting metadata for an older database.
+
 ## Verification scratch and cleanup
 
 Before a full gate, check space with `df -h /tmp` and inspect this task's scratch
@@ -145,6 +151,17 @@ At task completion, clean the temporary resources created by this project:
 The owner requested this workflow on 2026-09-28 after a full local gate exhausted
 the shared `/tmp` filesystem. Durable runtime data remains outside temporary
 storage at the location documented above.
+
+On 2026-10-01 the owner approved one specific retention cleanup: the 29 manual
+backup/dashboard snapshot directories dated before 2026-09-17 in the ignored
+`audit/2026-10-01/03-disk-usage/two-week-retention-proposal.json` inventory, after
+preserving a fresh verified recovery point. September 17 and newer copies stay.
+These are independent full copies, not an incremental chain. This approval is
+not an automatic recurring deletion policy; completion evidence belongs in the
+ignored audit record. Inspect the current `.latest-requested` pointer before
+removal and update it to the freshly verified requested backup, not a guessed
+historical path. Durable live message/request/image/site history is outside this
+cleanup scope.
 
 ## Branch changes and persistent storage
 

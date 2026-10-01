@@ -525,14 +525,15 @@ class ContextBuilder:
         )
         # Calibrate conservatively from this bot/profile's latest reported generation usage.
         measured = self.store.one(
-            "SELECT input_tokens,context FROM requests WHERE bot_id=? AND profile_id=? AND model=? AND json_extract(context,'$.profile_revision')=? AND purpose='generation' AND input_tokens IS NOT NULL ORDER BY started_at DESC LIMIT 1",
+            "SELECT input_tokens,m.estimated_tokens FROM requests "
+            "JOIN request_metadata m ON m.request_id=requests.id "
+            "WHERE bot_id=? AND profile_id=? AND model=? AND m.profile_revision=? "
+            "AND purpose='generation' AND input_tokens IS NOT NULL ORDER BY started_at DESC LIMIT 1",
             (bot["id"], profile["id"], profile["model"], profile["revision"]),
         )
         factor = 1.0
         if measured:
-            import json
-
-            previous_estimate = json.loads(measured["context"]).get("estimated_tokens") or 1
+            previous_estimate = measured["estimated_tokens"] or 1
             factor = max(1.0, measured["input_tokens"] / previous_estimate)
         meta["calibration_factor"] = factor
         max_images, max_image_bytes = image_limits(profile)

@@ -46,6 +46,7 @@ Raw API timestamps keep their existing epoch or canonical UTC representation. Da
 | `GET /api/trajectory/{turn-id}` / `/export` | Full requests, private provider diagnostics, assembly metadata, tool events and deliveries |
 | `GET /api/events?after=&before=&bot_id=&turn_id=&level=&limit=100` | Stable sequence cursor event ledger |
 | `GET /api/events/stream?after=` | Authenticated SSE; reconnect via `Last-Event-ID` |
+| `GET /api/events/{seq}` | One complete authenticated event, or 404 |
 | `GET /api/context/{bot}/{channel}` | Summary, checkpoint, estimates, notes, first 500 uncompacted messages, compaction history |
 | `GET /api/messages/{channel}?after=&through=&limit=100` | Original observed messages; page by sequence |
 | `GET /api/artifacts/{id}` | Authenticated generated attachment download |
@@ -59,6 +60,32 @@ Raw API timestamps keep their existing epoch or canonical UTC representation. Da
 Background job endpoints are private owner inspection/control, not submission
 or provider APIs. Reads never launch inference or consume a bot notification.
 See [BACKGROUND_JOBS](BACKGROUND_JOBS.md) and [RESEARCH_ASSISTANT](RESEARCH_ASSISTANT.md).
+
+## Reporting summaries
+
+`GET /api/events`, `/api/events/stream` and `/api/trajectory/{turn-id}` accept
+optional `summary=true`. Omission preserves the full existing response.
+Summary events retain their identifiers, time, severity and ownership. Payloads
+up to 4,096 UTF-8 bytes remain inline; larger payloads return `data: {}` with
+`data_omitted: 1`. Fetch `/api/events/{seq}` for the complete original event.
+Filtering, ordering and SSE resume cursors retain their existing semantics.
+
+Summary trajectories add `summary: true`, select request timing/status/usage
+fields without bodies, contexts or private diagnostics, and use summary events.
+Turn and outbox records remain available. Full trajectory inspection and export
+retain all previous evidence, including private diagnostics and redaction.
+
+The active workbench uses summaries for background polling and event streams.
+Opening a detailed trajectory tab fetches full evidence; subsequent polls only
+refetch it when the summary changes. Opening an omitted event retrieves its full
+payload. In-flight requests are cancelled when their inspector closes or changes
+target. These are presentation/read optimizations, not model context reductions.
+
+The reporting worker has bounded admission and returns 503 when full or closing;
+see [CONCURRENCY.md](CONCURRENCY.md#reporting-reads). Authentication and mutation
+contracts are unchanged. The frozen legacy frontend keeps its full-response API.
+
+## Configuration and controls
 
 The configuration kinds are `providers`, `profiles`, `bots`, `prompts`, `rooms`, `plugins`, and `settings` (`global`). `id` is immutable. Optional `revision` guards concurrent edits. A patch merges top-level fields; nested JSON objects and lists are deliberately replaced, not magically combined.
 

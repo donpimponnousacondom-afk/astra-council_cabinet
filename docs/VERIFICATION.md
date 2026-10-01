@@ -4,6 +4,34 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Dashboard reporting responsiveness (2026-10-01)
+
+- Base: `9a2d5f917a83fac02376c3061776021cba2e4b90`; implementation branch
+  `hotfix/dashboard-event-loop`. Evidence below was collected on the working
+  patch; CI certifies the published head independently.
+- Focused backend: reporting, context responsiveness, concurrency, snapshots and
+  pricing — **58 passed**, exit 0 (9.19 s). Coverage includes old-row metadata
+  backfill, preserved full evidence, read-only connections, bounded admission,
+  repeated cancellation and joining actual worker completion. A subsequent
+  consistency test covers concurrent writer/read-transaction isolation.
+- Focused browser checks — **2 passed**, exit 0 (10.4 s): overview requests only
+  summaries, detailed tabs fetch full evidence, unchanged completed turns do not
+  repeat full downloads, and omitted events fetch their complete payload.
+- Synthetic SQLite benchmark: 200 requests with 1,050,087-byte contexts; median
+  configuration grouping 490.67 ms before / 0.185 ms after, equal results. Complete
+  statistics 1.99 ms. One event response fell from 1,050,268 to 202 bytes in
+  summary mode; persisted full data remains retrievable. These timings describe
+  this fixture/host, not a universal latency guarantee or live Discord test.
+- Full repository gate and remote checks are recorded in the PR and ignored
+  `audit/2026-10-01/04-dashboard-performance/` evidence. The benchmark and local
+  checks used isolated fixtures; no model requests or production configuration
+  changes were made to obtain them. Earlier event-loop diagnostics identify the
+  statistics query, but do not establish the full cause of the historic 27.8 s
+  preparation pause.
+- Deployment requires a verified pre-migration backup. Owner-approved deletion
+  of the separately inventoried pre-September-17 backups happens only after that
+  recovery point is complete; it is separate from live-history retention.
+
 ## Document-site postmortem feedback (2026-09-30)
 
 ```text

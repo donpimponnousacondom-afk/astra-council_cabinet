@@ -23,13 +23,41 @@ Bare `create_task` retains an exception, which propagates when awaited/retrieved
 
 ## Responsive preparation
 
-TaskGroup cannot prevent synchronous code from blocking every coroutine. Context tokenization and tool working-set estimation operate on detached values in worker threads. SQLite, vault access, grant checks and viewer attribution stay on the event-loop thread. Transcript assembly yields between bounded chunks. Context preparation admits two simultaneous tokenization operations; operator bot/provider concurrency and budgets remain separate.
+TaskGroup cannot prevent synchronous code from blocking every coroutine. Context tokenization and tool working-set estimation operate on detached values in worker threads. The writer SQLite connection, vault access, grant checks and viewer attribution stay on the event-loop thread. Reporting uses separately owned read connections as described below. Transcript assembly yields between bounded chunks. Context preparation admits two simultaneous tokenization operations; operator bot/provider concurrency and budgets remain separate.
 
 Compaction previously rebuilt and tokenized every growing transcript prefix, repeating most text N times for N messages. Preparation now checks the complete candidate first, then bisects only if it exceeds token/image limits. Every selected batch is checked; no checkpoint advances until all summary requests succeed. Cancellation during pure preparation cannot commit a checkpoint or send a late request. Cancellation does not forcibly stop native worker computation: keep it bounded and free of state mutations. [Python guidance on blocking work](https://docs.python.org/3.14/library/asyncio-dev.html#running-blocking-code).
 
 `compaction.batch_prepared` records duration, message count, estimate and tokenization probes. `compaction.summary_checked` records a worker-thread count of retained text using cl100k_base, independently of reported output/reasoning usage. The local `summary_tokens` budget is not sent as a combined provider cap; generation/compaction JSON cap fields are omitted only from the compaction wire copy. Native reasoning settings, provider defaults and deadlines still apply. Incomplete or oversized candidates leave old context intact, with full returned content retained in the request. This supersedes the earlier combined output-cap behavior; see [operations](OPERATIONS.md#context-and-compaction).
 
 The monotonic monitor emits `runtime.loop_delayed` for scheduling delays above one second. Active bot names give correlation, not proof of the blocking task. `runtime.task_failed` includes a bounded redacted traceback; `/api/status.background_tasks` reports running names and up to 50 unexpected failures for the current process. These diagnostics do not change grants, settings or activation budgets.
+
+## Reporting reads
+
+HTTP statistics, event reads/streams and trajectory inspection use one
+`ReportingReader` worker per Kernel. At most four reads are admitted, including
+the running read; additional requests receive a retryable 503. Each operation
+opens its own SQLite `mode=ro` connection on the worker thread, reads within one
+transaction, and closes there. No live Store connection, vault, bot or provider
+object crosses threads. Existing trajectory redaction remains on its owner
+thread. This is one runtime with a reporting worker, not another council process.
+
+The requesting coroutine owns a scoped TaskGroup and joins the actual executor
+operation even when cancelled repeatedly. A cancellation flag interrupts SQLite
+through its progress handler. Shutdown rejects new reads and waits for admitted
+work before joining the executor and closing runtime resources. Snapshot HTTP
+draining and Kernel replacement retain those same joins; an old reader cannot
+outlive the database it inspects.
+
+`request_metadata` retains derived profile revision and token estimate beside
+the original requests. Startup backfills older rows; SQLite triggers maintain it
+on request insertion/context updates, and request deletion cascades. Statistics
+and calibration query those scalars without decoding full prompt snapshots.
+The calibration selection, ratio and context/compaction decisions are unchanged.
+Take a consistent pre-deployment backup before this additive schema migration;
+the first backfill reads historical contexts once and can lengthen startup.
+
+Dashboard summaries and on-demand full evidence are specified in
+[API.md](API.md#reporting-summaries). Full persisted evidence is retained.
 
 ## One presentation timezone
 
