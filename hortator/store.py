@@ -16,6 +16,18 @@ def dumps(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
 
 
+def event_columns(summary=False):
+    if not summary:
+        return "*"
+    # length(BLOB) uses SQLite's stored byte count. Large payloads stay on disk;
+    # summary clients can explicitly fetch the original event by sequence.
+    return (
+        "seq,id,at,kind,level,bot_id,turn_id,request_id,"
+        "CASE WHEN length(CAST(data AS BLOB))<=4096 THEN data ELSE '{}' END AS data,"
+        "length(CAST(data AS BLOB))>4096 AS data_omitted"
+    )
+
+
 class Store:
     """One event-loop writer. Short WAL transactions never span network awaits."""
 
@@ -110,6 +122,36 @@ class Store:
             "CREATE TABLE IF NOT EXISTS context_resets (bot_id TEXT NOT NULL, channel_id TEXT NOT NULL, "
             "after_seq INTEGER NOT NULL, after_at REAL NOT NULL, PRIMARY KEY(bot_id,channel_id))"
         )
+        # Keep tiny query metadata separate from the immutable large request
+        # evidence. Triggers also cover imports/fixtures and context updates.
+        self.db.executescript("""
+        CREATE TABLE IF NOT EXISTS request_metadata (
+          request_id TEXT PRIMARY KEY REFERENCES requests(id) ON DELETE CASCADE,
+          profile_revision, estimated_tokens);
+        CREATE TRIGGER IF NOT EXISTS request_metadata_insert AFTER INSERT ON requests BEGIN
+          INSERT INTO request_metadata VALUES (
+            NEW.id,json_extract(NEW.context,'$.profile_revision'),
+            json_extract(NEW.context,'$.estimated_tokens'));
+        END;
+        CREATE TRIGGER IF NOT EXISTS request_metadata_update AFTER UPDATE OF context ON requests BEGIN
+          INSERT INTO request_metadata VALUES (
+            NEW.id,json_extract(NEW.context,'$.profile_revision'),
+            json_extract(NEW.context,'$.estimated_tokens'))
+          ON CONFLICT(request_id) DO UPDATE SET
+            profile_revision=excluded.profile_revision,estimated_tokens=excluded.estimated_tokens;
+        END;
+        INSERT INTO request_metadata
+          SELECT id,json_extract(context,'$.profile_revision'),json_extract(context,'$.estimated_tokens')
+          FROM requests WHERE id NOT IN (SELECT request_id FROM request_metadata);
+        CREATE INDEX IF NOT EXISTS request_started ON requests(started_at);
+        CREATE INDEX IF NOT EXISTS request_calibration ON requests(
+          bot_id,profile_id,model,started_at DESC,input_tokens)
+          WHERE purpose='generation' AND input_tokens IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS request_running ON requests(status) WHERE status='running';
+        CREATE INDEX IF NOT EXISTS turn_started ON turns(started_at);
+        CREATE INDEX IF NOT EXISTS event_tool_time ON events(at)
+          WHERE kind IN ('tool.completed','tool.failed');
+        """)
         path.chmod(0o600)
 
     def rows(self, sql, args=()):
@@ -163,7 +205,9 @@ class Store:
         )
         return event
 
-    def events(self, *, after=0, before=None, limit=100, bot_id=None, turn_id=None, level=None):
+    def events(
+        self, *, after=0, before=None, limit=100, bot_id=None, turn_id=None, level=None, summary=False
+    ):
         where, args = ["seq> ?"], [after]
         for field, val in (("bot_id", bot_id), ("turn_id", turn_id), ("level", level)):
             if val:
@@ -174,7 +218,7 @@ class Store:
             args.append(before)
         order = "ASC" if after else "DESC"
         rows = self.rows(
-            f"SELECT * FROM events WHERE {' AND '.join(where)} ORDER BY seq {order} LIMIT ?",
+            f"SELECT {event_columns(summary)} FROM events WHERE {' AND '.join(where)} ORDER BY seq {order} LIMIT ?",
             (*args, min(limit, 500)),
         )
         for row in rows:

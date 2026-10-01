@@ -53,6 +53,8 @@ export function Trajectory({
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<RecordData | null>(null);
   const [eventDetail, setEventDetail] = useState<RecordData | null>(null);
+  const [eventError, setEventError] = useState("");
+  const [eventAttempt, setEventAttempt] = useState(0);
   const [inspector, setInspector] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [more, setMore] = useState(true);
@@ -60,7 +62,7 @@ export function Trajectory({
   const base =
     view === "turns"
       ? `/api/trajectory?limit=60&bot_id=${encodeURIComponent(bot)}&status=${status}`
-      : `/api/events?limit=100&bot_id=${encodeURIComponent(bot)}&level=${level}`;
+      : `/api/events?limit=100&summary=true&bot_id=${encodeURIComponent(bot)}&level=${level}`;
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -104,28 +106,71 @@ export function Trajectory({
       clearInterval(timer);
     };
   }, [base, view]);
+  const needsFullDetail = inspector !== "overview";
   useEffect(() => {
     if (!selected) {
       setDetail(null);
       return;
     }
     let active = true;
+    let pending = false;
+    let version = "";
+    const controller = new AbortController();
     setDetail(null);
-    const refresh = () =>
-      api(`/api/trajectory/${selected}`)
-        .then((data) => {
-          if (active) setDetail(data);
-        })
-        .catch((e) => {
-          if (active) notify(e.message, true);
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const summary = await api(`/api/trajectory/${selected}?summary=true`, {
+          signal: controller.signal,
         });
+        const nextVersion = JSON.stringify(summary);
+        if (nextVersion !== version) {
+          const data = needsFullDetail
+            ? await api(`/api/trajectory/${selected}`, {
+                signal: controller.signal,
+              })
+            : summary;
+          if (active) {
+            version = nextVersion;
+            setDetail(data);
+          }
+        }
+      } catch (e) {
+        if (active)
+          notify(
+            e instanceof Error ? e.message : "Could not load trajectory",
+            true,
+          );
+      } finally {
+        pending = false;
+      }
+    };
     refresh();
     const timer = setInterval(refresh, 3000);
     return () => {
       active = false;
+      controller.abort();
       clearInterval(timer);
     };
-  }, [selected, notify]);
+  }, [selected, needsFullDetail, notify]);
+  useEffect(() => {
+    setEventError("");
+    if (!eventDetail?.data_omitted) return;
+    let active = true;
+    const controller = new AbortController();
+    api(`/api/events/${eventDetail.seq}`, { signal: controller.signal })
+      .then((event) => {
+        if (active) setEventDetail(event);
+      })
+      .catch((e) => {
+        if (active) setEventError(e.message);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [eventDetail, eventAttempt]);
   const loadMore = async () => {
     const before =
       view === "turns" ? turns.at(-1)?.started_at : events.at(-1)?.seq;
@@ -332,7 +377,7 @@ export function Trajectory({
                 <X size={17} />
               </button>
             </header>
-            {detail && (
+            {detail && (!needsFullDetail || !detail.summary) && (
               <>
                 <div className="inspector-status">
                   <Badge tone={tone(detail.turn.status)}>
@@ -685,7 +730,21 @@ export function Trajectory({
           wide
         >
           <div className="modal-body">
-            <Code label="Event payload" value={eventDetail} expanded />
+            {eventDetail.data_omitted && eventError ? (
+              <>
+                <Notice warning>{eventError}</Notice>
+                <button
+                  className="button"
+                  onClick={() => setEventAttempt((attempt) => attempt + 1)}
+                >
+                  Retry loading event
+                </button>
+              </>
+            ) : eventDetail.data_omitted ? (
+              <p>Loading full event…</p>
+            ) : (
+              <Code label="Event payload" value={eventDetail} expanded />
+            )}
             {eventDetail.turn_id && (
               <button
                 className="button primary"

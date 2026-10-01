@@ -5,15 +5,18 @@ All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, 
 ## Independent PR review and check monitoring
 
 After finishing implementation, prepare a short digest of user intent, scope,
-base/head commits and measured verification, then delegate an independent review
-and CI watch. The owner requested this standing experiment on 2026-09-26. The
+base/head commits and measured verification, then delegate independent reviews
+and CI watches. On 2026-10-01 the owner expanded the standing experiment to both
+Luna and GPT-6.1 Sol for every PR. Keep initial reviews independent and compare
+confirmed findings, false positives, demonstrated misses and measured time;
+do not reward finding counts or invent token/cost measurements. The
 installed [council-pr-babysitter skill](/home/codexy/.codex/skills/council-pr-babysitter/SKILL.md)
 owns the reviewer selection and detailed brief. It is a local Codex skill outside
 Git, not a council bot plugin, and does not grant bots any new capability.
 
-The reviewer reports concrete regressions with file/line, trigger, consequence
+Each reviewer reports concrete regressions with file/line, trigger, consequence
 and evidence. The implementing agent verifies and fixes confirmed in-scope
-problems, then requests review of the new commit and watches its checks. Green
+problems, then requests both reviews of the new commit and watches its checks. Green
 checks and a verdict belong to a specific PR head; new commits need fresh evidence.
 Publish an authorized concise review digest with that SHA, CI links, findings and
 validation limits. Keep comments distinct from formal GitHub approval. Squash
@@ -118,6 +121,12 @@ The data directory is mode 0700; database/key/artifacts are owner-readable. **Th
 
 The application retains history instead of silently discarding observability. Monitor available disk space and back it up. Large contexts and many bots increase CPU, memory, database and provider usage; tune concurrency and cadence for the host. SQLite is appropriate for this single-host design; this implementation does not claim a horizontally distributed scheduler.
 
+Dashboard reporting uses a bounded read worker and summary polling; see
+[reporting ownership and migration](CONCURRENCY.md#reporting-reads) and
+[full evidence retrieval](API.md#reporting-summaries). The writer, bot state and
+Discord clients retain one runtime owner. Startup may take longer once when
+backfilling reporting metadata for an older database.
+
 ## Verification scratch and cleanup
 
 Before a full gate, check space with `df -h /tmp` and inspect this task's scratch
@@ -145,6 +154,17 @@ At task completion, clean the temporary resources created by this project:
 The owner requested this workflow on 2026-09-28 after a full local gate exhausted
 the shared `/tmp` filesystem. Durable runtime data remains outside temporary
 storage at the location documented above.
+
+On 2026-10-01 the owner approved one specific retention cleanup: the 29 manual
+backup/dashboard snapshot directories dated before 2026-09-17 in the ignored
+`audit/2026-10-01/03-disk-usage/two-week-retention-proposal.json` inventory, after
+preserving a fresh verified recovery point. September 17 and newer copies stay.
+These are independent full copies, not an incremental chain. This approval is
+not an automatic recurring deletion policy; completion evidence belongs in the
+ignored audit record. Inspect the current `.latest-requested` pointer before
+removal and update it to the freshly verified requested backup, not a guessed
+historical path. Durable live message/request/image/site history is outside this
+cleanup scope.
 
 ## Branch changes and persistent storage
 

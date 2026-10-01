@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from urllib.parse import urlencode
 
 from pydantic import ValidationError
 
-from .diagnostics import read_diagnostics
+from .reporting import request_stats, turn_detail
 from .footer import footer_settings
 from .memory_budget import hard_limit, largest_channel_usage
 from .models import ControlError, KINDS, OWNER_ID, SCHEMAS
@@ -526,53 +525,7 @@ class Service:
         return {"configured": bool(value)}
 
     def stats(self, hours=24):
-        since = time.time() - hours * 3600
-        fields = """count(*) AS requests, sum(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failures,
-          sum(CASE WHEN status='cancelled' THEN 1 ELSE 0 END) AS cancellations,
-          sum(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed,
-          sum(input_tokens) AS input_tokens,sum(output_tokens) AS output_tokens,
-          sum(reasoning_tokens) AS reasoning_tokens,sum(cached_tokens) AS cached_tokens,sum(cost) AS cost,
-          sum(CASE WHEN cost IS NOT NULL THEN 1 ELSE 0 END) AS cost_known_requests,
-          sum(CASE WHEN cost_source='estimated' THEN 1 ELSE 0 END) AS estimated_cost_requests,
-          sum(CASE WHEN input_tokens IS NOT NULL THEN 1 ELSE 0 END) AS usage_known_requests,
-          avg(ttft_ms) AS avg_ttft_ms,avg(duration_ms) AS avg_duration_ms"""
-        total = self.store.one(f"SELECT {fields} FROM requests WHERE started_at>=?", (since,))
-        grouped = {}
-        for group in ("bot_id", "provider_id", "profile_id", "model", "purpose"):
-            grouped[group] = self.store.rows(
-                f"SELECT {group} AS id,{fields} FROM requests WHERE started_at>=? GROUP BY {group}", (since,)
-            )
-        grouped["configuration"] = self.store.rows(
-            f"SELECT profile_id || '@r' || coalesce(json_extract(context,'$.profile_revision'),0) AS id,{fields} FROM requests WHERE started_at>=? GROUP BY profile_id,coalesce(json_extract(context,'$.profile_revision'),0)",
-            (since,),
-        )
-        latency = self.store.rows(
-            "SELECT ttft_ms,duration_ms FROM requests WHERE started_at>=? AND status='completed' ORDER BY started_at DESC LIMIT 10000",
-            (since,),
-        )
-        for key in ("ttft_ms", "duration_ms"):
-            vals = sorted(r[key] for r in latency if r[key] is not None)
-            total["p95_" + key] = vals[min(len(vals) - 1, int(len(vals) * 0.95))] if vals else None
-        total["latency_sample_size"] = len(latency)
-        history = self.store.rows(
-            f"SELECT CAST(started_at/3600 AS INTEGER)*3600 AS at,{fields} FROM requests WHERE started_at>=? GROUP BY CAST(started_at/3600 AS INTEGER) ORDER BY at",
-            (since,),
-        )
-        turns = self.store.rows(
-            "SELECT status,count(*) AS count FROM turns WHERE started_at>=? GROUP BY status", (since,)
-        )
-        tools = self.store.rows(
-            "SELECT json_extract(data,'$.name') AS name,kind,count(*) AS count,avg(json_extract(data,'$.duration_ms')) AS avg_duration_ms FROM events WHERE at>=? AND kind IN ('tool.completed','tool.failed') GROUP BY name,kind",
-            (since,),
-        )
-        return {
-            "hours": hours,
-            "total": total,
-            "by": grouped,
-            "history": history,
-            "turns": turns,
-            "tools": tools,
-        }
+        return request_stats(self.store, hours)
 
     def status(self):
         from .prompt_templates import catalog
@@ -611,21 +564,7 @@ class Service:
         )
 
     def turn(self, turn_id, *, include_diagnostics=False):
-        turn = self.store.one("SELECT * FROM turns WHERE id=?", (turn_id,))
-        if not turn:
-            raise ControlError("Turn not found", 404)
-        requests = self.store.rows("SELECT * FROM requests WHERE turn_id=? ORDER BY started_at", (turn_id,))
-        for request in requests:
-            for key in ("body", "context", "usage", "response"):
-                request[key] = json.loads(request[key]) if request[key] else None
-            if include_diagnostics:
-                request["diagnostics"] = read_diagnostics(self.store, request["id"])
-        outbox = self.store.rows("SELECT * FROM outbox WHERE turn_id=? ORDER BY created_at", (turn_id,))
-        # Detail includes the full turn. Global history remains cursor-paginated.
-        events = self.store.rows("SELECT * FROM events WHERE turn_id=? ORDER BY seq", (turn_id,))
-        for event in events:
-            event["data"] = json.loads(event["data"])
-        return self.vault.redact({"turn": turn, "requests": requests, "events": events, "outbox": outbox})
+        return self.vault.redact(turn_detail(self.store, turn_id, include_diagnostics=include_diagnostics))
 
     def global_memory_view(self, bot_id):
         return self.vault.redact(self.registry.global_memory.inspect(bot_id))

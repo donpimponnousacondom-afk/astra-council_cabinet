@@ -159,6 +159,7 @@ export const kindLabel: Record<Kind, string> = {
 };
 export function eventText(event: RecordData): string {
   const d = event.data || {};
+  if (event.data_omitted) return "Open event for full details";
   return (
     d.error ||
     d.content ||

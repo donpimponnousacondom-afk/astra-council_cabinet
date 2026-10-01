@@ -23,6 +23,7 @@ from .discord_gateway import COMMANDS, DiscordManager
 from .models import ControlError, OWNER_ID, SCHEMAS
 from .plugins import Registry
 from .provider import ProviderError, ProviderPool
+from .reporting import ReportingReader, event_detail, request_stats, turn_detail
 from .publishing import PublishingWorker
 from .runtime import Engine
 from .security import Actor, Auth, Vault
@@ -38,6 +39,7 @@ class Kernel:
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.store = Store(self.directory / "council.sqlite3")
+        self.reporting = ReportingReader(self.store.path)
         self.vault = Vault(self.store, self.directory)
         self.auth = Auth(self.store, self.vault, self.directory)
         self.pool = ProviderPool(self.store, self.vault)
@@ -136,9 +138,12 @@ class Kernel:
             return
         self.closed = True
         try:
-            await self.pool.close()
-            if self.started:
-                self.store.emit("runtime.stopped")
+            try:
+                await self.reporting.close()
+            finally:
+                await self.pool.close()
+                if self.started:
+                    self.store.emit("runtime.stopped")
         finally:
             self.store.close()
 
@@ -477,7 +482,7 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
 
     @app.get("/api/stats")
     async def stats(hours: int = Query(24, ge=1, le=8760), actor=Depends(authenticated), k=Depends(kernel)):
-        return k.service.stats(hours)
+        return await k.reporting.run(request_stats, hours)
 
     @app.get("/api/config-schemas")
     async def config_schemas(actor=Depends(authenticated)):
@@ -518,18 +523,27 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
         return k.service.turns(bot_id, before, status, limit)
 
     @app.get("/api/trajectory/{turn_id}")
-    async def trajectory(turn_id: str, actor=Depends(authenticated), k=Depends(kernel)):
-        return k.service.turn(turn_id, include_diagnostics=True)
+    async def trajectory(
+        turn_id: str, summary: bool = False, actor=Depends(authenticated), k=Depends(kernel)
+    ):
+        result = await k.reporting.run(turn_detail, turn_id, include_diagnostics=True, summary=summary)
+        return k.vault.redact(result)
 
     @app.get("/api/trajectory/{turn_id}/export")
     async def trajectory_export(turn_id: str, actor=Depends(authenticated), k=Depends(kernel)):
         return JSONResponse(
-            k.service.turn(turn_id, include_diagnostics=True),
+            k.vault.redact(await k.reporting.run(turn_detail, turn_id, include_diagnostics=True)),
             headers={"Content-Disposition": f'attachment; filename="{turn_id}.json"'},
         )
 
     @app.get("/api/events/stream")
-    async def event_stream(request: Request, after: int = 0, actor=Depends(authenticated), k=Depends(kernel)):
+    async def event_stream(
+        request: Request,
+        after: int = 0,
+        summary: bool = False,
+        actor=Depends(authenticated),
+        k=Depends(kernel),
+    ):
         try:
             cursor = max(after, int(request.headers.get("last-event-id", "0")))
         except ValueError:
@@ -547,7 +561,14 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
                     k.auth.session(request.cookies.get("hortator_session"))
                 except ControlError:
                     return
-                rows = k.store.events(after=cursor, limit=200)
+                try:
+                    rows = await k.reporting.run(Store.events, after=cursor, limit=200, summary=summary)
+                except ControlError as error:
+                    if error.status != 503:
+                        raise
+                    # Headers are already sent. Close normally so EventSource
+                    # retries from its last delivered ID instead of an ASGI error.
+                    return
                 for event in rows:
                     cursor = event["seq"]
                     yield f"id: {cursor}\ndata: {json.dumps(event)}\n\n"
@@ -569,13 +590,27 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
         bot_id: str | None = None,
         turn_id: str | None = None,
         level: str | None = None,
+        summary: bool = False,
         limit: int = Query(100, ge=1, le=500),
         actor=Depends(authenticated),
         k=Depends(kernel),
     ):
-        return k.store.events(
-            after=after, before=before, bot_id=bot_id, turn_id=turn_id, level=level, limit=limit
+        return await k.reporting.run(
+            Store.events,
+            after=after,
+            before=before,
+            bot_id=bot_id,
+            turn_id=turn_id,
+            level=level,
+            limit=limit,
+            summary=summary,
         )
+
+    @app.get("/api/events/{seq}")
+    async def event(seq: int, actor=Depends(authenticated), k=Depends(kernel)):
+        if seq < 1:
+            raise ControlError("Event not found", 404)
+        return await k.reporting.run(event_detail, seq)
 
     @app.get("/api/global-memory/{bot_id}")
     async def global_memory(bot_id: str, actor=Depends(authenticated), k=Depends(kernel)):

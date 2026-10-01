@@ -206,7 +206,7 @@ export default function App() {
         const [data, metrics, ledger, loadedSchemas] = await Promise.all([
           api<Dashboard>("/api/status"),
           api("/api/stats"),
-          api("/api/events?limit=20"),
+          api("/api/events?limit=20&summary=true"),
           schemaCache.current || api<RecordData>("/api/config-schemas"),
         ]);
         if (
@@ -262,7 +262,7 @@ export default function App() {
     if (!authenticated) return;
     refresh();
     const timer = setInterval(refresh, 4000);
-    const stream = new EventSource("/api/events/stream");
+    const stream = new EventSource("/api/events/stream?summary=true");
     stream.addEventListener("connected", () => setConnected(true));
     stream.onmessage = () => setConnected(true);
     stream.onerror = () => setConnected(false);

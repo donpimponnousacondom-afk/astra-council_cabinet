@@ -10,6 +10,15 @@ current checkout or running configuration.
 
 ## Current work and acceptance
 
+- On 2026-10-01 the owner authorized incremental dashboard/event-loop fixes:
+  remove repeated prompt-JSON decoding from statistics/calibration, load full
+  dashboard evidence on demand, and move reporting reads to a bounded worker.
+  Retain one runtime and the existing model context/configuration semantics.
+  Follow the independent Luna review/CI/merge/restart workflow; broader process
+  separation remains a measured follow-up, not part of this change. See
+  [reporting ownership](CONCURRENCY.md#reporting-reads) and
+  [summary API](API.md#reporting-summaries).
+
 - The owner requested two independent opt-in experiments (2026-09-26): readable
   attributed [conversation text](PROMPTS.md#experimental-conversation-text) for
   generation/compaction, and [Engram rolling memory](ENGRAMS.md). Existing bots
