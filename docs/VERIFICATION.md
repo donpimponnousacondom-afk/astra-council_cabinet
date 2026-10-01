@@ -31,6 +31,14 @@ historical claims retain their original date and scope.
 - Follow-up reporting/concurrency checks: **19 passed**, exit 0 (3.83 s), including
   in-progress private diagnostic versioning and clean SSE closure on admission
   pressure. These refine the implementation without changing persisted evidence.
+- The local full gate passed: **1,684 backend tests passed, 1 skipped**, all
+  lint/format/build and verification-runner checks passed, and **70 browser tests
+  passed**. Backend collection preceded the two follow-up reporting cases above;
+  this is working-patch evidence, not an exact final-head full-suite claim.
+- Independent Luna review found a transient full-event fetch failure left its
+  inspector displaying a loading state. The follow-up provides an explicit error
+  and Retry action. The updated focused browser suite passed **3 tests** (10.8 s),
+  including a 503 response followed by successful retry; TypeScript/Vite passed.
 - Deployment requires a verified pre-migration backup. Owner-approved deletion
   of the separately inventoried pre-September-17 backups happens only after that
   recovery point is complete; it is separate from live-history retention.

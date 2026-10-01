@@ -107,3 +107,51 @@ test("large event evidence is fetched when its summary is opened", async ({
   await expect(page.getByRole("dialog")).toContainText("full fixture evidence");
   expect(opened).toBe(1);
 });
+
+test("a temporarily busy full-event read shows an error and can retry in place", async ({
+  page,
+}) => {
+  const brief = {
+    id: "busy-event",
+    seq: 987655,
+    at: Date.now() / 1000,
+    kind: "context.assembled",
+    level: "info",
+    data: {},
+    data_omitted: true,
+  };
+  let reads = 0;
+  await page.route("**/api/events?*", (route) =>
+    route.fulfill({ json: [brief] }),
+  );
+  await page.route("**/api/events/987655", (route) => {
+    reads++;
+    return reads === 1
+      ? route.fulfill({
+          status: 503,
+          json: { error: "Reporting reads are busy; retry shortly" },
+        })
+      : route.fulfill({
+          json: {
+            ...brief,
+            data_omitted: false,
+            data: { preserved: "Recovered full evidence" },
+          },
+        });
+  });
+  await page.goto("/");
+  await page.getByLabel("Dashboard password").fill(password);
+  await page.getByRole("button", { name: "Enter council control" }).click();
+  await page
+    .getByRole("navigation", { name: "Workbench pages" })
+    .getByRole("button", { name: "Trajectory", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Event ledger", exact: true }).click();
+  await page.locator(".ledger-event").click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Reporting reads are busy");
+  await expect(dialog.getByText("Loading full event…")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Retry loading event" }).click();
+  await expect(dialog).toContainText("Recovered full evidence");
+  expect(reads).toBe(2);
+});

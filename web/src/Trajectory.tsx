@@ -53,6 +53,8 @@ export function Trajectory({
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<RecordData | null>(null);
   const [eventDetail, setEventDetail] = useState<RecordData | null>(null);
+  const [eventError, setEventError] = useState("");
+  const [eventAttempt, setEventAttempt] = useState(0);
   const [inspector, setInspector] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [more, setMore] = useState(true);
@@ -153,6 +155,7 @@ export function Trajectory({
     };
   }, [selected, needsFullDetail, notify]);
   useEffect(() => {
+    setEventError("");
     if (!eventDetail?.data_omitted) return;
     let active = true;
     const controller = new AbortController();
@@ -161,13 +164,13 @@ export function Trajectory({
         if (active) setEventDetail(event);
       })
       .catch((e) => {
-        if (active) notify(e.message, true);
+        if (active) setEventError(e.message);
       });
     return () => {
       active = false;
       controller.abort();
     };
-  }, [eventDetail, notify]);
+  }, [eventDetail, eventAttempt]);
   const loadMore = async () => {
     const before =
       view === "turns" ? turns.at(-1)?.started_at : events.at(-1)?.seq;
@@ -727,7 +730,17 @@ export function Trajectory({
           wide
         >
           <div className="modal-body">
-            {eventDetail.data_omitted ? (
+            {eventDetail.data_omitted && eventError ? (
+              <>
+                <Notice warning>{eventError}</Notice>
+                <button
+                  className="button"
+                  onClick={() => setEventAttempt((attempt) => attempt + 1)}
+                >
+                  Retry loading event
+                </button>
+              </>
+            ) : eventDetail.data_omitted ? (
               <p>Loading full event…</p>
             ) : (
               <Code label="Event payload" value={eventDetail} expanded />
