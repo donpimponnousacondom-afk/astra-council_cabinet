@@ -21,8 +21,9 @@ historical claims retain their original date and scope.
   provider or compaction logic changed. The owner reported successful first live
   compaction after the conversation-format rollout while this patch was being
   tested; this is owner-reported acceptance, not a new agent-run compaction test.
-- Exact published-head CI, independent Luna/Sol review and deployment evidence
-  are recorded in the PR and ignored `audit/2026-10-01/05-search-default-guidance/`.
+- This focused evidence does not certify a final published head. Consult the PR
+  and ignored `audit/2026-10-01/05-search-default-guidance/` for the latest CI,
+  independent Luna/Sol review and deployment status.
 
 ## Dashboard reporting responsiveness (2026-10-01)
 
