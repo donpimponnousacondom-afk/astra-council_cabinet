@@ -162,6 +162,124 @@ async def test_effective_defaults_and_bounded_excerpts_keep_raw_response(kernel,
     assert json.loads(json.loads(read["text"])["body"])["results"] == rows
 
 
+@pytest.mark.parametrize("usable", [True, False])
+async def test_rejected_urls_preserve_other_results_and_original_evidence(kernel, monkeypatch, usable):
+    # Shape from Loki's two HTTP-200 failures on 2026-10-02; excerpt text is a fixture.
+    rows = [
+        {"url": "https://support:@parallel.ai/products/search", "excerpts": ["bad" * 1000]},
+        {
+            "url": "https://docs.parallel.ai/api-reference/search",
+            "title": None,
+            "publish_date": None,
+            "excerpts": ["a" * 600],
+        },
+        {"url": "https://support:@parallel.ai/ai/products/search", "excerpts": []},
+        {"url": "https://support:@parallel.ai/ai/products/responses", "excerpts": ["bad"]},
+        {"url": "https://parallel.ai/blog/parallel-search-fast", "excerpts": ["b" * 600]},
+    ]
+    if not usable:
+        rows = [rows[i] for i in (0, 2, 3)]
+    payload = {
+        "search_id": "search-mixed",
+        "results": rows,
+        "warnings": ["upstream warning"],
+        "usage": [{"name": "sku_search", "count": 1}],
+    }
+    seen = []
+
+    def respond(request):
+        seen.append(request)
+        return httpx.Response(200, json=payload)
+
+    context = setup(kernel, monkeypatch, respond, config={"max_chars_total": 1000})
+    result = await call(kernel, context)
+    assert result["ok"] is usable and result["partial"] is usable
+    assert result["warnings"] == payload["warnings"]
+    assert result["reported_usage"] == payload["usage"] and result["search_id"] == "search-mixed"
+    assert [r["index"] for r in result["rejected_results"]] == ([0, 2, 3] if usable else [0, 1, 2])
+    assert all(r["field"] == "url" and r["reason"] for r in result["rejected_results"])
+    assert "No automatic retry" in result["notice"] and len(seen) == 1
+    if usable:
+        assert [r["url"] for r in result["results"]] == [rows[1]["url"], rows[4]["url"]]
+        assert [r["excerpts"] for r in result["results"]] == [["a" * 600], ["b" * 400]]
+        assert result["results"][0]["title"] is None and result["results"][0]["publish_date"] is None
+        assert result["truncated"] and result["results"][1]["excerpts_truncated"]
+        assert result["error"] is None and "usage" not in result
+    else:
+        assert result["category"] == "response_format" and "no usable" in result["error"]
+        assert not result["results"] and result["usage"]
+    event = next(
+        e for e in kernel.store.events() if e["kind"] == ("tool.completed" if usable else "tool.failed")
+    )
+    assert event["level"] == "warning"
+    with OperationalConsole(stream=io.StringIO(), keys=False, color=False) as console:
+        console.bind(kernel)
+        assert "Original HTTP response" in console.evidence_text({**event, "scope": "tools"})
+    read = await kernel.registry.call(
+        "dumb_search", {**result["http_response"]["read_response"], "length": 18000}, context, "read"
+    )
+    assert json.loads(json.loads(read["text"])["body"]) == payload
+    assert len(seen) == 1
+
+
+async def test_partial_diagnostics_remain_visible_when_result_is_paged(kernel, monkeypatch):
+    title = "Large upstream title " * 3500
+    context = setup(
+        kernel,
+        monkeypatch,
+        lambda request: httpx.Response(
+            200,
+            json={
+                "search_id": "id",
+                "results": [
+                    {"url": "https://support:@parallel.ai/products/search", "excerpts": []},
+                    {"url": "https://example.com", "title": title, "excerpts": ["source"]},
+                ],
+            },
+        ),
+    )
+    result = await call(kernel, context)
+    assert result["ok"] and result["partial"] and result["result_is_paged"]
+    assert result["rejected_results"][0]["field"] == "url"
+    args, chunks = result["read_response"], []
+    while args:
+        page = await kernel.registry.call("dumb_search", args, context, "read")
+        chunks.append(page["text"])
+        args = page["next"]
+    full = json.loads("".join(chunks))
+    assert full["results"][0]["title"] == title and full["http_response"]["read_response"]
+    assert full["rejected_results"] == result["rejected_results"]
+
+
+@pytest.mark.parametrize(
+    "bad,field",
+    [
+        (None, "row"),
+        ([], "row"),
+        ({"url": "https://example.com", "excerpts": None}, "excerpts"),
+        ({"url": "https://example.com", "excerpts": ["text", None]}, "excerpts"),
+        ({"url": "https://example.com", "excerpts": [], "title": 42}, "title"),
+        ({"url": "https://example.com", "excerpts": [], "publish_date": {}}, "publish_date"),
+        ({"url": "javascript:alert(1)", "excerpts": []}, "url"),
+        ({"url": "https://[broken", "excerpts": []}, "url"),
+    ],
+)
+async def test_malformed_rows_are_isolated_without_changing_count_limit(kernel, monkeypatch, bad, field):
+    good = {"url": "https://example.com/valid", "excerpts": ["source"]}
+    context = setup(
+        kernel,
+        monkeypatch,
+        lambda request: httpx.Response(200, json={"search_id": "id", "results": [bad, good, good]}),
+    )
+    result = await call(kernel, context, count=2)
+    assert result["ok"] and result["partial"] and result["truncated"]
+    assert len(result["results"]) == 1 and result["results"][0]["excerpts"] == ["source"]
+    assert result["rejected_results"] == [
+        {"index": 0, "field": field, "reason": result["rejected_results"][0]["reason"]}
+    ]
+    assert result["rejected_results"][0]["reason"]
+
+
 @pytest.mark.parametrize(
     "status,payload,category",
     [

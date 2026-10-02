@@ -120,6 +120,21 @@ def register(registry):
     registry.register(spec)
 
 
+def result_issue(row):
+    if not isinstance(row, dict):
+        return "row", "Expected a result object"
+    if not result_url(row.get("url")):
+        return "url", "URL rejected by the existing web-search URL validator"
+    for field in ("title", "publish_date"):
+        if row.get(field) is not None and not isinstance(row[field], str):
+            return field, "Expected text or null"
+    if not isinstance(row.get("excerpts"), list) or not all(
+        isinstance(text, str) for text in row["excerpts"]
+    ):
+        return "excerpts", "Expected an array of text excerpts"
+    return None
+
+
 def results_from(data, count, max_chars):
     if not isinstance(data, dict):
         raise SearchFailure("response_format", "Parallel returned a non-object JSON response")
@@ -128,20 +143,13 @@ def results_from(data, count, max_chars):
     values = data.get("results")
     if not isinstance(values, list) or not isinstance(data.get("search_id"), str):
         raise SearchFailure("response_format", "Parallel response needs a search_id and results array")
-    results, remaining = [], max_chars
+    results, rejected, remaining = [], [], max_chars
     truncated = len(values) > count
-    for row in values[:count]:
-        if (
-            not isinstance(row, dict)
-            or not result_url(row.get("url"))
-            or row.get("title") is not None
-            and not isinstance(row["title"], str)
-            or row.get("publish_date") is not None
-            and not isinstance(row["publish_date"], str)
-            or not isinstance(row.get("excerpts"), list)
-            or not all(isinstance(text, str) for text in row["excerpts"])
-        ):
-            raise SearchFailure("response_format", "Parallel returned a malformed search result")
+    for index, row in enumerate(values[:count]):
+        if issue := result_issue(row):
+            field, reason = issue
+            rejected.append({"index": index, "field": field, "reason": reason})
+            continue
         excerpts, clipped = [], False
         for text in row["excerpts"]:
             selected = text[:remaining]
@@ -157,7 +165,7 @@ def results_from(data, count, max_chars):
                 "excerpts_truncated": clipped,
             }
         )
-    return results, truncated
+    return results, truncated, rejected
 
 
 async def search(args, context, config, key, store, vault):
@@ -209,16 +217,28 @@ async def search(args, context, config, key, store, vault):
                 data = json.loads(response.data)
             except (ValueError, UnicodeError) as exc:
                 raise SearchFailure("response_format", "Parallel returned invalid JSON") from exc
-            results, truncated = results_from(data, count, config["max_chars_total"])
+            results, truncated, rejected = results_from(data, count, config["max_chars_total"])
             result.update(
-                ok=True,
                 results=results,
                 truncated=truncated,
+                partial=bool(results and rejected),
+                rejected_results=rejected,
                 search_id=data["search_id"],
                 reported_usage=data.get("usage"),
                 warnings=data.get("warnings"),
                 trust="Untrusted web excerpts; indexed content may be stale. Not full-page reads.",
             )
+            if rejected:
+                result["notice"] = (
+                    f"Rejected {len(rejected)} result rows; retained {len(results)} usable results. "
+                    "See rejected_results for zero-based response indices and reasons; "
+                    "the saved HTTP response retains every original row. No automatic retry was made."
+                )
+                if not results:
+                    raise SearchFailure(
+                        "response_format", "Parallel returned no usable search results. " + result["notice"]
+                    )
+            result["ok"] = True
             # Preserve original bytes in evidence, without repeating them beside excerpts.
             result["http_response"].pop("body", None)
             result["http_response"]["body_paged"] = True

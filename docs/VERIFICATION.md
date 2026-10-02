@@ -4,6 +4,30 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Dumb Search partial-result recovery (2026-10-02)
+
+- Base: `5df126fc61693c7c78198f51deec85caf67291b8`, branch
+  `hotfix/dumb-search-partial-results`; working tree dirty for the local checks.
+- **210 focused tests passed**, exit 0, in 38.58 s across `test_dumb_search`,
+  `test_web_search`, `test_ollama_search`, `test_http_evidence`,
+  `test_web_tool_context`, `test_plugins`, `test_tool_feedback`,
+  `test_plugin_hooks` and `test_concurrency`. Ruff lint and formatting passed
+  across `hortator`, `tests` and `scripts`; diff whitespace checks passed.
+- Regression cases exercise userinfo URL rejection alongside usable rows,
+  explicit all-invalid failures, unchanged nullable fields, malformed row/field
+  isolation, count/excerpt limits, warning-level completion, upstream usage and
+  warnings, raw-response rereads and diagnostics on oversized paged results.
+  HTTP is mocked; this does not claim a live Discord turn or new provider test.
+- Read-only offline replay of Loki's two saved HTTP-200 failures (13,094 and
+  13,268 bytes) now retains two usable rows and reports three rejected URLs from
+  each. His subsequent successful response still yields all five rows. No paid
+  searches, credential reads or live database/configuration writes were needed.
+- No UI, URL-validation policy, provider request, deadline/cancellation or
+  runtime configuration changes. Frontend/browser checks were not run locally
+  for this backend fix. Full CI and independent Luna/Sol reviews must certify
+  the published head before merge; see the PR and ignored evidence folder
+  `audit/2026-10-02/04-dumb-search-partial-results/` for those later outcomes.
+
 ## Dumb Search / Parallel Fast experiment (2026-10-02)
 
 - Based on `0af25a535d02aa7a7fc627851cde27f735546c5f`, branch
