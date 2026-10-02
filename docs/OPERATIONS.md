@@ -823,6 +823,13 @@ pipes, redirects and uploaded scripts are unavailable.
    asked; resume only remaining copies after diagnosing a failure. Once finished,
    remove obsolete staging files and retain the small receipts/procedure.
 
+Read a shell-loop worklist from a dedicated descriptor (for example `read -r
+source <&3` with `done 3< sources.txt`), because a child SSH command can consume
+standard input and silently skip the remaining entries. Use `ssh -n` for direct
+checksum commands, **not** for rsync's SSH transport, which needs stdin. Require
+the completed count to equal the selected count; confirm receipts and remaining
+directories rather than trusting a hardcoded success message.
+
 The initial fixed-worklist script is intentionally **not restartable as-is**.
 After interruption, inspect its `verified.tsv`, `completed.tsv`, remaining source
 directories and staging files. Prepare a continuation for only the still-local
