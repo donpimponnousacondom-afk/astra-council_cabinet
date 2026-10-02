@@ -823,6 +823,14 @@ pipes, redirects and uploaded scripts are unavailable.
    asked; resume only remaining copies after diagnosing a failure. Once finished,
    remove obsolete staging files and retain the small receipts/procedure.
 
+The initial fixed-worklist script is intentionally **not restartable as-is**.
+After interruption, inspect its `verified.tsv`, `completed.tsv`, remaining source
+directories and staging files. Prepare a continuation for only the still-local
+sources; compare any completed staged archive against its source before reusing
+it with rsync, or rebuild an incomplete archive while preserving the source.
+Recheck the remote digest and source before deletion. Do not blindly rerun the
+old list, erase staged evidence or infer completion from a missing source alone.
+
 For retrieval, rsync the chosen archive and `.sha256` back locally, run
 `sha256sum -c ARCHIVE.tar.zst.sha256` in their directory, and extract with
 `tar --zstd --acls --xattrs -xpf ARCHIVE.tar.zst -C EMPTY_STAGING_DIRECTORY`.
