@@ -384,7 +384,7 @@ async def download(client, url, params, headers, *, body=None, on_response=None)
     ) as response:
         data, complete = bytearray(), True
         transport_error = None
-        cancelled = False
+        cancelled = None
         try:
             async for chunk in response.aiter_bytes():
                 available = MAX_BYTES - len(data)
@@ -395,8 +395,8 @@ async def download(client, url, params, headers, *, body=None, on_response=None)
         except (httpx.HTTPError, TimeoutError) as exc:
             complete = False
             transport_error = f"{type(exc).__name__}: {exc}"
-        except asyncio.CancelledError:
-            complete, cancelled = False, True
+        except asyncio.CancelledError as exc:
+            complete, cancelled = False, exc
             raise
         finally:
             captured = HTTPResponse(
@@ -412,13 +412,19 @@ async def download(client, url, params, headers, *, body=None, on_response=None)
                 if complete
                 else (
                     "Response body was interrupted; capture is partial"
-                    if transport_error or cancelled
+                    if transport_error or cancelled is not None
                     else "Configured search download byte limit reached; capture is partial"
                 ),
                 transport_error=transport_error,
             )
             if on_response is not None:
-                on_response(captured)
+                try:
+                    on_response(captured)
+                except Exception as exc:
+                    if cancelled is not None:
+                        # A failed diagnostic write must not replace owner cancellation.
+                        raise cancelled from exc
+                    raise
         return captured
 
 

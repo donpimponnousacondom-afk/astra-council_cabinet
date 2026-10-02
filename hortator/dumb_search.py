@@ -7,6 +7,7 @@ import time
 
 import httpx
 
+from .concurrency import error_text
 from .http_evidence import record_response
 from .models import ControlError
 from .tool_feedback import errors_for
@@ -176,7 +177,11 @@ async def search(args, context, config, key, store, vault):
     result = {"ok": False, "engine": "parallel", "mode": MODE, "results": [], "error": None}
 
     def capture(response):
-        result["http_response"] = record_response(store, vault, context, PLUGIN_ID, response)
+        try:
+            result["http_response"] = record_response(store, vault, context, PLUGIN_ID, response)
+        except Exception as exc:
+            result["evidence_error"] = error_text(exc)
+            raise
 
     deadline = asyncio.timeout(TIMEOUT_SECONDS)
     try:
@@ -217,6 +222,11 @@ async def search(args, context, config, key, store, vault):
             # Preserve original bytes in evidence, without repeating them beside excerpts.
             result["http_response"].pop("body", None)
             result["http_response"]["body_paged"] = True
+    except asyncio.CancelledError as exc:
+        # Carry the response handle to the registry's cancellation event, so T
+        # can inspect it even though this tool never returns an ordinary result.
+        exc.tool_result = result
+        raise
     except SearchFailure as exc:
         result.update(category=exc.category, error=str(exc))
     except (httpx.HTTPError, TimeoutError) as exc:

@@ -289,6 +289,11 @@ async def test_interrupted_stream_keeps_received_status_headers_and_bytes(kernel
             "SELECT content FROM tool_result_evidence WHERE tool='dumb_search' AND json_extract(content,'$.http_status')=429"
         )
         evidence = json.loads(stored["content"])
+        event = next(e for e in kernel.store.events() if e["kind"] == "tool.cancelled")
+        with OperationalConsole(stream=io.StringIO(), keys=False, color=False) as console:
+            console.bind(kernel)
+            shown = console.evidence_text({**event, "scope": "tools"})
+            assert "Original HTTP response" in shown and "partial response" in shown
     else:
         result = task.result()
         assert not result["ok"] and result["category"] == (
@@ -300,6 +305,41 @@ async def test_interrupted_stream_keeps_received_status_headers_and_bytes(kernel
     assert evidence["http_status"] == 429 and not evidence["capture_complete"]
     assert {"name": "x-request-id", "value": "received-id"} in evidence["response_headers"]
     assert evidence["body"] == '{"error":"partial response'
+
+
+@pytest.mark.parametrize("interruption", ["deadline", "owner_cancel"])
+async def test_capture_failure_does_not_swallow_cancellation(kernel, monkeypatch, interruption):
+    started = asyncio.Event()
+
+    class Stream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"partial response"
+            started.set()
+            await asyncio.Event().wait()
+
+    def failed_capture(*args):
+        raise RuntimeError("fixture evidence write failed parallel-fixture-key")
+
+    context = setup(kernel, monkeypatch, lambda r: httpx.Response(200, stream=Stream()))
+    monkeypatch.setattr("hortator.dumb_search.record_response", failed_capture)
+    if interruption == "deadline":
+        monkeypatch.setattr("hortator.dumb_search.TIMEOUT_SECONDS", 0.02)
+    async with asyncio.TaskGroup() as group:
+        task = group.create_task(call(kernel, context))
+        await asyncio.wait_for(started.wait(), 2)
+        if interruption == "owner_cancel":
+            task.cancel()
+    if interruption == "owner_cancel":
+        assert task.cancelled()
+        event = next(e for e in kernel.store.events() if e["kind"] == "tool.cancelled")
+        result = event["data"]["result"]
+    else:
+        result = task.result()
+        assert result["category"] == "local_deadline" and not result["ok"]
+    assert "fixture evidence write failed" in result["evidence_error"]
+    assert "RuntimeError" in result["evidence_error"]
+    assert "http_response" not in result
+    assert "parallel-fixture-key" not in json.dumps(kernel.store.events())
 
 
 async def test_evidence_scope_and_origin_grants(kernel, monkeypatch):

@@ -45,6 +45,14 @@ historical claims retain their original date and scope.
   bytes while preserving cancellation. **114 focused tests passed** in 27.10 s,
   including those two regressions, read interruption and unchanged existing search
   behavior. The callback is optional; existing engine callers remain unchanged.
+- Further delta review found that cancellation also needed to expose the saved
+  handle to console **T**, and that a diagnostic-write failure must preserve the
+  original cancellation. Both are corrected and exercised through actual registry
+  events/console inspection and an injected capture failure. **125 focused tests
+  passed** in 28.59 s including concurrency checks. The initial implementation's
+  full local backend run separately passed **1,719 tests, 1 opt-in skip** in
+  466.11 s with two dependency deprecation warnings; final-head full CI remains
+  the authority for the review deltas.
 
 ## Effective search-default guidance (2026-10-01)
 

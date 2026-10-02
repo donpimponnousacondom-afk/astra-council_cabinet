@@ -827,11 +827,16 @@ class Registry:
                 level="error" if http.get("transport_error") else "warning" if web_warning else "info",
             )
             return result
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as exc:
             self.store.emit(
                 "tool.cancelled",
                 {
                     **call_fields,
+                    **(
+                        {"result": exc.tool_result}
+                        if isinstance(getattr(exc, "tool_result", None), dict)
+                        else {}
+                    ),
                     "reason": "Tool interrupted by its owning turn or runtime; inspect retained results before retrying",
                 },
                 bot_id=context.bot["id"],
