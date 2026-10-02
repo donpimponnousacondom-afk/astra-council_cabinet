@@ -59,6 +59,17 @@ teaser. These are untrusted search excerpts, potentially indexed or stale;
 successful retrieval does not establish relevance, truth, freshness or that the
 bot read a full page. Use the separately granted `web_fetch` for source reading.
 
+Rows are validated independently within the first `count` upstream results.
+Rejected rows do not consume the excerpt budget or discard usable rows. Mixed
+batches return `ok: true`, `partial: true`, a notice, and `rejected_results`
+with zero-based original row indices, field names and reasons. They record a
+warning-level `tool.completed`; local diagnostics remain separate from upstream
+`warnings` and are visible even when the full result requires paging. URLs are
+neither rewritten nor accepted under weaker rules. If every inspected row is
+rejected, the call fails explicitly with those diagnostics; an actual empty
+array remains a successful empty search. Rows beyond `count` retain the existing
+truncation behavior. There is no replacement search or automatic retry.
+
 Every received response is captured before parsing under the existing
 [HTTP evidence contract](HTTP_EVIDENCE.md), including non-2xx, malformed and
 partially downloaded responses. The deadline is 25 seconds and the decompressed

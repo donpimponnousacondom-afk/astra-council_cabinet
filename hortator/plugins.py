@@ -753,8 +753,10 @@ class Registry:
                 if isinstance(args, dict) and args.get("url") != http.get("url") and args.get("url"):
                     call_fields["requested_url"] = args["url"]
             web_warning = (
-                name in {"web_fetch", "web_search", "dumb_search"} and result.get("ok") is False
-            ) or (http.get("http_status") is not None and http["http_status"] >= 400)
+                (name in {"web_fetch", "web_search", "dumb_search"} and result.get("ok") is False)
+                or (name == "dumb_search" and result.get("partial") is True)
+                or (http.get("http_status") is not None and http["http_status"] >= 400)
+            )
             if search_failed:
                 result["usage"] = usage(name, spec.parameters, spec.description, args)
             source_result_id = (
@@ -785,6 +787,7 @@ class Registry:
                 result = {
                     "ok": result.get("ok", True),
                     "error": result.get("error"),
+                    **{key: result[key] for key in ("partial", "rejected_results") if key in result},
                     "http_status": http.get("http_status"),
                     "http_reason": http.get("http_reason"),
                     "result_is_paged": True,
