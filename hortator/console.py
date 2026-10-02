@@ -205,6 +205,7 @@ def is_web_event(event):
     return event.get("kind", "").startswith("web_search.") or event.get("data", {}).get("name") in {
         "web_fetch",
         "web_search",
+        "dumb_search",
     }
 
 
@@ -978,7 +979,7 @@ class OperationalConsole(logging.Handler):
                     seen.add(response_id)
                     raw = self.store.one(
                         "SELECT substr(content,1,?) AS content FROM tool_result_evidence "
-                        "WHERE id=? AND bot_id=? AND turn_id=? AND tool IN ('web_fetch','web_search')",
+                        "WHERE id=? AND bot_id=? AND turn_id=? AND tool IN ('web_fetch','web_search','dumb_search')",
                         (EVIDENCE_LIMIT + 1, response_id, source.get("bot_id"), source.get("turn_id")),
                     )
                     if raw:

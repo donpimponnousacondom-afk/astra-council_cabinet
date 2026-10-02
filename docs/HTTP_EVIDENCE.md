@@ -1,8 +1,12 @@
 # Web response evidence and console display
 
-Implemented on 2026-09-14 after the owner identified that generic HTTP exceptions hid response bodies and that the console stripped useful URLs. This contract applies to `web_fetch` and `web_search`; media-generation and Discord attachment adapters are separate follow-ups.
+Implemented on 2026-09-14 after the owner identified that generic HTTP exceptions hid response bodies and that the console stripped useful URLs. This contract applies to `web_fetch`, `web_search` and the opt-in [Dumb Search](DUMB_SEARCH.md); media-generation and Discord attachment adapters are separate follow-ups.
 
 ## Received responses
+
+Dumb Search follows the same capture path. Successful excerpts omit the duplicate
+raw-body preview while retaining its paged handle; failed responses keep their
+preview. Its key is sent only to the fixed Parallel search endpoint.
 
 A received HTTP response retains its numeric `http_status`, supplied `http_reason` (null if unavailable), final URL, ordered response-header entries, body encoding, captured byte count and capture-completeness flag. Duplicate headers are preserved. There is no invented reason phrase or replacement error page. Credentials remain redacted; this is evidence capture, not credential export.
 

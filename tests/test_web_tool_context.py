@@ -1,6 +1,8 @@
 import copy
 import json
 
+import pytest
+
 from hortator.http_evidence import HTTPResponse, record_response
 from hortator.store import dumps
 from hortator.working_set import bound_exchanges, result_reference
@@ -72,13 +74,14 @@ async def test_search_results_survive_paging_http_evidence_without_changing_capt
         assert captured["response_headers"] == response.headers
 
 
-async def test_omitted_reread_returns_to_original_source_and_same_unicode_offset(kernel):
-    context = grant(kernel, "web_search", "web_fetch")
+@pytest.mark.parametrize("name", ["web_search", "dumb_search"])
+async def test_omitted_reread_returns_to_original_source_and_same_unicode_offset(kernel, name):
+    context = grant(kernel, name, "web_fetch")
     original = kernel.registry.evidence.record(
-        context, "web_search", "original", {"text": "café 🙂 observation " * 1000}
+        context, name, "original", {"text": "café 🙂 observation " * 1000}
     )
     page = await kernel.registry.call(
-        "web_search",
+        name,
         {
             "operation": "read_result",
             "result_id": original["result_id"],
@@ -93,7 +96,7 @@ async def test_omitted_reread_returns_to_original_source_and_same_unicode_offset
     assert reference["result_id"] == original["result_id"]
     assert reference["page_result_id"] == page["result_id"]
     for _ in range(3):
-        reread = await kernel.registry.call("web_search", reference["reread"], context, "again")
+        reread = await kernel.registry.call(name, reference["reread"], context, "again")
         assert reread["text"] == page["text"]
         assert reread["source_result_id"] == original["result_id"]
         assert reread["range"]["start"] == 2000

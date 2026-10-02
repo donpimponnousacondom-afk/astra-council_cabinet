@@ -95,6 +95,10 @@ Installed plugins run in the Python process and are **trusted code**, not an OS 
 
 ## Shared model-facing contract
 
+The separate opt-in [Dumb Search](DUMB_SEARCH.md) uses Parallel Fast for one
+retrieval per call. It retains the shared credential, grant, validation, HTTP
+evidence and paged-result contracts, with no change to `web_search` routing.
+
 The `council_inspect` model callback is separate from the configuration API:
 bot lists/status are compact inventories and bot details omit conversation state.
 Explicit context queries remain available. Oversized inspection output is stored

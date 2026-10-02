@@ -4,6 +4,56 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Dumb Search / Parallel Fast experiment (2026-10-02)
+
+- Based on `0af25a535d02aa7a7fc627851cde27f735546c5f`, branch
+  `feat/dumb-search`. Evidence below is from the working implementation;
+  published-head CI and independent reviews certify the PR separately.
+- Focused backend: **105 passed** in 25.00 s across the new adapter, existing
+  Brave/DDG/Ollama search, HTTP evidence and plugin hooks. Ruff lint/format passed.
+  New cases exercise exact Fast payload/key routing, configuration precedence,
+  disabled defaults, discovery and validation without HTTP, nullable provider
+  fields, full excerpt preservation/paging, empty/malformed/non-2xx/oversized
+  responses, deadline/cancellation, origin-grant and turn isolation, and original
+  response inspection in the console. These cases use isolated mocked HTTP.
+- **24 authorized live searches**, through the real adapter/registry in temporary
+  isolated storage, all returned HTTP 200; 23 returned nonempty results, one
+  returned an empty list. They yielded 100 result rows and 170,470 excerpt
+  characters, with no local clipping. Each reported one `sku_search` usage unit.
+  Median 726 ms, nearest-rank p95 1,476 ms, observed range 451–1,776 ms. The
+  published Fast price estimates **$0.024** for these calls; the response did not
+  report dollars and account billing/credits were not independently verified.
+- Useful primary technical sources appeared for Python, SQLite, Ollama, Discord
+  and Svelte. Restricting an initially empty Python query to its domain instead
+  of a version path recovered relevant documentation, but not only that version.
+  Time-specific news returned older pages; two invented identifiers returned
+  irrelevant matches. A successful transport is not a quality score. No controlled
+  provider comparison, exhaustive relevance benchmark or live Discord bot turn
+  is claimed. Median returned excerpt text was 7,984 characters: the bot's model
+  still pays to read this context.
+- No live bot grants, search defaults, generation settings, prompts or retained
+  contexts were changed for these probes. The owner saved the temporary disabled
+  provider credential in the dashboard. Deployment will transfer it to the plugin
+  and remove that staging provider, leaving activation to the owner.
+- Full backend/remote CI, independent Luna/Sol review, deployment and detailed
+  live-query evidence are recorded with the PR and ignored
+  `audit/2026-10-02/02-dumb-search/`. No frontend source or dependency was changed.
+- Review follow-up: Sol identified lost partial HTTP evidence when the total
+  local deadline interrupted a received body. A reproduction failed for both
+  deadline and owner cancellation before the fix. The new adapter now uses a
+  synchronous capture callback before stream cleanup, retaining status/headers/
+  bytes while preserving cancellation. **114 focused tests passed** in 27.10 s,
+  including those two regressions, read interruption and unchanged existing search
+  behavior. The callback is optional; existing engine callers remain unchanged.
+- Further delta review found that cancellation also needed to expose the saved
+  handle to console **T**, and that a diagnostic-write failure must preserve the
+  original cancellation. Both are corrected and exercised through actual registry
+  events/console inspection and an injected capture failure. **125 focused tests
+  passed** in 28.59 s including concurrency checks. The initial implementation's
+  full local backend run separately passed **1,719 tests, 1 opt-in skip** in
+  466.11 s with two dependency deprecation warnings; final-head full CI remains
+  the authority for the review deltas.
+
 ## Effective search-default guidance (2026-10-01)
 
 - Based on `86c659273d6d8dca188b4d6f62c6a88f253ed9cd`, branch

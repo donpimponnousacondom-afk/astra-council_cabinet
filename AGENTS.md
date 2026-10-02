@@ -102,6 +102,7 @@ including superseded behavior, and must not be treated as current configuration.
 - Consistent snapshots and selective recovery: [SNAPSHOTS.md](docs/SNAPSHOTS.md).
 - Private per-bot global memory: [GLOBAL_MEMORY.md](docs/GLOBAL_MEMORY.md).
 - Web search and preserved engine evidence: [WEB_SEARCH.md](docs/WEB_SEARCH.md).
+- Experimental Parallel Fast search: [DUMB_SEARCH.md](docs/DUMB_SEARCH.md).
 - Shared image intake and per-bot visibility: [VISION.md](docs/VISION.md).
 - Profile pricing and usage provenance: [PRICING.md](docs/PRICING.md).
 - Document ownership, publication and SSH identity: [DOCUMENTS.md](docs/DOCUMENTS.md).

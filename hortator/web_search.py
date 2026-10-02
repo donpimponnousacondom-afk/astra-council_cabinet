@@ -376,13 +376,15 @@ def ollama_results(body, count):
         raise SearchFailure("response_format", f"Invalid Ollama search response: {exc}") from exc
 
 
-async def download(client, url, params, headers, *, body=None):
+async def download(client, url, params, headers, *, body=None, on_response=None):
+    """Optionally capture received bytes before cancellation unwinds the stream."""
     request = {"json": body} if body is not None else {}
     async with client.stream(
         "POST" if body is not None else "GET", url, params=params, headers=headers, timeout=25, **request
     ) as response:
         data, complete = bytearray(), True
         transport_error = None
+        cancelled = None
         try:
             async for chunk in response.aiter_bytes():
                 available = MAX_BYTES - len(data)
@@ -393,24 +395,37 @@ async def download(client, url, params, headers, *, body=None):
         except (httpx.HTTPError, TimeoutError) as exc:
             complete = False
             transport_error = f"{type(exc).__name__}: {exc}"
-        return HTTPResponse(
-            bytes(data),
-            response.headers.get("content-type", ""),
-            str(response.url),
-            response.status_code,
-            response.extensions.get("reason_phrase", b"").decode("latin1") or None,
-            headers_evidence(response.headers.multi_items()),
-            complete=complete,
-            limit=MAX_BYTES,
-            local_issue=None
-            if complete
-            else (
-                "Response body was interrupted; capture is partial"
-                if transport_error
-                else "Configured search download byte limit reached; capture is partial"
-            ),
-            transport_error=transport_error,
-        )
+        except asyncio.CancelledError as exc:
+            complete, cancelled = False, exc
+            raise
+        finally:
+            captured = HTTPResponse(
+                bytes(data),
+                response.headers.get("content-type", ""),
+                str(response.url),
+                response.status_code,
+                response.extensions.get("reason_phrase", b"").decode("latin1") or None,
+                headers_evidence(response.headers.multi_items()),
+                complete=complete,
+                limit=MAX_BYTES,
+                local_issue=None
+                if complete
+                else (
+                    "Response body was interrupted; capture is partial"
+                    if transport_error or cancelled is not None
+                    else "Configured search download byte limit reached; capture is partial"
+                ),
+                transport_error=transport_error,
+            )
+            if on_response is not None:
+                try:
+                    on_response(captured)
+                except Exception as exc:
+                    if cancelled is not None:
+                        # A failed diagnostic write must not replace owner cancellation.
+                        raise cancelled from exc
+                    raise
+        return captured
 
 
 async def search(args, context, config, key, store, vault):

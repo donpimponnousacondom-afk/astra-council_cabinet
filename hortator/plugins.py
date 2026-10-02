@@ -483,6 +483,9 @@ class Registry:
         from .secretary import Secretary
 
         self.secretary = Secretary(self)
+        from .dumb_search import register as register_dumb_search
+
+        register_dumb_search(self)
         # Built-in catalog policy is declared at installation, not in Service.
         for name in (
             "memory",
@@ -725,7 +728,7 @@ class Registry:
                 tool_timeout = max(120, limits(config)["timeout_seconds"] + 30)
             async with asyncio.timeout(tool_timeout):
                 if (
-                    name in ("web_fetch", "web_search", "workspace", "shell")
+                    name in ("web_fetch", "web_search", "dumb_search", "workspace", "shell")
                     and args.get("operation") == "read_result"
                 ):
                     result = self.evidence.read(args, context, self.allowed)
@@ -741,7 +744,7 @@ class Registry:
                 "document_site",
             }:
                 result = present_times(result, council_timezone(self.store))
-            search_failed = name == "web_search" and result.get("ok") is False
+            search_failed = name in {"web_search", "dumb_search"} and result.get("ok") is False
             http = result.get("http_response", {}) if isinstance(result, dict) else {}
             if http:
                 call_fields.update(
@@ -749,15 +752,15 @@ class Registry:
                 )
                 if isinstance(args, dict) and args.get("url") != http.get("url") and args.get("url"):
                     call_fields["requested_url"] = args["url"]
-            web_warning = (name in {"web_fetch", "web_search"} and result.get("ok") is False) or (
-                http.get("http_status") is not None and http["http_status"] >= 400
-            )
+            web_warning = (
+                name in {"web_fetch", "web_search", "dumb_search"} and result.get("ok") is False
+            ) or (http.get("http_status") is not None and http["http_status"] >= 400)
             if search_failed:
                 result["usage"] = usage(name, spec.parameters, spec.description, args)
             source_result_id = (
                 args["result_id"]
                 if (
-                    name in ("workspace", "shell", "web_fetch", "web_search")
+                    name in ("workspace", "shell", "web_fetch", "web_search", "dumb_search")
                     and args.get("operation") == "read_result"
                 )
                 or (name == "council_inspect" and args.get("resource") == "read_result")
@@ -777,7 +780,7 @@ class Registry:
                         "length": 6000,
                     },
                 }
-            elif name in {"web_fetch", "web_search"} and len(dumps(result)) > 60000:
+            elif name in {"web_fetch", "web_search", "dumb_search"} and len(dumps(result)) > 60000:
                 full = self.evidence.record(context, name, call_id, result)
                 result = {
                     "ok": result.get("ok", True),
@@ -824,11 +827,16 @@ class Registry:
                 level="error" if http.get("transport_error") else "warning" if web_warning else "info",
             )
             return result
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as exc:
             self.store.emit(
                 "tool.cancelled",
                 {
                     **call_fields,
+                    **(
+                        {"result": exc.tool_result}
+                        if isinstance(getattr(exc, "tool_result", None), dict)
+                        else {}
+                    ),
                     "reason": "Tool interrupted by its owning turn or runtime; inspect retained results before retrying",
                 },
                 bot_id=context.bot["id"],
