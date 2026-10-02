@@ -38,6 +38,13 @@ historical claims retain their original date and scope.
 - Full backend/remote CI, independent Luna/Sol review, deployment and detailed
   live-query evidence are recorded with the PR and ignored
   `audit/2026-10-02/02-dumb-search/`. No frontend source or dependency was changed.
+- Review follow-up: Sol identified lost partial HTTP evidence when the total
+  local deadline interrupted a received body. A reproduction failed for both
+  deadline and owner cancellation before the fix. The new adapter now uses a
+  synchronous capture callback before stream cleanup, retaining status/headers/
+  bytes while preserving cancellation. **114 focused tests passed** in 27.10 s,
+  including those two regressions, read interruption and unchanged existing search
+  behavior. The callback is optional; existing engine callers remain unchanged.
 
 ## Effective search-default guidance (2026-10-01)
 

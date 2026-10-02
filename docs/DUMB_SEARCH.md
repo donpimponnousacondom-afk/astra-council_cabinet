@@ -64,8 +64,9 @@ Every received response is captured before parsing under the existing
 partially downloaded responses. The deadline is 25 seconds and the decompressed
 body limit is 1,000,000 bytes. Redirects are not followed. Failures return
 actionable usage and record `tool.failed`; an actual empty array is a successful
-empty search. Cancellation propagates to the request. A timeout before response
-capture cannot provide response evidence.
+empty search. Cancellation propagates to the request. Received headers/bytes are
+saved even if the deadline or owner cancellation interrupts the body. A timeout
+before response headers arrive cannot provide response evidence.
 
 Successful results omit the duplicate raw-body preview. The returned
 `http_response.read_response` arguments retrieve the saved response using this

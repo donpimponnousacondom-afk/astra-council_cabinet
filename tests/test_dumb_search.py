@@ -255,6 +255,53 @@ async def test_deadline_and_transport_are_explicit(kernel, monkeypatch):
     assert not result["ok"] and result["category"] == "local_deadline"
 
 
+@pytest.mark.parametrize("interruption", ["deadline", "transport", "owner_cancel"])
+async def test_interrupted_stream_keeps_received_status_headers_and_bytes(kernel, monkeypatch, interruption):
+    started, closed = asyncio.Event(), asyncio.Event()
+
+    class Stream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'{"error":"partial response'
+            started.set()
+            if interruption == "transport":
+                raise httpx.ReadError("connection reset")
+            await asyncio.Event().wait()
+
+        async def aclose(self):
+            closed.set()
+
+    context = setup(
+        kernel,
+        monkeypatch,
+        lambda r: httpx.Response(429, stream=Stream(), headers={"X-Request-ID": "received-id"}),
+    )
+    if interruption == "deadline":
+        monkeypatch.setattr("hortator.dumb_search.TIMEOUT_SECONDS", 0.02)
+    async with asyncio.TaskGroup() as group:
+        task = group.create_task(call(kernel, context))
+        await asyncio.wait_for(started.wait(), 2)
+        if interruption == "owner_cancel":
+            task.cancel()
+    assert closed.is_set()
+    if interruption == "owner_cancel":
+        assert task.cancelled()
+        stored = kernel.store.one(
+            "SELECT content FROM tool_result_evidence WHERE tool='dumb_search' AND json_extract(content,'$.http_status')=429"
+        )
+        evidence = json.loads(stored["content"])
+    else:
+        result = task.result()
+        assert not result["ok"] and result["category"] == (
+            "local_deadline" if interruption == "deadline" else "transport"
+        )
+        evidence = result["http_response"]
+        read = await kernel.registry.call("dumb_search", evidence["read_response"], context, "read")
+        assert json.loads(read["text"])["body"] == '{"error":"partial response'
+    assert evidence["http_status"] == 429 and not evidence["capture_complete"]
+    assert {"name": "x-request-id", "value": "received-id"} in evidence["response_headers"]
+    assert evidence["body"] == '{"error":"partial response'
+
+
 async def test_evidence_scope_and_origin_grants(kernel, monkeypatch):
     context = setup(
         kernel, monkeypatch, lambda r: httpx.Response(200, json={"search_id": "id", "results": []})

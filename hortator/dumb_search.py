@@ -174,14 +174,22 @@ async def search(args, context, config, key, store, vault):
         body["objective"] = args["objective"]
     started = time.perf_counter()
     result = {"ok": False, "engine": "parallel", "mode": MODE, "results": [], "error": None}
+
+    def capture(response):
+        result["http_response"] = record_response(store, vault, context, PLUGIN_ID, response)
+
     deadline = asyncio.timeout(TIMEOUT_SECONDS)
     try:
         async with deadline:
             async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as client:
                 response = await download(
-                    client, ENDPOINT, None, {"x-api-key": key, "Accept": "application/json"}, body=body
+                    client,
+                    ENDPOINT,
+                    None,
+                    {"x-api-key": key, "Accept": "application/json"},
+                    body=body,
+                    on_response=capture,
                 )
-            result["http_response"] = record_response(store, vault, context, PLUGIN_ID, response)
             if not response.complete:
                 raise SearchFailure(
                     "transport" if response.transport_error else "response_limit",
