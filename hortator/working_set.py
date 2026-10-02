@@ -165,7 +165,7 @@ def result_reference(message):
         "omitted_from_active_prompt": True,
         "notice": "Body omitted from this prompt, not summarized. Original evidence remains in the trajectory. "
         "Use council_inspect resource=read_result for inspection evidence, or operation=read_result on "
-        "workspace, shell, web_fetch or web_search when granted, or the saved document/file/job handle.",
+        "workspace, shell, web_fetch, web_search or dumb_search when granted, or the saved document/file/job handle.",
         **reference,
     }
 

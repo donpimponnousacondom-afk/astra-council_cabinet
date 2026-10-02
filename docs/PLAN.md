@@ -70,6 +70,12 @@ See the [search contract](WEB_SEARCH.md) for current selection semantics.
 
 ## Deferred product work
 
+The owner authorized a separate [Dumb Search experiment](DUMB_SEARCH.md) on
+2026-10-02: inexpensive Parallel Fast retrieval with real API evaluation, standard
+plugin credentials and explicit bot grants. Existing search stays available;
+the owner will select the experimental plugin manually. Parallel monitoring,
+Extract and research-agent products remain deferred. No vendor tooling install.
+
 Separate-model/background compaction and a richer dashboard log panel remain
 future work. Extra branch-hook automation is deferred. These are planning notes,
 not authorization to change configuration, activate bots, remove the fallback,
