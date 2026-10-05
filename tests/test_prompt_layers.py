@@ -99,7 +99,8 @@ async def test_all_generated_layers_editable_and_seed_never_overwrites(kernel, o
     assert meta["prompt_layers"][0]["revision"] == original["revision"] + 1
 
 
-async def test_minimal_input_has_no_hidden_instructions_and_other_bot_unchanged(kernel, owner):
+@pytest.mark.parametrize("source", ["{latest_content}", "{{latest_content}}", "{{ LATEST_CONTENT }}"])
+async def test_minimal_input_has_no_hidden_instructions_and_other_bot_unchanged(kernel, owner, source):
     bot = configured(kernel)
     ingest(kernel, content="old stuff", discord_id="old")
     ingest(kernel, content="just this {bot_name}")
@@ -111,7 +112,7 @@ async def test_minimal_input_has_no_hidden_instructions_and_other_bot_unchanged(
             "name": "Raw last message",
             "runtime_layer": "transcript",
             "role": "user",
-            "content": "{latest_content}",
+            "content": source,
         },
         create=True,
     )
@@ -229,23 +230,30 @@ async def test_disabled_compaction_inputs_do_not_advance_checkpoint(
     assert kernel.store.context("ada", CHANNEL)["checkpoint"] == 0
 
 
-async def test_compaction_custom_roles_and_literal_values_are_used_on_wire(kernel, owner):
+@pytest.mark.parametrize("braces", ["single", "double"])
+async def test_compaction_custom_roles_and_literal_values_are_used_on_wire(kernel, owner, braces):
     import json
     from support.provider import install_client
     from support.runtime import completion
 
     bot = configured(kernel, persona="literal {transcript}")
+
+    def token(name):
+        return "{{ " + name.upper() + " }}" if braces == "double" else "{" + name + "}"
+
     ingest(kernel, content="history to compact", discord_id="old")
     ingest(kernel, content="new question")
+    kernel.store.execute("UPDATE contexts SET summary='earlier facts' WHERE bot_id='ada'")
     profile = kernel.store.get("profiles", "balanced")
     await kernel.service.save(
-        owner, "prompts", "runtime-compaction-instructions", {"content": "Summarize for {bot_name}"}
+        owner, "prompts", "runtime-compaction-instructions", {"content": "Summarize for " + token("bot_name")}
     )
+    await kernel.service.save(owner, "prompts", "runtime-compaction-summary", {"content": token("summary")})
     await kernel.service.save(
         owner,
         "prompts",
         "runtime-compaction-transcript",
-        {"role": "system", "content": "{persona}\n{transcript}"},
+        {"role": "system", "content": token("persona") + "\n" + token("transcript")},
     )
     bodies = []
 
@@ -256,6 +264,7 @@ async def test_compaction_custom_roles_and_literal_values_are_used_on_wire(kerne
     await install_client(kernel, response)
     await kernel.engine.contexts.prepare(bot, profile, CHANNEL, "compact", [], force=True)
     assert bodies[0]["messages"][0] == {"role": "system", "content": "Summarize for Ada"}
+    assert any(m["content"] == "earlier facts" for m in bodies[0]["messages"])
     assert bodies[0]["messages"][-1]["role"] == "system"
     assert bodies[0]["messages"][-1]["content"].startswith("literal {transcript}\n[")
     assert "history to compact" in bodies[0]["messages"][-1]["content"]

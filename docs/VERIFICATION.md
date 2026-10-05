@@ -8,6 +8,18 @@ historical claims retain their original date and scope.
 
 - Base `9b692fa008bbc0a6c19aa3e6bb29d1247529be94`, branch
   `feat/model-runtime-identity`; dirty source for local checks.
+- Owner expanded the final scope to uppercase double braces for every prompt
+  field, sharing the footer's parser/name normalization while preserving existing
+  single-brace fields. After that change, **185 focused backend tests passed**
+  in two disjoint runs: 123 (16.20 s) for model identity, prompt layers, Engram,
+  footer and footer tokens; 62 (11.14 s) for context responsiveness, compaction
+  limits and slash commands. Both exited 0. Tests cover uppercase/whitespace
+  transcript, retained-summary and Engram-state tokens through their actual
+  coverage checks, alongside legacy spellings and literal nested data.
+- Final-scope Ruff lint/format and frontend formatting/build passed (exit 0).
+  Both isolated prompt-controls/inspector browser tests passed together
+  (**2 passed, 11.9 s**, exit 0), including uppercase source references and
+  draft preservation. No full-suite local or live provider claim is implied.
 - **131 focused backend tests passed**, exit 0, in 22.20 s: model identity,
   prompt layers, context responsiveness, compaction limits, slash commands,
   footer and footer tokens. New cases trace ordinary/slash/panel request bodies,

@@ -164,16 +164,22 @@ function Inspection({
               Selected template could not be found.
             </p>
           );
-        const variables = [
-          ...new Set<string>(
-            Array.from(
-              String(template.content).matchAll(
-                /\{\{\s*(MODEL)\s*\}\}|\{([a-zA-Z_][a-zA-Z_0-9]*)\}/gi,
-              ),
-              (m) => (m[1] ? "{{MODEL}}" : m[2]),
+        const variables = new Map(
+          Array.from(
+            String(template.content).matchAll(
+              /\{\{\s*([^{}]+?)\s*\}\}|\{([a-zA-Z_][a-zA-Z_0-9]*)\}/g,
             ),
+            (m) => {
+              const upper = m[1]?.toUpperCase();
+              const name = upper
+                ? upper === "MODEL"
+                  ? upper
+                  : upper.toLowerCase()
+                : m[2];
+              return [upper ? `{{${upper}}}` : `{${name}}`, name] as const;
+            },
           ),
-        ];
+        );
         const stored = dashboard.prompts.find((p) => p.id === template.id);
         return (
           <section key={template.id}>
@@ -191,7 +197,7 @@ function Inspection({
               label={`Template text · ${template.id}`}
               value={template.content || "(empty template)"}
             />
-            {variables
+            {[...new Set(variables.values())]
               .filter((name) => Object.hasOwn(sources, name))
               .map((name) => (
                 <Code
@@ -201,12 +207,14 @@ function Inspection({
                   value={sources[name] || "(empty source)"}
                 />
               ))}
-            {variables.some((name) => !Object.hasOwn(sources, name)) && (
+            {[...variables.values()].some(
+              (name) => !Object.hasOwn(sources, name),
+            ) && (
               <p className="muted small-text">
                 Placeholders:{" "}
-                {variables
-                  .filter((name) => !Object.hasOwn(sources, name))
-                  .map((name) => (name === "{{MODEL}}" ? name : `{${name}}`))
+                {[...variables]
+                  .filter(([, name]) => !Object.hasOwn(sources, name))
+                  .map(([token]) => token)
                   .join(", ")}
                 . These are resolved from identity, configuration or turn data
                 where available; unknown names remain literal.

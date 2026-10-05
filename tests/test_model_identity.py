@@ -21,7 +21,10 @@ async def test_current_request_model_matches_tail_and_footer_without_changing_pr
     bot = configured(
         kernel,
         transcript_format=transcript_format,
-        dynamic_prompt="Currently using {{MODEL}}; keep {unknown}, {model}, {MODEL} literal.",
+        dynamic_prompt=(
+            "Currently using {{MODEL}}; keep {unknown}, {model}, {MODEL} literal. "
+            "At {{ NOW }}, {{BOT_NAME}} / {bot_name} has {{ROUNDS_REMAINING}} rounds."
+        ),
         footer_enabled=True,
         footer_template="{{MODEL}}",
         persona="Stable bot identity",
@@ -70,6 +73,10 @@ async def test_current_request_model_matches_tail_and_footer_without_changing_pr
         facts = next(p for p in meta["prompt_layers"] if p["id"] == "runtime_facts")
         values, _ = json.JSONDecoder().raw_decode(facts["content"].removeprefix("Runtime facts (trusted): "))
         assert values["model"] == model
+        assert (
+            f"At {values['now']}, Ada / Ada has {values['rounds_remaining']} rounds."
+            in messages[-1]["content"]
+        )
         assert messages[-2] == exchanges[-1]
         assert model in messages[-1]["content"]
         assert (

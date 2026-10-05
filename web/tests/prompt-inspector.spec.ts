@@ -29,7 +29,7 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
     [
       "inspector-persona",
       "Custom personality wrapper",
-      "Draft personality follows: {persona} {unknown} {toString}",
+      "Draft personality follows: {{ PERSONA }} {{UNKNOWN}} {toString}",
       "persona",
     ],
     ["inspector-empty", "Blank tail", "", "dynamic_prompt"],
@@ -52,7 +52,7 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
     prompt_ids: ["inspector-z", "inspector-a"],
     disabled_prompt_layers: [],
     persona: "Saved personality",
-    dynamic_prompt: "Tail at {now}; using {{MODEL}}",
+    dynamic_prompt: "Tail at {{NOW}}; using {{MODEL}}",
     prompt_layer_overrides: {
       persona: "inspector-persona",
       runtime_facts: "inspector-facts",
@@ -98,7 +98,7 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
   await row("dynamic_prompt").getByRole("button").click();
   await expect(
     dialog.getByRole("region", { name: "Bot dynamic prompt tail inspection" }),
-  ).toContainText("Tail at {now}; using {{MODEL}}");
+  ).toContainText("Tail at {{NOW}}; using {{MODEL}}");
   await expect(row("director")).toContainText("Not applicable");
   await expect(row("director").getByRole("checkbox")).toBeChecked();
   await row("director").getByRole("button").focus();
@@ -132,7 +132,7 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
   });
   await expect(inspect).toContainText("Bot override");
   await expect(inspect).toContainText(
-    "Draft personality follows: {persona} {unknown} {toString}",
+    "Draft personality follows: {{ PERSONA }} {{UNKNOWN}} {toString}",
   );
   await expect(inspect).toContainText("Unsaved personality {now}");
   await expect(inspect).toContainText("unknown names remain literal");
@@ -196,6 +196,6 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
     await page.request.get("/api/config/bots/prompt-inspector-fixture")
   ).json();
   expect(saved.persona).toBe("Saved personality");
-  expect(saved.dynamic_prompt).toBe("Tail at {now}; using {{MODEL}}");
+  expect(saved.dynamic_prompt).toBe("Tail at {{NOW}}; using {{MODEL}}");
   expect(saved.disabled_prompt_layers).toEqual([]);
 });

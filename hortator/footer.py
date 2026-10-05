@@ -5,6 +5,7 @@ import math
 import re
 
 from .discord_text import preview
+from .placeholders import DOUBLE_BRACE as PLACEHOLDER, double_brace_name
 
 
 DEFAULT_FOOTER_TEMPLATE = "TTFT: {{TTFT}} | TPS: {{TPS}}"
@@ -22,7 +23,6 @@ FOOTER_PLACEHOLDERS = (
     "TOTAL_TOKENS",
 )
 MAX_FOOTER_UNITS = 500
-PLACEHOLDER = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
 
 
 def footer_settings(bot):
@@ -42,7 +42,7 @@ def validate_template(value):
     if not value or len(value) > 300 or "```" in value:
         raise ValueError("Footer template must contain 1–300 characters, without code fences")
     for match in PLACEHOLDER.finditer(value):
-        if match[1].upper() not in FOOTER_PLACEHOLDERS:
+        if double_brace_name(match) not in FOOTER_PLACEHOLDERS:
             raise ValueError("Supported footer placeholders: " + ", ".join(FOOTER_PLACEHOLDERS))
     if "{" in PLACEHOLDER.sub("", value) or "}" in PLACEHOLDER.sub("", value):
         raise ValueError("Use double braces for footer placeholders, for example {{TTFT}}")
@@ -100,7 +100,7 @@ def render_footer(bot, profile=None, provider=None, request=None, *, redact=lamb
 
     def substitute(match):
         # Redact before escaping/truncating so formatting cannot disguise a stored secret.
-        value = str(redact(values[match[1].upper()]))
+        value = str(redact(values[double_brace_name(match)]))
         value = " ".join(value.split())
         value = "".join(c for c in value if ord(c) >= 32 and ord(c) != 127)
         return re.sub(r"([\\`*_~|<>\[\]])", r"\\\1", value)

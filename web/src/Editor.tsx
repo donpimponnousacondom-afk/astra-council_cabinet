@@ -679,13 +679,13 @@ export function Editor({
                     )}
                     <Field
                       label="Dynamic prompt tail"
-                      hint="Literal placeholders: {{MODEL}} (configured request model, same spelling as the Discord footer), {now}, {timezone}, {bot_name}, {boss_id}, {channel_id}, {round}, {rounds_remaining}, {context_tokens}, {context_window}, {seconds_since_last_message}."
+                      hint="Literal placeholders: {{MODEL}} (configured request model), {{NOW}}, {{TIMEZONE}}, {{BOT_NAME}}, {{BOSS_ID}}, {{CHANNEL_ID}}, {{ROUND}}, {{ROUNDS_REMAINING}}, {{CONTEXT_TOKENS}}, {{CONTEXT_WINDOW}}, {{SECONDS_SINCE_LAST_MESSAGE}}. Double braces match the Discord footer syntax. Existing single-brace placeholders still work; MODEL uses double braces only."
                     >
                       <textarea
                         rows={5}
                         value={draft.dynamic_prompt || ""}
                         onChange={(e) => set("dynamic_prompt", e.target.value)}
-                        placeholder="You have {rounds_remaining} tool rounds remaining…"
+                        placeholder="You have {{ROUNDS_REMAINING}} tool rounds remaining…"
                       />
                     </Field>
                     <Code
@@ -1483,14 +1483,16 @@ export function Editor({
                     <p className="muted small-text">
                       Common data:{" "}
                       {
-                        "{bot_name} {bot_id} {discord_user_id} {boss_id} {timezone}"
+                        "{{BOT_NAME}} {{BOT_ID}} {{DISCORD_USER_ID}} {{BOSS_ID}} {{TIMEZONE}}"
                       }
                       . Placement-specific data follows the built-in examples.
-                      Conversation input also supports {"{latest_message}"} (one
-                      record) and {"{latest_content}"} (text only). Runtime
-                      facts and dynamic tails also support {"{{MODEL}}"} for the
-                      configured request model, not verified upstream
-                      capabilities. Unknown placeholders remain literal.
+                      Conversation input also supports {"{{LATEST_MESSAGE}}"}{" "}
+                      (one record) and {"{{LATEST_CONTENT}}"} (text only).
+                      Runtime facts and dynamic tails also support {"{{MODEL}}"}{" "}
+                      for the configured request model, not verified upstream
+                      capabilities. Existing single-brace templates still work;
+                      MODEL uses double braces only. Unknown placeholders remain
+                      literal.
                     </p>
                     {(dashboard.prompt_layers || [])
                       .find((p) => p.id === draft.runtime_layer)

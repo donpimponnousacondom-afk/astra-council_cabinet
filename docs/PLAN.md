@@ -12,7 +12,9 @@ current checkout or running configuration.
 
 - On 2026-10-05 the owner requested model self-identification through existing
   late runtime facts and dynamic tails, with the same `{{MODEL}}` placeholder
-  as the public footer. Keep the captured request slug authoritative, layer
+  as the public footer. The owner then chose uppercase double braces for all
+  dynamic placeholders and shared parsing with footers; existing single-brace
+  templates keep working. Keep the captured request slug authoritative, layer
   switches effective and earlier prompt text unchanged. No model/profile,
   memory, compaction or image-capability changes. See
   [literal prompt data](PROMPTS.md#literal-data-placeholders).
