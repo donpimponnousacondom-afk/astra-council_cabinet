@@ -4,6 +4,28 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## On-request Storage Box archival (2026-10-03)
+
+- Completed the owner-selected move of **13 older backup/snapshot directories**,
+  retaining the two newest manual backups overall and the `.latest-requested`
+  target. Selected local allocation was **32.19 GiB**; compressed archive payloads
+  totalled **4.53 GiB**. All 13 remote archive/sidecar checks passed, all 13 had
+  verification and completion receipts, selected local sources were removed,
+  and temporary staging was empty at final reconciliation.
+- Each source was compared with its archive before and after transfer; remote
+  SHA-256 was computed on the Storage Box before local deletion. This establishes
+  copy integrity, not a live application restore test. No runtime restart,
+  application/configuration change or recurring archive job was introduced.
+- The initial run processed one copy because direct SSH consumed the shell
+  loop's worklist on stdin. An isolated two-item reproduction confirmed the
+  correction: dedicated worklist descriptor, `ssh -n` for direct checksum calls,
+  and an actual completion-count check. The remaining 12 copies completed in
+  an explicit continuation. Both initial independent operational reviews missed
+  this defect; both reviewed the correction, and the review skill was updated.
+- Private evidence: `audit/2026-10-03/01-storagebox-archive/REPORT.md` and
+  `~/.local/share/hortator-archive-runs/20261002T224104Z/`. Current procedure:
+  [on-request archival](OPERATIONS.md#on-request-storage-box-archival).
+
 ## Dumb Search partial-result recovery (2026-10-02)
 
 - Base: `5df126fc61693c7c78198f51deec85caf67291b8`, branch
