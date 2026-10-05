@@ -168,9 +168,9 @@ function Inspection({
           ...new Set<string>(
             Array.from(
               String(template.content).matchAll(
-                /\{([a-zA-Z_][a-zA-Z_0-9]*)\}/g,
+                /\{\{\s*(MODEL)\s*\}\}|\{([a-zA-Z_][a-zA-Z_0-9]*)\}/gi,
               ),
-              (m) => m[1],
+              (m) => (m[1] ? "{{MODEL}}" : m[2]),
             ),
           ),
         ];
@@ -206,7 +206,7 @@ function Inspection({
                 Placeholders:{" "}
                 {variables
                   .filter((name) => !Object.hasOwn(sources, name))
-                  .map((name) => `{${name}}`)
+                  .map((name) => (name === "{{MODEL}}" ? name : `{${name}}`))
                   .join(", ")}
                 . These are resolved from identity, configuration or turn data
                 where available; unknown names remain literal.

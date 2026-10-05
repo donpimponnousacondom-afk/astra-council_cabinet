@@ -266,6 +266,7 @@ DEFAULT_PROMPTS = [
 LAYER_KEYS = tuple(dict.fromkeys(item["runtime_layer"] for item in DEFAULT_PROMPTS))
 DEFAULT_IDS = frozenset(item["id"] for item in DEFAULT_PROMPTS)
 PLACEHOLDERS = {
+    "MODEL",
     "engram_state",
     "state_revision",
     "covered_through",
@@ -310,9 +311,12 @@ PLACEHOLDERS = {
 }
 
 
+PLACEHOLDER = re.compile(r"\{\{\s*((?i:MODEL))\s*\}\}|\{([a-zA-Z_][a-zA-Z_0-9]*)\}")
+
+
 def render(content, values):
     # One substitution pass: data containing braces never becomes a template.
-    return re.sub(r"\{([a-zA-Z_][a-zA-Z_0-9]*)\}", lambda m: str(values.get(m[1], m[0])), content)
+    return PLACEHOLDER.sub(lambda m: str(values.get(m[1].upper() if m[1] else m[2], m[0])), content)
 
 
 def layer(store, bot, key, values, *, variant="", raw=False):
@@ -334,7 +338,9 @@ def layer(store, bot, key, values, *, variant="", raw=False):
         return None
     return {
         "id": key,
-        "variables": sorted(set(re.findall(r"\{([a-zA-Z_][a-zA-Z_0-9]*)\}", prompt["content"]))),
+        "variables": sorted(
+            {m[1].upper() if m[1] else m[2] for m in PLACEHOLDER.finditer(prompt["content"])}
+        ),
         "template_id": prompt_id,
         "revision": prompt.get("revision", 0),
         "role": prompt.get("role", "system"),

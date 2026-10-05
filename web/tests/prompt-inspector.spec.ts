@@ -33,6 +33,12 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
       "persona",
     ],
     ["inspector-empty", "Blank tail", "", "dynamic_prompt"],
+    [
+      "inspector-facts",
+      "Model fact",
+      "Request model {{ MODEL }}",
+      "runtime_facts",
+    ],
     ["inspector-z", "Z shared", "First shared prompt", null],
     ["inspector-a", "A shared", "Second shared prompt", null],
   ])
@@ -46,8 +52,11 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
     prompt_ids: ["inspector-z", "inspector-a"],
     disabled_prompt_layers: [],
     persona: "Saved personality",
-    dynamic_prompt: "Tail at {now}",
-    prompt_layer_overrides: { persona: "inspector-persona" },
+    dynamic_prompt: "Tail at {now}; using {{MODEL}}",
+    prompt_layer_overrides: {
+      persona: "inspector-persona",
+      runtime_facts: "inspector-facts",
+    },
     allow_images: true,
     allow_silence: true,
   });
@@ -77,6 +86,19 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
     if (request.method() !== "GET") mutations.push(request.url());
   });
   const row = (id: string) => dialog.locator(`[data-layer="${id}"]`);
+  await expect(
+    dialog.getByText(/Literal placeholders:.*\{\{MODEL\}\}/),
+  ).toBeVisible();
+  await row("runtime_facts").getByRole("button").click();
+  await expect(
+    dialog.getByRole("region", {
+      name: "Runtime clock, activation and budgets inspection",
+    }),
+  ).toContainText("Placeholders: {{MODEL}}");
+  await row("dynamic_prompt").getByRole("button").click();
+  await expect(
+    dialog.getByRole("region", { name: "Bot dynamic prompt tail inspection" }),
+  ).toContainText("Tail at {now}; using {{MODEL}}");
   await expect(row("director")).toContainText("Not applicable");
   await expect(row("director").getByRole("checkbox")).toBeChecked();
   await row("director").getByRole("button").focus();
@@ -174,5 +196,6 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
     await page.request.get("/api/config/bots/prompt-inspector-fixture")
   ).json();
   expect(saved.persona).toBe("Saved personality");
+  expect(saved.dynamic_prompt).toBe("Tail at {now}; using {{MODEL}}");
   expect(saved.disabled_prompt_layers).toEqual([]);
 });

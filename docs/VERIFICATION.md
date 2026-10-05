@@ -4,6 +4,31 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Requested model in late prompt data (2026-10-05)
+
+- Base `9b692fa008bbc0a6c19aa3e6bb29d1247529be94`, branch
+  `feat/model-runtime-identity`; dirty source for local checks.
+- **131 focused backend tests passed**, exit 0, in 22.20 s: model identity,
+  prompt layers, context responsiveness, compaction limits, slash commands,
+  footer and footer tokens. New cases trace ordinary/slash/panel request bodies,
+  request ledger, dynamic facts and footer across both transcript formats and
+  changing captured profiles. Earlier message prefixes compare equal; unknown
+  placeholders and braces inside substituted data remain literal. Layer
+  switches and custom runtime templates retain control.
+- Ruff lint/format, frontend formatting and production build passed (exit 0;
+  command durations not separately recorded). Prompt-controls browser regression
+  passed in the initial two-test run. The added inspector assertion initially
+  used the wrong existing accessible region name; corrected the test locator,
+  then the inspector passed (one test, 4.4 s total). Failure diagnostics retained
+  under `audit/2026-10-05/01-model-identity/initial-browser-failure/`.
+- Backend HTTP is mocked; browser tests use isolated seeded data on port 18000.
+  No live provider/Discord invocation or cache-hit measurement is claimed.
+  Full backend CI and independent Luna/Sol final-head reviews gate publication
+  readiness separately; local focused checks are not a full-suite pass.
+- No provider/profile, image grant, memory, compaction or Loki prompt changes.
+  The planned owner-authorized Curie deployment edit only replaces its existing
+  `{model}` token with `{{MODEL}}`, using the current record revision.
+
 ## On-request Storage Box archival (2026-10-03)
 
 - Completed the owner-selected move of **13 older backup/snapshot directories**,

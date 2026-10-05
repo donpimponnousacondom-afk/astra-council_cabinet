@@ -10,6 +10,13 @@ current checkout or running configuration.
 
 ## Current work and acceptance
 
+- On 2026-10-05 the owner requested model self-identification through existing
+  late runtime facts and dynamic tails, with the same `{{MODEL}}` placeholder
+  as the public footer. Keep the captured request slug authoritative, layer
+  switches effective and earlier prompt text unchanged. No model/profile,
+  memory, compaction or image-capability changes. See
+  [literal prompt data](PROMPTS.md#literal-data-placeholders).
+
 - On 2026-10-01 the owner authorized incremental dashboard/event-loop fixes:
   remove repeated prompt-JSON decoding from statistics/calibration, load full
   dashboard evidence on demand, and move reporting reads to a bounded worker.

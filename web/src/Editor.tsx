@@ -679,7 +679,7 @@ export function Editor({
                     )}
                     <Field
                       label="Dynamic prompt tail"
-                      hint="Literal placeholders: {now}, {timezone}, {bot_name}, {boss_id}, {channel_id}, {round}, {rounds_remaining}, {context_tokens}, {context_window}, {seconds_since_last_message}."
+                      hint="Literal placeholders: {{MODEL}} (configured request model, same spelling as the Discord footer), {now}, {timezone}, {bot_name}, {boss_id}, {channel_id}, {round}, {rounds_remaining}, {context_tokens}, {context_window}, {seconds_since_last_message}."
                     >
                       <textarea
                         rows={5}
@@ -1487,8 +1487,10 @@ export function Editor({
                       }
                       . Placement-specific data follows the built-in examples.
                       Conversation input also supports {"{latest_message}"} (one
-                      record) and {"{latest_content}"} (text only). Unknown
-                      placeholders remain literal.
+                      record) and {"{latest_content}"} (text only). Runtime
+                      facts and dynamic tails also support {"{{MODEL}}"} for the
+                      configured request model, not verified upstream
+                      capabilities. Unknown placeholders remain literal.
                     </p>
                     {(dashboard.prompt_layers || [])
                       .find((p) => p.id === draft.runtime_layer)

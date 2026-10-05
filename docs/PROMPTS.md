@@ -113,8 +113,32 @@ Common generated-template fields: `{bot_name}`, `{bot_id}`, `{discord_user_id}`,
 - Notes: `{notes}`; budget guidance: `{used_chars}`, `{limit_chars}`, `{remaining_chars}`, `{note_limit_chars}`, `{hard_limit_chars}`, `{over_budget_chars}`.
 - Summary wrappers: `{summary}`. Compaction instructions additionally use `{summary_tokens}` (retained visible text, not combined reasoning/output).
 - Conversation: `{transcript}` for all selected attributed records, `{latest_message}` for the last attributed record, or `{latest_content}` for its text only. `{image_omissions}` carries selected-input omissions. A text-only wrapper intentionally removes author/recipient metadata; choose the attributed record when that matters.
-- Runtime tail: `{runtime_facts}` for the complete fact object; or individual `{now}`, `{channel_id}`, `{round}`, `{rounds_remaining}`, `{context_tokens}`, `{context_window}`, `{seconds_since_last_message}`. Existing `{dynamic_prompt}` is the rendered per-bot tail.
+- Runtime tail: `{runtime_facts}` for the complete fact object; or individual `{{MODEL}}`, `{now}`, `{channel_id}`, `{round}`, `{rounds_remaining}`, `{context_tokens}`, `{context_window}`, `{seconds_since_last_message}`. Existing `{dynamic_prompt}` is the rendered per-bot tail.
 - Slash guidance: `{invocation}` is safe invocation metadata, never the interaction token.
+
+`{{MODEL}}` uses the same spelling and requested-model source as the Discord
+footer. It is available in the per-bot dynamic tail and the `runtime_facts` /
+`dynamic_prompt` templates. Whitespace and case variants are accepted; other
+prompt placeholders retain their existing single-brace spelling. Runtime facts
+also include `model` automatically when that layer and its fact object are
+included. The value is the exact model slug from the request's captured profile,
+not a fresh lookup of the bot's assignment or an inferred upstream architecture.
+It does not establish vision support or disclose a proxy's private routing.
+
+Example bot tail:
+
+> You are currently using {{MODEL}} for this response. Boss may change models
+> between turns, and provider routing or fail-over may use a different back-end.
+> Earlier messages may therefore mention another model; that does not change
+> who you are or whose memories these are. Treat this as the configured model,
+> and don't guess a back-end the provider hasn't disclosed.
+
+These facts stay after conversation input and tool exchanges. Changing the slug
+does not edit the earlier personality/shared prompt prefix; actual provider cache
+reuse remains provider-dependent, especially across different models. Ordinary,
+slash and panel turns share this rendering. Layer switches/overrides still apply;
+no hidden identity layer is added when these are disabled. Compaction templates,
+stored memories and the public footer are unchanged.
 
 For a minimal text experiment, create a `transcript` template containing `{latest_content}` with role `user`. Select that override on the experimental bot, disable the other generated layers, and deselect additional shared prompts you do not want. Use that bot's existing plugin, image and silence controls to omit tool schemas or pixels. This does not edit its underlying shared model profile.
 
@@ -140,6 +164,11 @@ Private channel notes and global notes **survive** and remain injected according
 
 The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
+
+- On 2026-10-05 the owner requested the configured request model in late runtime
+  facts and the editable dynamic tail, using the footer's exact `{{MODEL}}`
+  spelling. Describe the current engine without redefining the bot's identity,
+  guessing undisclosed routing/capabilities or changing its personality prefix.
 
 - Context must identify each bot by stable ID and verified Discord user ID, and explicitly label actual reply/mention recipients per viewer. Human messages directed elsewhere remain shared background context, not independent wakeups for every bot. Preserve speaker/recipient attribution through compaction and memory guidance; never infer recipients or human authority from message text. Do not silently rewrite existing private memories when changing this contract.
 
