@@ -4,6 +4,13 @@ import type { Dashboard, RecordData } from "./api";
 import { Code } from "./components";
 
 type Layer = NonNullable<Dashboard["prompt_layers"]>[number];
+const placeholderPattern =
+  /\{\{\s*([^{}]+?)\s*\}\}|\{([a-zA-Z_][a-zA-Z_0-9]*)\}/g;
+function placeholderName(double: string | undefined, single: string) {
+  const upper = double?.toUpperCase();
+  return upper ? (upper === "MODEL" ? upper : upper.toLowerCase()) : single;
+}
+
 const stages = [
   ["instructions", "1 · Shared instructions"],
   ["bot", "2 · Personality & memory"],
@@ -97,9 +104,10 @@ function availability(
   const sources = sourceValues(layer, draft, dashboard);
   const empty = (p: RecordData | undefined) =>
     !String(p?.content || "")
-      .replace(/\{([a-zA-Z_][a-zA-Z_0-9]*)\}/g, (match, name) =>
-        Object.hasOwn(sources, name) ? sources[name] : match,
-      )
+      .replace(placeholderPattern, (match, double, single) => {
+        const name = placeholderName(double, single);
+        return Object.hasOwn(sources, name) ? sources[name] : match;
+      })
       .trim();
   if (templates.every(empty))
     return {
@@ -166,16 +174,10 @@ function Inspection({
           );
         const variables = new Map(
           Array.from(
-            String(template.content).matchAll(
-              /\{\{\s*([^{}]+?)\s*\}\}|\{([a-zA-Z_][a-zA-Z_0-9]*)\}/g,
-            ),
+            String(template.content).matchAll(placeholderPattern),
             (m) => {
               const upper = m[1]?.toUpperCase();
-              const name = upper
-                ? upper === "MODEL"
-                  ? upper
-                  : upper.toLowerCase()
-                : m[2];
+              const name = placeholderName(m[1], m[2]);
               return [upper ? `{{${upper}}}` : `{${name}}`, name] as const;
             },
           ),

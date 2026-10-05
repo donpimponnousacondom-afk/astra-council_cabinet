@@ -34,6 +34,18 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
     ],
     ["inspector-empty", "Blank tail", "", "dynamic_prompt"],
     [
+      "inspector-persona-source",
+      "Personality source",
+      "{{ PERSONA }}",
+      "persona",
+    ],
+    [
+      "inspector-tail-source",
+      "Tail source",
+      "{{DYNAMIC_PROMPT}}",
+      "dynamic_prompt",
+    ],
+    [
       "inspector-facts",
       "Model fact",
       "Request model {{ MODEL }}",
@@ -86,6 +98,29 @@ test("prompt inspection follows assembly order, explains gates and preserves dra
     if (request.method() !== "GET") mutations.push(request.url());
   });
   const row = (id: string) => dialog.locator(`[data-layer="${id}"]`);
+  await dialog
+    .getByLabel("Personality / system instructions", { exact: true })
+    .fill("");
+  await dialog
+    .getByLabel("Template for Bot personality", { exact: true })
+    .selectOption("inspector-persona-source");
+  await expect(row("persona")).toContainText("Empty");
+  await dialog
+    .getByLabel("Personality / system instructions", { exact: true })
+    .fill("Saved personality");
+  await expect(row("persona")).toContainText("Eligible");
+  await dialog
+    .getByLabel("Template for Bot personality", { exact: true })
+    .selectOption("inspector-persona");
+  await dialog.getByLabel("Dynamic prompt tail", { exact: true }).fill("");
+  await dialog
+    .getByLabel("Template for Bot dynamic prompt tail", { exact: true })
+    .selectOption("inspector-tail-source");
+  await expect(row("dynamic_prompt")).toContainText("Empty");
+  await dialog
+    .getByLabel("Dynamic prompt tail", { exact: true })
+    .fill("Tail at {{NOW}}; using {{MODEL}}");
+  await expect(row("dynamic_prompt")).toContainText("Eligible");
   await expect(
     dialog.getByText(/Literal placeholders:.*\{\{MODEL\}\}/),
   ).toBeVisible();

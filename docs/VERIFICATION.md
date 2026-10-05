@@ -20,6 +20,11 @@ historical claims retain their original date and scope.
   Both isolated prompt-controls/inspector browser tests passed together
   (**2 passed, 11.9 s**, exit 0), including uppercase source references and
   draft preservation. No full-suite local or live provider claim is implied.
+- Both reviewers independently found that the inspector's empty-source status
+  still used a single-brace matcher. Shared the frontend matcher/name helper
+  between availability and inspection; blank uppercase personality/tail wrappers
+  now show Empty and become Eligible when populated. Production build passed;
+  the extended inspector browser case passed (one test, 5.7 s, exit 0).
 - **131 focused backend tests passed**, exit 0, in 22.20 s: model identity,
   prompt layers, context responsiveness, compaction limits, slash commands,
   footer and footer tokens. New cases trace ordinary/slash/panel request bodies,
