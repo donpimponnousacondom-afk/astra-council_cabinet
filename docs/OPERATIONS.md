@@ -775,6 +775,78 @@ This uses SQLite's backup API, copies `artifacts/`, `images/`, `sites/`, `ssh/`,
 
 This workspace uses timestamped snapshots under `/home/codexy/.local/share/hortator-backups`, outside both the code checkout and live data directory. Its **`.latest-requested`** file identifies the latest requested snapshot; inspect that path and the snapshot's `manifest.json` for current evidence rather than relying on a copied session note. [VERIFICATION.md](VERIFICATION.md) records dated checks. A Git repository around a live SQLite database does not provide a consistent snapshot and risks tracking the master key and bootstrap password. Use the CLI's SQLite backup, then capture host settings and logs while the server is stopped for a complete archive. Complete snapshots include a matching key, all eight directories above, redacted configuration export, bootstrap password if present, logs, external launcher/environment and `.screenrc`, with `manifest.json` hashes and `RESTORE.md`. Verify SQLite integrity, hashes and matching-key decryption before declaring a snapshot usable. Keep directories 0700 and files 0600. These local snapshots provide rollback; an independent secure disk copy is still needed for disk-loss recovery. Never overwrite an earlier snapshot, commit these files to the application repository, or confuse a redacted JSON export with a credentials backup.
 
+### On-request Storage Box archival
+
+Owner decision, 2026-10-03: archive older completed manual backups and dashboard
+snapshots to `u390720@u390720.your-storagebox.de:council-snapshots/`, using SSH
+port **23** and the existing `codexy` SSH key. Keep the **two newest copies
+overall**, not two per collection. Inspect timestamps/manifests and preserve
+the manual `.latest-requested` target. The initial selection keeps the October 1
+and September 26 manual backups and moves all older copies, including every
+dashboard snapshot. Archived snapshots leave the local dashboard catalog until
+downloaded and extracted back into its snapshot directory.
+
+Run only when requested. This is a one-off compression/rsync procedure, not a
+recurring job, daemon, plugin or automatic retention policy. Use direct SSH and
+rsync; the temporary SSHFS mount at `/home/codexy/codex/claude/asdfg` is only an
+optional browsing view and must not be a dependency. The
+[Storage Box SSH documentation](https://docs.hetzner.com/storage/storage-box/access/access-ssh-rsync-borg/)
+describes its restricted shell: invoke `sha256sum` directly over SSH; remote
+pipes, redirects and uploaded scripts are unavailable.
+
+1. Inventory only completed copies under `~/.local/share/hortator-backups` and
+   `~/.local/share/hortator-snapshots`; select explicit paths, leaving the newest
+   two overall and `.latest-requested` intact. Do not archive live data or an
+   active backup/restore. Keep the source list and receipts in a dated private
+   `~/.local/share/hortator-archive-runs/` folder outside Git.
+2. Compress each selected directory locally as a separate `.tar.zst`, including
+   its top directory and all files, links, modes, ACLs and extended attributes.
+   Prefix archive names with `hortator-backups--` or `hortator-snapshots--`.
+   Use modest compression concurrency/priority, and stage one archive at a time.
+   Compare the archive against the source before transferring; retain a local
+   SHA-256 sidecar. Keep owner-only file/directory permissions.
+3. Upload archive and sidecar with `rsync -pt --ignore-existing --partial
+   --partial-dir=.rsync-partial -e 'ssh -p 23'` to `council-snapshots/`.
+   Preserve host-key verification. Do not use `--delete` or
+   `--remove-source-files`. An existing destination filename is left intact; its
+   checksum must match before any local deletion. Never replace a different
+   historical archive silently.
+4. Compute the destination archive's SHA-256 **on the Storage Box** using
+   `ssh -p 23 u390720@u390720.your-storagebox.de sha256sum
+   council-snapshots/ARCHIVE.tar.zst`, and compare it with the local checksum.
+   Check the uploaded sidecar too. Recheck source contents and its file inventory
+   after the transfer, then record the verified remote path and digest. Only
+   after these succeed, remove that exact local source and its temporary archive.
+   Any failure stops the run with unverified sources retained.
+5. A single detached shell run may continue with a PID, progress log and per-copy
+   receipts. No automatic retries or recurring schedule. Inspect these when
+   asked; resume only remaining copies after diagnosing a failure. Once finished,
+   remove obsolete staging files and retain the small receipts/procedure.
+
+Read a shell-loop worklist from a dedicated descriptor (for example `read -r
+source <&3` with `done 3< sources.txt`), because a child SSH command can consume
+standard input and silently skip the remaining entries. Use `ssh -n` for direct
+checksum commands, **not** for rsync's SSH transport, which needs stdin. Require
+the completed count to equal the selected count; confirm receipts and remaining
+directories rather than trusting a hardcoded success message.
+
+The initial fixed-worklist script is intentionally **not restartable as-is**.
+After interruption, inspect its `verified.tsv`, `completed.tsv`, remaining source
+directories and staging files. Prepare a continuation for only the still-local
+sources; compare any completed staged archive against its source before reusing
+it with rsync, or rebuild an incomplete archive while preserving the source.
+Recheck the remote digest and source before deletion. Do not blindly rerun the
+old list, erase staged evidence or infer completion from a missing source alone.
+
+For retrieval, rsync the chosen archive and `.sha256` back locally, run
+`sha256sum -c ARCHIVE.tar.zst.sha256` in their directory, and extract with
+`tar --zstd --acls --xattrs -xpf ARCHIVE.tar.zst -C EMPTY_STAGING_DIRECTORY`.
+Move the extracted top directory back to its original backup collection before
+using its existing restoration procedure. Preserve source/schema compatibility
+checks; downloading an old snapshot does not make it compatible with newer code.
+
+### Restore a manual backup
+
 To restore, stop Hortator, copy `council.sqlite3`, `master.key` and all eight backed-up directories above into an **empty** data directory, restore owner-only permissions, then start with that directory. Do not copy old `-wal`/`-shm` files over a restored database. If using an environment master key, supply the same key. The recovery logic marks unfinished work; it never blindly replays uncertain Discord sends or interrupted shell commands. Publishing jobs resume using their same immutable identities and verify remote receipts; retain their queue records, local content history and the matching remote publisher state when relocating an installation.
 
 To reset the dashboard password, stop the runtime and run:
