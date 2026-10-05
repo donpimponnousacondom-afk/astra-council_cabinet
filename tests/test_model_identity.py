@@ -21,7 +21,7 @@ async def test_current_request_model_matches_tail_and_footer_without_changing_pr
     bot = configured(
         kernel,
         transcript_format=transcript_format,
-        dynamic_prompt="Currently using {{MODEL}}; keep {unknown} literal.",
+        dynamic_prompt="Currently using {{MODEL}}; keep {unknown}, {model}, {MODEL} literal.",
         footer_enabled=True,
         footer_template="{{MODEL}}",
         persona="Stable bot identity",
@@ -72,7 +72,10 @@ async def test_current_request_model_matches_tail_and_footer_without_changing_pr
         assert values["model"] == model
         assert messages[-2] == exchanges[-1]
         assert model in messages[-1]["content"]
-        assert f"Currently using {model}; keep {{unknown}} literal." in messages[-1]["content"]
+        assert (
+            f"Currently using {model}; keep {{unknown}}, {{model}}, {{MODEL}} literal."
+            in messages[-1]["content"]
+        )
         assert model not in str(messages[:-1])
         if prefix is not None:
             assert messages[:-1] == prefix
@@ -101,12 +104,15 @@ async def test_model_tail_respects_layer_switches_and_custom_templates(kernel, o
     bot = {**bot, "disabled_prompt_layers": ["runtime_facts", "dynamic_prompt"]}
     assert kernel.engine.contexts.dynamic_layers(bot, profile, CHANNEL, 0, 0) == []
     await kernel.service.save(
-        owner, "prompts", "runtime-runtime-facts", {"content": "Configured request model: {{MODEL}}"}
+        owner,
+        "prompts",
+        "runtime-runtime-facts",
+        {"content": "Configured request model: {{MODEL}}; literal {model} and {MODEL}"},
     )
     bot = {**bot, "disabled_prompt_layers": ["dynamic_prompt"]}
     layers = kernel.engine.contexts.dynamic_layers(bot, profile, CHANNEL, 0, 0)
-    assert layers[0]["content"] == "Configured request model: test-model"
-    assert layers[0]["variables"] == ["MODEL"]
+    assert layers[0]["content"] == "Configured request model: test-model; literal {model} and {MODEL}"
+    assert layers[0]["variables"] == ["MODEL", "model"]
     assert "MODEL" in next(p for p in catalog() if p["id"] == "runtime_facts")["placeholders"]
 
 
@@ -119,3 +125,4 @@ def test_footer_model_placeholder_is_literal_single_pass(token):
         == "route/{bot_name} / Ada / {{UNKNOWN}}"
     )
     assert render(token, {"bot_name": "Ada"}) == token
+    assert render(token + " / {MODEL}", {"MODEL": "vendor/model"}) == "vendor/model / {MODEL}"

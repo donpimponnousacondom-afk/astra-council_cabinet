@@ -201,7 +201,6 @@ class ContextBuilder:
             "allow_images": bot.get("allow_images", True),
             "context_tokens": estimated,
             "context_window": profile["context_window"],
-            "model": profile["model"],
             "seconds_since_last_message": round(time.time() - state["last_sent"])
             if state["last_sent"]
             else "never",
@@ -221,7 +220,7 @@ class ContextBuilder:
         if self.application_emojis is not None:
             values["application_emojis"] = self.application_emojis.prompt(bot)
         custom = render(bot["dynamic_prompt"], {**values, "MODEL": profile["model"]})
-        facts = dict(values)
+        facts = {**values, "model": profile["model"]}
         for key in ("background_completion", "background_handoff"):
             if key in facts:
                 facts[key] = {

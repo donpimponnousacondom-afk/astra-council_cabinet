@@ -119,7 +119,8 @@ Common generated-template fields: `{bot_name}`, `{bot_id}`, `{discord_user_id}`,
 `{{MODEL}}` uses the same spelling and requested-model source as the Discord
 footer. It is available in the per-bot dynamic tail and the `runtime_facts` /
 `dynamic_prompt` templates. Whitespace and case variants are accepted; other
-prompt placeholders retain their existing single-brace spelling. Runtime facts
+prompt placeholders retain their existing single-brace spelling. Previously
+unknown `{model}` / `{MODEL}` remain literal; use `{{MODEL}}`. Runtime facts
 also include `model` automatically when that layer and its fact object are
 included. The value is the exact model slug from the request's captured profile,
 not a fresh lookup of the bot's assignment or an inferred upstream architecture.

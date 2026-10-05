@@ -15,6 +15,12 @@ historical claims retain their original date and scope.
   changing captured profiles. Earlier message prefixes compare equal; unknown
   placeholders and braces inside substituted data remain literal. Layer
   switches and custom runtime templates retain control.
+- Luna's independent review found unintended single-brace `{model}` expansion;
+  the parent also reproduced `{MODEL}` expansion. Kept the lowercase fact out
+  of substitution data and reserved the new substitution for `{{MODEL}}`.
+  Extended actual dynamic/custom-template regressions and reran the same
+  **131 focused cases: passed**, exit 0, 21.32 s. Sol's initial review missed
+  this case; both reviewers receive the disclosed fix for final-head review.
 - Ruff lint/format, frontend formatting and production build passed (exit 0;
   command durations not separately recorded). Prompt-controls browser regression
   passed in the initial two-test run. The added inspector assertion initially

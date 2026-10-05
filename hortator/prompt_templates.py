@@ -316,7 +316,15 @@ PLACEHOLDER = re.compile(r"\{\{\s*((?i:MODEL))\s*\}\}|\{([a-zA-Z_][a-zA-Z_0-9]*)
 
 def render(content, values):
     # One substitution pass: data containing braces never becomes a template.
-    return PLACEHOLDER.sub(lambda m: str(values.get(m[1].upper() if m[1] else m[2], m[0])), content)
+    def substitute(match):
+        if match[1]:
+            return str(values.get("MODEL", match[0]))
+        # MODEL is new double-brace data, not a new single-brace alias.
+        if match[2] == "MODEL":
+            return match[0]
+        return str(values.get(match[2], match[0]))
+
+    return PLACEHOLDER.sub(substitute, content)
 
 
 def layer(store, bot, key, values, *, variant="", raw=False):
