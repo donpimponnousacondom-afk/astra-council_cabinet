@@ -48,7 +48,9 @@ historical claims retain their original date and scope.
   No live provider/Discord invocation or cache-hit measurement is claimed.
   Full backend CI and independent Luna/Sol final-head reviews gate publication
   readiness separately; local focused checks are not a full-suite pass.
-- No provider/profile, image grant, memory, compaction or Loki prompt changes.
+- No live provider/profile, image-grant, memory, compaction-setting or Loki
+  prompt changes. Compaction templates accept the alternate placeholder spelling
+  while retaining their coverage checks and checkpoint semantics.
   The planned owner-authorized Curie deployment edit only replaces its existing
   `{model}` token with `{{MODEL}}`, using the current record revision.
 
