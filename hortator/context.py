@@ -219,8 +219,8 @@ class ContextBuilder:
             values["background_handoff"] = bot["background_handoff"]
         if self.application_emojis is not None:
             values["application_emojis"] = self.application_emojis.prompt(bot)
-        custom = render(bot["dynamic_prompt"], values)
-        facts = dict(values)
+        custom = render(bot["dynamic_prompt"], {**values, "MODEL": profile["model"]})
+        facts = {**values, "model": profile["model"]}
         for key in ("background_completion", "background_handoff"):
             if key in facts:
                 facts[key] = {
@@ -228,6 +228,7 @@ class ContextBuilder:
                     "origin_turn_id": facts[key].get("origin_turn_id"),
                 }
         values.update(
+            MODEL=profile["model"],
             runtime_facts=dumps(facts),
             dynamic_prompt=custom,
             silence_action=" or call council_silence alone" if bot.get("allow_silence", True) else "",

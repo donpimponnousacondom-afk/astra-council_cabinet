@@ -239,12 +239,15 @@ async def test_registration_is_disabled_non_tool_and_requires_current_grants(ker
 
 
 @pytest.mark.parametrize("customization", ["edit_default", "bot_override"])
-async def test_durable_identity_rule_survives_custom_engram_prompts(kernel, memory, owner, customization):
+@pytest.mark.parametrize("state_token", ["{engram_state}", "{{ ENGRAM_STATE }}"])
+async def test_durable_identity_rule_survives_custom_engram_prompts(
+    kernel, memory, owner, customization, state_token
+):
     bot = enabled(kernel)
     overrides = {}
     for layer, content in (
         ("engram_instructions", "Keep the next state concise."),
-        ("engram_state", "Prior notes: {engram_state}"),
+        ("engram_state", "Prior notes: " + state_token),
     ):
         template_id = "runtime-" + layer.replace("_", "-")
         if customization == "bot_override":

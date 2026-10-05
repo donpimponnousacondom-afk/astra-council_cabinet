@@ -4,6 +4,13 @@ import type { Dashboard, RecordData } from "./api";
 import { Code } from "./components";
 
 type Layer = NonNullable<Dashboard["prompt_layers"]>[number];
+const placeholderPattern =
+  /\{\{\s*([^{}]+?)\s*\}\}|\{([a-zA-Z_][a-zA-Z_0-9]*)\}/g;
+function placeholderName(double: string | undefined, single: string) {
+  const upper = double?.toUpperCase();
+  return upper ? (upper === "MODEL" ? upper : upper.toLowerCase()) : single;
+}
+
 const stages = [
   ["instructions", "1 · Shared instructions"],
   ["bot", "2 · Personality & memory"],
@@ -97,9 +104,10 @@ function availability(
   const sources = sourceValues(layer, draft, dashboard);
   const empty = (p: RecordData | undefined) =>
     !String(p?.content || "")
-      .replace(/\{([a-zA-Z_][a-zA-Z_0-9]*)\}/g, (match, name) =>
-        Object.hasOwn(sources, name) ? sources[name] : match,
-      )
+      .replace(placeholderPattern, (match, double, single) => {
+        const name = placeholderName(double, single);
+        return Object.hasOwn(sources, name) ? sources[name] : match;
+      })
       .trim();
   if (templates.every(empty))
     return {
@@ -164,16 +172,16 @@ function Inspection({
               Selected template could not be found.
             </p>
           );
-        const variables = [
-          ...new Set<string>(
-            Array.from(
-              String(template.content).matchAll(
-                /\{([a-zA-Z_][a-zA-Z_0-9]*)\}/g,
-              ),
-              (m) => m[1],
-            ),
+        const variables = new Map(
+          Array.from(
+            String(template.content).matchAll(placeholderPattern),
+            (m) => {
+              const upper = m[1]?.toUpperCase();
+              const name = placeholderName(m[1], m[2]);
+              return [upper ? `{{${upper}}}` : `{${name}}`, name] as const;
+            },
           ),
-        ];
+        );
         const stored = dashboard.prompts.find((p) => p.id === template.id);
         return (
           <section key={template.id}>
@@ -191,7 +199,7 @@ function Inspection({
               label={`Template text · ${template.id}`}
               value={template.content || "(empty template)"}
             />
-            {variables
+            {[...new Set(variables.values())]
               .filter((name) => Object.hasOwn(sources, name))
               .map((name) => (
                 <Code
@@ -201,12 +209,14 @@ function Inspection({
                   value={sources[name] || "(empty source)"}
                 />
               ))}
-            {variables.some((name) => !Object.hasOwn(sources, name)) && (
+            {[...variables.values()].some(
+              (name) => !Object.hasOwn(sources, name),
+            ) && (
               <p className="muted small-text">
                 Placeholders:{" "}
-                {variables
-                  .filter((name) => !Object.hasOwn(sources, name))
-                  .map((name) => `{${name}}`)
+                {[...variables]
+                  .filter(([, name]) => !Object.hasOwn(sources, name))
+                  .map(([token]) => token)
                   .join(", ")}
                 . These are resolved from identity, configuration or turn data
                 where available; unknown names remain literal.

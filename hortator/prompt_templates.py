@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from .placeholders import DOUBLE_BRACE, double_brace_name
+
 DEFAULT_PROMPTS = [
     {
         "id": "runtime-scheduled-alarm",
@@ -266,6 +268,7 @@ DEFAULT_PROMPTS = [
 LAYER_KEYS = tuple(dict.fromkeys(item["runtime_layer"] for item in DEFAULT_PROMPTS))
 DEFAULT_IDS = frozenset(item["id"] for item in DEFAULT_PROMPTS)
 PLACEHOLDERS = {
+    "MODEL",
     "engram_state",
     "state_revision",
     "covered_through",
@@ -310,9 +313,25 @@ PLACEHOLDERS = {
 }
 
 
+PLACEHOLDER = re.compile(DOUBLE_BRACE.pattern + r"|\{([a-zA-Z_][a-zA-Z_0-9]*)\}")
+
+
+def placeholder_name(match):
+    if match[1]:
+        name = double_brace_name(match)
+        return "MODEL" if name == "MODEL" else name.lower()
+    return match[2]
+
+
 def render(content, values):
     # One substitution pass: data containing braces never becomes a template.
-    return re.sub(r"\{([a-zA-Z_][a-zA-Z_0-9]*)\}", lambda m: str(values.get(m[1], m[0])), content)
+    def substitute(match):
+        # MODEL is new double-brace data, not a new single-brace alias.
+        if match[2] == "MODEL":
+            return match[0]
+        return str(values.get(placeholder_name(match), match[0]))
+
+    return PLACEHOLDER.sub(substitute, content)
 
 
 def layer(store, bot, key, values, *, variant="", raw=False):
@@ -334,7 +353,7 @@ def layer(store, bot, key, values, *, variant="", raw=False):
         return None
     return {
         "id": key,
-        "variables": sorted(set(re.findall(r"\{([a-zA-Z_][a-zA-Z_0-9]*)\}", prompt["content"]))),
+        "variables": sorted({placeholder_name(m) for m in PLACEHOLDER.finditer(prompt["content"])}),
         "template_id": prompt_id,
         "revision": prompt.get("revision", 0),
         "role": prompt.get("role", "system"),

@@ -4,6 +4,56 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Requested model in late prompt data (2026-10-05)
+
+- Base `9b692fa008bbc0a6c19aa3e6bb29d1247529be94`, branch
+  `feat/model-runtime-identity`; dirty source for local checks.
+- Owner expanded the final scope to uppercase double braces for every prompt
+  field, sharing the footer's parser/name normalization while preserving existing
+  single-brace fields. After that change, **185 focused backend tests passed**
+  in two disjoint runs: 123 (16.20 s) for model identity, prompt layers, Engram,
+  footer and footer tokens; 62 (11.14 s) for context responsiveness, compaction
+  limits and slash commands. Both exited 0. Tests cover uppercase/whitespace
+  transcript, retained-summary and Engram-state tokens through their actual
+  coverage checks, alongside legacy spellings and literal nested data.
+- Final-scope Ruff lint/format and frontend formatting/build passed (exit 0).
+  Both isolated prompt-controls/inspector browser tests passed together
+  (**2 passed, 11.9 s**, exit 0), including uppercase source references and
+  draft preservation. No full-suite local or live provider claim is implied.
+- Both reviewers independently found that the inspector's empty-source status
+  still used a single-brace matcher. Shared the frontend matcher/name helper
+  between availability and inspection; blank uppercase personality/tail wrappers
+  now show Empty and become Eligible when populated. Production build passed;
+  the extended inspector browser case passed (one test, 5.7 s, exit 0).
+- **131 focused backend tests passed**, exit 0, in 22.20 s: model identity,
+  prompt layers, context responsiveness, compaction limits, slash commands,
+  footer and footer tokens. New cases trace ordinary/slash/panel request bodies,
+  request ledger, dynamic facts and footer across both transcript formats and
+  changing captured profiles. Earlier message prefixes compare equal; unknown
+  placeholders and braces inside substituted data remain literal. Layer
+  switches and custom runtime templates retain control.
+- Luna's independent review found unintended single-brace `{model}` expansion;
+  the parent also reproduced `{MODEL}` expansion. Kept the lowercase fact out
+  of substitution data and reserved the new substitution for `{{MODEL}}`.
+  Extended actual dynamic/custom-template regressions and reran the same
+  **131 focused cases: passed**, exit 0, 21.32 s. Sol's initial review missed
+  this case; both reviewers receive the disclosed fix for final-head review.
+- Ruff lint/format, frontend formatting and production build passed (exit 0;
+  command durations not separately recorded). Prompt-controls browser regression
+  passed in the initial two-test run. The added inspector assertion initially
+  used the wrong existing accessible region name; corrected the test locator,
+  then the inspector passed (one test, 4.4 s total). Failure diagnostics retained
+  under `audit/2026-10-05/01-model-identity/initial-browser-failure/`.
+- Backend HTTP is mocked; browser tests use isolated seeded data on port 18000.
+  No live provider/Discord invocation or cache-hit measurement is claimed.
+  Full backend CI and independent Luna/Sol final-head reviews gate publication
+  readiness separately; local focused checks are not a full-suite pass.
+- No live provider/profile, image-grant, memory, compaction-setting or Loki
+  prompt changes. Compaction templates accept the alternate placeholder spelling
+  while retaining their coverage checks and checkpoint semantics.
+  The planned owner-authorized Curie deployment edit only replaces its existing
+  `{model}` token with `{{MODEL}}`, using the current record revision.
+
 ## On-request Storage Box archival (2026-10-03)
 
 - Completed the owner-selected move of **13 older backup/snapshot directories**,

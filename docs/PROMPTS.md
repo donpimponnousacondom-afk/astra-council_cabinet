@@ -105,18 +105,49 @@ Budget guidance has normal/over-budget variants. An explicit override replaces e
 
 ## Literal data placeholders
 
+The canonical spelling is uppercase with double braces, matching Discord footers:
+`{{NOW}}`, `{{BOT_NAME}}`, `{{MODEL}}`, and so on. The backend shares its double-brace
+matcher and case normalization with the footer. Whitespace/case variants such as
+`{{ now }}` are accepted. Existing single-brace fields such as `{now}` keep their
+original behavior; saved prompts and built-in defaults are not rewritten.
+Footer and prompt values remain separate: TPS/TTFT only exist after a response.
+
 Substitution is one pass over the template, never code evaluation. Data containing braces is not processed as another template. Unknown placeholders remain literal. Additional shared prompts keep literal content; substitutions apply to generated placements and the existing dynamic tail.
 
-Common generated-template fields: `{bot_name}`, `{bot_id}`, `{discord_user_id}`, `{boss_id}`, `{timezone}`. Bot identity comes from verified runtime/configuration, not conversation claims. Placement-specific fields:
+Common generated-template fields: `{{BOT_NAME}}`, `{{BOT_ID}}`, `{{DISCORD_USER_ID}}`, `{{BOSS_ID}}`, `{{TIMEZONE}}`. Bot identity comes from verified runtime/configuration, not conversation claims. Placement-specific fields:
 
-- Universal/persona: `{global_prompt}`, `{persona}`.
-- Notes: `{notes}`; budget guidance: `{used_chars}`, `{limit_chars}`, `{remaining_chars}`, `{note_limit_chars}`, `{hard_limit_chars}`, `{over_budget_chars}`.
-- Summary wrappers: `{summary}`. Compaction instructions additionally use `{summary_tokens}` (retained visible text, not combined reasoning/output).
-- Conversation: `{transcript}` for all selected attributed records, `{latest_message}` for the last attributed record, or `{latest_content}` for its text only. `{image_omissions}` carries selected-input omissions. A text-only wrapper intentionally removes author/recipient metadata; choose the attributed record when that matters.
-- Runtime tail: `{runtime_facts}` for the complete fact object; or individual `{now}`, `{channel_id}`, `{round}`, `{rounds_remaining}`, `{context_tokens}`, `{context_window}`, `{seconds_since_last_message}`. Existing `{dynamic_prompt}` is the rendered per-bot tail.
-- Slash guidance: `{invocation}` is safe invocation metadata, never the interaction token.
+- Universal/persona: `{{GLOBAL_PROMPT}}`, `{{PERSONA}}`.
+- Notes: `{{NOTES}}`; budget guidance: `{{USED_CHARS}}`, `{{LIMIT_CHARS}}`, `{{REMAINING_CHARS}}`, `{{NOTE_LIMIT_CHARS}}`, `{{HARD_LIMIT_CHARS}}`, `{{OVER_BUDGET_CHARS}}`.
+- Summary wrappers: `{{SUMMARY}}`. Compaction instructions additionally use `{{SUMMARY_TOKENS}}` (retained visible text, not combined reasoning/output).
+- Conversation: `{{TRANSCRIPT}}` for all selected attributed records, `{{LATEST_MESSAGE}}` for the last attributed record, or `{{LATEST_CONTENT}}` for its text only. `{{IMAGE_OMISSIONS}}` carries selected-input omissions. A text-only wrapper intentionally removes author/recipient metadata; choose the attributed record when that matters.
+- Runtime tail: `{{RUNTIME_FACTS}}` for the complete fact object; or individual `{{MODEL}}`, `{{NOW}}`, `{{CHANNEL_ID}}`, `{{ROUND}}`, `{{ROUNDS_REMAINING}}`, `{{CONTEXT_TOKENS}}`, `{{CONTEXT_WINDOW}}`, `{{SECONDS_SINCE_LAST_MESSAGE}}`. Existing `{{DYNAMIC_PROMPT}}` is the rendered per-bot tail.
+- Slash guidance: `{{INVOCATION}}` is safe invocation metadata, never the interaction token.
 
-For a minimal text experiment, create a `transcript` template containing `{latest_content}` with role `user`. Select that override on the experimental bot, disable the other generated layers, and deselect additional shared prompts you do not want. Use that bot's existing plugin, image and silence controls to omit tool schemas or pixels. This does not edit its underlying shared model profile.
+`{{MODEL}}` uses the same spelling and requested-model source as the Discord
+footer. It is available in the per-bot dynamic tail and the `runtime_facts` /
+`dynamic_prompt` templates. Previously unknown `{model}` / `{MODEL}` remain literal; use `{{MODEL}}`. Runtime facts
+also include `model` automatically when that layer and its fact object are
+included. The value is the exact model slug from the request's captured profile,
+not a fresh lookup of the bot's assignment or an inferred upstream architecture.
+It does not establish vision support or disclose a proxy's private routing.
+
+Example bot tail:
+
+> You are currently using {{MODEL}} for this response. Boss may change models
+> between turns, and provider routing or fail-over may use a different back-end.
+> Earlier messages may therefore mention another model; that does not change
+> who you are or whose memories these are. Treat this as the configured model,
+> and don't guess a back-end the provider hasn't disclosed.
+
+These facts stay after conversation input and tool exchanges. Changing the slug
+does not edit the earlier personality/shared prompt prefix; actual provider cache
+reuse remains provider-dependent, especially across different models. Ordinary,
+slash and panel turns share this rendering. Layer switches/overrides still apply;
+no hidden identity layer is added when these are disabled. Stored compaction
+templates/memories and public-footer behavior are unchanged; generated templates
+also accept the new spelling, with the same source-coverage checks.
+
+For a minimal text experiment, create a `transcript` template containing `{{LATEST_CONTENT}}` with role `user`. Select that override on the experimental bot, disable the other generated layers, and deselect additional shared prompts you do not want. Use that bot's existing plugin, image and silence controls to omit tool schemas or pixels. This does not edit its underlying shared model profile.
 
 Run that latest-only experiment with [Engram](ENGRAMS.md) disabled. Engram requires
 all selected messages and the retained summary in the actual request so its
@@ -124,7 +155,7 @@ coverage cannot acknowledge omitted input; use its own retention controls instea
 
 Actual assistant/tool exchanges, native continuation fields, tool schemas and returned tool results remain protocol/data, not editable instruction templates. Granted tools still carry their schemas and complete error/usage feedback. An entirely empty request fails locally before a paid provider call. Trajectory records capture the actual ordered messages, enabled templates/roles/revisions/hashes and omitted layer keys; disabled stored summaries are not mislabeled as injected summaries.
 
-Compaction source wrappers must include `{transcript}` and, when there is an existing summary, `{summary}` in the corresponding placement. Disabling or omitting those inputs pauses compaction with an explicit error and preserves its old checkpoint; it never silently discards accumulated history. Compaction instructions can be independently edited/disabled. Template rendering and measured budgets use the actual selected roles and text. Fresh image selections remain valid across text compaction for the current turn, as before.
+Compaction source wrappers must include `{{TRANSCRIPT}}` and, when there is an existing summary, `{{SUMMARY}}` in the corresponding placement (existing single-brace spellings also work). Disabling or omitting those inputs pauses compaction with an explicit error and preserves its old checkpoint; it never silently discards accumulated history. Compaction instructions can be independently edited/disabled. Template rendering and measured budgets use the actual selected roles and text. Fresh image selections remain valid across text compaction for the current turn, as before.
 
 ## Forget everything before now
 
@@ -140,6 +171,13 @@ Private channel notes and global notes **survive** and remain injected according
 
 The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
+
+- On 2026-10-05 the owner requested the configured request model in late runtime
+  facts and the editable dynamic tail, using the footer's exact `{{MODEL}}`
+  spelling, then requested uppercase double braces for every dynamic placeholder
+  and reuse of footer parsing where possible, while preserving saved single-brace
+  templates. Describe the current engine without redefining the bot's identity,
+  guessing undisclosed routing/capabilities or changing its personality prefix.
 
 - Context must identify each bot by stable ID and verified Discord user ID, and explicitly label actual reply/mention recipients per viewer. Human messages directed elsewhere remain shared background context, not independent wakeups for every bot. Preserve speaker/recipient attribution through compaction and memory guidance; never infer recipients or human authority from message text. Do not silently rewrite existing private memories when changing this contract.
 
