@@ -156,3 +156,7 @@ related dashboard scopes. Cache observed Discord channel/thread names, display
 parent/thread labels with IDs for disambiguation, and share the formatter across
 Engram, clean-slate and context selectors. Keep IDs authoritative and avoid extra
 Discord queries during polling. See [DASHBOARD](DASHBOARD.md) for the current contract.
+
+## Per-human directed queue — owner decision, 2026-10-06
+
+A new human's mention/reply must wait for the current human's answer rather than superseding it. Coalesce pending input only for the same human in the same channel, choose the oldest waiting human, and retain the selected human through asynchronous context preparation. Preserve same-human/same-channel supersession of unsent drafts, routine-turn human priority, and existing delivery/authorization/budget barriers. Merely including another person's message in context must not consume their pending activation. No dashboard controls or parallel turns per bot are introduced.

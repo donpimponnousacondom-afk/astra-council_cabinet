@@ -1,6 +1,8 @@
 import asyncio
 import json
+import re
 import time
+import threading
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock
 
@@ -304,3 +306,333 @@ async def test_hortator_priority_requires_the_exact_human_owner(kernel):
     await kernel.engine.tick()
     await asyncio.wait_for(settle(kernel), 1)
     kernel.engine.transport.send.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "arrival", ["before_launch", "during_preparation", "during_generation", "during_send_gap"]
+)
+async def test_different_humans_queue_without_replacing_or_consuming_each_other(kernel, arrival):
+    ada, _ = pair(kernel, interval_seconds=0)
+    first = message(555555555555555551, mentions=[ada], content="First person's question")
+    second = message(
+        555555555555555552, author="777777777777777777", mentions=[ada], content="Second person's question"
+    )
+    third = message(
+        555555555555555553, author="666666666666666666", mentions=[ada], content="Third person's question"
+    )
+    second_update = message(
+        555555555555555554,
+        author="777777777777777777",
+        mentions=[ada],
+        content="Second person's clarification",
+    )
+    await receive(kernel, first)
+    entered, release = asyncio.Event(), asyncio.Event()
+    calls = []
+    original_prepare = kernel.engine.contexts.prepare
+
+    async def prepare(*args, **kwargs):
+        if arrival == "during_preparation" and not entered.is_set():
+            entered.set()
+            await release.wait()
+        return await original_prepare(*args, **kwargs)
+
+    kernel.engine.contexts.prepare = prepare
+
+    async def handler(request):
+        body = json.loads(request.content)
+        tail = body["messages"][-1]["content"]
+        calls.append(tail)
+        if len(calls) == 1 and arrival == "during_generation":
+            entered.set()
+            await release.wait()
+        return completion(f"Answer {len(calls)}")
+
+    await install_client(kernel, handler)
+    if arrival == "before_launch":
+        for msg in (second, third, second_update):
+            await receive(kernel, msg)
+    if arrival == "during_send_gap":
+        kernel.engine.room_last[CHANNEL] = time.time() + 0.15
+    await kernel.engine.tick()
+    if arrival in ("during_preparation", "during_generation"):
+        await asyncio.wait_for(entered.wait(), 1)
+    elif arrival == "during_send_gap":
+        for _ in range(100):
+            if kernel.store.one("SELECT 1 FROM events WHERE kind='delivery.cooldown'"):
+                break
+            await asyncio.sleep(0.01)
+        else:
+            pytest.fail("Did not reach shared send gap")
+    if arrival != "before_launch":
+        for msg in (second, third, second_update):
+            await receive(kernel, msg)
+        await kernel.engine.tick()
+        assert not kernel.engine.tasks["ada"].cancelling()
+    release.set()
+    await asyncio.wait_for(settle(kernel), 2)
+    assert kernel.engine.transport.send.await_count == 1
+    assert kernel.engine.transport.send.await_args.args[3] == str(first.id)
+    assert len(kernel.engine.attention(ada)) == 3
+    # All three waiting messages may already have appeared in the first prompt.
+    # They must still survive the successful turn's last_seen update.
+    for _ in range(2):
+        await kernel.engine.tick()
+        await asyncio.wait_for(settle(kernel), 2)
+    assert [call.args[3] for call in kernel.engine.transport.send.await_args_list] == [
+        str(first.id),
+        str(second_update.id),
+        str(third.id),
+    ]
+    assert all(row["status"] == "sent" for row in kernel.store.rows("SELECT status FROM turns"))
+    assert not kernel.engine.attention(ada)
+    assert len(calls) == 3
+    assert str(first.id) in calls[0]
+    assert str(second_update.id) in calls[1]
+    assert str(third.id) in calls[2]
+    claims = kernel.store.rows("SELECT turn_id,message_id FROM human_attention_claims ORDER BY message_id")
+    assert claims[1]["turn_id"] == claims[3]["turn_id"]
+    assert len({row["turn_id"] for row in claims}) == 3
+
+
+async def test_same_human_can_still_supersede_their_own_directed_answer(kernel):
+    ada, _ = pair(kernel, interval_seconds=0)
+    await receive(kernel, message(555555555555555551, mentions=[ada]))
+    entered, release = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def handler(request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            entered.set()
+            await release.wait()
+        return completion(f"Answer {calls}")
+
+    await install_client(kernel, handler)
+    await kernel.engine.tick()
+    await asyncio.wait_for(entered.wait(), 1)
+    await receive(kernel, message(555555555555555552, mentions=[ada], content="Actually, new question"))
+    release.set()
+    await settle(kernel)
+    assert kernel.store.one("SELECT status FROM outbox")["status"] == "suppressed"
+    await kernel.engine.tick()
+    await settle(kernel)
+    kernel.engine.transport.send.assert_awaited_once()
+    assert kernel.engine.transport.send.await_args.args[3] == "555555555555555552"
+
+
+async def test_waiting_human_survives_store_reopen_after_another_humans_answer(kernel):
+    ada, _ = pair(kernel, interval_seconds=0)
+    await receive(kernel, message(555555555555555551, mentions=[ada]))
+    await receive(kernel, message(555555555555555552, author="777777777777777777", mentions=[ada]))
+    await install_client(kernel, lambda r: completion("First answer"))
+    await kernel.engine.tick()
+    await settle(kernel)
+    original = kernel.store
+    reopened = Store(original.path)
+    try:
+        reopened.recover()
+        kernel.engine.store = reopened
+        assert [r["discord_id"] for r in kernel.engine.attention(ada)] == ["555555555555555552"]
+    finally:
+        kernel.engine.store = original
+        reopened.close()
+    # Recovery correctly marks gateways offline until their normal reconnect.
+    kernel.store.execute("UPDATE bot_runtime SET gateway_status='online' WHERE bot_id='ada'")
+    await kernel.engine.tick()
+    await settle(kernel)
+    assert [call.args[3] for call in kernel.engine.transport.send.await_args_list] == [
+        "555555555555555551",
+        "555555555555555552",
+    ]
+
+
+async def test_human_followup_in_another_thread_does_not_cancel_current_conversation(kernel):
+    ada, _ = pair(kernel, interval_seconds=0)
+    await receive(kernel, message(555555555555555551, mentions=[ada]))
+    entered, release = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def handler(request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            entered.set()
+            await release.wait()
+        return completion("Answer")
+
+    await install_client(kernel, handler)
+    await kernel.engine.tick()
+    await asyncio.wait_for(entered.wait(), 1)
+    followup = message(555555555555555552, mentions=[ada])
+    followup.channel = NS(id=222222222222222223, parent_id=int(CHANNEL))
+    await receive(kernel, followup)
+    release.set()
+    await settle(kernel)
+    await kernel.engine.tick()
+    await settle(kernel)
+    assert [call.args[3] for call in kernel.engine.transport.send.await_args_list] == [
+        "555555555555555551",
+        "555555555555555552",
+    ]
+    assert [call.args[1] for call in kernel.engine.transport.send.await_args_list] == [
+        CHANNEL,
+        "222222222222222223",
+    ]
+
+
+async def test_queued_humans_keep_original_questions_through_engram_reduction(kernel):
+    from hortator.engrams import DEFAULTS, PLUGIN_ID
+
+    ada, _ = pair(kernel, interval_seconds=0)
+    plugin = kernel.store.get("plugins", PLUGIN_ID)
+    kernel.store.put(
+        "plugins",
+        {**plugin, "enabled": True, "config": {**DEFAULTS, "reduce_history": True, "recent_messages": 1}},
+    )
+    kernel.store.put("bots", {**ada, "enabled_plugins": [PLUGIN_ID]})
+    ada = kernel.store.get("bots", "ada")
+    questions = ["FIRST UNIQUE QUESTION", "SECOND UNIQUE QUESTION", "THIRD UNIQUE QUESTION"]
+    for i, author in enumerate([OWNER_ID, "777777777777777777", "666666666666666666"]):
+        await receive(
+            kernel, message(555555555555555551 + i, author=author, mentions=[ada], content=questions[i])
+        )
+    prompts = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        full = json.dumps(body)
+        prompts.append(full)
+        nonce = re.search(r"\[\^ENGRAM:([a-f0-9]{32})\]", full).group(1)
+        # A valid memory update is not a guarantee that it retained another
+        # queued person's exact question. The harness must preserve that input.
+        return completion(
+            f'Answer\n[^ENGRAM:{nonce}]\n{{"MEM":"A person answered","FACTS":""}}\n[^END:{nonce}]'
+        )
+
+    await install_client(kernel, handler)
+    for _ in range(3):
+        await kernel.engine.tick()
+        await settle(kernel)
+    assert len(prompts) == 3
+    for i, question in enumerate(questions):
+        assert question in prompts[i]
+        assert kernel.engine.transport.send.await_args_list[i].args[3] == str(555555555555555551 + i)
+    assert not kernel.engine.attention(ada)
+
+
+@pytest.mark.parametrize("prior_checkpoint", ["automatic", "existing", "manual"])
+async def test_pending_human_text_and_pixels_survive_compaction(kernel, prior_checkpoint):
+    from support.vision import cached
+
+    ada, _ = pair(kernel, interval_seconds=0)
+    profile = kernel.store.get("profiles", "balanced")
+    kernel.store.put(
+        "profiles", {**profile, "compact_threshold": 0.1, "keep_recent_messages": 1, "context_window": 16384}
+    )
+    # Include ordinary chatter after the questions: compaction must be able to
+    # summarize it without consuming an earlier queued question's raw input.
+    for i, author in enumerate([OWNER_ID, "777777777777777777", "666666666666666666"]):
+        await receive(
+            kernel,
+            message(555555555555555551 + i, author=author, mentions=[ada], content=f"UNIQUE QUESTION {i}"),
+        )
+    await receive(kernel, message(555555555555555554, content="Unaddressed ordinary chatter"))
+    _, item = await cached(kernel)
+    kernel.store.execute(
+        "UPDATE messages SET attachments=? WHERE discord_id=?", (json.dumps([item]), "555555555555555552")
+    )
+    if prior_checkpoint == "existing":
+        # Even an earlier forced compaction must not hide a pending question.
+        kernel.store.execute(
+            "UPDATE contexts SET checkpoint=(SELECT max(seq) FROM messages),summary='Earlier summary without questions' WHERE bot_id='ada'"
+        )
+    prompts = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        prompts.append(body)
+        return completion("An answer or a summary that does not repeat the questions")
+
+    await install_client(kernel, handler)
+    if prior_checkpoint == "manual":
+        kernel.engine.launch(ada, CHANNEL, compact_only=True)
+        await settle(kernel)
+        assert kernel.store.context("ada", CHANNEL)["checkpoint"] > 0
+        assert len(kernel.engine.attention(ada)) == 3
+        kernel.engine.transport.send.assert_not_awaited()
+    for _ in range(3):
+        await kernel.engine.tick()
+        await settle(kernel)
+    requests = kernel.store.rows("SELECT purpose FROM requests ORDER BY started_at")
+    generations = [
+        body for body, record in zip(prompts, requests, strict=True) if record["purpose"] == "generation"
+    ]
+    assert len(generations) == 3
+    assert "UNIQUE QUESTION 1" in json.dumps(generations[1])
+    parts = [
+        part
+        for msg in generations[1]["messages"]
+        if isinstance(msg["content"], list)
+        for part in msg["content"]
+    ]
+    assert sum(part.get("type") == "image_url" for part in parts) == 1
+    assert [call.args[3] for call in kernel.engine.transport.send.await_args_list] == [
+        str(555555555555555551 + i) for i in range(3)
+    ]
+    if prior_checkpoint != "existing":
+        assert any(record["purpose"] == "compaction" for record in requests)
+    assert not kernel.engine.attention(ada)
+
+
+@pytest.mark.parametrize("same_human", [True, False])
+async def test_human_queue_rechecked_after_reasoning_capture_before_discord_send(
+    kernel, monkeypatch, same_human
+):
+    import hortator.reasoning_viewer as viewer
+
+    ada, _ = pair(kernel, interval_seconds=0)
+    plugin = kernel.store.get("plugins", "reasoning_viewer")
+    kernel.store.put("plugins", {**plugin, "enabled": True})
+    kernel.store.put("bots", {**ada, "enabled_plugins": ["reasoning_viewer"]})
+    ada = kernel.store.get("bots", "ada")
+    await receive(kernel, message(555555555555555551, mentions=[ada]))
+    entered, release = asyncio.Event(), threading.Event()
+    loop = asyncio.get_running_loop()
+    original = viewer.has_capture
+    captures = 0
+
+    def has_capture(rows):
+        nonlocal captures
+        captures += 1
+        if captures == 1:
+            loop.call_soon_threadsafe(entered.set)
+            assert release.wait(5), "Test did not release capture preparation"
+        return original(rows)
+
+    monkeypatch.setattr(viewer, "has_capture", has_capture)
+    await install_client(kernel, lambda r: completion("Answer"))
+    await kernel.engine.tick()
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        assert kernel.store.one("SELECT status FROM outbox")["status"] == "pending"
+        await receive(
+            kernel,
+            message(
+                555555555555555552, author=OWNER_ID if same_human else "777777777777777777", mentions=[ada]
+            ),
+        )
+        await kernel.engine.tick()
+        kernel.engine.transport.send.assert_not_awaited()
+    finally:
+        release.set()
+    await settle(kernel)
+    assert kernel.store.one("SELECT status FROM outbox ORDER BY created_at LIMIT 1")["status"] == (
+        "suppressed" if same_human else "sent"
+    )
+    await kernel.engine.tick()
+    await settle(kernel)
+    assert [call.args[3] for call in kernel.engine.transport.send.await_args_list] == (
+        ["555555555555555552"] if same_human else ["555555555555555551", "555555555555555552"]
+    )

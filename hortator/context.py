@@ -463,20 +463,53 @@ class ContextBuilder:
             self.store.one("SELECT max(seq) AS seq FROM messages WHERE channel_id=?", (channel_id,))["seq"]
             or 0
         )
+        # A queued question is not replaceable by a summary of another person's
+        # turn. Include current-turn claims too: launch claims before preparation.
+        protected = {
+            row["seq"]
+            for row in self.store.rows(
+                "SELECT m.seq FROM messages m WHERE channel_id=? AND seq>? AND seq<=? AND deleted=0 "
+                "AND json_extract(addressing,'$.author_kind')='human' "
+                "AND json_extract(addressing,'$.live')=1 "
+                "AND (?=0 OR author_id=?) "
+                "AND EXISTS (SELECT 1 FROM json_each(m.addressing,'$.targets') t "
+                "WHERE json_extract(t.value,'$.bot_id')=?) "
+                "AND NOT EXISTS (SELECT 1 FROM human_attention_claims h "
+                "WHERE h.bot_id=? AND h.message_id=m.discord_id AND h.turn_id<>?)",
+                (
+                    channel_id,
+                    context["last_seen"],
+                    tail,
+                    bot["role"] == "hortator",
+                    OWNER_ID,
+                    bot["id"],
+                    bot["id"],
+                    turn_id,
+                ),
+            )
+        }
         # Page through all uncompressed input. Do not silently drop old messages when a busy room grows.
         rows = []
         # An acknowledged engram may replace an older summary, but its recent
         # tail still consists of real transcript rows, including pre-checkpoint rows.
-        cursor = 0 if replace_summary else context["checkpoint"]
+        cursor = (
+            0
+            if replace_summary
+            else min(context["checkpoint"], min(protected, default=context["checkpoint"] + 1) - 1)
+        )
         while cursor < tail:
             page = self.store.transcript(channel_id, after=cursor, through=tail, limit=1000)
             if not page:
                 break
-            rows.extend(self.store.filter_context_rows(bot["id"], page))
+            rows.extend(
+                row
+                for row in self.store.filter_context_rows(bot["id"], page)
+                if replace_summary or row["seq"] > context["checkpoint"] or row["seq"] in protected
+            )
             cursor = page[-1]["seq"]
             await asyncio.sleep(0)
         if reduce_history:
-            rows = self.engrams.select_rows(engram, rows)
+            rows = self.engrams.select_rows(engram, rows, unhandled_after=context["last_seen"])
         summary = "" if replace_summary else context["summary"]
         if bot.get("allow_images", True):
             try:
@@ -551,20 +584,26 @@ class ContextBuilder:
         # unseen backlog remains input until acknowledged; failure keeps it all.
         if reduce_history:
             triggers = []
+        # Explicit manual compaction may summarize pending input: preparation
+        # restores those exact rows above on their next directed turn.
+        pinned = [] if force else [row for row in rows if row["seq"] in protected]
+        compactable = rows if force else [row for row in rows if row["seq"] not in protected]
+        if triggers and not rows:
+            raise ControlError("No uncompacted messages to summarize; shorten the prompts or scoped memory")
+        if triggers and not compactable:
+            # A threshold is a preparation hint, not permission to erase a queued
+            # question. The hard input-budget check below remains authoritative.
+            triggers = []
         if triggers:
-            if not rows:
-                raise ControlError(
-                    "No uncompacted messages to summarize; shorten the prompts or scoped memory"
-                )
             original_estimate = meta["estimated_tokens"]
-            keep = min(profile["keep_recent_messages"], max(0, len(rows) - 1))
+            keep = min(profile["keep_recent_messages"], max(0, len(compactable) - 1))
             # If the tail itself exceeds the target, compact progressively more of it.
             while keep > 0:
                 tail_messages, tail_meta = await self.assemble(
                     bot,
                     profile,
                     channel_id,
-                    rows[-keep:],
+                    sorted(pinned + compactable[-keep:], key=lambda row: row["seq"]),
                     context["summary"],
                     tools=tools,
                     image_plan=image_plan,
@@ -575,7 +614,8 @@ class ContextBuilder:
                 ] < threshold and not image_limits_exceeded(tail_messages, profile):
                     break
                 keep //= 2
-            old_rows, recent = (rows[:-keep], rows[-keep:]) if keep else (rows, [])
+            old_rows, recent = (compactable[:-keep], compactable[-keep:]) if keep else (compactable, [])
+            recent = sorted(pinned + recent, key=lambda row: row["seq"])
             summary = context["summary"]
             pending = list(old_rows)
             compaction_id = "cmp_" + turn_id

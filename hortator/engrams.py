@@ -295,11 +295,16 @@ class Engrams:
             "reset_after_at": boundary.get("after_at", 0),
         }
 
-    def select_rows(self, snapshot, rows):
+    def select_rows(self, snapshot, rows, *, unhandled_after=None):
         if not snapshot or not snapshot["config"]["reduce_history"] or not snapshot["revision"]:
             return rows
-        covered = [row for row in rows if row["seq"] <= snapshot["covered_through"]]
-        pending = [row for row in rows if row["seq"] > snapshot["covered_through"]]
+        covered_through = snapshot["covered_through"]
+        if unhandled_after is not None:
+            # Engram coverage means observed, not answered: queued humans can
+            # appear in another person's turn without consuming their request.
+            covered_through = min(covered_through, unhandled_after)
+        covered = [row for row in rows if row["seq"] <= covered_through]
+        pending = [row for row in rows if row["seq"] > covered_through]
         keep = covered[-snapshot["config"]["recent_messages"] :]
         return keep + pending
 

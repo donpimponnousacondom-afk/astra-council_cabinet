@@ -2170,3 +2170,15 @@ records the actual matching dashboard/server identities. No push is performed.
 - PR review identified that successful thread creation had discarded already-known
   name/parent metadata. The creation path now saves actual returned names before
   exposing contexts; tests cover both text-channel and forum response shapes.
+
+## 2026-10-06 — per-human directed attention queue
+
+The owner reported a reply attached to a different human's message. Read-only request/event evidence showed the original draft was correctly suppressed, followed by a fresh request with the second human's activation; generated text nevertheless answered the earlier screenshot. The owner requested queuing separate humans instead of cancelling an active directed answer.
+
+The runtime now pins the selected human through preparation, coalesces only that human's input in that channel, schedules the oldest waiting human, and keeps unclaimed humans above the handled-message cursor. Same-human/same-channel updates can still supersede unsent drafts; routine priority and in-flight Discord delivery behavior remain unchanged. No configuration, prompt, schema or grant changes.
+
+Local isolated verification: `pytest -q tests/test_addressing.py tests/test_single_shot.py tests/test_background_jobs.py tests/test_secretary.py tests/test_role_mentions.py` **129 passed**, two existing dependency warnings. Regressions cover arrivals before launch/during preparation/generation/send gap, three-human ordering, per-human coalescing, same-human replacement, restart persistence, and another thread. Ruff check/format passed. A first restart-test fixture forgot to reconnect the simulated gateway after recovery correctly marked it offline; the fixture now models that reconnect. No live provider calls or Discord sends were made for these tests. Full-suite and dual independent PR review evidence will be recorded on the published PR after they settle.
+
+PR86 review follow-up: Sol independently reproduced Engram coverage dropping a queued raw question and ordinary compaction dropping its pixels. The parent confirmed both. Context preparation now restores eligible pending/current-turn human rows even below a prior checkpoint and pins them through automatic compaction; Engram reduction retains unhandled rows. Explicit manual compaction still works, with subsequent queued turns recovering their raw input. Existing reset/deletion/owner filters and hard budgets remain active. Added mocked provider regressions for three-human Engram reduction and queued text/pixels across automatic, existing-checkpoint and manual compaction. Full final-head evidence remains in the PR review digest rather than inferred from earlier-head results.
+
+Luna independently reproduced an existing same-human race during the reasoning viewer’s asynchronous pre-send capture check. Delivery now performs that preparation before its final deadline/queue/configuration checks and before marking the outbox as sending. Two worker-thread-gated regressions distinguish same-human supersession from another human waiting; the already-started Discord-send test continues to protect delivery uncertainty.
