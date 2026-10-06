@@ -273,15 +273,22 @@ async def test_manual_trigger_uses_human_time_not_old_pending_or_bot_activity(ke
     assert kernel.store.rows("SELECT channel_id FROM turns ORDER BY started_at")[-1]["channel_id"] == old
 
 
-async def test_manual_recency_excludes_other_targets_unknown_authors_and_disallowed_rooms(kernel):
+async def test_manual_recency_counts_other_targets_but_excludes_unknown_and_disallowed(kernel, owner):
     bot = setup(kernel)
-    root, thread = "222222222222222222", "666666666666666666"
+    thread = "666666666666666666"
     kernel.store.execute("UPDATE messages SET at=100")
     conversation(kernel, thread, 200, targets=[{"bot_id": "curie", "user_id": "444444444444444444"}])
     conversation(kernel, thread, 300, kind="unknown")
     conversation(kernel, "777777777777777777", 400)
     kernel.store.execute("UPDATE channels SET parent_id=NULL WHERE id='777777777777777777'")
-    assert kernel.engine.manual_channel(bot) == root
+    assert kernel.engine.manual_channel(bot) == thread
+    assert kernel.engine.attention(bot) == []
+    await install_client(kernel, lambda _: completion())
+    await trigger(kernel, owner)
+    await settle(kernel)
+    assert kernel.store.one("SELECT channel_id FROM turns")["channel_id"] == thread
+    assert not kernel.store.one("SELECT 1 FROM human_attention_claims")
+    assert kernel.store.one("SELECT reply_to FROM outbox")["reply_to"] is None
     conversation(kernel, thread, 500)
     assert kernel.engine.manual_channel(bot) == thread
 

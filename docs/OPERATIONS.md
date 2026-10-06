@@ -75,8 +75,9 @@ global/provider pause, provider recovery waits, concurrency and usage limits app
 
 An untargeted Trigger selects the allowed conversation with the most recent
 non-deleted human activity after the bot’s context reset. It uses message time,
-not history-import order or recent bot replies, and excludes human messages
-directed elsewhere. Hortator still requires owner activity. An explicit API
+not history-import order or recent bot replies. Human activity directed to another
+participant still counts for choosing a conversation; it does not grant this bot
+that participant’s mention/reply activation. Hortator still requires owner activity. An explicit API
 channel target takes precedence. Without eligible human activity, the untargeted
 request fails clearly; it does not fall back to old bot-only threads. Ordinary
 scheduling retains its pending-input/oldest-evaluated fairness rule. No fake message or new prompt is inserted. Busy clicks are

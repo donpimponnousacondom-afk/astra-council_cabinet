@@ -143,7 +143,8 @@ existing historical statements are not rewritten into claims of current state.
 
 Owner selected the most recent eligible conversation with human activity for an
 untargeted dashboard Trigger. Use stored message timestamps, authenticated human
-author metadata and existing scope/reset/addressing rules. Explicit channel
+author metadata and existing scope/reset rules; preserve directed reply targeting
+separately from conversation selection. Explicit channel
 selection remains authoritative; normal scheduler fairness is unchanged. Do not
 add a destination picker or alter bot configuration. See the current contract in
 [OPERATIONS](OPERATIONS.md#dashboard-workbench).

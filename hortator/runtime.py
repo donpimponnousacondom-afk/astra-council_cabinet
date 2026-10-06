@@ -197,10 +197,10 @@ class Engine:
                 continue
             boundary = self.store.context_boundary(bot["id"], channel_id)
             # Read metadata only; late backfill must not look newer than live conversation.
-            rows = self.store.execute(
-                "SELECT seq,at,channel_id,author_id,bot_id,reply_to,addressing FROM messages "
+            row = self.store.one(
+                "SELECT seq,at FROM messages "
                 "WHERE channel_id=? AND deleted=0 AND json_extract(addressing,'$.author_kind')='human' "
-                "AND seq>? AND at>? AND (?=0 OR author_id=?) ORDER BY at DESC,seq DESC",
+                "AND seq>? AND at>? AND (?=0 OR author_id=?) ORDER BY at DESC,seq DESC LIMIT 1",
                 (
                     channel_id,
                     boundary["after_seq"] if boundary else 0,
@@ -209,14 +209,8 @@ class Engine:
                     OWNER_ID,
                 ),
             )
-            try:
-                for record in rows:
-                    row = dict(record)
-                    if not human_directed_elsewhere(self.store, row, bot["id"]):
-                        candidates.append((row["at"], row["seq"], channel_id))
-                        break
-            finally:
-                rows.close()
+            if row:
+                candidates.append((row["at"], row["seq"], channel_id))
         return max(candidates)[2] if candidates else None
 
     def attention(self, bot, channel_id=None, through=None):
