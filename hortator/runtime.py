@@ -1403,6 +1403,13 @@ class Engine:
                         else wait
                     )
                     await asyncio.sleep(min(wait, remaining))
+                reasoning = (
+                    await self.registry.reasoning_viewer.prepare(
+                        bot, context.turn_id, request_id, outbox_id, destination
+                    )
+                    if not routing
+                    else None
+                )
                 # Stop before dispatch, but never cancel an in-flight Discord send
                 # solely because the drafting deadline passed: acceptance may be uncertain.
                 check_deadline()
@@ -1423,13 +1430,6 @@ class Engine:
                 panel = self.registry.panels.prepared(context) if not routing else None
                 if panel:
                     self.registry.panels.dispatch(panel, outbox_id)
-                reasoning = (
-                    await self.registry.reasoning_viewer.prepare(
-                        bot, context.turn_id, request_id, outbox_id, destination
-                    )
-                    if not routing
-                    else None
-                )
                 discord_id = await self.transport.send(
                     bot,
                     destination,

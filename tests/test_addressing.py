@@ -2,6 +2,7 @@ import asyncio
 import json
 import re
 import time
+import threading
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock
 
@@ -583,3 +584,55 @@ async def test_pending_human_text_and_pixels_survive_compaction(kernel, prior_ch
     if prior_checkpoint != "existing":
         assert any(record["purpose"] == "compaction" for record in requests)
     assert not kernel.engine.attention(ada)
+
+
+@pytest.mark.parametrize("same_human", [True, False])
+async def test_human_queue_rechecked_after_reasoning_capture_before_discord_send(
+    kernel, monkeypatch, same_human
+):
+    import hortator.reasoning_viewer as viewer
+
+    ada, _ = pair(kernel, interval_seconds=0)
+    plugin = kernel.store.get("plugins", "reasoning_viewer")
+    kernel.store.put("plugins", {**plugin, "enabled": True})
+    kernel.store.put("bots", {**ada, "enabled_plugins": ["reasoning_viewer"]})
+    ada = kernel.store.get("bots", "ada")
+    await receive(kernel, message(555555555555555551, mentions=[ada]))
+    entered, release = asyncio.Event(), threading.Event()
+    loop = asyncio.get_running_loop()
+    original = viewer.has_capture
+    captures = 0
+
+    def has_capture(rows):
+        nonlocal captures
+        captures += 1
+        if captures == 1:
+            loop.call_soon_threadsafe(entered.set)
+            assert release.wait(5), "Test did not release capture preparation"
+        return original(rows)
+
+    monkeypatch.setattr(viewer, "has_capture", has_capture)
+    await install_client(kernel, lambda r: completion("Answer"))
+    await kernel.engine.tick()
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        assert kernel.store.one("SELECT status FROM outbox")["status"] == "pending"
+        await receive(
+            kernel,
+            message(
+                555555555555555552, author=OWNER_ID if same_human else "777777777777777777", mentions=[ada]
+            ),
+        )
+        await kernel.engine.tick()
+        kernel.engine.transport.send.assert_not_awaited()
+    finally:
+        release.set()
+    await settle(kernel)
+    assert kernel.store.one("SELECT status FROM outbox ORDER BY created_at LIMIT 1")["status"] == (
+        "suppressed" if same_human else "sent"
+    )
+    await kernel.engine.tick()
+    await settle(kernel)
+    assert [call.args[3] for call in kernel.engine.transport.send.await_args_list] == (
+        ["555555555555555552"] if same_human else ["555555555555555551", "555555555555555552"]
+    )
