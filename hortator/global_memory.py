@@ -10,6 +10,7 @@ from .models import ControlError
 from .store import dumps
 from .timekeeping import council_timezone, present_times
 from .tool_feedback import feedback
+from .working_set import with_result_reader
 
 
 PLUGIN_ID = "global_memory"
@@ -17,6 +18,8 @@ DESCRIPTION = (
     "Your private cross-channel notes: shared across YOUR conversations, never with other bots. "
     'Always include operation. Write: {"operation":"write","key":"owner-preference","value":"Concise attributed note"}. '
     'Read: {"operation":"read"}. Delete: {"operation":"delete","key":"owner-preference"}. '
+    'Read one note: {"operation":"read","key":"owner-preference"}. Large replies are saved intact and paged. '
+    "Use this same tool with returned read_result/next arguments until next is null; a page is not the whole read. "
     "{} returns usage without reading or changing notes. Writes replace the same key. "
     "Keep enduring facts, people and preferences here; use channel memory for room-specific details. "
     "Preserve who said what, the source channel and date in notes; a conversation elsewhere is background, "
@@ -126,10 +129,12 @@ class GlobalMemory:
                 "Consolidate notes before lowering the budget; no notes were changed."
             )
 
-    def notes(self, bot_id):
+    def notes(self, bot_id, key=None):
         return self.store.rows(
-            "SELECT key,value,source_channel_id,updated_at FROM global_memories WHERE bot_id=? ORDER BY key",
-            (bot_id,),
+            "SELECT key,value,source_channel_id,updated_at FROM global_memories WHERE bot_id=?"
+            + (" AND key=?" if key is not None else "")
+            + " ORDER BY key",
+            (bot_id, key) if key is not None else (bot_id,),
         )
 
     def spec_for(self, context):
@@ -230,7 +235,7 @@ class GlobalMemory:
             return self.vault.redact(report)
         if args["operation"] == "read":
             return {
-                "notes": self.notes(bot["id"]),
+                "notes": self.notes(bot["id"], args["key"].strip() if "key" in args else None),
                 "budget": budget,
                 **({"warning": describe_budget(budget)} if budget["must_consolidate"] else {}),
             }
@@ -310,7 +315,7 @@ def register(registry):
         "Global memory (private to this bot)",
         DESCRIPTION
         + f"Per-bot budget: 1–{MAX_MEMORY_CHAR_LIMIT:,} characters, default {DEFAULT_MEMORY_CHAR_LIMIT:,}, with 5% temporary headroom and at most {NOTE_CHAR_LIMIT:,} per note. Disable this plugin to stop both tools and automatic cross-channel note injection; stored notes remain intact.",
-        PARAMETERS,
+        with_result_reader(PARAMETERS),
         memory.call,
         {},
     )

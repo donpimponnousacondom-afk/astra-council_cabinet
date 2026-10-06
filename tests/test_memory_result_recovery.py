@@ -1,4 +1,4 @@
-"""Recovery instructions must be executable, not an invented memory operation."""
+"""Recovery instructions must name an executable reader, including native memory paging."""
 
 import copy
 import json
@@ -26,9 +26,7 @@ async def test_memory_reference_names_an_executable_granted_reader(kernel, memor
     )
     assert "error" not in written
     original = await kernel.registry.call(memory, {"operation": "read"}, context, "read")
-    reference = result_reference(
-        {"content": dumps(original)}, tool_name=memory, available_readers=(memory, reader)
-    )
+    reference = result_reference({"content": dumps(original)}, tool_name=memory, available_readers=(reader,))
     assert reference["reread_tool"] == reader
     assert type(reference["reread"]["offset"]) is int
     assert type(reference["reread"]["length"]) is int
@@ -37,9 +35,12 @@ async def test_memory_reference_names_an_executable_granted_reader(kernel, memor
     assert json.loads(page["text"])["notes"][0]["value"] == "café 🙂 preserved"
     # Advice is not a grant: the existing source-grant check still owns access.
     current = kernel.store.get("bots", "ada")
-    kernel.store.put("bots", {**current, "enabled_plugins": [reader, *dependencies]})
+    kernel.store.put(
+        "bots", {**current, "enabled_plugins": [reader, *dependencies] if reader != memory else []}
+    )
     denied = await kernel.registry.call(reader, reference["reread"], context, "revoked")
-    assert denied["ok"] is False and "grant" in denied["error"]
+    assert denied["ok"] is False
+    assert "grant" in denied["error"] or "not enabled" in denied["error"]
 
 
 @pytest.mark.parametrize("indexed", [False, True])
@@ -105,8 +106,8 @@ async def test_runtime_large_memory_read_recovers_every_note_through_named_local
     kernel, memory, exhausted
 ):
     rounds = 1 if exhausted else 30
-    ready(kernel, enabled_plugins=[memory, "web_fetch"], max_tool_rounds=rounds, tool_working_set_tokens=3000)
-    context = grant(kernel, memory, "web_fetch", max_tool_rounds=rounds, tool_working_set_tokens=3000)
+    ready(kernel, enabled_plugins=[memory], max_tool_rounds=rounds, tool_working_set_tokens=3000)
+    context = grant(kernel, memory, max_tool_rounds=rounds, tool_working_set_tokens=3000)
     expected = [
         "".join(f"Note {key} entry {n:05d}: café 🙂 verified observation.\n" for n in range(90))
         for key in range(5)
@@ -134,13 +135,13 @@ async def test_runtime_large_memory_read_recovers_every_note_through_named_local
                 assert result["reread_unavailable"] and "reread_tool" not in result
                 assert "reread" not in result
                 return reply(tool("council_silence", {"label": "Unable to verify omitted notes"}))
-            assert result["reread_tool"] == "web_fetch"
+            assert result["reread_tool"] == memory
             assert result["reread_tool"] in {t["function"]["name"] for t in body["tools"]}
             return reply(tool(result["reread_tool"], result["reread"]))
         assert "error" not in result and not result.get("omitted_from_active_prompt")
         chunks.append(result["text"])
         if result["next"]:
-            return reply(tool("web_fetch", result["next"]))
+            return reply(tool(memory, result["next"]))
         return reply(tool("council_silence", {"label": "Every note read"}))
 
     await install_client(kernel, handle)

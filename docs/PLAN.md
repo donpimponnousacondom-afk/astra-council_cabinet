@@ -10,6 +10,13 @@ current checkout or running configuration.
 
 ## Current work and acceptance
 
+- On 2026-10-06 the owner authorized lossless memory-result pagination after
+  discussing Loki's keyed-read and paging suggestions. Preserve the full reply
+  before bounding its prompt copy, expose a native reader on both memory tools,
+  and allow exact-key reads. Reuse immutable evidence and existing scope/grant
+  checks; retain note budgets and stored data. Do not change Engram, compaction,
+  live bot settings or add dashboard controls. See [memory paging](GLOBAL_MEMORY.md).
+
 - On 2026-10-06 the owner authorized correcting ambiguous recovery instructions
   for large tool results after Curie sent `read_result` to `global_memory`.
   Name an actually advertised reader and its arguments in each omitted-result

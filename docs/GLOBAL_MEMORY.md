@@ -20,9 +20,15 @@ The tool takes a JSON object with named fields; argument order is irrelevant. No
 
 | Field | Type | Use |
 | --- | --- | --- |
-| `operation` | String: `read`, `write`, `delete` | Required for every real operation. |
-| `key` | Nonblank string, at most 100 characters | Required for `write` and `delete`. Leading/trailing whitespace is normalized. |
+| `operation` | String: `read`, `write`, `delete`, `read_result` | Required for every real model operation. |
+| `key` | Nonblank string, at most 100 characters | Required for `write` and `delete`; optional exact-key filter for `read`. Leading/trailing whitespace is normalized. |
 | `value` | String, at most 8,000 characters | Required for `write`; replaces the complete value at that key. Empty text is an empty note, not deletion. |
+| `result_id` | Nonempty string, at most 100 characters | Required for `read_result`; use a returned evidence ID. |
+| `offset` | Integer, at least zero | Optional for `read_result`, default zero; counts serialized Unicode characters. |
+| `length` | Integer, 1–18,000 | Optional for `read_result`, default 6,000 characters. |
+
+Paging fields belong only to `read_result`, which does not accept note keys or
+values. The owner API retains read/write/delete, as described below.
 
 ```json
 {}
@@ -34,12 +40,26 @@ Returns complete usage, examples and the bot's current aggregate allowance witho
 {"operation":"read"}
 ```
 
-Returns this bot's notes in key order and its current budget. Each note includes `key`, `value`, `source_channel_id` and `updated_at`. Timestamps shown to the model use the configured council timezone and explicit offset.
+Returns this bot's notes in key order and its current budget. Add `"key":"owner-preference"` to read only that exact key (surrounding whitespace is trimmed); an unmatched key returns an empty notes list. Budget accounting still covers all notes. Each note includes `key`, `value`, `source_channel_id` and `updated_at`. Timestamps shown to the model use the configured council timezone and explicit offset.
 
-If a large read cannot fit the active tool-result budget, follow the returned
-`reread_tool` and `reread` arguments to page its stored local evidence. Do not send
-`read_result` to `global_memory`; it is not a supported memory operation. Paging
-and the no-reader case follow the shared [working-set contract](AGENTIC_TOOLS.md#task-and-active-context-budgets).
+Model-facing replies larger than 60,000 serialized Unicode characters are saved
+intact before returning a first page of 6,000 characters. The reply preserves its
+budget/warning and names `next_tool` with complete `next` arguments. Call that
+tool until `next` is null; one page is not a complete read. These pages contain
+serialized JSON, which can span page boundaries; join `text` in range order to
+recover the complete reply. Original notes are never shortened.
+
+`global_memory` itself supports `{"operation":"read_result","result_id":"<returned-id>","offset":0,"length":6000}`
+for models. Offsets count Unicode characters; lengths are integers from 1 to
+18,000, default 6,000. This reads an immutable saved reply even if a note changes
+later. Receipts remain restricted to the originating bot, channel and turn, with
+source grants rechecked. A new turn can use `read` to get current notes. This does
+not require a web/workspace grant or fetch anything from the network. Operator
+memory APIs retain read/write/delete and do not accept turn-receipt paging.
+
+If a reply is omitted from the active prompt, follow its `reread_tool` and
+`reread` arguments. Native memory readers, fallback readers and the no-reader case
+follow the shared [working-set contract](AGENTIC_TOOLS.md#task-and-active-context-budgets).
 
 ```json
 {"operation":"write","key":"owner-preference","value":"The owner prefers concise technical answers. Learned from the owner's message in the control channel on 2026-09-13."}

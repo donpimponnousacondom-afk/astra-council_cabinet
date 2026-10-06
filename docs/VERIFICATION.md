@@ -4,6 +4,39 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Lossless memory replies and native paging (2026-10-06)
+
+- Base `837f4d830792425ba73b1d6fde6ce4e019283850`, branch
+  `hotfix/memory-result-pagination`. The owner approved pagination and exact-key
+  reads after discussing the older 60,000-character reply fallback. The new
+  regression selection stopped after **3 expected failures** on the old code:
+  oversized channel/global results were shortened, and channel reads ignored keys.
+- Both memory tools now retain oversized replies intact before returning a
+  bounded first page, expose native `read_result` and prefer it when recovering
+  omitted results. Exact-key reads select one note without changing total budget
+  accounting. Existing source scope/grant checks, owner APIs, stored notes,
+  Engram configuration and compaction policy are preserved.
+- **181 focused tests passed** in 57.63 s, with two dependency deprecation
+  warnings, no failures/skips: memory pagination/recovery, global memory and
+  integration, tool feedback, web-tool context, agentic runtime and inspector.
+  The final pagination-only rerun passed **23 tests** in 5.30 s, strengthening
+  scope checks using another bot that actually has the reader grant and
+  exercising the owner service entry point.
+- Coverage reconstructs every character of large Unicode/escaped replies,
+  preserves the original snapshot across later note edits, checks key filtering,
+  budget warnings, maximum-length pages, invalid arguments, transitive revoked
+  source grants and cross-bot/channel/turn denials. Runtime fixtures recover
+  omitted notes with only the native memory grant and report exhausted rounds
+  honestly. These use isolated data and mocked model transport; no live provider
+  request, production note edit or forced compaction was performed.
+- Repository-wide Ruff lint/format and diff checks passed. Full CI and independent
+  Luna/Sol review remain publication gates. Evidence is in ignored
+  `audit/2026-10-06/05-memory-pagination/`.
+- Both initial independent reviews found no actionable code defects. Luna
+  identified an outdated operation table in GLOBAL_MEMORY; the parent confirmed
+  and updated the complete field table. Sol's initial review missed that wording.
+  The follow-up is documentation only; final-head reviews and CI remain required.
+
 ## New-record editors without randomUUID (2026-10-06)
 
 - Base `b0f9f10c81173b775b78419f9595809d0589e78f`, branch
