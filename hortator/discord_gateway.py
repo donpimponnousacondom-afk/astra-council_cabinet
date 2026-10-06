@@ -944,6 +944,7 @@ class DiscordManager:
                         author_id=OWNER_ID,
                         author_name="The Boss",
                         content=text,
+                        at=message.created_at.timestamp(),
                         addressing={"author_kind": "human", "live": False},
                     )
                     self.store.context(bot["id"], str(channel.id))

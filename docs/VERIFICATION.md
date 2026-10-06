@@ -2142,5 +2142,6 @@ records the actual matching dashboard/server identities. No push is performed.
   alone do not establish full-suite or deployed readiness.
 
 - Independent review caught that authenticated `!dm` questions lacked human-author
-  metadata. The trusted command producer now records it without creating a live
-  mention/reply activation; a regression exercises the real command handler.
+  metadata. The trusted command producer now records it and the original Discord
+  timestamp without creating a live mention/reply activation; a regression exercises
+  the real command handler and checks ordering against a newer conversation.

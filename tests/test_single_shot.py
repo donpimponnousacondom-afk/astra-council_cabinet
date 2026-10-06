@@ -1,5 +1,6 @@
 import asyncio
 import time
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -318,6 +319,7 @@ async def test_manual_recency_recognizes_authenticated_dm_command(kernel):
     channel = SimpleNamespace(id=888888888888888888)
     message = SimpleNamespace(
         id=777777777777777777,
+        created_at=datetime.fromtimestamp(100, timezone.utc),
         content="!dm Please continue the private discussion",
         author=SimpleNamespace(id=1482143139828596916, bot=False, create_dm=AsyncMock(return_value=channel)),
         webhook_id=None,
@@ -326,5 +328,19 @@ async def test_manual_recency_recognizes_authenticated_dm_command(kernel):
     await kernel.connector.command(bot, message)
     assert kernel.engine.channel_allowed(bot, str(channel.id))
     assert kernel.engine.manual_channel(bot) == str(channel.id)
+    assert kernel.store.one("SELECT at FROM messages")["at"] == 100
+    # A slow create_dm call must not make an older question appear newer.
+    kernel.store.ingest(
+        discord_id="999999999999999999",
+        channel_id="999999999999999998",
+        room_id="owner:hortator",
+        author_id="1482143139828596916",
+        author_name="The Boss",
+        content="Newer question",
+        at=200,
+        addressing={"author_kind": "human", "live": False},
+    )
+    kernel.store.context(bot["id"], "999999999999999998")
+    assert kernel.engine.manual_channel(bot) == "999999999999999998"
     # Recording the human author must not synthesize a live mention/reply activation.
     assert kernel.engine.attention(bot) == []
