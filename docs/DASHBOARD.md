@@ -42,6 +42,12 @@ Persistent warnings and failed saves must remain visible and attributable. Succe
 
 Each asynchronous save or credential completion belongs to the editor instance that started it. If the operator has switched to another record, an old completion must not close or replace the new editor. Dirty-state protection includes invalid raw JSON, pending credentials and private-note drafts, not just the last successfully parsed configuration object. Changing a note's channel or a credential's target must not silently carry unsaved content into a different destination.
 
+New-record editors generate an editable ID suggestion with the existing kind
+prefix and eight hexadecimal characters using `crypto.getRandomValues`. They
+must also open over ordinary HTTP, where `crypto.randomUUID` may be unavailable.
+These are record identifiers, not credentials; API validation and duplicate-ID
+handling remain authoritative. Opening an editor does not save a record.
+
 Use local, reusable CSS variables for the theme. Dark+ includes the base Visual Studio dark theme; relevant anchors are editor background `#1e1e1e`, editor text `#d4d4d4`, menu surface `#252526` and the familiar blue `#007acc`. These are visual references, not a dependency on the VS Code application. [Official base theme](https://raw.githubusercontent.com/microsoft/vscode/main/extensions/theme-defaults/themes/dark_vs.json).
 
 Dark+ token accents such as `#9cdcfe`, `#4ec9b0`, `#b5cea8`, `#ce9178` and `#c586c0` can distinguish identifiers, values and evidence. Preserve text labels and severity meanings so color is not the only signal. [Official Dark+ theme](https://raw.githubusercontent.com/microsoft/vscode/main/extensions/theme-defaults/themes/dark_plus.json).
