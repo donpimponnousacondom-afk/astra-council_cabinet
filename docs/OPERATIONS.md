@@ -394,9 +394,10 @@ Folded warnings/errors allow up to 640 characters, prioritizing operation, chann
 or bare `!`) stays outside model context. Hortator handles live commands from
 its owner in its existing control scope; council bots skip them. Unknown
 `!command` names still produce Hortator's command error rather than falling
-through to its model. Repeated leading marks (`!!hello`, `!!!!!`) or a first
-word wrapped in marks (`!hello!`) are ordinary conversation, with the original
-text, reply/mention targeting and normal scope/activation gates preserved.
+through to its model. A further `!` in the first whitespace-delimited word
+marks ordinary conversation: repeated leading marks (`!!hello`, `!!!!!`)
+and wrapped words (`!hello!`, `!hello!,`) retain the original text,
+reply/mention targeting and normal scope/activation gates.
 An exclamation in a command argument does not change dispatch (`!prompt ada Hello!`
 is still a command). Historical prose can be ingested but never receives live
 mention/reply priority. This owner-approved punctuation exception (2026-10-06)

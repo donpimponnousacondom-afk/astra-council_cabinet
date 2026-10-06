@@ -23,6 +23,15 @@ historical claims retain their original date and scope.
   bare/spaced prefixes, aliases, unknown-command errors, punctuation in command
   arguments, exact-owner/control-channel gates and existing stop/start controls.
   Ruff lint/format and `git diff --check` passed, exit 0.
+- Luna's initial independent review found that a closing exclamation followed
+  by a comma or period (`!hello!,`, `!hello!.`) was still dropped; Sol's initial
+  review missed that boundary. The parent reproduced it through actual receive.
+  Simplified classification to treat any additional `!` in the first word as
+  prose and added both suffix cases for both roles/live and historical input.
+  The same focused selection then passed **170 tests**, exit 0, in 30.26 s,
+  with two dependency warnings and no failures/skips. Ruff lint/format and
+  diff checks passed again. Both reviewers receive this disclosed delta for
+  final-head review; no independent-discovery claim for the follow-up.
 - These checks use isolated fixture data and mocked Discord replies, with no
   live provider/Discord invocation, configuration edits or scheduler changes.
   Full CI and independent Luna/Sol final-head reviews remain separate gates.

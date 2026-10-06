@@ -16,7 +16,10 @@ def recipient(kernel, bot_id):
     return bot
 
 
-@pytest.mark.parametrize("content", ["!!!!! GENIUS", "  !!hello", "!hello!", "!hello! more text"])
+@pytest.mark.parametrize(
+    "content",
+    ["!!!!! GENIUS", "  !!hello", "!hello!", "!hello! more text", "!hello!, how are you?", "!hello!."],
+)
 @pytest.mark.parametrize("bot_id", ["ada", "hortator"])
 @pytest.mark.parametrize("historical", [False, True])
 async def test_exclamations_are_stored_as_replies_without_command_dispatch(

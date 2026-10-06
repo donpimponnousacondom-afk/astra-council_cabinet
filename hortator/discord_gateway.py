@@ -73,9 +73,9 @@ def command_prefixed(content):
     if not text.startswith("!"):
         return False
     head = text.split(maxsplit=1)[0]
-    # Repeated or paired exclamations are prose: "!!!!!", "!!hello", "!hello!".
+    # Any further ! in the first word is prose, including "!hello!,".
     # A bare !, whitespace after it and unknown !commands retain command handling.
-    return head == "!" or not (head.startswith("!!") or head.endswith("!"))
+    return "!" not in head[1:]
 
 
 class CouncilClient(discord.Client):
