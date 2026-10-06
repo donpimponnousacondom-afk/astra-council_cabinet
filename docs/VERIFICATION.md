@@ -32,6 +32,10 @@ historical claims retain their original date and scope.
 - Repository-wide Ruff lint/format and diff checks passed. Full CI and independent
   Luna/Sol review remain publication gates. Evidence is in ignored
   `audit/2026-10-06/05-memory-pagination/`.
+- Both initial independent reviews found no actionable code defects. Luna
+  identified an outdated operation table in GLOBAL_MEMORY; the parent confirmed
+  and updated the complete field table. Sol's initial review missed that wording.
+  The follow-up is documentation only; final-head reviews and CI remain required.
 
 ## New-record editors without randomUUID (2026-10-06)
 

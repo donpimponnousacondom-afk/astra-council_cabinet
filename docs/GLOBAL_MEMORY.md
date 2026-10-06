@@ -20,9 +20,15 @@ The tool takes a JSON object with named fields; argument order is irrelevant. No
 
 | Field | Type | Use |
 | --- | --- | --- |
-| `operation` | String: `read`, `write`, `delete` | Required for every real operation. |
-| `key` | Nonblank string, at most 100 characters | Required for `write` and `delete`. Leading/trailing whitespace is normalized. |
+| `operation` | String: `read`, `write`, `delete`, `read_result` | Required for every real model operation. |
+| `key` | Nonblank string, at most 100 characters | Required for `write` and `delete`; optional exact-key filter for `read`. Leading/trailing whitespace is normalized. |
 | `value` | String, at most 8,000 characters | Required for `write`; replaces the complete value at that key. Empty text is an empty note, not deletion. |
+| `result_id` | Nonempty string, at most 100 characters | Required for `read_result`; use a returned evidence ID. |
+| `offset` | Integer, at least zero | Optional for `read_result`, default zero; counts serialized Unicode characters. |
+| `length` | Integer, 1–18,000 | Optional for `read_result`, default 6,000 characters. |
+
+Paging fields belong only to `read_result`, which does not accept note keys or
+values. The owner API retains read/write/delete, as described below.
 
 ```json
 {}
