@@ -138,3 +138,13 @@ Record new product decisions in the relevant feature contract and update this
 plan when they change current work, acceptance or deferred scope. Preserve dated
 rationale in the historical record. New dated entries use newest-first order;
 existing historical statements are not rewritten into claims of current state.
+
+### 2026-10-06 — Manual Trigger destination
+
+Owner selected the most recent eligible conversation with human activity for an
+untargeted dashboard Trigger. Use stored message timestamps, authenticated human
+author metadata and existing scope/reset rules; preserve directed reply targeting
+separately from conversation selection. Explicit channel
+selection remains authoritative; normal scheduler fairness is unchanged. Do not
+add a destination picker or alter bot configuration. See the current contract in
+[OPERATIONS](OPERATIONS.md#dashboard-workbench).

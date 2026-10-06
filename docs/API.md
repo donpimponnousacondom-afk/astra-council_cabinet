@@ -134,7 +134,8 @@ Control request shape:
 
 One-shot example: `{"action":"trigger","kind":"bots","id":"ada","data":{}}`.
 Optional `data.channel_id` selects an existing allowed conversation; otherwise
-normal context selection is used with explicit idle evaluation. Returns
+the most recent eligible conversation with human activity is selected under the
+[Trigger routing rules](OPERATIONS.md#dashboard-workbench). Returns
 `{"turn_id":"turn_...","single_shot":true}` after admission, not a delivery
 receipt. Existing owner/session/CSRF gates apply. Trigger preserves saved bot
 activation/configuration, can run a paused bot once, and rejects busy/full slots,
