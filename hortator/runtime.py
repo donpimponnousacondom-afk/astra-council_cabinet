@@ -188,6 +188,37 @@ class Engine:
                 candidates.append((not unseen, context["updated_at"], channel_id))
         return min(candidates)[2] if candidates else None
 
+    def manual_channel(self, bot):
+        """Newest eligible human conversation, independent of scheduler fairness."""
+        candidates = []
+        for context in self.store.rows("SELECT channel_id FROM contexts WHERE bot_id=?", (bot["id"],)):
+            channel_id = context["channel_id"]
+            if not self.channel_allowed(bot, channel_id):
+                continue
+            boundary = self.store.context_boundary(bot["id"], channel_id)
+            # Read metadata only; late backfill must not look newer than live conversation.
+            rows = self.store.execute(
+                "SELECT seq,at,channel_id,author_id,bot_id,reply_to,addressing FROM messages "
+                "WHERE channel_id=? AND deleted=0 AND json_extract(addressing,'$.author_kind')='human' "
+                "AND seq>? AND at>? AND (?=0 OR author_id=?) ORDER BY at DESC,seq DESC",
+                (
+                    channel_id,
+                    boundary["after_seq"] if boundary else 0,
+                    boundary["after_at"] if boundary else 0,
+                    bot["role"] == "hortator",
+                    OWNER_ID,
+                ),
+            )
+            try:
+                for record in rows:
+                    row = dict(record)
+                    if not human_directed_elsewhere(self.store, row, bot["id"]):
+                        candidates.append((row["at"], row["seq"], channel_id))
+                        break
+            finally:
+                rows.close()
+        return max(candidates)[2] if candidates else None
+
     def attention(self, bot, channel_id=None, through=None):
         rows = self.store.rows(
             "SELECT m.* FROM messages m JOIN contexts c ON c.channel_id=m.channel_id AND c.bot_id=? "
@@ -360,13 +391,11 @@ class Engine:
         error = self.budget_error(bot)
         if error:
             raise ControlError(error, 409)
-        attention = self.attention(bot)
-        channel_id = channel_id or (
-            attention[0]["channel_id"] if attention else self.pick_channel(bot, force=True)
-        )
+        channel_id = channel_id or self.manual_channel(bot)
         if not channel_id:
             raise ControlError(
-                "No eligible conversation context; start the bot and let it observe a room first"
+                "No eligible conversation with human activity; let the bot observe a human message "
+                "in an allowed room, or specify an eligible channel explicitly"
             )
         return self.launch(bot, channel_id, single_shot=True, human_directed=True)
 

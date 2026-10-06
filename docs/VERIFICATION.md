@@ -2123,3 +2123,19 @@ No live notes, credentials, provider/model settings or source branches were
 rewritten for testing. Deployment uses the existing shared-Screen `--refresh`
 workflow after the source commit; its external `logs/next-feature.json` receipt
 records the actual matching dashboard/server identities. No push is performed.
+
+### 2026-10-06 — Manual Trigger follows recent human conversation
+
+- Reproduced the routing distinction in isolated fixtures: ordinary scheduling
+  selects an old pending thread while an untargeted manual Trigger selects the
+  root conversation with newer human activity. Verified explicit channel override
+  through the control service and persisted turn destinations with a mocked provider.
+- `pytest -q tests/test_single_shot.py`: **27 passed**. Covers late backfill,
+  external bots/webhooks, deleted/unknown-author messages, messages directed to
+  another member, disallowed rooms, reset cutoffs, owner-only Hortator activity,
+  empty human history and existing one-shot admission/cancellation behavior.
+- `ruff check hortator tests`: passed. No live Discord sends, provider requests,
+  configuration changes or context resets were used for these checks.
+- Full-suite and final-head CI/review evidence is recorded with the PR and in
+  ignored `audit/2026-10-06/06-manual-trigger-recency/`; the focused checks above
+  alone do not establish full-suite or deployed readiness.

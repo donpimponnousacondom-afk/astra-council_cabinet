@@ -224,3 +224,90 @@ async def test_cancelling_before_trial_starts_releases_temporary_permission(kern
     assert not kernel.engine.tasks and not kernel.engine.single_shots
     assert not kernel.connector.needed(bot)
     assert kernel.store.one("SELECT status FROM turns")["status"] == "cancelled"
+
+
+def conversation(k, channel, at, *, kind="human", deleted=False, targets=None, author=None):
+    discord_id = str(
+        600000000000000000 + k.store.one("SELECT coalesce(max(seq),0) AS seq FROM messages")["seq"]
+    )
+    k.store.ingest(
+        discord_id=discord_id,
+        channel_id=channel,
+        room_id="council",
+        guild_id="111111111111111111",
+        parent_id="222222222222222222" if channel != "222222222222222222" else None,
+        author_id=author or "1482143139828596916",
+        author_name="Test participant",
+        content="Routing fixture",
+        at=at,
+        addressing={"author_kind": kind, "live": True, "targets": targets or []},
+    )
+    seq = k.store.one("SELECT seq FROM messages WHERE discord_id=?", (discord_id,))["seq"]
+    k.store.context("ada", channel)
+    if deleted:
+        k.store.execute("UPDATE messages SET deleted=1 WHERE seq=?", (seq,))
+    return seq
+
+
+async def test_manual_trigger_uses_human_time_not_old_pending_or_bot_activity(kernel, owner):
+    bot = setup(kernel)
+    root, old = "222222222222222222", "666666666666666666"
+    kernel.store.execute("UPDATE messages SET at=200")
+    kernel.store.execute("UPDATE contexts SET last_seen=999,updated_at=200")
+    # History arrives later, but the human conversation happened earlier.
+    conversation(kernel, old, 100)
+    kernel.store.execute("UPDATE contexts SET updated_at=1 WHERE channel_id=?", (old,))
+    conversation(kernel, old, 300, kind="bot")  # external bot has no council bot_id
+    conversation(kernel, old, 400, kind="webhook")
+    conversation(kernel, old, 500, deleted=True)
+    assert kernel.engine.pick_channel(bot) == old  # ordinary fairness unchanged
+    assert kernel.engine.manual_channel(bot) == root
+    await install_client(kernel, lambda _: completion())
+    await trigger(kernel, owner)
+    await settle(kernel)
+    assert kernel.store.one("SELECT channel_id FROM turns")["channel_id"] == root
+    # An explicit target still wins, even when it is the older conversation.
+    await trigger(kernel, owner, channel_id=old)
+    await settle(kernel)
+    assert kernel.store.rows("SELECT channel_id FROM turns ORDER BY started_at")[-1]["channel_id"] == old
+
+
+async def test_manual_recency_excludes_other_targets_unknown_authors_and_disallowed_rooms(kernel):
+    bot = setup(kernel)
+    root, thread = "222222222222222222", "666666666666666666"
+    kernel.store.execute("UPDATE messages SET at=100")
+    conversation(kernel, thread, 200, targets=[{"bot_id": "curie", "user_id": "444444444444444444"}])
+    conversation(kernel, thread, 300, kind="unknown")
+    conversation(kernel, "777777777777777777", 400)
+    kernel.store.execute("UPDATE channels SET parent_id=NULL WHERE id='777777777777777777'")
+    assert kernel.engine.manual_channel(bot) == root
+    conversation(kernel, thread, 500)
+    assert kernel.engine.manual_channel(bot) == thread
+
+
+async def test_manual_recency_respects_reset_and_has_no_bot_only_fallback(kernel, owner):
+    bot = setup(kernel)
+    kernel.store.execute("DELETE FROM messages")
+    conversation(kernel, "222222222222222222", 200, kind="bot")
+    assert kernel.engine.manual_channel(bot) is None
+    with pytest.raises(ControlError, match="human activity"):
+        await trigger(kernel, owner)
+    seq = conversation(kernel, "222222222222222222", 300)
+    kernel.store.execute(
+        "INSERT INTO context_resets(bot_id,channel_id,after_seq,after_at) VALUES(?,?,?,?)",
+        ("ada", "*", seq, 350),
+    )
+    conversation(kernel, "222222222222222222", 320)  # backfilled across cutoff
+    assert kernel.engine.manual_channel(bot) is None
+    conversation(kernel, "222222222222222222", 400)
+    assert kernel.engine.manual_channel(bot) == "222222222222222222"
+
+
+async def test_manual_recency_hortator_only_counts_owner(kernel):
+    bot = setup(kernel)
+    # Keep channel admission separately controlled to exercise the owner-activity guard.
+    bot = {**bot, "role": "hortator"}
+    kernel.engine.channel_allowed = lambda *_: True
+    kernel.store.execute("UPDATE messages SET at=100")
+    conversation(kernel, "666666666666666666", 200, author="999999999999999999")
+    assert kernel.engine.manual_channel(bot) == "222222222222222222"

@@ -1040,7 +1040,7 @@ function BotTable({
                   !provider(b)?.enabled
                 }
                 aria-label={`Trigger ${b.name} once`}
-                title="Run one turn now using existing context and tools. Keeps the current pause state; skips the wake timer and personal send cooldown. Silence remains allowed if configured."
+                title="Run one turn now in the most recent conversation with human activity, using existing context and tools. Keeps the current pause state; skips the wake timer and personal send cooldown. Silence remains allowed if configured."
                 onClick={() => act("trigger", "bots", b.id)}
               >
                 <Zap size={12} /> Trigger

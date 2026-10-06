@@ -53,6 +53,7 @@ def ingest(
         room_id="council",
         author_id="1482143139828596916",
         author_name="The Boss",
+        addressing={"author_kind": "human", "live": False},
         content=content,
     )
     k.store.context(bot_id, channel_id)

@@ -73,10 +73,13 @@ bot returns to its configured cadence after that turn. Timer `0` remains off.
 Saved configuration and revisions are not changed. The usual room spacing,
 global/provider pause, provider recovery waits, concurrency and usage limits apply.
 
-Trigger selects pending human attention first, otherwise the ordinary allowed
-context ordering with idle evaluation permitted for this explicit action. It
-requires an existing eligible conversation; a new bot must first connect and
-observe its room. No fake message or new prompt is inserted. Busy clicks are
+An untargeted Trigger selects the allowed conversation with the most recent
+non-deleted human activity after the bot’s context reset. It uses message time,
+not history-import order or recent bot replies, and excludes human messages
+directed elsewhere. Hortator still requires owner activity. An explicit API
+channel target takes precedence. Without eligible human activity, the untargeted
+request fails clearly; it does not fall back to old bot-only threads. Ordinary
+scheduling retains its pending-input/oldest-evaluated fairness rule. No fake message or new prompt is inserted. Busy clicks are
 refused rather than queued. The button is disabled during a turn; **Pause** can
 cancel even a trial of an already-paused bot. Trajectory records `manual_trigger`.
 Failed trials of paused or timer-off bots do not start autonomous recovery turns;
