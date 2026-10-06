@@ -144,7 +144,13 @@ function initial(
   const result: RecordData = {};
   for (const [key, prop] of Object.entries<RecordData>(properties))
     if ("default" in prop) result[key] = prop.default;
-  result.id = `${kind === "profiles" ? "model" : kind.slice(0, -1)}_${crypto.randomUUID().slice(0, 8)}`;
+  // randomUUID is unavailable on non-local HTTP origins. getRandomValues works
+  // there too; these editable record IDs retain the same eight hex digits.
+  const suffix = crypto
+    .getRandomValues(new Uint32Array(1))[0]
+    .toString(16)
+    .padStart(8, "0");
+  result.id = `${kind === "profiles" ? "model" : kind.slice(0, -1)}_${suffix}`;
   result.name = "";
   if (kind === "bots") {
     Object.assign(result, {

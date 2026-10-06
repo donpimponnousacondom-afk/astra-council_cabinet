@@ -4,6 +4,31 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## New-record editors without randomUUID (2026-10-06)
+
+- Base `b0f9f10c81173b775b78419f9595809d0589e78f`, branch
+  `hotfix/dashboard-http-record-ids`. The modern editor called `randomUUID`
+  during draft initialization, crashing before any save on browsers where that
+  API is unavailable. The [Web Crypto interface](https://w3c.github.io/webcrypto/#crypto-interface)
+  restricts `randomUUID` to secure contexts; `getRandomValues` has no such
+  restriction. Editable ID suggestions now retain their prefix and eight random
+  hexadecimal characters using `getRandomValues`. Frozen legacy code is unchanged.
+- Both new browser regressions failed against the previous production bundle,
+  with the reported `crypto.randomUUID is not a function` exception captured
+  in traces. With the patched bundle, **23 browser tests passed** in 58.8 s:
+  record creation, prompt controls, prompt inspector and workbench coverage.
+  Every new-record editor opens with `randomUUID` disabled; two Engram instruction
+  prompts save under generated IDs and read back through the fixture API.
+- These checks used the repository's isolated Playwright server and fake
+  credentials, not production records or model calls. Loopback is a secure
+  context, so the tests explicitly remove `randomUUID` to reproduce its absence.
+  TypeScript/Vite build, frontend format check and `git diff --check` passed.
+  The test build used an ignored audit directory, leaving the live bundle intact.
+- Evidence: ignored `audit/2026-10-06/04-dashboard-http-ids/`, including
+  before/after logs and the original failing browser traces. Full CI and
+  independent Luna/Sol review remain publication gates. No bot configuration,
+  memory, compaction or runtime restart was part of these local checks.
+
 ## Explicit reader tools for omitted memory results (2026-10-06)
 
 - Base `92ccccec66e13f39f63fa2a0c51ba18f69bdcab9`, branch
