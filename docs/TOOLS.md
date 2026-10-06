@@ -19,6 +19,16 @@ actual used/remaining characters. `read`, `write` and `delete` results contain a
 `hard_limit_chars`, `over_budget_chars`, `must_consolidate` and `note_limit_chars`.
 Empty-call and argument-error usage includes the same current guidance.
 
+`read` optionally accepts a `key` to select exactly one note; unmatched keys
+return an empty notes list without changing aggregate budget accounting. Both
+channel and global memory save model replies exceeding 60,000 serialized Unicode
+characters intact and return a 6,000-character first page. Follow `next_tool`
+with the returned `next` arguments until null. Both tools now advertise native
+`read_result` for saved evidence, retaining the original bot/channel/turn and
+transitive source-grant checks. JSON may span pages; `range` and `total_chars`
+identify exactly what was read. Later note edits do not change the saved reply.
+See [the complete memory paging contract](GLOBAL_MEMORY.md).
+
 Small overshoots may use a 5% allowance, rounded down. At 48,128/48,000, the
 write is saved and returns `warning`; it is not a tool failure. While over
 budget, only deletion or a replacement that reduces total usage succeeds.
@@ -100,7 +110,7 @@ Active tool exchanges have a per-bot estimated working-set cap and must fit actu
 
 ## Global memories belong to one bot
 
-The optional `global_memory` tool mirrors channel memory's `read`, `write` (same-key replacement) and `delete` operations, including `{}` usage and complete argument feedback. Its store and quota are private to the current bot across channels. No caller-supplied bot/channel selector can change that scope. Guidance, usage results and automatic prompt layers report the actual allowance; source channel/time is evidence of where the note was written, not proof that its claims are correct or current instructions. See [GLOBAL_MEMORY.md](GLOBAL_MEMORY.md) for complete examples.
+The optional `global_memory` tool mirrors channel memory's `read`, `write` (same-key replacement), `delete` and model-only `read_result` operations, including `{}` usage and complete argument feedback. Its store and quota are private to the current bot across channels. No caller-supplied bot/channel selector can change that scope. Guidance, usage results and automatic prompt layers report the actual allowance; source channel/time is evidence of where the note was written, not proof that its claims are correct or current instructions. See [GLOBAL_MEMORY.md](GLOBAL_MEMORY.md) for complete examples.
 
 
 ### Original web HTTP evidence

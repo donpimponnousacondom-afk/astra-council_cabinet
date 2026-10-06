@@ -12,7 +12,44 @@ from .store import dumps, uid
 
 # These existing tools read shared evidence with the original scope/grant checks.
 # Selection is intersected with the schemas advertised for this specific round.
-RESULT_READERS = ("web_fetch", "workspace", "shell", "web_search", "dumb_search", "council_inspect")
+RESULT_READERS = (
+    "web_fetch",
+    "workspace",
+    "shell",
+    "web_search",
+    "dumb_search",
+    "council_inspect",
+    "memory",
+    "global_memory",
+)
+
+
+def with_result_reader(parameters):
+    """Add model-only evidence paging; owner memory APIs keep their own schema."""
+    result = copy.deepcopy(parameters)
+    operation = result["properties"]["operation"]
+    operation["enum"].append("read_result")
+    operation["description"] += " read_result pages a saved tool reply using its returned result_id."
+    result["properties"].update(
+        result_id={"type": "string", "minLength": 1, "maxLength": 100},
+        offset={
+            "type": "integer",
+            "minimum": 0,
+            "description": "Unicode character offset; use the returned next arguments.",
+        },
+        length={"type": "integer", "minimum": 1, "maximum": 18000, "default": 6000},
+    )
+    result.setdefault("allOf", []).append(
+        {
+            "if": {"properties": {"operation": {"const": "read_result"}}, "required": ["operation"]},
+            "then": {"required": ["result_id"], "properties": {"key": False, "value": False}},
+            "else": {"properties": {"result_id": False, "offset": False, "length": False}},
+        }
+    )
+    result.setdefault("examples", []).append(
+        {"operation": "read_result", "result_id": "result_from_previous_reply", "offset": 0, "length": 6000}
+    )
+    return result
 
 
 class ToolEvidence:

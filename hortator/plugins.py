@@ -31,7 +31,7 @@ from .fetched_documents import (
 )
 from .store import dumps, uid
 from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage, with_usage
-from .working_set import ToolEvidence
+from .working_set import ToolEvidence, with_result_reader
 from .concurrency import error_text
 from .timekeeping import council_timezone, present_times
 from .web_search import (
@@ -54,6 +54,8 @@ STR = {"type": "string"}
 MEMORY_DESCRIPTION = (
     'Always include operation. Write: {"operation":"write","key":"topic","value":"Concise note"}. '
     'Read all notes: {"operation":"read"}. Delete: {"operation":"delete","key":"topic"}. '
+    'Read one note: {"operation":"read","key":"topic"}. Large replies are saved intact and paged. '
+    "Use this same tool with returned read_result/next arguments until next is null; a page is not the whole read. "
     "Sending only key/value is invalid; never omit operation. {} returns usage, not notes. "
     "Notes belong only to this bot and channel; other bots/channels are inaccessible. Writes replace that key's value. "
 )
@@ -345,34 +347,36 @@ class Registry:
                 "Private memory",
                 MEMORY_DESCRIPTION
                 + f"Each bot has a 1–{MAX_MEMORY_CHAR_LIMIT:,} character budget per channel (default {DEFAULT_MEMORY_CHAR_LIMIT:,}), with 5% temporary headroom and at most {NOTE_CHAR_LIMIT:,} per note. Over budget, shrink/delete notes before adding more. Disable the plugin to stop memory tools and automatic note injection; stored notes are preserved.",
-                schema(
-                    {
-                        "operation": {
-                            "type": "string",
-                            "enum": ["read", "write", "delete"],
-                            "description": "REQUIRED on every real call. Use write when saving key/value; read lists notes; delete removes one key. No default is inferred.",
-                        },
-                        "key": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": r"\S"},
-                        "value": {"type": "string", "maxLength": NOTE_CHAR_LIMIT},
-                    },
-                    ("operation",),
-                )
-                | {
-                    "examples": [
-                        {"operation": "write", "key": "topic", "value": "Concise note"},
-                        {"operation": "read"},
-                        {"operation": "delete", "key": "topic"},
-                    ],
-                    "allOf": [
+                with_result_reader(
+                    schema(
                         {
-                            "if": {
-                                "properties": {"operation": {"enum": ["write", "delete"]}},
-                                "required": ["operation"],
+                            "operation": {
+                                "type": "string",
+                                "enum": ["read", "write", "delete"],
+                                "description": "REQUIRED on every real call. Use write when saving key/value; read lists notes; delete removes one key. No default is inferred.",
                             },
-                            "then": {"required": ["key"]},
-                        }
-                    ],
-                },
+                            "key": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": r"\S"},
+                            "value": {"type": "string", "maxLength": NOTE_CHAR_LIMIT},
+                        },
+                        ("operation",),
+                    )
+                    | {
+                        "examples": [
+                            {"operation": "write", "key": "topic", "value": "Concise note"},
+                            {"operation": "read"},
+                            {"operation": "delete", "key": "topic"},
+                        ],
+                        "allOf": [
+                            {
+                                "if": {
+                                    "properties": {"operation": {"enum": ["write", "delete"]}},
+                                    "required": ["operation"],
+                                },
+                                "then": {"required": ["key"]},
+                            }
+                        ],
+                    }
+                ),
                 self.memory,
                 {},
             )
@@ -728,10 +732,21 @@ class Registry:
                 tool_timeout = max(120, limits(config)["timeout_seconds"] + 30)
             async with asyncio.timeout(tool_timeout):
                 if (
-                    name in ("web_fetch", "web_search", "dumb_search", "workspace", "shell")
+                    name
+                    in (
+                        "web_fetch",
+                        "web_search",
+                        "dumb_search",
+                        "workspace",
+                        "shell",
+                        "memory",
+                        "global_memory",
+                    )
                     and args.get("operation") == "read_result"
                 ):
                     result = self.evidence.read(args, context, self.allowed)
+                    if name in {"memory", "global_memory"}:
+                        result["next_tool"] = name
                 else:
                     result = self.vault.redact(await spec.handler(args, context, config, key))
             if name in {
@@ -762,7 +777,16 @@ class Registry:
             source_result_id = (
                 args["result_id"]
                 if (
-                    name in ("workspace", "shell", "web_fetch", "web_search", "dumb_search")
+                    name
+                    in (
+                        "workspace",
+                        "shell",
+                        "web_fetch",
+                        "web_search",
+                        "dumb_search",
+                        "memory",
+                        "global_memory",
+                    )
                     and args.get("operation") == "read_result"
                 )
                 or (name == "council_inspect" and args.get("resource") == "read_result")
@@ -799,15 +823,30 @@ class Registry:
                         "length": 18000,
                     },
                 }
+            elif name in {"memory", "global_memory"} and len(dumps(result)) > 60000:
+                full = self.evidence.record(context, name, call_id, result, source_result_id=source_result_id)
+                source_result_id = full["result_id"]
+                metadata = {key: result[key] for key in ("budget", "warning") if key in result}
+                result = {
+                    **self.evidence.read(
+                        {
+                            "operation": "read_result",
+                            "result_id": source_result_id,
+                            "offset": 0,
+                            "length": 6000,
+                        },
+                        context,
+                        self.allowed,
+                    ),
+                    "result_is_paged": True,
+                    "next_tool": name,
+                    "notice": "Full memory reply saved intact. This is its first page, not a complete read. Call next_tool with next until next is null. Later note edits do not change this snapshot.",
+                    **metadata,
+                }
             elif len(dumps(result)) > 60000:
                 result = {
                     "truncated": True,
                     "text": dumps(result)[:50000],
-                    **(
-                        {key: result[key] for key in ("budget", "warning") if key in result}
-                        if name in {"memory", "global_memory"}
-                        else {}
-                    ),
                 }
             if not inspector_paged:
                 result = self.evidence.record(
@@ -958,10 +997,13 @@ class Registry:
         scope = (context.bot["id"], context.channel_id)
         budget = budget_for(self.store, context.bot, context.channel_id)
         if args["operation"] == "read":
+            selected_key = args["key"].strip() if "key" in args else None
             return {
                 "notes": self.store.rows(
-                    "SELECT key,value,updated_at FROM memories WHERE bot_id=? AND channel_id=? ORDER BY key",
-                    scope,
+                    "SELECT key,value,updated_at FROM memories WHERE bot_id=? AND channel_id=?"
+                    + (" AND key=?" if selected_key is not None else "")
+                    + " ORDER BY key",
+                    (*scope, selected_key) if selected_key is not None else scope,
                 ),
                 "budget": budget,
                 **({"warning": describe_budget(budget)} if budget["must_consolidate"] else {}),

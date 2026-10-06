@@ -61,8 +61,11 @@ from tools advertised in that round, preferring the original tool when it suppor
 evidence reads. Otherwise an available web-fetch, workspace, shell, web-search,
 Dumb Search or council-inspection reader is named explicitly. These operations
 read saved local evidence; using `web_fetch` here does not fetch a website.
-Channel and global memory still support only read/write/delete. They do not
-acquire a `read_result` operation or another tool's grant through this reference.
+Channel and global memory now also advertise native `read_result`, so their
+own omitted replies can be paged without a web/workspace grant. The same original
+scope and transitive source-grant checks apply through every reader; a reference
+does not grant another tool's capability. [Memory paging](GLOBAL_MEMORY.md)
+preserves oversized replies before limiting their model-facing pages.
 An exhausted tool budget or absent reader yields `reread_unavailable`, with no
 invented paging call. Carried references are refreshed for the next round's
 available tools. Paging continuations retain the source and offset, and a complete
