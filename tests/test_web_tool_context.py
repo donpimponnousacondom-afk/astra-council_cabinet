@@ -92,7 +92,7 @@ async def test_omitted_reread_returns_to_original_source_and_same_unicode_offset
         "first-read",
     )
     message = {"role": "tool", "content": dumps(page)}
-    reference = result_reference(message)
+    reference = result_reference(message, available_readers=(name,))
     assert reference["result_id"] == original["result_id"]
     assert reference["page_result_id"] == page["result_id"]
     for _ in range(3):
@@ -100,8 +100,8 @@ async def test_omitted_reread_returns_to_original_source_and_same_unicode_offset
         assert reread["text"] == page["text"]
         assert reread["source_result_id"] == original["result_id"]
         assert reread["range"]["start"] == 2000
-        reference = result_reference({"role": "tool", "content": dumps(reread)})
-    repeated = result_reference({"role": "tool", "content": dumps(reference)})
+        reference = result_reference({"role": "tool", "content": dumps(reread)}, available_readers=(name,))
+    repeated = result_reference({"role": "tool", "content": dumps(reference)}, available_readers=(name,))
     assert repeated["reread"] == reference["reread"]
 
 
@@ -117,8 +117,10 @@ def test_inspector_reread_keeps_its_native_resource_operation():
                     "read_response": {"resource": "read_result", "result_id": "page"},
                 }
             )
-        }
+        },
+        available_readers=("council_inspect",),
     )
+    assert reference["reread_tool"] == "council_inspect"
     assert reference["reread"] == {
         "resource": "read_result",
         "result_id": "source",

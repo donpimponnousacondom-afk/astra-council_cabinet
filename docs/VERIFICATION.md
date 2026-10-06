@@ -4,6 +4,33 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Explicit reader tools for omitted memory results (2026-10-06)
+
+- Base `92ccccec66e13f39f63fa2a0c51ba18f69bdcab9`, branch
+  `hotfix/tool-result-reader-guidance`. Read-only production evidence showed
+  successful global-memory reads followed by unsupported `global_memory.read_result`
+  calls at 18:36 and 19:01 Europe/Madrid. Working-set references carried paging
+  arguments without an explicit reader name. All 17 preceding writes succeeded.
+- The runtime now supplies the current round's advertised tools to the detached
+  working-set calculation. Omitted results name an existing reader plus numeric
+  arguments, keep native inspection selectors and source/page offsets, and refresh
+  carried references or report that no reader remains. Memory operations and
+  original source/scope/grant checks are unchanged.
+- **87 focused tests passed**, exit 0, in 43.69 s; two dependency deprecation
+  warnings, no skips. Selection: memory-result recovery, web-tool context,
+  council inspector, agentic runtime, background receipts, global memory and
+  global-memory integration. Repository-wide Ruff lint/format and diff checks
+  passed. These are isolated fixtures and mocked model transport, not live
+  provider acceptance. The new runtime cases follow every returned page through
+  the actual registry and reconstruct all notes without network fetching.
+- An initial regression run caught removal of background-job continuation
+  offsets; restricting selector changes to shared evidence handles fixed it.
+  Test setup also needed the existing shell workspace dependency and trusted
+  Hortator scope for inspector coverage. No production grants changed.
+- Full CI and independent Luna/Sol review remain publication gates. Evidence:
+  ignored `audit/2026-10-06/03-memory-result-recovery/focused.txt`. No runtime
+  restart, memory edit, Engram change or forced compaction during these checks.
+
 ## Exclamation punctuation versus command intake (2026-10-06)
 
 - Base `6f2d0b9aa50c8735f43eb49604808599e1c15ef3`, branch

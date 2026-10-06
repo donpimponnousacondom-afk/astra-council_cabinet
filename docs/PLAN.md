@@ -10,6 +10,14 @@ current checkout or running configuration.
 
 ## Current work and acceptance
 
+- On 2026-10-06 the owner authorized correcting ambiguous recovery instructions
+  for large tool results after Curie sent `read_result` to `global_memory`.
+  Name an actually advertised reader and its arguments in each omitted-result
+  reference, preserve evidence/scopes/grants, and report when no reader is available.
+  No memory, Engram or compaction settings change. The owner is separately
+  preparing Curie's compaction before the Engram trial; avoid interrupting active
+  compaction during deployment. See [tool-result paging](AGENTIC_TOOLS.md#task-and-active-context-budgets).
+
 - On 2026-10-06 the owner authorized a narrow punctuation-intake correction:
   repeated leading exclamations and a wrapped first word such as `!hello!`
   should reach ordinary conversation without breaking Hortator commands.
