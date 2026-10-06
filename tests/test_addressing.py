@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import time
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock
@@ -478,3 +479,107 @@ async def test_human_followup_in_another_thread_does_not_cancel_current_conversa
         CHANNEL,
         "222222222222222223",
     ]
+
+
+async def test_queued_humans_keep_original_questions_through_engram_reduction(kernel):
+    from hortator.engrams import DEFAULTS, PLUGIN_ID
+
+    ada, _ = pair(kernel, interval_seconds=0)
+    plugin = kernel.store.get("plugins", PLUGIN_ID)
+    kernel.store.put(
+        "plugins",
+        {**plugin, "enabled": True, "config": {**DEFAULTS, "reduce_history": True, "recent_messages": 1}},
+    )
+    kernel.store.put("bots", {**ada, "enabled_plugins": [PLUGIN_ID]})
+    ada = kernel.store.get("bots", "ada")
+    questions = ["FIRST UNIQUE QUESTION", "SECOND UNIQUE QUESTION", "THIRD UNIQUE QUESTION"]
+    for i, author in enumerate([OWNER_ID, "777777777777777777", "666666666666666666"]):
+        await receive(
+            kernel, message(555555555555555551 + i, author=author, mentions=[ada], content=questions[i])
+        )
+    prompts = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        full = json.dumps(body)
+        prompts.append(full)
+        nonce = re.search(r"\[\^ENGRAM:([a-f0-9]{32})\]", full).group(1)
+        # A valid memory update is not a guarantee that it retained another
+        # queued person's exact question. The harness must preserve that input.
+        return completion(
+            f'Answer\n[^ENGRAM:{nonce}]\n{{"MEM":"A person answered","FACTS":""}}\n[^END:{nonce}]'
+        )
+
+    await install_client(kernel, handler)
+    for _ in range(3):
+        await kernel.engine.tick()
+        await settle(kernel)
+    assert len(prompts) == 3
+    for i, question in enumerate(questions):
+        assert question in prompts[i]
+        assert kernel.engine.transport.send.await_args_list[i].args[3] == str(555555555555555551 + i)
+    assert not kernel.engine.attention(ada)
+
+
+@pytest.mark.parametrize("prior_checkpoint", ["automatic", "existing", "manual"])
+async def test_pending_human_text_and_pixels_survive_compaction(kernel, prior_checkpoint):
+    from support.vision import cached
+
+    ada, _ = pair(kernel, interval_seconds=0)
+    profile = kernel.store.get("profiles", "balanced")
+    kernel.store.put(
+        "profiles", {**profile, "compact_threshold": 0.1, "keep_recent_messages": 1, "context_window": 16384}
+    )
+    # Include ordinary chatter after the questions: compaction must be able to
+    # summarize it without consuming an earlier queued question's raw input.
+    for i, author in enumerate([OWNER_ID, "777777777777777777", "666666666666666666"]):
+        await receive(
+            kernel,
+            message(555555555555555551 + i, author=author, mentions=[ada], content=f"UNIQUE QUESTION {i}"),
+        )
+    await receive(kernel, message(555555555555555554, content="Unaddressed ordinary chatter"))
+    _, item = await cached(kernel)
+    kernel.store.execute(
+        "UPDATE messages SET attachments=? WHERE discord_id=?", (json.dumps([item]), "555555555555555552")
+    )
+    if prior_checkpoint == "existing":
+        # Even an earlier forced compaction must not hide a pending question.
+        kernel.store.execute(
+            "UPDATE contexts SET checkpoint=(SELECT max(seq) FROM messages),summary='Earlier summary without questions' WHERE bot_id='ada'"
+        )
+    prompts = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        prompts.append(body)
+        return completion("An answer or a summary that does not repeat the questions")
+
+    await install_client(kernel, handler)
+    if prior_checkpoint == "manual":
+        kernel.engine.launch(ada, CHANNEL, compact_only=True)
+        await settle(kernel)
+        assert kernel.store.context("ada", CHANNEL)["checkpoint"] > 0
+        assert len(kernel.engine.attention(ada)) == 3
+        kernel.engine.transport.send.assert_not_awaited()
+    for _ in range(3):
+        await kernel.engine.tick()
+        await settle(kernel)
+    requests = kernel.store.rows("SELECT purpose FROM requests ORDER BY started_at")
+    generations = [
+        body for body, record in zip(prompts, requests, strict=True) if record["purpose"] == "generation"
+    ]
+    assert len(generations) == 3
+    assert "UNIQUE QUESTION 1" in json.dumps(generations[1])
+    parts = [
+        part
+        for msg in generations[1]["messages"]
+        if isinstance(msg["content"], list)
+        for part in msg["content"]
+    ]
+    assert sum(part.get("type") == "image_url" for part in parts) == 1
+    assert [call.args[3] for call in kernel.engine.transport.send.await_args_list] == [
+        str(555555555555555551 + i) for i in range(3)
+    ]
+    if prior_checkpoint != "existing":
+        assert any(record["purpose"] == "compaction" for record in requests)
+    assert not kernel.engine.attention(ada)

@@ -162,3 +162,7 @@ weights or implement that architecture.
   uncovered input. Do not disable the required input/state layers to mimic this.
 - Loki is an alpha tester, not a special runtime case. Every eligible bot can use
   the same plugin with explicit grants; stable council bots retain their settings.
+
+### Pending human requests and history reduction (2026-10-06)
+
+Coverage records which messages were observed while forming Engram state; it does not mean every human in that context was answered. Reduction preserves all messages beyond the bot’s handled cursor, including queued humans’ original questions, even if a previous turn’s Engram state covers them. The ordinary recent-message tail still applies to covered, handled messages. See [human priority](OPERATIONS.md) for the per-human queue.
