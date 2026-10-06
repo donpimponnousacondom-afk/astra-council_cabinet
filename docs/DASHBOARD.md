@@ -199,5 +199,6 @@ Existing decision dates and qualifications below remain authoritative.
   ID retained for disambiguation. Context, clean-slate and Engram selectors share
   the display helper; their request values remain IDs. Missing names use explicit
   unknown-channel/thread labels. The frozen legacy dashboard remains unchanged.
-  Names are refreshed by normal authorized message/history observation and known
-  channel rename events, never by Discord calls during dashboard polling.
+  Names are refreshed by normal authorized message/history observation, successful
+  thread creation, and known-channel rename/rejoin events, never by Discord calls
+  during dashboard polling.

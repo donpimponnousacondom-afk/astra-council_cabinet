@@ -2152,8 +2152,8 @@ records the actual matching dashboard/server identities. No push is performed.
   existing IDs and parent/guild metadata. Message observation, authorized reconnect
   history and known-channel rename events refresh names; polling only reads them.
 - `pytest -q tests/test_channel_labels.py tests/test_history_scope.py tests/test_context_reset.py tests/test_engrams.py`:
-  **73 passed**, covering old-schema migration, real gateway ingestion, empty-history
-  reconnect, rename scope, unchanged bot/Engram data and the existing memory/reset contracts.
+  **76 passed**, covering old-schema migration, real gateway ingestion, empty-history
+  reconnect, empty text/forum thread creation, known-thread rejoin, rename scope, unchanged bot/Engram data and the existing memory/reset contracts.
 - Browser fixtures cover readable Engram headings/options, original reset IDs,
   duplicate thread names, parent-room fallback, unknown channels and shared
   clean-slate/context labels. Final browser/CI/review evidence is recorded with the
@@ -2166,3 +2166,7 @@ records the actual matching dashboard/server identities. No push is performed.
 - Snapshot suite: **18 passed**, with two existing dependency deprecation warnings.
   Ruff, formatting, TypeScript and isolated production Vite build passed. The
   production dashboard files were not overwritten by the test build.
+
+- PR review identified that successful thread creation had discarded already-known
+  name/parent metadata. The creation path now saves actual returned names before
+  exposing contexts; tests cover both text-channel and forum response shapes.

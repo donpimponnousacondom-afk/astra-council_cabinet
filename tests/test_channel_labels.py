@@ -1,5 +1,9 @@
 import sqlite3
 from types import SimpleNamespace as NS
+from unittest.mock import AsyncMock, Mock
+
+import discord
+import pytest
 
 from conftest import configured
 from hortator.discord_gateway import CouncilClient
@@ -85,3 +89,36 @@ async def test_reconnect_learns_existing_thread_name_even_without_new_messages(k
     assert kernel.store.one("SELECT name FROM channels WHERE id=?", (THREAD,))["name"] == "Old thread"
     assert not kernel.store.rows("SELECT * FROM messages")
     assert not kernel.store.rows("SELECT * FROM requests")
+
+
+@pytest.mark.parametrize("forum", [False, True])
+async def test_new_empty_thread_keeps_returned_name_before_any_messages(kernel, forum):
+    bot = configured(kernel)
+    parent = Mock(spec=discord.ForumChannel if forum else discord.TextChannel)
+    parent.id = int(CHANNEL)
+    parent.guild = NS(id=111111111111111111)
+    parent.name = "chaos"
+    thread = NS(id=int(THREAD), name="Known empty thread", jump_url="https://discord.com/channels/test")
+    parent.create_thread = AsyncMock(return_value=NS(thread=thread) if forum else thread)
+    kernel.connector.clients[bot["id"]] = NS(get_channel=lambda _: parent)
+    try:
+        await kernel.connector.create_thread(kernel.store.get("rooms", "council"), "Requested name")
+    finally:
+        kernel.connector.clients.pop(bot["id"])
+    context = next(c for c in kernel.service.public("bots", bot)["contexts"] if c["channel_id"] == THREAD)
+    assert context["channel_name"] == "Known empty thread"
+    assert context["parent_id"] == CHANNEL and context["parent_name"] == "chaos"
+    assert not kernel.store.rows("SELECT * FROM messages")
+    assert not kernel.store.rows("SELECT * FROM requests")
+
+
+async def test_rejoining_known_thread_refreshes_name_without_admitting_unknown_threads(kernel):
+    kernel.store.remember_channel(THREAD, name="Before")
+    client = NS(manager=kernel.connector, bot_id="ada")
+    await CouncilClient.on_thread_join(client, NS(id=int(THREAD), parent_id=int(CHANNEL), name="After"))
+    await CouncilClient.on_thread_join(
+        client, NS(id=999999999999999999, parent_id=int(CHANNEL), name="Other")
+    )
+    assert kernel.store.one("SELECT name FROM channels WHERE id=?", (THREAD,))["name"] == "After"
+    assert not kernel.store.one("SELECT 1 FROM channels WHERE id='999999999999999999'")
+    assert not kernel.store.rows("SELECT * FROM contexts")

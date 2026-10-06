@@ -208,6 +208,8 @@ class CouncilClient(discord.Client):
             )
 
     async def on_thread_join(self, thread):
+        if self.manager.store.one("SELECT 1 FROM channels WHERE id=?", (str(thread.id),)):
+            self.manager.store.remember_channel(str(thread.id), name=thread.name)
         self.manager.store.emit(
             "discord.thread_joined",
             {"channel_id": str(thread.id), "parent_id": str(thread.parent_id)},
@@ -1343,6 +1345,10 @@ class DiscordManager:
             thread = await channel.create_thread(name=name, type=discord.ChannelType.public_thread)
         else:
             raise ControlError("Create threads from a text or forum channel")
+        self.store.remember_channel(str(channel.id), guild_id=str(channel.guild.id), name=channel.name)
+        self.store.remember_channel(
+            str(thread.id), guild_id=str(channel.guild.id), parent_id=str(channel.id), name=thread.name
+        )
         for member in self.store.list("bots"):
             if room["id"] in member["room_ids"]:
                 self.store.context(member["id"], str(thread.id))
