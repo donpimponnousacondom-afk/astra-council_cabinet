@@ -311,3 +311,20 @@ async def test_manual_recency_hortator_only_counts_owner(kernel):
     kernel.store.execute("UPDATE messages SET at=100")
     conversation(kernel, "666666666666666666", 200, author="999999999999999999")
     assert kernel.engine.manual_channel(bot) == "222222222222222222"
+
+
+async def test_manual_recency_recognizes_authenticated_dm_command(kernel):
+    bot = configured(kernel, bot_id="hortator")
+    channel = SimpleNamespace(id=888888888888888888)
+    message = SimpleNamespace(
+        id=777777777777777777,
+        content="!dm Please continue the private discussion",
+        author=SimpleNamespace(id=1482143139828596916, bot=False, create_dm=AsyncMock(return_value=channel)),
+        webhook_id=None,
+        channel=SimpleNamespace(id=222222222222222222),
+    )
+    await kernel.connector.command(bot, message)
+    assert kernel.engine.channel_allowed(bot, str(channel.id))
+    assert kernel.engine.manual_channel(bot) == str(channel.id)
+    # Recording the human author must not synthesize a live mention/reply activation.
+    assert kernel.engine.attention(bot) == []
