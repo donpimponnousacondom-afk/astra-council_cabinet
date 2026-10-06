@@ -2170,3 +2170,11 @@ records the actual matching dashboard/server identities. No push is performed.
 - PR review identified that successful thread creation had discarded already-known
   name/parent metadata. The creation path now saves actual returned names before
   exposing contexts; tests cover both text-channel and forum response shapes.
+
+## 2026-10-06 — per-human directed attention queue
+
+The owner reported a reply attached to a different human's message. Read-only request/event evidence showed the original draft was correctly suppressed, followed by a fresh request with the second human's activation; generated text nevertheless answered the earlier screenshot. The owner requested queuing separate humans instead of cancelling an active directed answer.
+
+The runtime now pins the selected human through preparation, coalesces only that human's input in that channel, schedules the oldest waiting human, and keeps unclaimed humans above the handled-message cursor. Same-human/same-channel updates can still supersede unsent drafts; routine priority and in-flight Discord delivery behavior remain unchanged. No configuration, prompt, schema or grant changes.
+
+Local isolated verification: `pytest -q tests/test_addressing.py tests/test_single_shot.py tests/test_background_jobs.py tests/test_secretary.py tests/test_role_mentions.py` **129 passed**, two existing dependency warnings. Regressions cover arrivals before launch/during preparation/generation/send gap, three-human ordering, per-human coalescing, same-human replacement, restart persistence, and another thread. Ruff check/format passed. A first restart-test fixture forgot to reconnect the simulated gateway after recovery correctly marked it offline; the fixture now models that reconnect. No live provider calls or Discord sends were made for these tests. Full-suite and dual independent PR review evidence will be recorded on the published PR after they settle.

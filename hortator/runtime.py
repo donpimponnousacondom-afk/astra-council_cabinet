@@ -233,6 +233,11 @@ class Engine:
 
     def claim_attention(self, bot, channel_id, turn_id, *, through=None):
         pending = self.attention(bot, channel_id, through)
+        # Keep the human selected at launch through asynchronous preparation.
+        # Otherwise take the oldest waiting human, coalescing only their input.
+        activation = bot.get("activation")
+        author_id = activation["author_id"] if activation else pending[-1]["author_id"] if pending else None
+        pending = [row for row in pending if row["author_id"] == author_id]
         for row in pending:
             self.store.execute(
                 "INSERT OR IGNORE INTO human_attention_claims VALUES(?,?,?,?)",
@@ -260,6 +265,24 @@ class Engine:
             turn_id=turn_id,
         )
         return activation
+
+    def superseding_attention(self, bot, channel_id, turn_id):
+        """Only the current human may replace their own unsent directed answer."""
+        pending = self.attention(bot, channel_id)
+        claimed = self.store.one(
+            "SELECT m.author_id,m.channel_id FROM human_attention_claims h "
+            "JOIN messages m ON m.discord_id=h.message_id "
+            "WHERE h.bot_id=? AND h.turn_id=? ORDER BY m.seq DESC LIMIT 1",
+            (bot["id"], turn_id),
+        )
+        # Routine drafts still yield to human input. Once a human owns a turn,
+        # another human (or another conversation) waits for its completion.
+        return [
+            row
+            for row in pending
+            if not claimed
+            or (row["author_id"] == claimed["author_id"] and row["channel_id"] == claimed["channel_id"])
+        ]
 
     def budget_error(self, bot):
         now = time.time()
@@ -290,7 +313,12 @@ class Engine:
         # A human's intended recipient gets a free scheduler slot before routine chatter.
         for bot in sorted(bots, key=lambda b: not bool(pending.get(b["id"]))):
             attention = pending.get(bot["id"], [])
-            if attention and bot["id"] in self.tasks and bot["id"] in self.delivery_waiting:
+            if (
+                attention
+                and bot["id"] in self.tasks
+                and bot["id"] in self.delivery_waiting
+                and self.superseding_attention(bot, None, self.delivery_waiting[bot["id"]])
+            ):
                 self.human_superseded.add(self.delivery_waiting[bot["id"]])
                 self.tasks[bot["id"]].cancel()
                 continue
@@ -318,7 +346,7 @@ class Engine:
             if health["circuit_until"] > now:
                 continue
             channel_id = (
-                attention[0]["channel_id"]
+                attention[-1]["channel_id"]
                 if attention
                 else completed_job["channel_id"]
                 if completed_job
@@ -1196,9 +1224,13 @@ class Engine:
                     "Tool round budget exhausted without a valid final answer; no further calls executed"
                 )
             if status in ("sent", "silent"):
+                # Seeing another human's question in context does not answer it.
+                # Keep it above the read cursor until its own turn claims it.
+                waiting = self.attention(bot, channel_id)
+                handled_through = min(through, min((row["seq"] - 1 for row in waiting), default=through))
                 self.store.execute(
                     "UPDATE contexts SET last_seen=?,updated_at=? WHERE bot_id=? AND channel_id=?",
-                    (through, time.time(), bot["id"], channel_id),
+                    (handled_through, time.time(), bot["id"], channel_id),
                 )
                 self.store.execute("UPDATE bot_runtime SET error=NULL WHERE bot_id=?", (bot["id"],))
         except TurnSuperseded:
@@ -1320,7 +1352,7 @@ class Engine:
             turn_id=context.turn_id,
         )
         try:
-            if self.attention(bot, context.channel_id):
+            if self.superseding_attention(bot, context.channel_id, context.turn_id):
                 raise TurnSuperseded("New directed human input is waiting; regenerate from current context")
             priority = self.store.one(
                 "SELECT 1 FROM human_attention_claims WHERE bot_id=? AND turn_id=? LIMIT 1",
@@ -1374,7 +1406,7 @@ class Engine:
                 # Stop before dispatch, but never cancel an in-flight Discord send
                 # solely because the drafting deadline passed: acceptance may be uncertain.
                 check_deadline()
-                if self.attention(bot, context.channel_id):
+                if self.superseding_attention(bot, context.channel_id, context.turn_id):
                     raise TurnSuperseded(
                         "New directed human input is waiting; regenerate from current context"
                     )
