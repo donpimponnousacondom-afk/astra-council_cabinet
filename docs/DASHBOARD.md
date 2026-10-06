@@ -192,3 +192,13 @@ Existing decision dates and qualifications below remain authoritative.
 - The active dashboard at `/` is a dense desktop workbench inspired by VS Code Dark+: monospace data, compact lists only, docked/maximizable editors and keyboard navigation. Mobile/touch layout is not a requirement. Preserve every existing configuration/control/inspection behavior, especially Trajectory and Analytics. The independent `/legacy/` build is a frozen temporary fallback pending owner acceptance; do not add features there or import its modules/styles into the active frontend. Removing `web/src/legacy/`, `web/legacy/`, `web/tests/legacy/`, its Vite build input and fallback links must require no Python/API/database changes. Keep unsaved/invalid JSON, note and credential drafts protected across navigation; asynchronous completions belong to their originating editor. See [docs/DASHBOARD.md](DASHBOARD.md) for parity and removal boundaries.
 
 - Owner decision, 2026-10-06: untargeted **Trigger** defaults to the most recent eligible conversation with human activity. Preserve explicit channel targets and ordinary scheduler ordering; see [OPERATIONS](OPERATIONS.md#dashboard-workbench).
+
+- Owner decision, 2026-10-06: make channel/thread snowflakes readable in Engram
+  inspection and related context selectors. Show the configured room name or last
+  observed Discord name, with parent room/thread names together and the immutable
+  ID retained for disambiguation. Context, clean-slate and Engram selectors share
+  the display helper; their request values remain IDs. Missing names use explicit
+  unknown-channel/thread labels. The frozen legacy dashboard remains unchanged.
+  Names are refreshed by normal authorized message/history observation, successful
+  thread creation, and known-channel rename/rejoin events, never by Discord calls
+  during dashboard polling.

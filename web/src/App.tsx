@@ -786,6 +786,7 @@ export default function App() {
                 )}
                 {contextBot && (
                   <ContextPanel
+                    rooms={dashboard.rooms}
                     key={contextBot.id}
                     bot={
                       dashboard.bots.find((b) => b.id === contextBot.id) ||

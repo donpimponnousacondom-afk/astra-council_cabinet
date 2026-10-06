@@ -268,3 +268,9 @@ The owner-only, CSRF-protected control operation is:
 ```
 
 Optionally add `data.channel_id` for one existing context. Omitted means all channels, including future assignments. The server requires exact confirmation, refuses unknown fields and generates its own current-time cutoff. No memory-delete or caller-supplied cutoff parameter exists. The result contains `bot_id`, nullable `channel_id`, `after_seq`, `after_at` (epoch), and a consequence description. Bot status includes `context_resets`; context inspection includes `reset_boundary` and only messages eligible after it. Shared historical request evidence is unchanged. This operation is not exposed to model tools.
+
+Public bot `contexts` / `context_resets` rows and owner Engram inspection `states`
+may include display-only `channel_name`, `parent_id` and `parent_name` from cached
+Discord observations. Names may be absent or stale while offline; `channel_id`
+remains the stable selector and routing value. Reading these labels performs no
+Discord lookup or model call and does not change conversation/Engram state.

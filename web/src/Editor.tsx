@@ -29,6 +29,7 @@ import {
   ResearchSettings,
 } from "./ResearchAssistant";
 import { alphabetical, byName } from "./ordering";
+import { channelLabel, channelOption } from "./channels";
 import {
   DocumentBotSettings,
   DocumentPluginSettings,
@@ -2027,10 +2028,12 @@ function CredentialBox({
 
 export function ContextPanel({
   bot,
+  rooms,
   close,
   notify,
 }: {
   bot: RecordData;
+  rooms: RecordData[];
   close: () => void;
   notify: (text: string, error?: boolean) => void;
 }) {
@@ -2216,10 +2219,11 @@ export function ContextPanel({
                 >
                   {alphabetical<RecordData>(
                     bot.contexts,
+                    (c) => channelLabel(c.channel_id, rooms, bot.contexts),
                     (c) => c.channel_id,
                   ).map((c) => (
                     <option key={c.channel_id} value={c.channel_id}>
-                      {c.channel_id}
+                      {channelOption(c.channel_id, rooms, bot.contexts)}
                     </option>
                   ))}
                 </select>

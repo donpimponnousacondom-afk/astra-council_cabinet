@@ -2145,3 +2145,28 @@ records the actual matching dashboard/server identities. No push is performed.
   metadata. The trusted command producer now records it and the original Discord
   timestamp without creating a live mention/reply activation; a regression exercises
   the real command handler and checks ordering against a newer conversation.
+
+### 2026-10-06 — Readable channel and thread labels
+
+- Added a nullable cached channel name with an additive migration that preserves
+  existing IDs and parent/guild metadata. Message observation, authorized reconnect
+  history and known-channel rename events refresh names; polling only reads them.
+- `pytest -q tests/test_channel_labels.py tests/test_history_scope.py tests/test_context_reset.py tests/test_engrams.py`:
+  **76 passed**, covering old-schema migration, real gateway ingestion, empty-history
+  reconnect, empty text/forum thread creation, known-thread rejoin, rename scope, unchanged bot/Engram data and the existing memory/reset contracts.
+- Browser fixtures cover readable Engram headings/options, original reset IDs,
+  duplicate thread names, parent-room fallback, unknown channels and shared
+  clean-slate/context labels. Final browser/CI/review evidence is recorded with the
+  PR and under ignored `audit/2026-10-06/07-channel-labels/`; fixtures do not establish
+  live Discord acceptance. No bot configuration or memory changes are required.
+- Browser conversation-context suite: **4 passed**, including the existing Engram
+  configuration/reset tests and the shared label regression. Two initial failures
+  were test-fixture mistakes (wrong navigation label and incomplete mocked context
+  payload); corrected fixtures passed without changing application behavior.
+- Snapshot suite: **18 passed**, with two existing dependency deprecation warnings.
+  Ruff, formatting, TypeScript and isolated production Vite build passed. The
+  production dashboard files were not overwritten by the test build.
+
+- PR review identified that successful thread creation had discarded already-known
+  name/parent metadata. The creation path now saves actual returned names before
+  exposing contexts; tests cover both text-channel and forum response shapes.

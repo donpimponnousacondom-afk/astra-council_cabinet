@@ -301,6 +301,9 @@ test("engram inspection remains read-only while disabled and reset needs an expl
         states: [
           {
             channel_id: "1001",
+            channel_name: "Model experiments",
+            parent_id: "1000",
+            parent_name: "chaos",
             revision: cleared ? 2 : 1,
             epoch: "0:0",
             covered_through: cleared ? 0 : 14,
@@ -347,6 +350,15 @@ test("engram inspection remains read-only while disabled and reset needs an expl
   await expect(panel).toContainText("Disabled · 0 pending candidates");
   expect(loads).toBe(1);
   expect(resets).toBe(0);
+  await expect(
+    panel.getByLabel("Engram scope").locator('option[value="1001"]'),
+  ).toHaveText("#chaos / Model experiments · 1001");
+  await expect(
+    panel.getByRole("heading", {
+      name: "#chaos / Model experiments",
+      exact: true,
+    }),
+  ).toBeVisible();
   await panel.getByText("MEM", { exact: true }).click();
   await panel.getByText("FACTS", { exact: true }).click();
   await expect(panel).toContainText("A remembered commitment");
@@ -375,7 +387,7 @@ test("engram inspection remains read-only while disabled and reset needs an expl
   page.once("dialog", (d) => d.accept());
   await reset.click();
   await expect(panel.getByRole("status")).toHaveText(
-    "Engram memory reset for 1001 (1001).",
+    "Engram memory reset for #chaos / Model experiments (1001).",
   );
   await expect(panel).not.toContainText("A remembered commitment");
   await expect(reset).toBeDisabled();
@@ -399,4 +411,77 @@ test("engram inspection remains read-only while disabled and reset needs an expl
   await expect(panel).toContainText(
     "Save or discard configuration drafts before resetting engrams.",
   );
+});
+
+test("channel and thread labels stay readable and unambiguous across context selectors", async ({
+  page,
+}, testInfo) => {
+  await login(page);
+  const id = "channel-label-fixture";
+  await createBot(page, id);
+  const contexts = [
+    { channel_id: "1000", channel_name: "chaos" },
+    { channel_id: "1001", channel_name: "Research", parent_id: "1000" },
+    { channel_id: "1002", channel_name: "Research", parent_id: "1000" },
+    { channel_id: "1003", parent_id: "1000" },
+    { channel_id: "1004" },
+  ];
+  await page.route("**/api/status", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.rooms.push({ id: "label-room", name: "chaos", channel_id: "1000" });
+    data.bots = data.bots.map((bot: { id: string }) =>
+      bot.id === id ? { ...bot, contexts } : bot,
+    );
+    await route.fulfill({ response, json: data });
+  });
+  await page.route(`**/api/context/${id}/*`, async (route) => {
+    await route.fulfill({
+      json: {
+        memories: [],
+        compaction_events: [],
+        messages: [],
+        summary: "",
+        estimated_tokens: 0,
+        compactions: 0,
+        checkpoint: 0,
+        message_count: 0,
+      },
+    });
+  });
+  await page.getByRole("button", { name: "Refresh dashboard" }).click();
+  await navigate(page, "Bots");
+  await page.getByRole("button", { name: `Edit ${id}`, exact: true }).click();
+  let dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Control", exact: true }).click();
+  const resetScope = dialog.getByLabel("Reset scope", { exact: true });
+  const labels = [
+    "#chaos · 1000",
+    "#chaos / Research · 1001",
+    "#chaos / Research · 1002",
+    "Thread in #chaos · 1003",
+    "Unknown channel · 1004",
+  ];
+  for (const label of labels)
+    await expect(resetScope.locator("option", { hasText: label })).toHaveCount(
+      1,
+    );
+  await resetScope.selectOption("1002");
+  await expect(resetScope).toHaveValue("1002");
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await navigate(page, "Overview");
+  await page
+    .getByRole("button", { name: `Context & memory for ${id}`, exact: true })
+    .click();
+  dialog = page.getByRole("dialog");
+  const contextScope = dialog.getByLabel("Channel / thread", { exact: true });
+  for (const label of labels)
+    await expect(
+      contextScope.locator("option", { hasText: label }),
+    ).toHaveCount(1);
+  await contextScope.selectOption("1002");
+  await expect(contextScope).toHaveValue("1002");
+  await page.screenshot({
+    path: testInfo.outputPath("readable-channel-labels.png"),
+  });
 });

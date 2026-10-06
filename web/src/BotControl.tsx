@@ -3,6 +3,7 @@ import { control, dateLabel } from "./api";
 import type { RecordData } from "./api";
 import { Field, Notice } from "./components";
 import { alphabetical } from "./ordering";
+import { channelLabel, channelOption } from "./channels";
 
 export function BotControl({
   bot,
@@ -20,16 +21,9 @@ export function BotControl({
   const [receipt, setReceipt] = useState<RecordData | null>(null);
   const [error, setError] = useState("");
   const pending = useRef(false);
-  const channelName = (id: string): string =>
-    rooms.find((room) => room.channel_id === id)?.name || id;
-  const optionName = (id: string): string => {
-    const name = channelName(id);
-    const duplicate =
-      (bot.contexts || []).filter(
-        (c: RecordData) => channelName(c.channel_id) === name,
-      ).length > 1;
-    return duplicate ? `${name} · ${id}` : name;
-  };
+  const observations = [...(bot.contexts || []), ...(bot.context_resets || [])];
+  const channelName = (id: string) => channelLabel(id, rooms, observations);
+  const optionName = (id: string) => channelOption(id, rooms, observations);
   async function reset() {
     if (pending.current || dirty || confirmation !== bot.id) return;
     if (

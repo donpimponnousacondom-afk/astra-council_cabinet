@@ -148,3 +148,11 @@ separately from conversation selection. Explicit channel
 selection remains authoritative; normal scheduler fairness is unchanged. Do not
 add a destination picker or alter bot configuration. See the current contract in
 [OPERATIONS](OPERATIONS.md#dashboard-workbench).
+
+### 2026-10-06 — Readable conversation scopes
+
+Owner requested names instead of unexplained snowflakes in Engram inspection and
+related dashboard scopes. Cache observed Discord channel/thread names, display
+parent/thread labels with IDs for disambiguation, and share the formatter across
+Engram, clean-slate and context selectors. Keep IDs authoritative and avoid extra
+Discord queries during polling. See [DASHBOARD](DASHBOARD.md) for the current contract.
