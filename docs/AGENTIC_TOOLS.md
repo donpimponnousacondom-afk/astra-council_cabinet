@@ -55,6 +55,19 @@ is changed by this projection.
 
 References explicitly state that omitted text is **not in the active prompt and has not been summarized**. They retain bounded recent progress, file/document/job handles and a unique `result_id`. Save durable notes through granted workspace or memory operations. To reread an original result, any granted workspace/web-fetch/shell pack supports `{"operation":"read_result","result_id":"result_…","offset":0,"length":2000}`. Its offsets count Unicode characters in the original serialized JSON. Fetch/file/job handles can instead reread their native content.
 
+Each omitted-result reference names **`reread_tool`** and provides its complete
+**`reread`** arguments, using numeric offsets and lengths. The reader is selected
+from tools advertised in that round, preferring the original tool when it supports
+evidence reads. Otherwise an available web-fetch, workspace, shell, web-search,
+Dumb Search or council-inspection reader is named explicitly. These operations
+read saved local evidence; using `web_fetch` here does not fetch a website.
+Channel and global memory still support only read/write/delete. They do not
+acquire a `read_result` operation or another tool's grant through this reference.
+An exhausted tool budget or absent reader yields `reread_unavailable`, with no
+invented paging call. Carried references are refreshed for the next round's
+available tools. Paging continuations retain the source and offset, and a complete
+read requires following `next` to null; a partial page is not full verification.
+
 When an omitted result was itself a `read_result` page, its recovery arguments
 point to `source_result_id` at the original `range.start`, not at the new page's
 evidence wrapper. The page's receipt remains available as `page_result_id`.

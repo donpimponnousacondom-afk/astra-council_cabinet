@@ -86,7 +86,9 @@ async def test_unknown_identity_returns_real_ids_and_discovery_instead_of_guesse
     for entity in kernel.store.list(kind):
         assert entity["id"] in result["error"]
     assert "usage" in result
-    reference = result_reference({"role": "tool", "content": dumps(result)})
+    reference = result_reference(
+        {"role": "tool", "content": dumps(result)}, available_readers=("council_inspect",)
+    )
     assert reference["reread"]["resource"] == "read_result"
     page = await call(kernel, context, reference["reread"], "reread-error")
     assert "does not exist" in page["text"]
@@ -143,7 +145,10 @@ async def test_large_inspections_redact_secrets_before_persisting_and_paging(ker
 async def test_native_inspector_handle_survives_working_set_omission(kernel):
     context = inspector(kernel)
     roster = await call(kernel, context, {"resource": "bots"})
-    reference = result_reference({"role": "tool", "content": dumps(roster), "tool_call_id": "inspect"})
+    reference = result_reference(
+        {"role": "tool", "content": dumps(roster), "tool_call_id": "inspect"},
+        available_readers=("council_inspect",),
+    )
     assert reference["reread"]["resource"] == "read_result"
     assert "operation" not in reference["reread"]
     page = await call(kernel, context, reference["reread"], "omitted-read")

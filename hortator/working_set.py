@@ -10,6 +10,11 @@ from .models import ControlError
 from .store import dumps, uid
 
 
+# These existing tools read shared evidence with the original scope/grant checks.
+# Selection is intersected with the schemas advertised for this specific round.
+RESULT_READERS = ("web_fetch", "workspace", "shell", "web_search", "dumb_search", "council_inspect")
+
+
 class ToolEvidence:
     """Small redacted results share the trajectory's retention, in the backed-up DB."""
 
@@ -99,7 +104,7 @@ class ToolEvidence:
         }
 
 
-def result_reference(message):
+def result_reference(message, *, available_readers=(), tool_name=None):
     """Keep trusted addressing and bounded progress metadata, never invent a summary."""
     try:
         body = json.loads(message.get("content", ""))
@@ -136,6 +141,7 @@ def result_reference(message):
     for key in tuple(reference):
         if len(dumps(reference[key])) > 1200:
             del reference[key]
+    notice = "Body omitted from this prompt, not summarized. Original evidence remains in the trajectory. "
     if body.get("result_id"):
         # A paged read has its own evidence receipt, but recovery must point at
         # the source bytes and original offset, not JSON containing another read.
@@ -144,28 +150,58 @@ def result_reference(message):
         if source != body["result_id"]:
             reference["page_result_id"] = body["result_id"]
             reference["result_id"] = source
-        reference["reread"] = {
-            "operation": "read_result",
-            "result_id": source,
-            "offset": offset,
-            "length": 2000,
-        }
         read_response = body.get("read_response")
-        if message.get("name") == "council_inspect" or (
+        preferred = tool_name or message.get("name") or body.get("reread_tool") or body.get("source_tool")
+        if not preferred and (
             isinstance(read_response, dict) and read_response.get("resource") == "read_result"
         ):
+            preferred = "council_inspect"
+        readers = [name for name in RESULT_READERS if name in available_readers]
+        reader = preferred if preferred in readers else next(iter(readers), None)
+        # Drop stale inspector paging instructions when switching reader tools,
+        # and all evidence paging hints when no reader remains this round.
+        if isinstance(read_response, dict) and (
+            read_response.get("resource") == "read_result"
+            or (not reader and read_response.get("operation") == "read_result")
+        ):
+            reference.pop("read_response", None)
+        if reader:
+            selector = "resource" if reader == "council_inspect" else "operation"
+            reference["reread_tool"] = reader
             reference["reread"] = {
-                "resource": "read_result",
+                selector: "read_result",
                 "result_id": source,
                 "offset": offset,
                 "length": 2000,
             }
-            reference["read_response"] = reference["reread"]
+            if reader == "council_inspect":
+                reference["read_response"] = reference["reread"]
+            notice += (
+                f"Call {reader} (reread_tool) with the reread object as its arguments. "
+                "This reads saved local evidence, not the network. Keep offsets/lengths as JSON numbers. "
+                "A page is partial: follow next until null before claiming a complete read."
+            )
+        else:
+            reference["reread_unavailable"] = True
+            notice += (
+                "No result-reading tool is available this round; do not claim the omitted content was read."
+            )
+        following = reference.get("next")
+        if (
+            isinstance(following, dict)
+            and following.get("result_id")
+            and (following.get("operation") == "read_result" or following.get("resource") == "read_result")
+        ):
+            reference.pop("next")
+            if reader:
+                reference["next_tool"] = reader
+                reference["next"] = {
+                    selector: "read_result",
+                    **{key: following[key] for key in ("result_id", "offset", "length") if key in following},
+                }
     return {
         "omitted_from_active_prompt": True,
-        "notice": "Body omitted from this prompt, not summarized. Original evidence remains in the trajectory. "
-        "Use council_inspect resource=read_result for inspection evidence, or operation=read_result on "
-        "workspace, shell, web_fetch, web_search or dumb_search when granted, or the saved document/file/job handle.",
+        "notice": notice,
         **reference,
     }
 
@@ -242,7 +278,7 @@ def page_search_http(message):
     return changed
 
 
-def bound_exchanges(extras, estimate, token_limit):
+def bound_exchanges(extras, estimate, token_limit, *, available_readers=()):
     """Return new messages: no mutation of previously assembled request evidence.
 
     First page redundant successful-search HTTP evidence. Replace large old
@@ -251,12 +287,33 @@ def bound_exchanges(extras, estimate, token_limit):
     Most recent results are kept whenever they fit. No helper model is called.
     """
     active = copy.deepcopy(extras)
+    call_names = {
+        call["id"]: call["function"]["name"] for message in active for call in message.get("tool_calls", [])
+    }
+
+    def reference_for(message):
+        return result_reference(
+            message,
+            available_readers=available_readers,
+            tool_name=call_names.get(message.get("tool_call_id")),
+        )
+
+    # A previous round may have offered a reader that is no longer advertised
+    # (revoked grant or exhausted tool rounds). Refresh even when already small.
+    for message in active:
+        if message.get("role") == "tool":
+            try:
+                body = json.loads(message.get("content", ""))
+            except ValueError, TypeError:
+                continue
+            if isinstance(body, dict) and body.get("omitted_from_active_prompt"):
+                message["content"] = dumps(reference_for(message))
 
     def size(messages):
         return estimate(prompt_exchanges(messages))
 
     before = size(active)
-    if before <= token_limit:
+    if before <= token_limit and not (active and "_working_set_index" in active[0]):
         return active, {"estimated_tokens": before, "omitted_groups": 0, "minimized_results": 0}
     references = []
     jobs = []
@@ -269,6 +326,9 @@ def bound_exchanges(extras, estimate, token_limit):
             previously_omitted_jobs = index.get("omitted_jobs", 0)
         elif isinstance(index, list):
             references = index
+        references = [reference_for({"content": dumps(ref)}) for ref in references]
+        for ref in references:
+            ref.pop("notice", None)
     groups = []
     for message in active:
         if message.get("role") == "assistant" or not groups:
@@ -295,7 +355,7 @@ def bound_exchanges(extras, estimate, token_limit):
                 else:
                     jobs.append(receipt)
             else:
-                ref = result_reference(message)
+                ref = reference_for(message)
                 ref.pop("notice", None)
                 references.append(ref)
 
@@ -305,7 +365,7 @@ def bound_exchanges(extras, estimate, token_limit):
             if size(assembled()) <= token_limit:
                 break
             if message.get("role") == "tool" and len(message.get("content", "")) > 1600:
-                message["content"] = dumps(result_reference(message))
+                message["content"] = dumps(reference_for(message))
                 minimized += 1
             # Retained assistant messages (including native continuation fields
             # and signatures) stay byte-for-byte compatible. Omit a complete

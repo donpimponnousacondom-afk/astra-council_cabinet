@@ -36,6 +36,11 @@ Returns complete usage, examples and the bot's current aggregate allowance witho
 
 Returns this bot's notes in key order and its current budget. Each note includes `key`, `value`, `source_channel_id` and `updated_at`. Timestamps shown to the model use the configured council timezone and explicit offset.
 
+If a large read cannot fit the active tool-result budget, follow the returned
+`reread_tool` and `reread` arguments to page its stored local evidence. Do not send
+`read_result` to `global_memory`; it is not a supported memory operation. Paging
+and the no-reader case follow the shared [working-set contract](AGENTIC_TOOLS.md#task-and-active-context-budgets).
+
 ```json
 {"operation":"write","key":"owner-preference","value":"The owner prefers concise technical answers. Learned from the owner's message in the control channel on 2026-09-13."}
 ```

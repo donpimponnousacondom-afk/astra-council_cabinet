@@ -715,7 +715,11 @@ class Engine:
                     max(64, headroom),
                 )
                 extras, working_meta = await asyncio.to_thread(
-                    bound_exchanges, extras, self.contexts.estimate, working_limit
+                    bound_exchanges,
+                    extras,
+                    self.contexts.estimate,
+                    working_limit,
+                    available_readers=tuple(tool["function"]["name"] for tool in available_tools),
                 )
                 messages, meta = await self.contexts.assemble(
                     budget_bot,
