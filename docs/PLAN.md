@@ -10,6 +10,13 @@ current checkout or running configuration.
 
 ## Current work and acceptance
 
+- On 2026-10-06 the owner authorized a narrow punctuation-intake correction:
+  repeated leading exclamations and a wrapped first word such as `!hello!`
+  should reach ordinary conversation without breaking Hortator commands.
+  Keep single-prefix command/error handling, owner/scope gates and the namespace
+  for eventual council commands. No scheduler or configuration changes. See
+  [intake semantics](OPERATIONS.md#scheduling-and-message-semantics).
+
 - On 2026-10-05 the owner requested model self-identification through existing
   late runtime facts and dynamic tails, with the same `{{MODEL}}` placeholder
   as the public footer. The owner then chose uppercase double braces for all

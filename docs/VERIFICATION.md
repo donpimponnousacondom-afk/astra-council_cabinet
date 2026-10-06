@@ -4,6 +4,30 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Exclamation punctuation versus command intake (2026-10-06)
+
+- Base `6f2d0b9aa50c8735f43eb49604808599e1c15ef3`, branch
+  `hotfix/discord-punctuation-intake`; dirty source for local checks.
+- Reproduced the missing-message symptom offline through the real receive path:
+  repeated leading `!` returned before storage/addressing. Per-bot attention
+  claims remained independent. Read-only production turn metadata showed Loki
+  answering while Curie was generating; no raw pre-filter packet receipt was
+  available to prove delivery of the individual missing message.
+- Before the patch, the new regression file reported **16 failed, 32 passed**
+  in 10.33 s; the failures were the expected punctuation-input cases. After the
+  patch, **162 focused tests passed**, exit 0, in 28.63 s: command-prefix,
+  Discord intake, addressing, security, version and footer coverage. Two
+  dependency deprecation warnings were reported, no failures/skips.
+- Coverage includes actual receive/command dispatch for both council and
+  Hortator, repeated/wrapped punctuation, reply wake-ups, historical replay,
+  bare/spaced prefixes, aliases, unknown-command errors, punctuation in command
+  arguments, exact-owner/control-channel gates and existing stop/start controls.
+  Ruff lint/format and `git diff --check` passed, exit 0.
+- These checks use isolated fixture data and mocked Discord replies, with no
+  live provider/Discord invocation, configuration edits or scheduler changes.
+  Full CI and independent Luna/Sol final-head reviews remain separate gates.
+  Local evidence is in ignored `audit/2026-10-06/01-loki-missing-message/`.
+
 ## Requested model in late prompt data (2026-10-05)
 
 - Base `9b692fa008bbc0a6c19aa3e6bb29d1247529be94`, branch

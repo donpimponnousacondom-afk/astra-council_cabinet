@@ -212,6 +212,11 @@ For the `web_search` plugin, non-secret `config` fields are `engine` (`auto`, `b
 
 `!help` returns the complete command list in fenced code blocks with no repeated owner/credential preface. `!version` and `!ver` are aliases for the same deterministic, read-only version report, also fenced. Formatting does not change exact-owner authorization, introduce model calls or enable mutations through the inspector. Native Discord Markdown in generated messages is preserved under the existing reasoning/mention rules.
 
+Repeated or paired leading exclamation marks are conversation punctuation,
+not a command prefix; single-prefix command/error handling stays deterministic.
+See [Discord intake semantics](OPERATIONS.md#scheduling-and-message-semantics)
+for the exact examples and historical-input behavior.
+
 ## Documents and automatic publication
 
 - Authenticated `GET /api/documents` returns `{sites: [...], remote_status, publishing}`. `publishing` contains global worker `enabled`, `configured`, `status`, `last_error` and `public_base_url`; configured readiness checks local settings/key/pins, not live SSH/HTTPS acceptance. Each site reports current and local-published revisions, files, automatic publication mode and truthful queue/delivery state.
