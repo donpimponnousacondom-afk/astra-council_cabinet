@@ -214,6 +214,14 @@ class CouncilClient(discord.Client):
             bot_id=self.bot_id,
         )
 
+    async def on_thread_update(self, before, after):
+        if self.manager.store.one("SELECT 1 FROM channels WHERE id=?", (str(after.id),)):
+            self.manager.store.remember_channel(str(after.id), name=after.name)
+
+    async def on_guild_channel_update(self, before, after):
+        if self.manager.store.one("SELECT 1 FROM channels WHERE id=?", (str(after.id),)):
+            self.manager.store.remember_channel(str(after.id), name=after.name)
+
     async def on_error(self, event_method, *args, **kwargs):
         error = sys.exception()
         self.manager.store.emit(
@@ -693,6 +701,7 @@ class DiscordManager:
             at=message.created_at.timestamp(),
             guild_id=str(message.guild.id) if message.guild else None,
             parent_id=str(message.channel.parent_id) if getattr(message.channel, "parent_id", None) else None,
+            channel_name=getattr(message.channel, "name", None),
             reply_to=str(message.reference.message_id)
             if message.reference and message.reference.message_id
             else None,
@@ -815,6 +824,12 @@ class DiscordManager:
                     raise ControlError("Channel does not match an assigned room and configured guild")
                 if isinstance(channel, discord.ForumChannel):
                     continue
+                self.store.remember_channel(
+                    str(channel.id),
+                    guild_id=str(channel.guild.id),
+                    parent_id=str(channel.parent_id) if getattr(channel, "parent_id", None) else None,
+                    name=getattr(channel, "name", None),
+                )
                 stage = "read_history"
                 last = self.store.one(
                     "SELECT discord_id FROM messages WHERE channel_id=? ORDER BY at DESC LIMIT 1",

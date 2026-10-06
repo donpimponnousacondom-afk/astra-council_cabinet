@@ -108,6 +108,8 @@ class Store:
         """)
         if "addressing" not in {row["name"] for row in self.rows("PRAGMA table_info(messages)")}:
             self.execute("ALTER TABLE messages ADD COLUMN addressing TEXT NOT NULL DEFAULT '{}'")
+        if "name" not in {row["name"] for row in self.rows("PRAGMA table_info(channels)")}:
+            self.execute("ALTER TABLE channels ADD COLUMN name TEXT")
         if "discord_parts" not in {row["name"] for row in self.rows("PRAGMA table_info(messages)")}:
             self.execute("ALTER TABLE messages ADD COLUMN discord_parts TEXT NOT NULL DEFAULT '{}'")
         if "routing" not in {row["name"] for row in self.rows("PRAGMA table_info(outbox)")}:
@@ -285,6 +287,16 @@ class Store:
             )
         )
 
+    def remember_channel(self, channel_id, *, guild_id=None, parent_id=None, name=None):
+        """Retain observed Discord display metadata; IDs remain the routing authority."""
+        self.execute(
+            "INSERT INTO channels(id,guild_id,parent_id,name) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
+            "guild_id=coalesce(excluded.guild_id,channels.guild_id),"
+            "parent_id=coalesce(excluded.parent_id,channels.parent_id),"
+            "name=coalesce(excluded.name,channels.name)",
+            (channel_id, guild_id, parent_id, self.redact(name) if isinstance(name, str) and name else None),
+        )
+
     def ingest(
         self,
         *,
@@ -300,16 +312,14 @@ class Store:
         attachments=None,
         guild_id=None,
         parent_id=None,
+        channel_name=None,
         addressing=None,
         discord_parts=None,
     ):
         room = self.get("rooms", room_id) if room_id else None
         if guild_id is None and room and room["channel_id"] == channel_id:
             guild_id = room["guild_id"]
-        self.execute(
-            "INSERT INTO channels(id,guild_id,parent_id) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET guild_id=coalesce(excluded.guild_id,channels.guild_id),parent_id=coalesce(excluded.parent_id,channels.parent_id)",
-            (channel_id, guild_id, parent_id),
-        )
+        self.remember_channel(channel_id, guild_id=guild_id, parent_id=parent_id, name=channel_name)
         content = self.redact(content)
         cur = self.execute(
             """INSERT OR IGNORE INTO messages(discord_id,channel_id,room_id,author_id,

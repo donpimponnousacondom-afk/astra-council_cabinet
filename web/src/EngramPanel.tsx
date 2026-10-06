@@ -3,9 +3,13 @@ import { api, dateLabel } from "./api";
 import type { RecordData } from "./api";
 import { Code, Field, Notice } from "./components";
 import { alphabetical } from "./ordering";
+import { channelLabel, channelOption } from "./channels";
 
 type EngramState = {
   channel_id: string;
+  channel_name?: string | null;
+  parent_id?: string | null;
+  parent_name?: string | null;
   revision: number;
   epoch: string;
   covered_through: number;
@@ -51,8 +55,8 @@ export function EngramPanel({
   const pending = useRef(false);
   const operationId = `engram-reset:${bot.id}`;
   const path = `/api/engrams/${encodeURIComponent(bot.id)}`;
-  const channelName = (id: string) =>
-    rooms.find((room) => room.channel_id === id)?.name || id;
+  const observations = [...(data?.states || []), ...(bot.contexts || [])];
+  const channelName = (id: string) => channelLabel(id, rooms, observations);
   const channels = alphabetical(
     [
       ...new Set<string>([
@@ -180,8 +184,7 @@ export function EngramPanel({
               <option value="">All channels</option>
               {channels.map((id) => (
                 <option key={id} value={id}>
-                  {channelName(id)}
-                  {channelName(id) !== id ? ` · ${id}` : ""}
+                  {channelOption(id, rooms, observations)}
                 </option>
               ))}
             </select>

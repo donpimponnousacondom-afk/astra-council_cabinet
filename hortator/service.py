@@ -172,11 +172,15 @@ class Service:
             value["runtime"] = self.store.runtime(value["id"])
             value["active_turn"] = bool(self.engine and value["id"] in self.engine.tasks)
             if include_context:
-                value["contexts"] = self.store.rows(
-                    "SELECT * FROM contexts WHERE bot_id=? ORDER BY updated_at DESC", (value["id"],)
+                value["contexts"] = self.channel_details(
+                    self.store.rows(
+                        "SELECT * FROM contexts WHERE bot_id=? ORDER BY updated_at DESC", (value["id"],)
+                    )
                 )
-            value["context_resets"] = self.store.rows(
-                "SELECT * FROM context_resets WHERE bot_id=? ORDER BY after_at DESC", (value["id"],)
+            value["context_resets"] = self.channel_details(
+                self.store.rows(
+                    "SELECT * FROM context_resets WHERE bot_id=? ORDER BY after_at DESC", (value["id"],)
+                )
             )
             value["readiness"] = self.readiness(value)
             from .slash_commands import public_status as slash_public_status
@@ -569,9 +573,23 @@ class Service:
     def global_memory_view(self, bot_id):
         return self.vault.redact(self.registry.global_memory.inspect(bot_id))
 
+    def channel_details(self, rows):
+        """Display metadata only; never resolve names through network I/O during polling."""
+        for row in rows:
+            metadata = self.store.one(
+                "SELECT c.name AS channel_name,c.parent_id,p.name AS parent_name FROM channels c "
+                "LEFT JOIN channels p ON p.id=c.parent_id WHERE c.id=?",
+                (row["channel_id"],),
+            )
+            if metadata:
+                row.update(metadata)
+        return rows
+
     def engram_view(self, bot_id, channel_id=None):
         self.entity("bots", bot_id)
-        return self.vault.redact(self.registry.engrams.inspect(bot_id, channel_id))
+        value = self.registry.engrams.inspect(bot_id, channel_id)
+        self.channel_details(value["states"])
+        return self.vault.redact(value)
 
     async def engram_reset(self, actor, bot_id, data):
         actor.require_owner()
