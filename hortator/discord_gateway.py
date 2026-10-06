@@ -68,6 +68,16 @@ def owner_message(message):
     return str(message.author.id) == OWNER_ID and not message.author.bot and not message.webhook_id
 
 
+def command_prefixed(content):
+    text = content.lstrip()
+    if not text.startswith("!"):
+        return False
+    head = text.split(maxsplit=1)[0]
+    # Any further ! in the first word is prose, including "!hello!,".
+    # A bare !, whitespace after it and unknown !commands retain command handling.
+    return "!" not in head[1:]
+
+
 class CouncilClient(discord.Client):
     def __init__(self, manager, bot_id):
         intents = discord.Intents.none()
@@ -617,7 +627,7 @@ class DiscordManager:
             and (getattr(message.channel, "type", None) == discord.ChannelType.private)
         ):
             self.store.remember_owner_dm(bot, str(message.channel.id))
-        if message.content.lstrip().startswith("!"):
+        if command_prefixed(message.content):
             if bot["role"] == "hortator" and not historical:
                 await self.command(bot, message)
             return
