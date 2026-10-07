@@ -1,4 +1,4 @@
-"""Serialize one detached request and measure bytes without retaining image data in logs."""
+"""Serialize one detached request and measure bytes without retaining media data in logs."""
 
 from urllib.parse import urlsplit
 
@@ -10,10 +10,21 @@ def encode_request(body, endpoint):
     # access here: large base64 payloads are prepared on a worker thread.
     payload = httpx.Request("POST", endpoint, json=body).content
     count = original_bytes = base64_bytes = 0
+    audio_count = audio_bytes = audio_base64_bytes = 0
     for message in body.get("messages", []):
         if not isinstance(message.get("content"), list):
             continue
         for part in message["content"]:
+            audio = part.get("input_audio")
+            if (
+                part.get("type") == "input_audio"
+                and isinstance(audio, dict)
+                and isinstance(audio.get("data"), str)
+            ):
+                encoded = audio["data"]
+                audio_count += 1
+                audio_base64_bytes += len(encoded)
+                audio_bytes += len(encoded) // 4 * 3 - (len(encoded) - len(encoded.rstrip("=")))
             image = part.get("image_url")
             if part.get("type") != "image_url" or not isinstance(image, dict):
                 continue
@@ -31,6 +42,9 @@ def encode_request(body, endpoint):
         "inline_image_count": count,
         "image_bytes": original_bytes,
         "image_base64_bytes": base64_bytes,
+        "inline_audio_count": audio_count,
+        "audio_bytes": audio_bytes,
+        "audio_base64_bytes": audio_base64_bytes,
         "upstream_body_limit_bytes": None,
         "body_limit_basis": "unknown",
     }

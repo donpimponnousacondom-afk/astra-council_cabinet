@@ -4,6 +4,35 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Native audio input (2026-10-07)
+
+- Base `7719e8102a89a7abe4ef88eefd172ede461e27bf`, branch `feat/audio-input`.
+  Owner requested native voice-note/general audio through the existing CPA route,
+  and explicitly chose to leave the plugin disabled for manual enablement.
+  [AUDIO_INPUT.md](AUDIO_INPUT.md) defines the feature contract and limits.
+- **53 focused tests passed** (35 audio + 18 snapshots) in 13.01 s, with two
+  existing dependency warnings. Actual FFmpeg/ffprobe fixtures cover WAV, OGG,
+  MP3, FLAC, AAC, AIFF, M4A and WebM, preserving bytes and measuring duration.
+  Mocked transport/runtime tests cover native streaming/buffered request bodies,
+  reference-only ledgers, disabled grants, wire revocation/corruption, actual
+  discord.py voice attachment shapes, metadata-only history, deletion/edit races,
+  text-only compaction with retained current-turn audio, tool rounds, failed-turn
+  retry eligibility, bounded captures, joined cancellation and CLI/snapshot restore.
+  Existing image/snapshot selection separately passed **60 tests** in 13.71 s.
+- Three isolated **live CPA/Gemini probes** used synthetic audio and no council
+  conversation, Discord send or configuration change. WAV and OGG beeps both
+  returned HTTP 200 in 4.98/4.95 s; OGG correctly identified three electronic beeps,
+  while WAV was misidentified as a guitar. A synthetic OGG spoken sentence was
+  transcribed exactly (punctuation aside) in **2.73 s**, HTTP 200. Route:
+  `CPA_proxy` / `aurorabell/gemini-3.7-flash-high`. Reported totals across all three:
+  319 input and 721 output tokens, including 676 reasoning tokens. No cost was
+  reported; these probes establish route acceptance and one correct speech
+  transcription, not universal format/model interpretation accuracy.
+- Repository Ruff lint/format and diff checks passed. Full local/remote gates,
+  dual review and deployment outcomes are recorded separately when complete.
+  Isolated live metadata/scripts and check logs are in ignored
+  `audit/2026-10-07/03-audio-input/`; credentials and audio base64 are not logged.
+
 ## One-use incomplete-response diagnostics (2026-10-07)
 
 - Base `ac09e2c70641ac3e70d5e741ff40fcbebc66f83c`, branch

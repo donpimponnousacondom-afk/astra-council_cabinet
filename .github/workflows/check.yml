@@ -33,6 +33,12 @@ jobs:
           cache-dependency-path: web/package-lock.json
       # Namespace/OS integration tests report their own skips when unavailable.
       # This gate does not claim live services or mandatory sandbox execution.
+      - name: Audio format test dependency
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
       - name: Full backend and frontend checks
         run: ./scripts/check.sh --suite ci
       - name: Preserve verification metadata

@@ -2,6 +2,11 @@
 
 Plugins are ordinary installed Python packages with an `hortator.plugins` entry point. The runtime loads these trusted local packages at startup; it never installs or executes code named by a model or Discord message.
 
+The optional [Audio input](AUDIO_INPUT.md) is a keyless, non-tool conversation
+capability. Global enablement and a per-bot grant admit new Discord audio to the
+current model through context preparation/provider serialization. It introduces
+no worker service, model action or separate transcription provider.
+
 The opt-in [Engram experiment](ENGRAMS.md) is a non-tool capability for private
 factual state generated alongside an ordinary answer. It needs narrow context,
 completion and confirmed-delivery hooks; a regular tool handler cannot intercept

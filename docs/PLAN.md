@@ -171,3 +171,12 @@ A new human's mention/reply must wait for the current human's answer rather than
 ## Remove speculative Bearer redaction — owner decision, 2026-10-07
 
 The shared regex replaced the next ordinary word after “bearer”, including “doors” in Loki’s answer. The owner explicitly requested deleting this heuristic entirely, without replacing it with another pattern or token-shape guess. Keep existing credential isolation, exact saved-secret replacement and structured secret-field redaction. This applies to the shared redactor across all bots and text storage/evidence paths and duplicate rules in the console and private reasoning viewer; no bot-specific workaround, new setting, or historical text rewrite. The owner also requested an inventory of other filters; see [OPERATIONS](OPERATIONS.md#text-filtering-inventory--2026-10-07). That inventory does not authorize changing the remaining rules.
+
+## Native audio input — owner decision, 2026-10-07
+
+Add an opt-in, non-tool audio capability for new Discord voice notes and audio
+attachments through each bot’s current model/provider. The owner confirmed the
+same CPA route already works in another harness and explicitly chose to leave
+the new plugin disabled for manual enablement. Preserve existing wake rules,
+per-bot handled boundaries, original bytes and text-only compaction; no separate
+transcription model or voice-channel listener. See [AUDIO_INPUT](AUDIO_INPUT.md).

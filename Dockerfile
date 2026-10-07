@@ -14,7 +14,7 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 UV_LINK_MODE=copy \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bubblewrap libseccomp2 ca-certificates bash coreutils findutils grep sed gawk \
     curl wget git jq perl procps iproute2 net-tools file gzip tar zip unzip \
-    diffutils patch xz-utils bzip2 binutils \
+    diffutils patch xz-utils bzip2 binutils ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && python3.14 -m pip install --no-cache-dir uv==0.12.9
 COPY scripts/install-micromamba.py /tmp/install-micromamba.py

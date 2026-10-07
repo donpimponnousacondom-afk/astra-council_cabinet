@@ -28,6 +28,7 @@ from .chat_response import (
 )
 from .store import dumps, uid
 from .vision import ImageCache
+from .audio_input import AudioInput
 
 
 class ProviderError(ControlError):
@@ -658,6 +659,9 @@ class ProviderPool:
             try:
                 body["messages"] = ImageCache(self.store).wire_messages(
                     messages, profile, allow_images=bot.get("allow_images", True)
+                )
+                body["messages"] = await AudioInput(self.store).wire_messages(
+                    body["messages"], bot, context.get("channel_id")
                 )
             except ControlError as exc:
                 raise ProviderError(str(exc), provider_fault=False) from exc

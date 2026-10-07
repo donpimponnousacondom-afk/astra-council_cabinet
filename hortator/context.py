@@ -24,6 +24,15 @@ from .vision import (
 from .prompt_templates import layer as prompt_layer, render
 from .addressing import for_viewer
 from .vision_turn import select_images, current_inputs, with_inputs, attachment_metadata
+from .audio_input import (
+    AudioInput,
+    audio_metadata,
+    audio_parts,
+    audio_reserve,
+    current_audio,
+    select_audio,
+    with_audio,
+)
 
 
 class ContextBuilder:
@@ -33,6 +42,7 @@ class ContextBuilder:
         self.application_emojis = application_emojis
         self.engrams = engrams
         self.images = ImageCache(store)
+        self.audio = AudioInput(store)
         self.encoder = tiktoken.get_encoding("cl100k_base")
         self.token_slots = asyncio.Semaphore(2)
 
@@ -45,6 +55,7 @@ class ContextBuilder:
             self.estimate({"messages": messages, "tools": tools})
             + len(messages) * 8
             + image_count(messages) * IMAGE_TOKEN_RESERVE
+            + audio_reserve(messages)
         )
 
     async def estimate_async(self, messages, tools):
@@ -53,10 +64,10 @@ class ContextBuilder:
         async with self.token_slots:
             return await asyncio.to_thread(self.estimate_request, messages, tools)
 
-    async def conversation_async(self, rows, bot, inputs=()):
+    async def conversation_async(self, rows, bot, inputs=(), audio_inputs=()):
         result = []
         for offset in range(0, len(rows), 64):
-            result.extend(self.conversation(rows[offset : offset + 64], bot, inputs))
+            result.extend(self.conversation(rows[offset : offset + 64], bot, inputs, audio_inputs))
             await asyncio.sleep(0)
         return result
 
@@ -276,7 +287,7 @@ class ContextBuilder:
     def visible_rows(self, bot, rows):
         return self.store.filter_context_rows(bot["id"], rows)
 
-    def conversation(self, rows, bot=None, inputs=()):
+    def conversation(self, rows, bot=None, inputs=(), audio_inputs=()):
         if bot is not None:
             rows = self.visible_rows(bot, rows)
         timezone = ZoneInfo(self.store.get("settings", "global")["timezone"])
@@ -298,7 +309,11 @@ class ContextBuilder:
                 "content": "[message deleted]" if row["deleted"] else row["content"],
                 "attachments": []
                 if row["deleted"]
-                else attachment_metadata(row["discord_id"], row["attachments"], inputs),
+                else audio_metadata(
+                    row["discord_id"],
+                    attachment_metadata(row["discord_id"], row["attachments"], inputs),
+                    audio_inputs,
+                ),
             }
             for row in rows
         ]
@@ -315,6 +330,7 @@ class ContextBuilder:
         tools=None,
         image_plan=None,
         engram=None,
+        audio_plan=None,
     ):
         rows = self.visible_rows(bot, rows)
         if image_plan is None or not bot.get("allow_images", True):
@@ -325,6 +341,14 @@ class ContextBuilder:
                 allow_images=bot.get("allow_images", True),
             )
         inputs = current_inputs(self.store, channel_id, image_plan)
+        if audio_plan is None or not self.audio.enabled(bot):
+            audio_plan = select_audio(
+                rows,
+                self.store.context(bot["id"], channel_id)["last_seen"],
+                self.audio.config(bot),
+                self.audio.enabled(bot),
+            )
+        audio_inputs = current_audio(self.store, channel_id, audio_plan)
         layers = self.layers(bot, channel_id)
         messages = []
 
@@ -345,7 +369,7 @@ class ContextBuilder:
             if item:
                 layers.append(item)
                 messages.append({"role": item["role"], "content": item["content"]})
-        transcript = await self.conversation_async(rows, bot, inputs)
+        transcript = await self.conversation_async(rows, bot, inputs, audio_inputs)
         async with self.token_slots:
             rendered_transcript = await asyncio.to_thread(
                 render_transcript, transcript, bot.get("transcript_format", "structured"), bot["id"]
@@ -375,8 +399,23 @@ class ContextBuilder:
                 if "transcript" in item["variables"]
                 else [entry for entry in inputs if entry["message_id"] in selected_ids]
             )
+            selected_audio = (
+                audio_inputs
+                if "transcript" in item["variables"]
+                else [entry for entry in audio_inputs if entry["message_id"] in selected_ids]
+            )
             layers.append(item)
-            messages.append({"role": item["role"], "content": with_inputs(item["content"], selected_inputs)})
+            content = with_audio(with_inputs(item["content"], selected_inputs), selected_audio)
+            if audio_plan["omitted"]:
+                notice = "Audio inputs omitted (metadata only; do not claim to hear them): " + dumps(
+                    audio_plan["omitted"]
+                )
+                content = (
+                    content + "\n" + notice
+                    if isinstance(content, str)
+                    else [*content, {"type": "text", "text": notice}]
+                )
+            messages.append({"role": item["role"], "content": content})
         if extras:
             messages.extend(extras)
         estimated = await self.estimate_async(messages, tools or [])
@@ -416,9 +455,12 @@ class ContextBuilder:
             "summary": summary if any(p["id"] == "summary" for p in layers) else "",
             "stored_summary_present": bool(summary),
             "estimated_tokens": estimate,
-            "estimator": "cl100k_base + 15% + framing + 4096 reserve/image; approximate, not provider image usage",
+            "estimator": "cl100k_base + 15% + framing + 4096 reserve/image + 32 reserve/audio second; approximate, not provider media usage",
             "image_count": image_count(messages),
             "image_plan": image_plan,
+            "audio_plan": audio_plan,
+            "audio_count": len(audio_parts(messages)),
+            "audio_token_reserve": audio_reserve(messages),
             "context_window": profile["context_window"],
             "output_reserve": profile["response_tokens"],
             "round": round_index,
@@ -524,9 +566,42 @@ class ContextBuilder:
         image_plan = select_images(
             rows, context["last_seen"], profile, allow_images=bot.get("allow_images", True)
         )
+        try:
+            audio_plan = (
+                await self.audio.prepare(rows, context["last_seen"], bot)
+                if not force
+                else select_audio([], context["last_seen"], self.audio.config(bot), False)
+            )
+        except TimeoutError as exc:
+            raise ControlError(
+                "New-message audio capture exceeded 60 seconds; cached progress is retained, retry preparation"
+            ) from exc
         messages, meta = await self.assemble(
-            bot, profile, channel_id, rows, summary, tools=tools, image_plan=image_plan, engram=engram
+            bot,
+            profile,
+            channel_id,
+            rows,
+            summary,
+            tools=tools,
+            image_plan=image_plan,
+            engram=engram,
+            audio_plan=audio_plan,
         )
+        if audio_plan["inputs"] or audio_plan["omitted"] or audio_plan["disabled_clips"]:
+            self.store.emit(
+                "context.audio_selection",
+                {
+                    "channel_id": channel_id,
+                    "policy": audio_plan["policy"],
+                    "selected_clips": len(audio_plan["inputs"]),
+                    "omitted": audio_plan["omitted"],
+                    "disabled_clips": audio_plan["disabled_clips"],
+                    "historical_clips": audio_plan["historical_clips"],
+                },
+                bot_id=bot["id"],
+                turn_id=turn_id,
+                level="warning" if audio_plan["omitted"] else "debug",
+            )
         if image_plan["historical_images"] or image_plan["budget_omitted"] or image_plan["disabled_images"]:
             self.store.emit(
                 "context.image_selection",
@@ -608,6 +683,7 @@ class ContextBuilder:
                     tools=tools,
                     image_plan=image_plan,
                     engram=engram,
+                    audio_plan=audio_plan,
                 )
                 if tail_meta["estimated_tokens"] * factor + profile[
                     "summary_tokens"
@@ -806,6 +882,7 @@ class ContextBuilder:
                     tools=tools,
                     image_plan=image_plan,
                     engram=engram,
+                    audio_plan=audio_plan,
                 )
                 if (
                     meta["estimated_tokens"] * factor + profile["response_tokens"]

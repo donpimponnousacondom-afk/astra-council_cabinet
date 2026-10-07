@@ -1,5 +1,11 @@
 # Control API and Discord command parity
 
+The optional `audio_input` capability uses existing global plugin enablement,
+per-bot `enabled_plugins` and `plugin_config`. It is keyless and `model_tool=False`,
+with no additional HTTP routes. Attachment evidence uses `audio` metadata;
+request context records the selected plan/count, approximate token reserve and
+wire byte counts. See [AUDIO_INPUT](AUDIO_INPUT.md) for scope and configuration.
+
 The optional [Engram](ENGRAMS.md) exposes owner-only state inspection at
 `GET /api/engrams/{bot_id}` (optional `channel_id`) and explicit state reset at
 `POST /api/engrams/{bot_id}/reset`. Normal authentication, origin and CSRF checks
