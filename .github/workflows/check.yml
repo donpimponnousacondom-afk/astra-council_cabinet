@@ -3,7 +3,8 @@ name: Checks
 on:
   pull_request:
   push:
-    branches: ['feat/**', 'hotfix/**', 'dev/**']
+    # Seed default-branch caches after merge; PR updates run only once.
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -24,15 +25,42 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          version: '0.12.9'
-          python-version: '3.14'
+          version: "0.12.9"
+          python-version: "3.14"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: web/package-lock.json
       # Namespace/OS integration tests report their own skips when unavailable.
       # This gate does not claim live services or mandatory sandbox execution.
+      - name: Audio dependency cache epoch
+        id: audio-cache
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache audio dependency downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/hortator-ci-ffmpeg-debs/*.deb
+          key: ffmpeg-debs-ubuntu24.04-${{ runner.arch }}-v2-${{ steps.audio-cache.outputs.week }}
+          restore-keys: |
+            ffmpeg-debs-ubuntu24.04-${{ runner.arch }}-v2-
+      - name: Audio format test dependency
+        timeout-minutes: 5
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            audio_cache_dir=/tmp/hortator-ci-ffmpeg-debs
+            sudo install -d -o root -g root -m 0755 "$audio_cache_dir"
+            sudo install -d -o _apt -g root -m 0700 "$audio_cache_dir/partial"
+            # The Azure mirror repeatedly stalled cold installs on hosted runners.
+            # Keep Ubuntu's signed packages, using its main archive instead.
+            if [ -f /etc/apt/apt-mirrors.txt ]; then
+              sudo sed -i 's|https\?://azure\.archive\.ubuntu\.com|https://archive.ubuntu.com|g' /etc/apt/apt-mirrors.txt
+            fi
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+            sudo apt-get -o Dir::Cache::archives="$audio_cache_dir" -o APT::Keep-Downloaded-Packages=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg
+          fi
       - name: Full backend and frontend checks
         run: ./scripts/check.sh --suite ci
       - name: Preserve verification metadata

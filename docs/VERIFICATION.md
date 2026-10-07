@@ -4,6 +4,101 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Native audio input (2026-10-07)
+
+- Base `7719e8102a89a7abe4ef88eefd172ede461e27bf`, branch `feat/audio-input`.
+  Owner requested native voice-note/general audio through the existing CPA route,
+  and explicitly chose to leave the plugin disabled for manual enablement.
+  [AUDIO_INPUT.md](AUDIO_INPUT.md) defines the feature contract and limits.
+- **53 focused tests passed** (35 audio + 18 snapshots) in 13.01 s, with two
+  existing dependency warnings. Actual FFmpeg/ffprobe fixtures cover WAV, OGG,
+  MP3, FLAC, AAC, AIFF, M4A and WebM, preserving bytes and measuring duration.
+  Mocked transport/runtime tests cover native streaming/buffered request bodies,
+  reference-only ledgers, disabled grants, wire revocation/corruption, actual
+  discord.py voice attachment shapes, metadata-only history, deletion/edit races,
+  text-only compaction with retained current-turn audio, tool rounds, failed-turn
+  retry eligibility, bounded captures, joined cancellation and CLI/snapshot restore.
+  Existing image/snapshot selection separately passed **60 tests** in 13.71 s.
+- Three isolated **live CPA/Gemini probes** used synthetic audio and no council
+  conversation, Discord send or configuration change. WAV and OGG beeps both
+  returned HTTP 200 in 4.98/4.95 s; OGG correctly identified three electronic beeps,
+  while WAV was misidentified as a guitar. A synthetic OGG spoken sentence was
+  transcribed exactly (punctuation aside) in **2.73 s**, HTTP 200. Route:
+  `CPA_proxy` / `aurorabell/gemini-3.7-flash-high`. Reported totals across all three:
+  319 input and 721 output tokens, including 676 reasoning tokens. No cost was
+  reported; these probes establish route acceptance and one correct speech
+  transcription, not universal format/model interpretation accuracy.
+- Repository Ruff lint/format and diff checks passed. Full local/remote gates,
+  dual review and deployment outcomes are recorded separately when complete.
+  Isolated live metadata/scripts and check logs are in ignored
+  `audit/2026-10-07/03-audio-input/`; credentials and audio base64 are not logged.
+- Pre-review full local `./scripts/check.sh --suite ci` passed: **1,961 tests,
+  one environment-dependent public-network/package-install skip**, two existing
+  dependency warnings; locked dependencies, lint, format, evidence tests and
+  frontend install/format/build all passed. The run began on the uncommitted
+  feature and ended after initial publication; its source snapshots are retained.
+  It does not cover the later review corrections. Final-head GitHub gates remain
+  required, independently of this local run.
+- Sol independently found two P2 timing defects in the initial head: source
+  deletion during file expansion could still send audio, and cancellation could
+  outlive an unjoined wire file read. Parent reproduced **2 expected failures**,
+  then added **9 failing regressions** covering deletion/removal/replacement and
+  grant revocation during both file expansion and JSON encoding, plus wire-read
+  cancellation. File expansion now joins on cancellation; owner-thread checks
+  repeat after expansion and at the last local boundary before HTTP dispatch.
+  The corrected audio/provider/failed-response-recovery selection passed
+  **90 tests in 22.12 s**, including all nine regressions. No HTTP attempt is
+  recorded or made when this final validation rejects a source.
+- Luna's independent initial review found a third P2: an operator-selected
+  system-role transcript incorrectly carried native audio in that same message.
+  Parent reproduced **two failures/two passes** across the two transcript styles
+  and both supported roles, using actual saved prompt edits and an endpoint
+  fixture that enforces the native content schema. System-role transcript text
+  now keeps its chosen role while audio follows as attributed user input.
+  Initial reviews were independent: Sol uniquely found the two timing defects;
+  Luna uniquely found the role mismatch. Each missed the other's initial cases.
+- Luna subsequently reported a separate WebM issue after its initial digest:
+  the shared extension could admit a video attachment as audio, and the first
+  probe inspected only the audio stream. Parent reproduced **two failures**
+  with a video MIME candidate and a real mislabelled WebM video/audio fixture.
+  Candidate classification now excludes video MIME types and probing rejects
+  actual video tracks while preserving embedded album-cover art in audio files.
+  This was an additional post-initial finding, not retroactively added to the
+  blind initial comparison.
+- Final-head PR checks at `36aaf53` passed **1,952 tests / 19 skips / two warnings**;
+  that head is superseded by the role/video corrections. Its separate push job
+  stalled over ten minutes in dependency setup. The audio dependency step now
+  has bounded network waits and a five-minute step timeout; a setup failure
+  remains a failed check, never a skipped audio gate.
+- After the role/video corrections, the focused audio, prompt-layer, provider,
+  response-recovery and snapshot selection passed **134 tests in 33.11 s**, with
+  two existing dependency warnings. Video regression uses a real tiny WebM with
+  an audio track; the positive control preserves an MP3 including attached album
+  art byte-for-byte. The owner reiterated that Discord voice notes are the main
+  target; the intake fixture also exercises an empty-body voice-note reply to a
+  bot as the human wake event, without requiring a typed mention.
+- The PR run for `d1b7beb` passed **1,958 tests / 19 skips / two warnings** on
+  retry, with the full gate taking **270.70 s** (pytest 259.53 s, Python install
+  1.87 s, npm install 1.93 s). Its first attempt timed out while downloading
+  Ubuntu packages; retry installed them in 23 s. This separates mirror delay
+  from actual test time. The owner then requested pipeline optimization: remove
+  duplicate feature-push/PR runs, retain PR/manual/full post-merge checks, seed
+  reusable default-branch caches, and cache FFmpeg package downloads. The full
+  verification command and check name are unchanged; cache-hit and final-head
+  timing evidence will be recorded on the PR after the revised workflow runs.
+- The first cache-enabled run (`adb27d3`) also hit the cold Azure-mirror timeout,
+  before full tests or cache saving. It was not treated as a passing gate or a
+  demonstrated speedup. CI now selects Ubuntu's main HTTPS archive in the runner's
+  mirror list. This addresses the observed download source; signed-package
+  verification, bounded installation and all checks remain mandatory.
+- `504b70e` passed the complete gate (**1,958 passed / 19 skipped**) and saved
+  62.8 MB of package downloads; cold audio setup took 30 s. Luna then found an
+  actual APT root-download fallback warning caused by the cache's runner-home
+  path. Sol supplied a correction matching APT's normal ownership layout:
+  a dedicated traversable `/tmp` cache with `_apt`-owned 0700 `partial/`.
+  The cache namespace was bumped; no existing home permissions are widened.
+  This is a later CI finding, separate from the initial blind application review.
+
 ## One-use incomplete-response diagnostics (2026-10-07)
 
 - Base `ac09e2c70641ac3e70d5e741ff40fcbebc66f83c`, branch

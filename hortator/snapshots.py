@@ -19,7 +19,17 @@ from .models import ControlError, SCHEMAS
 from .memory_budget import DEFAULT_MEMORY_CHAR_LIMIT, NOTE_CHAR_LIMIT, hard_limit
 
 FORMAT = 1
-STORES = ("artifacts", "images", "sites", "ssh", "workspaces", "jobs", "fetched_documents", "site_history")
+STORES = (
+    "artifacts",
+    "images",
+    "audio",
+    "sites",
+    "ssh",
+    "workspaces",
+    "jobs",
+    "fetched_documents",
+    "site_history",
+)
 PAUSE_FILE = "snapshot-paused.json"
 ID = re.compile(r"[0-9]{8}T[0-9]{12}Z-[a-f0-9]{12}")
 

@@ -472,6 +472,9 @@ class Registry:
         from .engrams import register as register_engrams
 
         register_engrams(self)
+        from .audio_input import register as register_audio_input
+
+        register_audio_input(self)
         from .slash_commands import register as register_slash
 
         register_slash(self)

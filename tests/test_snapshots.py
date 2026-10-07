@@ -40,6 +40,8 @@ def snapshot_data(tmp_path):
     k.store.close()
     (directory / "images").mkdir(exist_ok=True)
     (directory / "images" / "test-image").write_bytes(b"test image bytes")
+    (directory / "audio").mkdir()
+    (directory / "audio" / "test-audio").write_bytes(b"test audio bytes")
     manager = Snapshots(directory, BUILD)
     return manager, directory, fingerprint
 
@@ -49,6 +51,7 @@ def test_complete_snapshot_validated_immutable_and_incompatible(snapshot_data):
     manifest = manager.capture("Experiment baseline", "All current state")
     assert manager.verify(manifest["id"], fingerprint)["name"] == "Experiment baseline"
     assert manifest["files"]["images/test-image"]["bytes"] == 16
+    assert manifest["files"]["audio/test-audio"]["bytes"] == 16
     assert (manager.path(manifest["id"]) / "data/master.key").stat().st_mode & 0o777 == 0o400
     assert manager.catalog(fingerprint)["snapshots"][0]["compatible"]
     other = Snapshots(directory, {**BUILD, "commit": "b" * 40})
@@ -187,12 +190,15 @@ def test_full_restore_preserves_recovery_and_lock(snapshot_data):
         db.execute("UPDATE memories SET value='experiment'")
     (directory / "images/test-image").write_bytes(b"experiment pixels")
     (directory / "images/extra").write_bytes(b"extra")
+    (directory / "audio/test-audio").write_bytes(b"changed audio")
     receipt = manager.restore(manifest["id"], fingerprint)
     assert lock.stat().st_ino == inode
     assert (directory / "images/test-image").read_bytes() == b"test image bytes"
+    assert (directory / "audio/test-audio").read_bytes() == b"test audio bytes"
     assert not (directory / "images/extra").exists()
     recovery = manager.path(receipt["recovery_snapshot_id"])
     assert (recovery / "data/images/extra").read_bytes() == b"extra"
+    assert (recovery / "data/audio/test-audio").read_bytes() == b"changed audio"
     with sqlite3.connect(directory / "council.sqlite3") as db:
         assert (
             db.execute("SELECT value FROM memories WHERE bot_id='ada' AND channel_id='channel-a'").fetchone()[

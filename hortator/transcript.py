@@ -144,6 +144,15 @@ def render_transcript(records, style="structured", viewer_bot_id=None):
                 info += " [image supplied]"
             elif "pixels_in_this_request" in attachment:
                 info += " [image metadata only]"
+            if attachment.get("audio_in_this_request"):
+                info += " [audio supplied]"
+            elif "audio_in_this_request" in attachment:
+                info += " [audio metadata only; no sound supplied]"
+            audio = attachment.get("audio") or {}
+            if audio.get("error"):
+                info += " [audio unavailable: " + _label(audio["error"]) + "]"
+            if audio.get("duration_seconds"):
+                info += " duration_seconds=" + str(audio["duration_seconds"])
             vision = attachment.get("vision") or {}
             if vision.get("status") not in (None, "ready"):
                 info += " [image status: " + _label(vision["status"]) + "]"

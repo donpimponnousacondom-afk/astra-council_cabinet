@@ -755,6 +755,7 @@ class Engine:
                     available_tools,
                     image_plan=original_meta["image_plan"],
                     engram=engram,
+                    audio_plan=original_meta.get("audio_plan"),
                 )
                 headroom = (
                     int(
@@ -786,6 +787,7 @@ class Engine:
                     available_tools,
                     image_plan=original_meta["image_plan"],
                     engram=engram,
+                    audio_plan=original_meta.get("audio_plan"),
                 )
                 meta.update(
                     checkpoint=original_meta["checkpoint"],

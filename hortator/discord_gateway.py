@@ -22,6 +22,7 @@ from .footer import footer_settings, render_footer
 from .timekeeping import council_timezone, present_times
 from .version import version_text
 from .vision import ImageCache, image_candidate, MAX_CAPTURE_IMAGES, reuse_vision
+from .audio_cache import reuse_audio
 from .store import dumps
 from .discord_content import compose, from_message, saved_parts, embed_text, component_text
 
@@ -187,6 +188,9 @@ class CouncilClient(discord.Client):
                 item = {key: value.get(key) for key in ("id", "filename", "url", "size", "content_type")}
                 item["id"] = str(item["id"])
                 item = reuse_vision(item, prior.get(item["id"]))
+                item = reuse_audio(item, prior.get(item["id"]))
+                if value.get("duration_secs") is not None:
+                    item["duration_secs"] = value["duration_secs"]
                 if image_candidate(item) and (self.manager.store.get("bots", self.bot_id) or {}).get(
                     "allow_images", True
                 ):
@@ -674,6 +678,9 @@ class DiscordManager:
                 "content_type": a.content_type,
             }
             attachment = reuse_vision(attachment, prior.get(str(a.id)))
+            attachment = reuse_audio(attachment, prior.get(str(a.id)))
+            if getattr(a, "duration", None) is not None:
+                attachment["duration_secs"] = a.duration
             if image_candidate(attachment) and bot.get("allow_images", True):
                 image_index += 1
                 if image_index <= MAX_CAPTURE_IMAGES:

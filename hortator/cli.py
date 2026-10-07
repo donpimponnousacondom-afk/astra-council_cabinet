@@ -78,6 +78,7 @@ def main():
         for folder in (
             "artifacts",
             "images",
+            "audio",
             "sites",
             "ssh",
             "workspaces",

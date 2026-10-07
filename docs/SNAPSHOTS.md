@@ -18,7 +18,7 @@ Each snapshot has a manifest and a `data/` payload containing:
 
 - SQLite copied through its backup API, including configuration, encrypted credentials, authentication state, private notes, contexts/checkpoints, transcripts, requests, trajectories, tool jobs and publishing queue records. Optional plugin tables, including per-bot global memories, are included automatically.
 - The matching `master.key`, including an environment-supplied key when applicable.
-- Managed stores when present: `artifacts/`, `images/`, `sites/`, `ssh/`, `workspaces/`, `jobs/`, `fetched_documents/` and the separate `site_history/` repository.
+- Managed stores when present: `artifacts/`, `images/`, `audio/`, `sites/`, `ssh/`, `workspaces/`, `jobs/`, `fetched_documents/` and the separate `site_history/` repository.
 - `initial-password` when present.
 
 Every file has a recorded size and SHA-256 digest. SQLite integrity, foreign-key references and decryption of all stored secrets are checked before declaring the capture complete. Publication uses a new immutable directory name only after the payload and manifest have been flushed. Snapshot directories are owner-only; payload files and the manifest are read-only (an existing owner-execute bit is preserved for executable workspace files). There is no overwrite or delete endpoint.
