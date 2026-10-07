@@ -60,6 +60,7 @@ def _queue_failed_response(store, turn_id):
     request = store.one(
         "SELECT id,status,json_extract(response,'$.finish_reason') AS finish_reason,"
         "json_extract(context,'$.http_attempt_started') AS http_attempt_started,"
+        "json_extract(context,'$.request_not_sent') AS request_not_sent,"
         "json_extract(context,'$.retry_group_id') AS retry_group "
         "FROM requests WHERE turn_id=? AND bot_id=? AND purpose='generation' "
         "ORDER BY started_at DESC,rowid DESC LIMIT 1",
@@ -69,10 +70,11 @@ def _queue_failed_response(store, turn_id):
         request["status"] == "completed" and request["finish_reason"] not in {"length", "content_filter"}
     ):
         return
-    if request["http_attempt_started"] == 0 and not store.one(
+    if (request["http_attempt_started"] == 0 or request["request_not_sent"]) and not store.one(
         "SELECT 1 FROM requests WHERE turn_id=? AND bot_id=? AND purpose='generation' "
         "AND status IN ('failed','cancelled','interrupted') AND id!=? "
         "AND json_extract(context,'$.retry_group_id')=? "
+        "AND coalesce(json_extract(context,'$.request_not_sent'),0)=0 "
         "AND coalesce(json_extract(context,'$.http_attempt_started'),1)!=0 LIMIT 1",
         (turn_id, turn["bot_id"], request["id"], request["retry_group"]),
     ):
@@ -255,6 +257,26 @@ def consume(store, note, request_id, turn_id):
                 "source_request_id": note["source_request_id"],
                 "excerpted": note["excerpted"],
             },
+            bot_id=note["bot_id"],
+            turn_id=turn_id,
+            request_id=request_id,
+        )
+    return bool(removed)
+
+
+def restore_unsent(store, note, request_id, turn_id):
+    """Undo only this attempt's consumption after a proven pre-send failure."""
+    restored = store.execute(
+        "INSERT INTO response_recovery_pending(bot_id,channel_id,request_id,turn_id,created_at) "
+        "SELECT r.bot_id,t.channel_id,r.id,t.id,? FROM requests r JOIN turns t ON t.id=r.turn_id "
+        "WHERE r.id=? AND r.bot_id=? AND t.bot_id=r.bot_id AND t.channel_id=? "
+        "ON CONFLICT(bot_id,channel_id) DO NOTHING",
+        (time.time(), note["source_request_id"], note["bot_id"], note["channel_id"]),
+    ).rowcount
+    if restored:
+        store.emit(
+            "response_recovery.not_sent",
+            {"channel_id": note["channel_id"], "source_request_id": note["source_request_id"]},
             bot_id=note["bot_id"],
             turn_id=turn_id,
             request_id=request_id,

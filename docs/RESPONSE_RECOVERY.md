@@ -36,6 +36,10 @@ Engram text is an uncommitted draft with an obsolete nonce, never accepted state
   failure before HTTP does not consume the reference. If the reader is busy or
   even the minimal notice cannot fit, ordinary generation can proceed without it
   and the reference remains available for a later first round.
+- A proven connection-pool/connect failure before sending restores a reference
+  consumed by that attempt. Read/write failures or cancellation after starting
+  transport have uncertain delivery and do not restore it. A later unsent retry
+  cannot restore a note already offered by an earlier potentially sent attempt.
 
 The runtime does not append this material to shared history, compaction input,
 channel/global notes or accepted Engram state. The bot may deliberately save useful
@@ -64,9 +68,10 @@ known credentials are redacted again before inference. Model-readable request
 records contain a placeholder in the note's slot; the exact supplied note is kept
 under private diagnostics `request_recovery`. This preserves operator inspection
 without spreading private reasoning through public trajectory tools, events or
-transcript replay. Events `response_recovery.queued`, `.offered`, and read-failure
-`.deferred` contain metadata, not captured text. No general model-facing reasoning
-reader is added.
+transcript replay. Events `response_recovery.queued`, `.offered`, read-failure
+`.deferred`, and `.not_sent` contain metadata, not captured text. `.offered` means
+an attempt started; `.not_sent` corrects it when transport establishes no request
+was sent. No general model-facing reasoning reader is added.
 
 Pending references survive restart. Startup queues only turns it just recovered
 as interrupted, without backfilling old finished failures. Full snapshots include

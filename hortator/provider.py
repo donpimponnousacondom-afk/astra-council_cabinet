@@ -16,7 +16,7 @@ from .models import ControlError
 from .footer_tokens import measure_footer_tokens
 from .request_payload import encode_request
 from .diagnostics import record_diagnostics, reasoning_settings
-from .response_recovery import consume as consume_recovery
+from .response_recovery import consume as consume_recovery, restore_unsent
 from .chat_response import (
     ChatResponse,
     Frame,
@@ -648,6 +648,7 @@ class ProviderPool:
         status_code = None
         error_data = None
         diagnostic_at = clock
+        recovery_consumed = False
         deadline = asyncio.timeout(provider["timeout_seconds"])
         phase = "prepare_request"
         try:
@@ -677,7 +678,7 @@ class ProviderPool:
                 wire_headers.update(headers)
                 phase = "await_response_headers"
                 if recovery:
-                    consume_recovery(self.store, recovery, request_id, turn_id)
+                    recovery_consumed = consume_recovery(self.store, recovery, request_id, turn_id)
                 async with self.client.stream(
                     "POST",
                     endpoint,
@@ -866,6 +867,18 @@ class ProviderPool:
             cancelled = isinstance(error, asyncio.CancelledError)
             if not isinstance(error, (Exception, asyncio.CancelledError)):
                 raise
+            if phase == "await_response_headers" and isinstance(
+                error, (httpx.PoolTimeout, httpx.ConnectTimeout, httpx.ConnectError)
+            ):
+                # These failures precede sending the HTTP request. Read/write
+                # errors and cancellation are ambiguous and must not reoffer it.
+                meta["request_not_sent"] = True
+                self.store.execute(
+                    "UPDATE requests SET context=? WHERE id=?",
+                    (dumps(self.vault.redact(meta)), request_id),
+                )
+                if recovery_consumed:
+                    restore_unsent(self.store, recovery, request_id, turn_id)
             if isinstance(error, UpstreamResponseError):
                 error_data = error.envelope
                 exc = envelope_error(error_data, private_key=private_key)

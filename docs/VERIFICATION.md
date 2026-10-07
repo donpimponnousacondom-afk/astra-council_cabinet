@@ -11,7 +11,7 @@ historical claims retain their original date and scope.
   own failed draft and retained reasoning once, as an automatic user-role tail.
   [RESPONSE_RECOVERY.md](RESPONSE_RECOVERY.md) defines eligibility, limits and
   the narrow private-diagnostic exception.
-- **166 focused tests passed** in 37.17 s, with two existing dependency warnings:
+- **174 focused tests passed** in 40.50 s, with two existing dependency warnings:
   recovery, runtime, diagnostics, streaming, resets, Engram integration and
   snapshots. New cases cover filtered/length-limited output, broken streams,
   incomplete calls, raw Engram drafts, retries, bot/channel isolation, restart,
@@ -25,6 +25,12 @@ historical claims retain their original date and scope.
   the correction). Staging now recognizes an earlier HTTP attempt within that same
   completion, retaining final-error identity while recovering its earlier capture.
   A completion that never reached HTTP still preserves an older unoffered note.
+- Luna independently found that a connection-pool timeout could consume the old
+  note before sending anything. Parent tests reproduced pool/connect failures and
+  repeated unsent retries (**4 failed, 4 passed** before correction). Only proven
+  pre-send failures restore a note consumed by that attempt; read/write uncertainty
+  and previously sent attempts remain consumed. The metadata-only `.not_sent`
+  receipt corrects the earlier attempt-start `.offered` event.
 - These are isolated fixtures and mocked transport, not live provider or Discord
   validation. A read-only production metadata check confirmed Curie's latest
   filtered request retained 1,517 reasoning characters and 60 content characters;

@@ -427,3 +427,38 @@ async def test_local_pre_http_failure_does_not_replace_unoffered_work(kernel, mo
     assert not json.loads(latest["context"])["http_attempt_started"]
     assert "local serialization fixture" in latest["error"]
     assert not [e for e in kernel.store.events() if e["kind"] == "response_recovery.offered"]
+
+
+@pytest.mark.parametrize(
+    "failures,preserve",
+    [
+        ([httpx.PoolTimeout], True),
+        ([httpx.ConnectTimeout], True),
+        ([httpx.ConnectError], True),
+        ([httpx.ReadTimeout], False),
+        ([httpx.WriteError], False),
+        ([httpx.PoolTimeout, httpx.ReadTimeout], False),
+        ([httpx.ReadTimeout, httpx.PoolTimeout], False),
+        ([httpx.PoolTimeout, httpx.PoolTimeout], True),
+    ],
+)
+async def test_proven_unsent_attempt_preserves_note_but_uncertain_delivery_consumes_it(
+    kernel, failures, preserve
+):
+    await failed_turn(kernel)
+    source = kernel.store.one("SELECT request_id FROM response_recovery_pending")["request_id"]
+    provider = kernel.store.get("providers", "openrouter")
+    provider.pop("revision")
+    provider.update(retry_count=len(failures) - 1, retry_delay_seconds=0)
+    kernel.store.put("providers", provider)
+    attempts = iter(failures)
+
+    def handler(request):
+        raise next(attempts)("transport fixture")
+
+    await install_client(kernel, handler)
+    await run(kernel)
+    note = await kernel.reporting.run(read_note, "ada", CHANNEL, 6000)
+    assert (note["source_request_id"] == source) == preserve
+    assert (DRAFT in note["message"]["content"]) == preserve
+    assert (THOUGHT in note["message"]["content"]) == preserve
