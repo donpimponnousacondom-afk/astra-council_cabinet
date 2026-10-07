@@ -59,16 +59,26 @@ def _queue_failed_response(store, turn_id):
         return
     request = store.one(
         "SELECT id,status,json_extract(response,'$.finish_reason') AS finish_reason,"
-        "json_extract(context,'$.http_attempt_started') AS http_attempt_started "
+        "json_extract(context,'$.http_attempt_started') AS http_attempt_started,"
+        "json_extract(context,'$.retry_group_id') AS retry_group "
         "FROM requests WHERE turn_id=? AND bot_id=? AND purpose='generation' "
         "ORDER BY started_at DESC,rowid DESC LIMIT 1",
         (turn_id, turn["bot_id"]),
     )
-    if (
-        not request
-        or request["http_attempt_started"] == 0
-        or (request["status"] == "completed" and request["finish_reason"] not in {"length", "content_filter"})
+    if not request or (
+        request["status"] == "completed" and request["finish_reason"] not in {"length", "content_filter"}
     ):
+        return
+    if request["http_attempt_started"] == 0 and not store.one(
+        "SELECT 1 FROM requests WHERE turn_id=? AND bot_id=? AND purpose='generation' "
+        "AND status IN ('failed','cancelled','interrupted') AND id!=? "
+        "AND json_extract(context,'$.retry_group_id')=? "
+        "AND coalesce(json_extract(context,'$.http_attempt_started'),1)!=0 LIMIT 1",
+        (turn_id, turn["bot_id"], request["id"], request["retry_group"]),
+    ):
+        # Preserve a previous unoffered note if this completion never reached
+        # HTTP. A locally interrupted retry still belongs to a completion whose
+        # earlier attempt may hold received work; read_note recovers that capture.
         return
     store.execute(
         "INSERT INTO response_recovery_pending VALUES(?,?,?,?,?) "

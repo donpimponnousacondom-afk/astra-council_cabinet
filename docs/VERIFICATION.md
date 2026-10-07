@@ -11,7 +11,7 @@ historical claims retain their original date and scope.
   own failed draft and retained reasoning once, as an automatic user-role tail.
   [RESPONSE_RECOVERY.md](RESPONSE_RECOVERY.md) defines eligibility, limits and
   the narrow private-diagnostic exception.
-- **164 focused tests passed** in 36.32 s, with two existing dependency warnings:
+- **166 focused tests passed** in 37.17 s, with two existing dependency warnings:
   recovery, runtime, diagnostics, streaming, resets, Engram integration and
   snapshots. New cases cover filtered/length-limited output, broken streams,
   incomplete calls, raw Engram drafts, retries, bot/channel isolation, restart,
@@ -19,6 +19,12 @@ historical claims retain their original date and scope.
   redaction and cancellation/local failure before an HTTP attempt. The earlier
   successful attempt in a failed retry group is never substituted; only failed
   attempts of the same completion can supply a missing final-attempt capture.
+- Sol's independent review found that cancelling a retry during local preparation
+  skipped the earlier attempt's retained fragments. Parent regressions reproduced
+  both cancellation and local serialization failure (**2 failed, 1 passed** before
+  the correction). Staging now recognizes an earlier HTTP attempt within that same
+  completion, retaining final-error identity while recovering its earlier capture.
+  A completion that never reached HTTP still preserves an older unoffered note.
 - These are isolated fixtures and mocked transport, not live provider or Discord
   validation. A read-only production metadata check confirmed Curie's latest
   filtered request retained 1,517 reasoning characters and 60 content characters;

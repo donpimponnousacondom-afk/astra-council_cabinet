@@ -340,13 +340,29 @@ async def test_oversized_capture_is_reported_without_unbounded_python_decode(ker
     assert "Private capture exceeds" in note["message"]["content"]
 
 
-async def test_last_empty_retry_keeps_previous_attempts_received_work(kernel):
+@pytest.mark.parametrize("last_attempt", ["http_error", "local_error", "cancelled"])
+async def test_last_empty_retry_keeps_previous_attempts_received_work(kernel, monkeypatch, last_attempt):
+    from hortator import provider as provider_module
+
     ready(kernel, cooldown_seconds=0)
     provider = kernel.store.get("providers", "openrouter")
     provider.pop("revision")
     provider.update(retry_count=1, retry_delay_seconds=0)
     kernel.store.put("providers", provider)
     calls = 0
+    encodes = 0
+    original_encode = provider_module.encode_request
+
+    def encode(*args):
+        nonlocal encodes
+        encodes += 1
+        if encodes == 2 and last_attempt != "http_error":
+            if last_attempt == "cancelled":
+                raise asyncio.CancelledError()
+            raise RuntimeError("final retry local fixture failure")
+        return original_encode(*args)
+
+    monkeypatch.setattr(provider_module, "encode_request", encode)
 
     def handler(request):
         nonlocal calls
@@ -364,12 +380,18 @@ async def test_last_empty_retry_keeps_previous_attempts_received_work(kernel):
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert calls == 2
+    assert calls == (2 if last_attempt == "http_error" else 1)
     note = await kernel.reporting.run(read_note, "ada", CHANNEL, 6000)
+    assert note is not None
     payload = json.loads(note["message"]["content"][len(NOTICE) :])
     assert payload["received_content"] == DRAFT and payload["received_private_reasoning"] == THOUGHT
     assert payload["source_request_id"] != payload["capture_request_id"]
-    assert payload["http_status"] == 503 and "final retry fixture unavailable" in payload["error"]
+    if last_attempt == "http_error":
+        assert payload["http_status"] == 503 and "final retry fixture unavailable" in payload["error"]
+    else:
+        assert payload["http_status"] is None
+        assert payload["error_phase"] == "serialize_request"
+        assert payload["request_status"] == ("cancelled" if last_attempt == "cancelled" else "failed")
 
 
 async def test_optional_queue_failure_preserves_original_turn_error(kernel, monkeypatch, caplog):
