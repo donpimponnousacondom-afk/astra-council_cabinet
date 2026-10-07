@@ -160,3 +160,7 @@ Discord queries during polling. See [DASHBOARD](DASHBOARD.md) for the current co
 ## Per-human directed queue — owner decision, 2026-10-06
 
 A new human's mention/reply must wait for the current human's answer rather than superseding it. Coalesce pending input only for the same human in the same channel, choose the oldest waiting human, and retain the selected human through asynchronous context preparation. Preserve same-human/same-channel supersession of unsent drafts, routine-turn human priority, and existing delivery/authorization/budget barriers. Merely including another person's message in context must not consume their pending activation. No dashboard controls or parallel turns per bot are introduced.
+
+## Remove speculative Bearer redaction — owner decision, 2026-10-07
+
+The shared regex replaced the next ordinary word after “bearer”, including “doors” in Loki’s answer. The owner explicitly requested deleting this heuristic entirely, without replacing it with another pattern or token-shape guess. Keep existing credential isolation, exact saved-secret replacement and structured secret-field redaction. This applies to the shared redactor across all bots and text storage/evidence paths; no bot-specific workaround, new setting, or historical text rewrite.

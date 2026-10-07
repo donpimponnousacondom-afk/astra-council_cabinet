@@ -126,7 +126,7 @@ Receipts also distinguish historical delivery of a job from the revision current
 
 ## Storage, limits and recovery
 
-Metadata lives in `council.sqlite3`: `document_sites`, `document_revisions`, and `document_sync_queue`. Bytes live in `$HORTATOR_DATA_DIR/sites/<hash-of-bot-id>/<sha256-of-bytes>`, outside Git source control. These are immutable blobs, not a directly served directory. Files are 0600 and directories 0700. HTTP serving resolves only the selected published manifest; checksums and byte lengths are verified before reading or queuing a publication. Shared vault redaction is applied to UTF-8 text, including base64 text and imports: it replaces known credential strings and also token-shaped text following `Bearer`. That existing heuristic can alter harmless literal examples such as `Bearer EXAMPLE_TOKEN`; `$OPENROUTER_API_KEY` and `${OPENROUTER_API_KEY}` pass through the heuristic unchanged. This rewrites matching text before storage; it is not a credential-pattern refusal in the sync worker or a general detector for every secret in user-provided media. Its policy is unchanged by the 2026-09-30 documentation and tool-coaching work.
+Metadata lives in `council.sqlite3`: `document_sites`, `document_revisions`, and `document_sync_queue`. Bytes live in `$HORTATOR_DATA_DIR/sites/<hash-of-bot-id>/<sha256-of-bytes>`, outside Git source control. These are immutable blobs, not a directly served directory. Files are 0600 and directories 0700. HTTP serving resolves only the selected published manifest; checksums and byte lengths are verified before reading or queuing a publication. Shared vault redaction is applied to UTF-8 text, including base64 text and imports: it replaces exact known credential strings. Following the owner’s 2026-10-07 instruction, it no longer guesses that a word following `Bearer` is a credential. Ordinary prose and unknown literal examples, including textual `Authorization: Bearer EXAMPLE_TOKEN`, remain unchanged. Structured secret fields are still redacted by the shared redactor. This is not a credential-pattern refusal in the sync worker or a general detector for secrets in user-provided text/media.
 
 Writes fsync their blob before committing the revision and, in automatic mode, publication pointer and queue row in one SQLite transaction. A crash before metadata commit can leave an unreferenced blob but cannot expose a partial revision. Failed queue creation rolls back the entire save. No bot operation deletes files or revision history. Do not edit blobs manually.
 
@@ -160,6 +160,16 @@ confirmed on 2026-09-30 that replacing matching text with `[REDACTED]` is accept
 and must remain. The rejected behavior is a speculative content-scanner tripwire
 that stops publication or the service. Do not remove or redesign the accepted
 redactor as remediation for the other project's incident.
+
+On 2026-10-07 the owner revised the Bearer-heuristic decision after ordinary
+“bearer doors” prose became “bearer [REDACTED]”. The owner explicitly requested
+removing the speculative token-word rule entirely, with no replacement regex or
+token-shape detector. This applies to all council members and shared text paths.
+Credential isolation, exact known-value redaction and structured secret-field
+redaction remain unchanged. Unknown plaintext token examples are no longer
+scrubbed merely because they follow `Bearer`, even in an authorization-header
+example. Historical stored text is not rewritten or guessed back into existence.
+
 
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
 

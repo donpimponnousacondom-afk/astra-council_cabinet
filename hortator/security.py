@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
-import re
 import secrets
 import time
 from dataclasses import dataclass
@@ -85,7 +84,6 @@ class Vault:
             for secret in sorted(secrets_to_hide, key=len, reverse=True):
                 if len(secret) >= 6:
                     value = value.replace(secret, "[REDACTED]")
-            value = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]+=*", r"\1[REDACTED]", value)
         return value
 
 
