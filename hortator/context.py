@@ -405,7 +405,9 @@ class ContextBuilder:
                 else [entry for entry in audio_inputs if entry["message_id"] in selected_ids]
             )
             layers.append(item)
-            content = with_audio(with_inputs(item["content"], selected_inputs), selected_audio)
+            content = with_inputs(item["content"], selected_inputs)
+            if item["role"] == "user":
+                content = with_audio(content, selected_audio)
             if audio_plan["omitted"]:
                 notice = "Audio inputs omitted (metadata only; do not claim to hear them): " + dumps(
                     audio_plan["omitted"]
@@ -416,6 +418,10 @@ class ContextBuilder:
                     else [*content, {"type": "text", "text": notice}]
                 )
             messages.append({"role": item["role"], "content": content})
+            if selected_audio and item["role"] != "user":
+                # Editable transcript text can be a system layer. Native audio
+                # is user input in Chat Completions, regardless of that choice.
+                messages.append({"role": "user", "content": with_audio([], selected_audio)})
         if extras:
             messages.extend(extras)
         estimated = await self.estimate_async(messages, tools or [])

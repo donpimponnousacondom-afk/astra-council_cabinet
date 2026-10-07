@@ -22,9 +22,12 @@ FORMATS = {"wav", "mp3", "ogg", "flac", "aac", "aiff", "m4a", "webm"}
 
 
 def audio_candidate(attachment):
-    return str(attachment.get("content_type") or "").startswith("audio/") or str(
-        attachment.get("filename", "")
-    ).lower().endswith(tuple("." + suffix for suffix in (*FORMATS, "opus", "aif")))
+    mime = str(attachment.get("content_type") or "").lower()
+    if mime.startswith("video/"):
+        return False
+    return mime.startswith("audio/") or str(attachment.get("filename", "")).lower().endswith(
+        tuple("." + suffix for suffix in (*FORMATS, "opus", "aif"))
+    )
 
 
 def reuse_audio(attachment, previous):
@@ -83,10 +86,8 @@ def probe(path):
                 "file",
                 "-format_whitelist",
                 "wav,mp3,ogg,flac,aac,aiff,mov,matroska,webm",
-                "-select_streams",
-                "a:0",
                 "-show_entries",
-                "stream=codec_name,duration:format=format_name,duration",
+                "stream=codec_type,codec_name,duration:stream_disposition=attached_pic:format=format_name,duration",
                 "-of",
                 "json",
                 str(path),
@@ -103,18 +104,24 @@ def probe(path):
         raise ValueError("Audio probe exceeded 10 seconds; reattach a smaller clip") from exc
     try:
         value = json.loads(result.stdout)
-        stream = value["streams"][0]
+        stream = next(s for s in value["streams"] if s.get("codec_type") == "audio")
         container = value["format"]
         formats = set(container["format_name"].split(","))
         format_ = "m4a" if "mov" in formats else "webm" if "matroska" in formats else next(iter(formats))
         duration = float(container.get("duration") or stream["duration"])
         if result.returncode or format_ not in FORMATS or not math.isfinite(duration) or duration <= 0:
             raise ValueError
-        return {"format": format_, "duration_seconds": duration, "codec": stream["codec_name"]}
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        details = {"format": format_, "duration_seconds": duration, "codec": stream["codec_name"]}
+    except (ValueError, KeyError, IndexError, TypeError, StopIteration) as exc:
         raise ValueError(
             "Audio container or duration could not be read; reattach a supported audio file"
         ) from exc
+    if any(
+        s.get("codec_type") == "video" and not s.get("disposition", {}).get("attached_pic")
+        for s in value["streams"]
+    ):
+        raise ValueError("Audio input does not accept video tracks; attach an audio-only file")
+    return details
 
 
 class AudioCache:

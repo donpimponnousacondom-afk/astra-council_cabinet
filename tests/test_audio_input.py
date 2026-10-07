@@ -16,7 +16,7 @@ import discord
 import pytest
 
 from conftest import ingest
-from hortator.audio_cache import AudioCache, MAX_AUDIO_BYTES, joined_worker, reuse_audio
+from hortator.audio_cache import AudioCache, MAX_AUDIO_BYTES, audio_candidate, joined_worker, reuse_audio
 from hortator.audio_input import DEFAULTS, audio_parts, audio_reserve, select_audio, validate_config
 from hortator.concurrency import task_group
 from hortator.models import ControlError
@@ -375,7 +375,19 @@ async def test_voice_note_intake_and_raw_edit_preserve_cache_metadata(kernel):
     from hortator.discord_gateway import CouncilClient
 
     bot, channel = enable(kernel)
-    msg = message(666666666666666660, content="", mentions=[bot])
+    # Real voice notes have no typed body. Replying to a bot supplies the wake
+    # target without requiring a text mention beside the recording.
+    kernel.store.ingest(
+        discord_id="666666666666666659",
+        channel_id=channel,
+        room_id="council",
+        author_id=bot["application_id"],
+        author_name=bot["name"],
+        bot_id=bot["id"],
+        content="Send me a voice note",
+        addressing={"author_kind": "bot", "live": True},
+    )
+    msg = message(666666666666666660, content="", reply_to="666666666666666659")
     source = attachment()
     msg.attachments = [
         discord.Attachment(
@@ -557,3 +569,113 @@ async def test_wire_file_worker_is_joined_before_cancelled_request_finishes(kern
         with pytest.raises(asyncio.CancelledError):
             await task
     assert joined and finished.is_set()
+
+
+@pytest.mark.parametrize("role", ["system", "user"])
+@pytest.mark.parametrize("style", ["structured", "conversation"])
+async def test_audio_stays_user_role_with_editable_transcript_roles(kernel, owner, role, style):
+    bot, channel = enable(kernel)
+    bot = {**bot, "transcript_format": style}
+    kernel.store.put("bots", bot)
+    prompt_id = "runtime-transcript" + ("-conversation" if style == "conversation" else "")
+    await kernel.service.save(owner, "prompts", prompt_id, {"role": role})
+    store_attachment(kernel, channel, cached(kernel))
+    ctx = kernel.engine.contexts
+    profile = kernel.store.get("profiles", bot["model_profile_id"])
+    messages, meta = await ctx.assemble(bot, profile, channel, kernel.store.transcript(channel), "")
+    assert next(layer for layer in meta["prompt_layers"] if layer["id"] == "transcript")["role"] == role
+    sent = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        sent.append(body)
+        if any(
+            m["role"] != "user" and any(p["type"] == "input_audio" for p in m["content"])
+            for m in body["messages"]
+            if isinstance(m["content"], list)
+        ):
+            return httpx.Response(400, json={"error": {"message": "input_audio requires user role"}})
+        return completion("Heard")
+
+    await install_client(kernel, handler)
+    result = await kernel.pool.complete(
+        bot=bot, profile=profile, messages=messages, tools=[], turn_id="audio-role", context=meta
+    )
+    assert result.content == "Heard"
+    assert len(audio_parts(messages)) == 1
+    assert all(m["role"] == "user" for m in messages if audio_parts([m]))
+    assert any(m["role"] == role and "The Boss" in str(m["content"]) for m in sent[0]["messages"])
+
+
+def test_video_mime_is_not_an_audio_candidate_even_with_shared_container_extension():
+    assert not audio_candidate(attachment(filename="video.webm", content_type="video/webm"))
+
+
+async def test_actual_video_track_is_unavailable_but_audio_album_art_is_preserved(kernel, tmp_path):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("ffmpeg/ffprobe needed for actual video/album-art integration")
+    from support.vision import png
+
+    source, video = tmp_path / "audio.wav", tmp_path / "video.webm"
+    source.write_bytes(wav())
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=size=16x16:duration=1:rate=1",
+            "-i",
+            str(source),
+            "-c:v",
+            "libvpx-vp9",
+            "-c:a",
+            "libopus",
+            "-shortest",
+            str(video),
+        ],
+        check=True,
+        timeout=15,
+    )
+    raw = video.read_bytes()
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, content=raw))
+    ) as client:
+        captured = await AudioCache(kernel.store, client).capture(
+            attachment(filename="mislabelled.webm", content_type="audio/webm", size=len(raw))
+        )
+    assert captured["audio"]["status"] == "unavailable"
+    assert "video" in captured["audio"]["error"].lower()
+
+    cover, song = tmp_path / "cover.png", tmp_path / "song.mp3"
+    cover.write_bytes(png())
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(source),
+            "-i",
+            str(cover),
+            "-map",
+            "0:a",
+            "-map",
+            "1:v",
+            "-c:a",
+            "libmp3lame",
+            "-c:v",
+            "png",
+            "-disposition:v",
+            "attached_pic",
+            str(song),
+        ],
+        check=True,
+        timeout=15,
+    )
+    raw = song.read_bytes()
+    cache = AudioCache(kernel.store)
+    prepared = cache.prepare(raw)
+    assert prepared["format"] == "mp3" and cache.read(prepared) == raw

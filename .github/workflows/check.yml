@@ -34,10 +34,11 @@ jobs:
       # Namespace/OS integration tests report their own skips when unavailable.
       # This gate does not claim live services or mandatory sandbox execution.
       - name: Audio format test dependency
+        timeout-minutes: 5
         run: |
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends ffmpeg
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg
           fi
       - name: Full backend and frontend checks
         run: ./scripts/check.sh --suite ci

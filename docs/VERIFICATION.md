@@ -49,6 +49,34 @@ historical claims retain their original date and scope.
   The corrected audio/provider/failed-response-recovery selection passed
   **90 tests in 22.12 s**, including all nine regressions. No HTTP attempt is
   recorded or made when this final validation rejects a source.
+- Luna's independent initial review found a third P2: an operator-selected
+  system-role transcript incorrectly carried native audio in that same message.
+  Parent reproduced **two failures/two passes** across the two transcript styles
+  and both supported roles, using actual saved prompt edits and an endpoint
+  fixture that enforces the native content schema. System-role transcript text
+  now keeps its chosen role while audio follows as attributed user input.
+  Initial reviews were independent: Sol uniquely found the two timing defects;
+  Luna uniquely found the role mismatch. Each missed the other's initial cases.
+- Luna subsequently reported a separate WebM issue after its initial digest:
+  the shared extension could admit a video attachment as audio, and the first
+  probe inspected only the audio stream. Parent reproduced **two failures**
+  with a video MIME candidate and a real mislabelled WebM video/audio fixture.
+  Candidate classification now excludes video MIME types and probing rejects
+  actual video tracks while preserving embedded album-cover art in audio files.
+  This was an additional post-initial finding, not retroactively added to the
+  blind initial comparison.
+- Final-head PR checks at `36aaf53` passed **1,952 tests / 19 skips / two warnings**;
+  that head is superseded by the role/video corrections. Its separate push job
+  stalled over ten minutes in dependency setup. The audio dependency step now
+  has bounded network waits and a five-minute step timeout; a setup failure
+  remains a failed check, never a skipped audio gate.
+- After the role/video corrections, the focused audio, prompt-layer, provider,
+  response-recovery and snapshot selection passed **134 tests in 33.11 s**, with
+  two existing dependency warnings. Video regression uses a real tiny WebM with
+  an audio track; the positive control preserves an MP3 including attached album
+  art byte-for-byte. The owner reiterated that Discord voice notes are the main
+  target; the intake fixture also exercises an empty-body voice-note reply to a
+  bot as the human wake event, without requiring a typed mention.
 
 ## One-use incomplete-response diagnostics (2026-10-07)
 

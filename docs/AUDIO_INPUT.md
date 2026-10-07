@@ -26,11 +26,18 @@ audio does not make every bot answer every attachment.
 Supported containers are WAV, MP3, OGG (including Discord Opus voice notes), FLAC,
 AAC, AIFF, M4A and WebM audio. Probe the actual container/duration independently of
 the filename or Discord's duration hint; retain the original bytes without
-transcoding. Individual model/provider acceptance and understanding can differ.
+transcoding. Video MIME types are not candidates; probing rejects actual video
+tracks even in a mislabelled audio container. Embedded album-cover art remains
+part of an audio file. Individual model/provider acceptance and understanding can differ.
 Native OpenAI-compatible `input_audio` carries base64 and a format identifier;
 CPA translates it to Gemini inline media on its supported route. See
 [Gemini audio input](https://ai.google.dev/gemini-api/docs/openai#audio-understanding)
 and the [CPA adapter](https://github.com/router-for-me/CLIProxyAPI/blob/main/internal/translator/antigravity/openai/chat-completions/antigravity_openai_request.go).
+
+Audio parts always use a user message, as required by the
+[Chat Completions content schema](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
+If the operator chooses a system-role transcript template, its text retains that
+role and the attributed audio follows in a separate user message.
 
 ## Turn lifetime and evidence
 
