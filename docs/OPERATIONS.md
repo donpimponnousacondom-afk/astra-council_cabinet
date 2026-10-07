@@ -948,6 +948,17 @@ exits, durations and skipped test identities. See the [verification template and
 CI activation procedure](verification-template.md). The workflow must be published
 and its status check required by repository rules before it gates merges.
 
+GitHub runs the gate once per PR update, on manual dispatch, and after a merge to
+`main`. Feature-branch pushes do not duplicate the PR job. The default-branch run
+also seeds dependency caches that later PRs can reuse. Python downloads are keyed
+to `uv.lock`, npm to its lockfile, and FFmpeg's downloaded Ubuntu packages are
+cached separately with an architecture-specific weekly key and older-key fallback.
+APT still resolves and installs the current packages; cached files do not skip
+installation or checks. Full test results are never cached. Audio dependency
+installation has a five-minute deadline and network timeouts; a setup failure is
+a failed gate. Review the current PR's complete check rollup, regardless of the
+number of workflow events present.
+
 ## Python 3.14 and sandbox toolchain maintenance
 
 The application now requires Python 3.14 (`.python-version` and `requires-python >=3.14,<3.15`). Provision it with `uv python install 3.14` or use an existing operator-managed Python 3.14; leave distribution Python symlinks alone. Use `uv sync --frozen --python 3.14`. Stop the shared Screen foreground runtime before replacing its `.venv`; validate in a separate `UV_PROJECT_ENVIRONMENT` while it is still running. The `hortator-next-feature` helper also invokes Python 3.14 explicitly. Historical verification records describe the interpreters actually used then, not today's baseline. External SSH receivers retain their independent system-Python contract. Ruff intentionally targets Python 3.14 for the application, including parenthesis-free multi-exception handlers; receiver code keeps its separately configured older target. Do not globally rewrite either syntax policy.

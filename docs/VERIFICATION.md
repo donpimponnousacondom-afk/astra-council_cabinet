@@ -77,6 +77,15 @@ historical claims retain their original date and scope.
   art byte-for-byte. The owner reiterated that Discord voice notes are the main
   target; the intake fixture also exercises an empty-body voice-note reply to a
   bot as the human wake event, without requiring a typed mention.
+- The PR run for `d1b7beb` passed **1,958 tests / 19 skips / two warnings** on
+  retry, with the full gate taking **270.70 s** (pytest 259.53 s, Python install
+  1.87 s, npm install 1.93 s). Its first attempt timed out while downloading
+  Ubuntu packages; retry installed them in 23 s. This separates mirror delay
+  from actual test time. The owner then requested pipeline optimization: remove
+  duplicate feature-push/PR runs, retain PR/manual/full post-merge checks, seed
+  reusable default-branch caches, and cache FFmpeg package downloads. The full
+  verification command and check name are unchanged; cache-hit and final-head
+  timing evidence will be recorded on the PR after the revised workflow runs.
 
 ## One-use incomplete-response diagnostics (2026-10-07)
 
