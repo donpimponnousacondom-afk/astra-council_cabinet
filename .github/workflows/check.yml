@@ -42,22 +42,24 @@ jobs:
       - name: Cache audio dependency downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/ffmpeg-debs/*.deb
-          key: ffmpeg-debs-ubuntu24.04-${{ runner.arch }}-v1-${{ steps.audio-cache.outputs.week }}
+          path: /tmp/hortator-ci-ffmpeg-debs/*.deb
+          key: ffmpeg-debs-ubuntu24.04-${{ runner.arch }}-v2-${{ steps.audio-cache.outputs.week }}
           restore-keys: |
-            ffmpeg-debs-ubuntu24.04-${{ runner.arch }}-v1-
+            ffmpeg-debs-ubuntu24.04-${{ runner.arch }}-v2-
       - name: Audio format test dependency
         timeout-minutes: 5
         run: |
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            mkdir -p "$RUNNER_TEMP/ffmpeg-debs/partial"
+            audio_cache_dir=/tmp/hortator-ci-ffmpeg-debs
+            sudo install -d -o root -g root -m 0755 "$audio_cache_dir"
+            sudo install -d -o _apt -g root -m 0700 "$audio_cache_dir/partial"
             # The Azure mirror repeatedly stalled cold installs on hosted runners.
             # Keep Ubuntu's signed packages, using its main archive instead.
             if [ -f /etc/apt/apt-mirrors.txt ]; then
               sudo sed -i 's|https\?://azure\.archive\.ubuntu\.com|https://archive.ubuntu.com|g' /etc/apt/apt-mirrors.txt
             fi
             sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-            sudo apt-get -o Dir::Cache::archives="$RUNNER_TEMP/ffmpeg-debs" -o APT::Keep-Downloaded-Packages=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg
+            sudo apt-get -o Dir::Cache::archives="$audio_cache_dir" -o APT::Keep-Downloaded-Packages=true -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg
           fi
       - name: Full backend and frontend checks
         run: ./scripts/check.sh --suite ci

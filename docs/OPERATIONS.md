@@ -958,6 +958,10 @@ installation or checks. Full test results are never cached. Audio dependency
 installation has a five-minute deadline and network timeouts; a setup failure is
 a failed gate. Hosted-runner audio setup replaces the unreliable Azure Ubuntu
 mirror with Ubuntu's main HTTPS archive, retaining APT signature verification.
+The public package cache lives under `/tmp/hortator-ci-ffmpeg-debs` on the ephemeral
+runner; its root is 0755 and `partial/` remains owned by `_apt` with mode 0700,
+preserving APT's existing unprivileged downloader without changing runner-home
+permissions. Only completed `.deb` files are cached.
 Review the current PR's complete check rollup, regardless of the
 number of workflow events present.
 

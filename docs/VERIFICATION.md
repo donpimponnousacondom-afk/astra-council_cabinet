@@ -91,6 +91,13 @@ historical claims retain their original date and scope.
   demonstrated speedup. CI now selects Ubuntu's main HTTPS archive in the runner's
   mirror list. This addresses the observed download source; signed-package
   verification, bounded installation and all checks remain mandatory.
+- `504b70e` passed the complete gate (**1,958 passed / 19 skipped**) and saved
+  62.8 MB of package downloads; cold audio setup took 30 s. Luna then found an
+  actual APT root-download fallback warning caused by the cache's runner-home
+  path. Sol supplied a correction matching APT's normal ownership layout:
+  a dedicated traversable `/tmp` cache with `_apt`-owned 0700 `partial/`.
+  The cache namespace was bumped; no existing home permissions are widened.
+  This is a later CI finding, separate from the initial blind application review.
 
 ## One-use incomplete-response diagnostics (2026-10-07)
 
