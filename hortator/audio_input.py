@@ -6,7 +6,7 @@ import copy
 import json
 import math
 
-from .audio_cache import AudioCache, FORMATS, audio_candidate
+from .audio_cache import AudioCache, FORMATS, audio_candidate, joined_worker
 from .models import ControlError
 from .store import dumps
 
@@ -236,10 +236,11 @@ class AudioInput:
                         row["attachments"] = attachments
         return select_audio(rows, after_sequence, self.config(bot), self.enabled(bot))
 
-    async def wire_messages(self, messages, bot, channel_id):
+    def check_wire(self, messages, bot, channel_id):
+        """Owner-thread validation; repeat after each detached preparation await."""
         parts = audio_parts(messages)
         if not parts:
-            return messages
+            return
         if not self.enabled(bot):
             raise ControlError("Audio input grant was revoked; prepare a new turn")
         if len(current_audio(self.store, channel_id, {"inputs": parts})) != len(parts):
@@ -251,6 +252,11 @@ class AudioInput:
             or sum(p["audio"]["duration_seconds"] for p in parts) > config["max_duration_seconds"]
         ):
             raise ControlError("Audio inputs exceed the current clip, byte or duration budget")
+
+    async def wire_messages(self, messages, bot, channel_id):
+        if not audio_parts(messages):
+            return messages
+        self.check_wire(messages, bot, channel_id)
 
         def expand():
             result = copy.deepcopy(messages)
@@ -268,9 +274,11 @@ class AudioInput:
 
         try:
             # Detached, read-only values; no SQLite/vault access in this worker.
-            return await asyncio.to_thread(expand)
+            result = await joined_worker(expand)
         except (ValueError, OSError) as exc:
             raise ControlError(f"Audio input unavailable: {exc}") from exc
+        self.check_wire(messages, bot, channel_id)
+        return result
 
 
 def register(registry):

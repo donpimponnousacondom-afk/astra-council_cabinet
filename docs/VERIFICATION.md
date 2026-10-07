@@ -32,6 +32,23 @@ historical claims retain their original date and scope.
   dual review and deployment outcomes are recorded separately when complete.
   Isolated live metadata/scripts and check logs are in ignored
   `audit/2026-10-07/03-audio-input/`; credentials and audio base64 are not logged.
+- Pre-review full local `./scripts/check.sh --suite ci` passed: **1,961 tests,
+  one environment-dependent public-network/package-install skip**, two existing
+  dependency warnings; locked dependencies, lint, format, evidence tests and
+  frontend install/format/build all passed. The run began on the uncommitted
+  feature and ended after initial publication; its source snapshots are retained.
+  It does not cover the later review corrections. Final-head GitHub gates remain
+  required, independently of this local run.
+- Sol independently found two P2 timing defects in the initial head: source
+  deletion during file expansion could still send audio, and cancellation could
+  outlive an unjoined wire file read. Parent reproduced **2 expected failures**,
+  then added **9 failing regressions** covering deletion/removal/replacement and
+  grant revocation during both file expansion and JSON encoding, plus wire-read
+  cancellation. File expansion now joins on cancellation; owner-thread checks
+  repeat after expansion and at the last local boundary before HTTP dispatch.
+  The corrected audio/provider/failed-response-recovery selection passed
+  **90 tests in 22.12 s**, including all nine regressions. No HTTP attempt is
+  recorded or made when this final validation rejects a source.
 
 ## One-use incomplete-response diagnostics (2026-10-07)
 

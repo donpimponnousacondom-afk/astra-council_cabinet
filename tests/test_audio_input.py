@@ -20,7 +20,7 @@ from hortator.audio_cache import AudioCache, MAX_AUDIO_BYTES, joined_worker, reu
 from hortator.audio_input import DEFAULTS, audio_parts, audio_reserve, select_audio, validate_config
 from hortator.concurrency import task_group
 from hortator.models import ControlError
-from hortator.provider import Completion
+from hortator.provider import Completion, ProviderError
 from hortator.transcript import render_transcript
 from support.provider import install_client
 from support.runtime import completion, settle
@@ -463,3 +463,97 @@ async def test_preparation_bounds_captures_and_historical_audio_never_downloads(
     plan = await ctx.audio.prepare(kernel.store.transcript(channel), sequence, bot)
     assert plan["historical_clips"] == 7 and not plan["inputs"]
     ctx.audio.cache.capture.assert_not_awaited()
+
+
+@pytest.mark.parametrize("phase", ["wire", "encode"])
+@pytest.mark.parametrize("change", ["delete", "remove", "replace", "revoke"])
+async def test_last_moment_revocation_prevents_http_after_detached_preparation(
+    kernel, monkeypatch, phase, change
+):
+    from hortator import provider
+
+    bot, channel = enable(kernel)
+    item = cached(kernel)
+    store_attachment(kernel, channel, item)
+    profile = kernel.store.get("profiles", bot["model_profile_id"])
+    messages, meta = await kernel.engine.contexts.assemble(
+        bot, profile, channel, kernel.store.transcript(channel), ""
+    )
+    entered, release = threading.Event(), threading.Event()
+    original = AudioCache.read if phase == "wire" else provider.encode_request
+
+    def blocked(*args):
+        entered.set()
+        assert release.wait(5)
+        return original(*args)
+
+    monkeypatch.setattr(
+        AudioCache if phase == "wire" else provider, "read" if phase == "wire" else "encode_request", blocked
+    )
+    sent = []
+
+    def handler(request):
+        sent.append(request)
+        return completion()
+
+    await install_client(kernel, handler)
+
+    async def request():
+        try:
+            return await kernel.pool.complete(
+                bot=bot, profile=profile, messages=messages, tools=[], turn_id="revoked", context=meta
+            )
+        except ProviderError as error:
+            return error
+
+    async with task_group() as group:
+        task = group.create_task(request())
+        while not entered.is_set():
+            await asyncio.sleep(0.001)
+        if change == "delete":
+            kernel.store.execute("UPDATE messages SET deleted=1")
+        elif change == "remove":
+            kernel.store.execute("UPDATE messages SET attachments='[]'")
+        elif change == "replace":
+            store_attachment(kernel, channel, {**item, "audio": {**item["audio"], "sha256": "0" * 64}})
+        else:
+            kernel.store.put("bots", {**bot, "enabled_plugins": []})
+        release.set()
+        result = await task
+    assert isinstance(result, ProviderError)
+    assert result.provider_fault is False
+    assert not sent
+    assert not json.loads(kernel.store.one("SELECT context FROM requests")["context"]).get(
+        "http_attempt_started"
+    )
+
+
+async def test_wire_file_worker_is_joined_before_cancelled_request_finishes(kernel, monkeypatch):
+    bot, channel = enable(kernel)
+    store_attachment(kernel, channel, cached(kernel))
+    ctx = kernel.engine.contexts
+    profile = kernel.store.get("profiles", bot["model_profile_id"])
+    messages, _ = await ctx.assemble(bot, profile, channel, kernel.store.transcript(channel), "")
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    original = AudioCache.read
+
+    def blocked(*args):
+        entered.set()
+        assert release.wait(5)
+        try:
+            return original(*args)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(AudioCache, "read", blocked)
+    async with task_group() as group:
+        task = group.create_task(ctx.audio.wire_messages(messages, bot, channel))
+        while not entered.is_set():
+            await asyncio.sleep(0.001)
+        task.cancel()
+        await asyncio.sleep(0.01)
+        joined = not task.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert joined and finished.is_set()

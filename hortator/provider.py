@@ -656,13 +656,12 @@ class ProviderPool:
             record_diagnostics(
                 self.store, self.vault, request_id, result, body, status="running", recovery=recovery
             )
+            audio = AudioInput(self.store)
             try:
                 body["messages"] = ImageCache(self.store).wire_messages(
                     messages, profile, allow_images=bot.get("allow_images", True)
                 )
-                body["messages"] = await AudioInput(self.store).wire_messages(
-                    body["messages"], bot, context.get("channel_id")
-                )
+                body["messages"] = await audio.wire_messages(body["messages"], bot, context.get("channel_id"))
             except ControlError as exc:
                 raise ProviderError(str(exc), provider_fault=False) from exc
             # Total deadline covers streamed bodies as well as the connection, not just inactivity.
@@ -670,6 +669,13 @@ class ProviderPool:
                 phase = "serialize_request"
                 endpoint = provider["base_url"] + "/chat/completions"
                 request_payload, request_size = await asyncio.to_thread(encode_request, body, endpoint)
+                try:
+                    # Encoding can yield long enough for a Discord edit/deletion or
+                    # grant change. Recheck original references at the final local
+                    # boundary, before marking/sending the HTTP attempt.
+                    audio.check_wire(messages, bot, context.get("channel_id"))
+                except ControlError as exc:
+                    raise ProviderError(str(exc), provider_fault=False) from exc
                 meta.update(request_size, http_attempt_started=True)
                 result.response_diagnostics["request_size"] = request_size
                 self.store.execute(
