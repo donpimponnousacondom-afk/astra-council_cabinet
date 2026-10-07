@@ -168,7 +168,10 @@ token-shape detector. This applies to all council members and shared text paths.
 Credential isolation, exact known-value redaction and structured secret-field
 redaction remain unchanged. Unknown plaintext token examples are no longer
 scrubbed merely because they follow `Bearer`, even in an authorization-header
-example. Historical stored text is not rewritten or guessed back into existence.
+example. Duplicate Bearer heuristics in console output and the private reasoning
+viewer are also removed. The console retains a separate keyword-assignment rule;
+see the [remaining-filter inventory](OPERATIONS.md#text-filtering-inventory--2026-10-07).
+Historical stored text is not rewritten or guessed back into existence.
 
 
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
