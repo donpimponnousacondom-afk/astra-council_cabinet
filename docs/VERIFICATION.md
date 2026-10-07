@@ -86,6 +86,11 @@ historical claims retain their original date and scope.
   reusable default-branch caches, and cache FFmpeg package downloads. The full
   verification command and check name are unchanged; cache-hit and final-head
   timing evidence will be recorded on the PR after the revised workflow runs.
+- The first cache-enabled run (`adb27d3`) also hit the cold Azure-mirror timeout,
+  before full tests or cache saving. It was not treated as a passing gate or a
+  demonstrated speedup. CI now selects Ubuntu's main HTTPS archive in the runner's
+  mirror list. This addresses the observed download source; signed-package
+  verification, bounded installation and all checks remain mandatory.
 
 ## One-use incomplete-response diagnostics (2026-10-07)
 

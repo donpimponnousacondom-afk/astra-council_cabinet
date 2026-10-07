@@ -956,7 +956,9 @@ cached separately with an architecture-specific weekly key and older-key fallbac
 APT still resolves and installs the current packages; cached files do not skip
 installation or checks. Full test results are never cached. Audio dependency
 installation has a five-minute deadline and network timeouts; a setup failure is
-a failed gate. Review the current PR's complete check rollup, regardless of the
+a failed gate. Hosted-runner audio setup replaces the unreliable Azure Ubuntu
+mirror with Ubuntu's main HTTPS archive, retaining APT signature verification.
+Review the current PR's complete check rollup, regardless of the
 number of workflow events present.
 
 ## Python 3.14 and sandbox toolchain maintenance
