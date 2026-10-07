@@ -157,6 +157,12 @@ Actual assistant/tool exchanges, native continuation fields, tool schemas and re
 
 Compaction source wrappers must include `{{TRANSCRIPT}}` and, when there is an existing summary, `{{SUMMARY}}` in the corresponding placement (existing single-brace spellings also work). Disabling or omitting those inputs pauses compaction with an explicit error and preserves its old checkpoint; it never silently discards accumulated history. Compaction instructions can be independently edited/disabled. Template rendering and measured budgets use the actual selected roles and text. Fresh image selections remain valid across text compaction for the current turn, as before.
 
+The [one-use failed-response notice](RESPONSE_RECOVERY.md) is diagnostic protocol
+data appended after all assembled layers, always as a separate user-role message.
+It is not a new persisted prompt, speaker record or memory layer. Its fixed label
+distinguishes quoted incomplete evidence from human instructions. It is supplied
+only on an eligible first generation round and kept out of compaction inputs.
+
 ## Forget everything before now
 
 **Bots → bot → Control → Forget everything before now** sets a durable bot-specific history boundary at the current time. Default scope is all channels, including future assignments; an existing channel can be selected instead. Channel choices share the [dashboard conversation labels](DASHBOARD.md): configured room names or cached observed Discord names, parent/thread labels, and the immutable ID for disambiguation. Missing names remain explicitly unknown; no Discord lookup is performed while displaying or selecting a scope. Type the bot's stable ID and confirm the warning. Save/discard configuration drafts first. No snapshot restore is performed and no other bot is reset.

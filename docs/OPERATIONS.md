@@ -644,6 +644,13 @@ The controls cover `reasoning_effort`, `reasoning.effort`/`enabled`/`max_tokens`
 
 ## Pause, failures and recovery
 
+Incomplete ordinary generations can supply a [one-use recovery note](RESPONSE_RECOVERY.md)
+to the same bot/conversation's next generation request. It is appended as user-role
+diagnostic data, including retained readable reasoning, and disappears on subsequent
+tool rounds. It does not trigger a retry, post the draft or commit partial Engrams.
+Exact supplied recovery input is private request evidence; ordinary inspector
+records contain a placeholder. See that contract for eligibility, bounds and resets.
+
 `!stop all` or **Pause council** persists the pause, cancels active provider/tool tasks, and suppresses queued output. Stopping a provider cancels its dependent bots' current turns. Editing a shared model/prompt/plugin/room cancels affected work so it cannot later post stale output. A paused bot's model stays paused after restart. Hortator's deterministic command connection remains available even while its model is disabled.
 
 A send already accepted by Discord cannot be recalled by cancelling Python. If delivery is interrupted after dispatch and acceptance cannot be established, its outbox state is **unknown**. Unknown sends are not automatically resent. A gateway echo with a matching bot identity, channel and unique nonce can reconcile it to sent. On process startup, pending outputs become suppressed, in-progress sends become unknown, and unfinished requests/turns become interrupted. Inspect the timeline before deciding what to do next.

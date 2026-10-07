@@ -98,6 +98,13 @@ class Store:
         CREATE TABLE IF NOT EXISTS request_diagnostics (
           request_id TEXT PRIMARY KEY REFERENCES requests(id) ON DELETE CASCADE,
           body TEXT NOT NULL, updated_at REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS response_recovery_pending (
+          bot_id TEXT NOT NULL, channel_id TEXT NOT NULL,
+          request_id TEXT NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
+          turn_id TEXT NOT NULL, created_at REAL NOT NULL,
+          PRIMARY KEY(bot_id,channel_id));
+        CREATE INDEX IF NOT EXISTS request_generation_turn ON requests(turn_id,started_at DESC)
+          WHERE purpose='generation';
         CREATE TABLE IF NOT EXISTS outbox (
           id TEXT PRIMARY KEY, turn_id TEXT NOT NULL, bot_id TEXT NOT NULL, channel_id TEXT NOT NULL,
           content TEXT NOT NULL, reply_to TEXT, artifacts TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL,
@@ -363,6 +370,7 @@ class Store:
         return self.one("SELECT * FROM provider_health WHERE provider_id=?", (provider_id,))
 
     def recover(self):
+        interrupted = self.rows("SELECT id FROM turns WHERE ended_at IS NULL")
         self.execute("UPDATE bot_runtime SET gateway_status='offline',heartbeat_ms=NULL")
         for row in self.rows("SELECT * FROM outbox WHERE status IN ('pending','sending')"):
             status = "unknown" if row["status"] == "sending" else "suppressed"
@@ -398,6 +406,10 @@ class Store:
             "WHERE json_extract(body,'$.status')='running' AND request_id IN (SELECT id FROM requests WHERE status='interrupted')",
             (time.time(),),
         )
+        from .response_recovery import queue_failed_response
+
+        for turn in interrupted:
+            queue_failed_response(self, turn["id"])
 
     def close(self):
         self.db.close()

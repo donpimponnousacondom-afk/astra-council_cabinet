@@ -90,6 +90,7 @@ including superseded behavior, and must not be treated as current configuration.
 
 - Dashboard and explicit one-turn trigger: [DASHBOARD.md](docs/DASHBOARD.md).
 - Console, provider requests, scheduling, footers and compaction: [OPERATIONS.md](docs/OPERATIONS.md).
+- One-use recovery of incomplete model responses: [RESPONSE_RECOVERY.md](docs/RESPONSE_RECOVERY.md).
 - Slash ingress and acknowledgement recovery: [SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
 - HTTP response evidence: [HTTP_EVIDENCE.md](docs/HTTP_EVIDENCE.md).
 - Tools, ordinary answers, council inspection and private channel memory: [TOOLS.md](docs/TOOLS.md).
