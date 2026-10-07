@@ -47,7 +47,7 @@ class Kernel:
         self.service.seed()
         self.service.seed_prompt_templates()
         self.registry = Registry(self.store, self.vault, self.directory, self.service.inspect_model)
-        self.engine = Engine(self.store, self.vault, self.pool, self.registry)
+        self.engine = Engine(self.store, self.vault, self.pool, self.registry, reporting=self.reporting)
         self.jobs = BackgroundJobs(self.store, self.registry)
         self.publishing = PublishingWorker(self.store, self.vault, self.directory, self.registry.documents)
         self.background = BackgroundTasks(self.store)

@@ -16,6 +16,7 @@ from .models import ControlError
 from .footer_tokens import measure_footer_tokens
 from .request_payload import encode_request
 from .diagnostics import record_diagnostics, reasoning_settings
+from .response_recovery import consume as consume_recovery
 from .chat_response import (
     ChatResponse,
     Frame,
@@ -422,7 +423,17 @@ class ProviderPool:
         )
 
     async def complete(
-        self, *, bot, profile, messages, tools, turn_id, context, purpose="generation", use_bot_key=True
+        self,
+        *,
+        bot,
+        profile,
+        messages,
+        tools,
+        turn_id,
+        context,
+        purpose="generation",
+        use_bot_key=True,
+        recovery=None,
     ):
         provider = self.store.get("providers", profile["provider_id"])
         if not provider:
@@ -460,6 +471,7 @@ class ProviderPool:
                         queued=queued if attempt == 1 else time.perf_counter(),
                         retry_available=attempt <= retries,
                         use_bot_key=use_bot_key,
+                        recovery=recovery,
                     )
                 except ProviderError as exc:
                     if attempt > retries or not retryable(exc):
@@ -518,6 +530,7 @@ class ProviderPool:
         queued,
         retry_available,
         use_bot_key=True,
+        recovery=None,
     ):
         limit = bot.get("daily_cost_limit")
         if limit is not None:
@@ -557,6 +570,7 @@ class ProviderPool:
         request_id, started, clock = uid("req_"), time.time(), time.perf_counter()
         meta = {
             **context,
+            "http_attempt_started": False,
             "diagnostic_capture_version": 2,
             "queue_ms": (clock - queued) * 1000,
             "profile_revision": profile["revision"],
@@ -573,6 +587,12 @@ class ProviderPool:
                 retained_summary_token_limit=profile["summary_tokens"],
                 summary_tokenizer="cl100k_base",
             )
+        public_body = safe_payload(body)
+        if recovery:
+            public_body["messages"][-1] = {
+                "role": "user",
+                "content": "[One-use failed-response recovery note; original in private request diagnostics]",
+            }
         self.store.execute(
             """INSERT INTO requests(id,turn_id,bot_id,provider_id,profile_id,model,purpose,
           started_at,status,body,context) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
@@ -586,7 +606,7 @@ class ProviderPool:
                 purpose,
                 started,
                 "running",
-                dumps(self.vault.redact(safe_payload(body))),
+                dumps(self.vault.redact(public_body)),
                 dumps(self.vault.redact(meta)),
             ),
         )
@@ -631,7 +651,9 @@ class ProviderPool:
         deadline = asyncio.timeout(provider["timeout_seconds"])
         phase = "prepare_request"
         try:
-            record_diagnostics(self.store, self.vault, request_id, result, body, status="running")
+            record_diagnostics(
+                self.store, self.vault, request_id, result, body, status="running", recovery=recovery
+            )
             try:
                 body["messages"] = ImageCache(self.store).wire_messages(
                     messages, profile, allow_images=bot.get("allow_images", True)
@@ -643,7 +665,7 @@ class ProviderPool:
                 phase = "serialize_request"
                 endpoint = provider["base_url"] + "/chat/completions"
                 request_payload, request_size = await asyncio.to_thread(encode_request, body, endpoint)
-                meta.update(request_size)
+                meta.update(request_size, http_attempt_started=True)
                 result.response_diagnostics["request_size"] = request_size
                 self.store.execute(
                     "UPDATE requests SET context=? WHERE id=?",
@@ -654,6 +676,8 @@ class ProviderPool:
                 )
                 wire_headers.update(headers)
                 phase = "await_response_headers"
+                if recovery:
+                    consume_recovery(self.store, recovery, request_id, turn_id)
                 async with self.client.stream(
                     "POST",
                     endpoint,
@@ -711,7 +735,13 @@ class ProviderPool:
                                         visible = (time.perf_counter() - clock) * 1000
                                 if time.perf_counter() - diagnostic_at >= 2:
                                     record_diagnostics(
-                                        self.store, self.vault, request_id, result, body, status="running"
+                                        self.store,
+                                        self.vault,
+                                        request_id,
+                                        result,
+                                        body,
+                                        status="running",
+                                        recovery=recovery,
                                     )
                                     diagnostic_at = time.perf_counter()
                                 if finished:
@@ -746,7 +776,9 @@ class ProviderPool:
             response_state.finish()
             if context.get("engram"):
                 result.response_diagnostics["engram_output"] = result.content
-            record_diagnostics(self.store, self.vault, request_id, result, body, status="completed")
+            record_diagnostics(
+                self.store, self.vault, request_id, result, body, status="completed", recovery=recovery
+            )
             duration = (time.perf_counter() - clock) * 1000
             # Reuse the footer's numeric-only counting for each completed request,
             # including compaction and tool-call rounds. Keep raw billing counts
@@ -926,6 +958,7 @@ class ProviderPool:
                 result,
                 body,
                 status="cancelled" if cancelled else "failed",
+                recovery=recovery,
                 error={
                     "envelope": error_data,
                     "message": message,

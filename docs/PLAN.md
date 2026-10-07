@@ -1,5 +1,12 @@
 # Implementation and acceptance plan
 
+On 2026-10-07 the owner authorized a one-use user-role recovery note containing
+that bot's retained failed-response draft and readable reasoning, including
+content-filtered output. Append it after the existing prompt, let the bot use or
+ignore the evidence, and keep it out of transcript/compaction/state unless the bot
+deliberately saves useful facts. Preserve scope, budgets, cancellation and public
+reasoning isolation. See [the recovery contract](RESPONSE_RECOVERY.md).
+
 This is the current planning index. Detailed implemented contracts and owner
 instructions live in the feature documents linked from [AGENTS.md](../AGENTS.md).
 The [newest-first design index](history/README.md) links the

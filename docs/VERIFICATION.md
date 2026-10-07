@@ -4,6 +4,30 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## One-use incomplete-response diagnostics (2026-10-07)
+
+- Base `ac09e2c70641ac3e70d5e741ff40fcbebc66f83c`, branch
+  `feat/one-use-failed-response-recovery`. The owner authorized returning a bot's
+  own failed draft and retained reasoning once, as an automatic user-role tail.
+  [RESPONSE_RECOVERY.md](RESPONSE_RECOVERY.md) defines eligibility, limits and
+  the narrow private-diagnostic exception.
+- **164 focused tests passed** in 36.32 s, with two existing dependency warnings:
+  recovery, runtime, diagnostics, streaming, resets, Engram integration and
+  snapshots. New cases cover filtered/length-limited output, broken streams,
+  incomplete calls, raw Engram drafts, retries, bot/channel isolation, restart,
+  reset, token fitting, oversized captures, unavailable readers, current secret
+  redaction and cancellation/local failure before an HTTP attempt. The earlier
+  successful attempt in a failed retry group is never substituted; only failed
+  attempts of the same completion can supply a missing final-attempt capture.
+- These are isolated fixtures and mocked transport, not live provider or Discord
+  validation. A read-only production metadata check confirmed Curie's latest
+  filtered request retained 1,517 reasoning characters and 60 content characters;
+  no production transcript, credentials, settings or memory were changed.
+- Repository-wide Ruff lint/format and diff checks passed before publication.
+  Both independent reviews and final-head CI remain merge gates. Focused logs and
+  content-free live capture metadata are retained under ignored
+  `audit/2026-10-07/02-response-recovery/`.
+
 ## Lossless memory replies and native paging (2026-10-06)
 
 - Base `837f4d830792425ba73b1d6fde6ce4e019283850`, branch

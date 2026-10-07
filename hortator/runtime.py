@@ -16,6 +16,7 @@ from .diagnostics import reasoning_settings
 from .models import ControlError, OWNER_ID
 from .plugins import ATTACH, SILENCE, ToolContext
 from .provider import strip_reasoning
+from .response_recovery import queue_failed_response, read_note
 from .store import dumps, uid
 from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage
 from .working_set import bound_exchanges, prompt_exchanges
@@ -43,8 +44,9 @@ class TurnSuperseded(ControlError):
 
 
 class Engine:
-    def __init__(self, store, vault, pool, registry, transport=None):
+    def __init__(self, store, vault, pool, registry, transport=None, *, reporting=None):
         self.store, self.vault, self.pool, self.registry = store, vault, pool, registry
+        self.reporting = reporting
         self.contexts = ContextBuilder(
             store, pool, registry.global_memory, registry.application_emojis, registry.engrams
         )
@@ -632,6 +634,7 @@ class Engine:
             "UPDATE turns SET status=?,decision=?,error=?,ended_at=? WHERE id=?",
             (status, decision, error, time.time(), turn_id),
         )
+        queue_failed_response(self.store, turn_id)
         if self.jobs:
             self.jobs.release_turn(turn_id)
         # No catch-up bursts; activation interval restarts when work settles.
@@ -806,6 +809,50 @@ class Engine:
                     raise ControlError(
                         "Tool results would exceed the context budget; turn stopped without discarding history"
                     )
+                recovery = None
+                if (
+                    round_index == 0
+                    and not bot.get("invocation")
+                    and self.reporting
+                    and self.store.one(
+                        "SELECT 1 FROM response_recovery_pending WHERE bot_id=? AND channel_id=?",
+                        (bot["id"], channel_id),
+                    )
+                ):
+                    remaining = (
+                        int(
+                            (profile["context_window"] - profile["response_tokens"] - 1)
+                            / original_meta["calibration_factor"]
+                        )
+                        - meta["estimated_tokens"]
+                        - 128
+                    )
+                    try:
+                        recovery = await self.reporting.run(read_note, bot["id"], channel_id, remaining)
+                    except Exception as exc:
+                        self.store.emit(
+                            "response_recovery.deferred",
+                            {"channel_id": channel_id, "error": error_text(exc)},
+                            bot_id=bot["id"],
+                            turn_id=turn_id,
+                            level="warning",
+                        )
+                    if recovery:
+                        recovery = {**recovery, "message": self.vault.redact(recovery["message"])}
+                        candidate = messages + [recovery["message"]]
+                        estimated = await self.contexts.estimate_async(candidate, available_tools)
+                        if (
+                            estimated * original_meta["calibration_factor"] + profile["response_tokens"]
+                            < profile["context_window"]
+                        ):
+                            messages = candidate
+                            meta["estimated_tokens"] = estimated
+                            meta["response_recovery"] = {
+                                key: recovery[key]
+                                for key in ("source_request_id", "excerpted", "estimated_tokens")
+                            }
+                        else:
+                            recovery = None
                 self.store.execute(
                     "UPDATE contexts SET estimated_tokens=? WHERE bot_id=? AND channel_id=?",
                     (meta["estimated_tokens"], bot["id"], channel_id),
@@ -818,6 +865,7 @@ class Engine:
                         tools=available_tools,
                         turn_id=turn_id,
                         context=meta,
+                        recovery=recovery,
                     )
                 )
                 parsed_engram = None

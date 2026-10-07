@@ -601,7 +601,7 @@ class Snapshots:
                 if channel_id:
                     clause += " AND channel_id=?"
                     args.append(channel_id)
-                for table in ("engram_states", "engram_candidates"):
+                for table in ("engram_states", "engram_candidates", "response_recovery_pending"):
                     if table in current_tables:
                         target.execute(f"DELETE FROM {table} WHERE {clause}", args)
                 if "engram_epochs" in current_tables:

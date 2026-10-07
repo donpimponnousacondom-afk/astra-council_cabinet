@@ -1,4 +1,8 @@
-"""Operator-only provider evidence; the opt-in reasoning viewer is the sole Discord reader."""
+"""Private provider evidence; narrow owner-authorized readers stay explicitly scoped.
+
+The reasoning viewer is the sole Discord reader. One-use response recovery may
+return a bot's own failed capture to its next ordinary generation, never history.
+"""
 
 from __future__ import annotations
 
@@ -60,7 +64,7 @@ def text_content(value):
     raise ValueError("Assistant text must be a string, text-part array, or null")
 
 
-def record_diagnostics(store, vault, request_id, result, body, *, status, error=None):
+def record_diagnostics(store, vault, request_id, result, body, *, status, error=None, recovery=None):
     """Preserve returned reasoning even on an interrupted/failed stream.
 
     Requests remain safe for the model's inspector. Replay fields live separately,
@@ -90,6 +94,8 @@ def record_diagnostics(store, vault, request_id, result, body, *, status, error=
         "provider_error": error,
         "response": result.response_diagnostics,
     }
+    if recovery:
+        data["request_recovery"] = recovery
     # Keep provider-produced diagnostic text, while applying credential masking
     # independently of the reasoning filter used for public/model-facing output.
     data = vault.redact(data)
