@@ -129,6 +129,21 @@ def test_http_debug_and_errors_never_print_queries_or_client_credentials():
         assert console.stream.getvalue() == before
 
 
+async def test_console_preserves_bearer_prose_but_masks_known_credentials(kernel):
+    secret = "console-known-credential-test-only"
+    kernel.vault.put("provider/fake/api_key", secret)
+    content = f"bearer doors; Bearer EXAMPLE_TOKEN; Bearer {secret}"
+    expected = content.replace(secret, "[REDACTED]")
+    with output() as console:
+        console.bind(kernel)
+        event = kernel.store.emit("runtime.log", {"message": content}, level="warning")
+        assert expected in console.stream.getvalue()
+        assert event["data"]["message"] == expected
+        console.key("f")
+        assert expected in console.stream.getvalue()
+        assert secret not in console.stream.getvalue()
+
+
 async def test_fold_expands_errors_and_ids_without_secrets_or_terminal_injection(kernel):
     secret = "console-credential-test-only"
     kernel.vault.put("provider/openrouter/api_key", secret)

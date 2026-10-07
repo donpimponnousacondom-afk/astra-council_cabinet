@@ -7,7 +7,6 @@ reasoning is read only after authenticating a click and never enters transcripts
 import asyncio
 import io
 import json
-import re
 import time
 
 import discord
@@ -82,7 +81,6 @@ def page_capture(raw, page, *, download=False, file_limit=0, secrets=()):
     for value in sorted(secrets, key=len, reverse=True):
         if len(value) >= 6:
             text = text.replace(value, "[REDACTED]")
-    text = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]+=*", r"\1[REDACTED]", text)
     if download:
         if not text.strip():
             raise ControlError("No readable reasoning was captured for this request")

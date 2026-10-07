@@ -60,7 +60,9 @@ Private page/download controls additionally verify their saved ephemeral viewer
 message. Grants and bindings are checked again after asynchronous work. Disabling
 either grant immediately blocks further reads through old public/private controls;
 it does not delete diagnostics or recall text already read. Credentials are
-masked again using current vault values. Reasoning is never added to ordinary
+masked again using current vault values. The owner's 2026-10-07 removal of
+speculative Bearer-word redaction also applies to pages and downloads: ordinary
+prose and unknown token examples remain literal. Reasoning is never added to ordinary
 events, model inspection, channel transcripts or bot memory.
 
 Controls survive process restarts through central gateway dispatch. Opening and

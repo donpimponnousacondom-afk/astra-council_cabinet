@@ -286,7 +286,12 @@ async def test_revocation_after_ack_and_during_read_is_rechecked(kernel, monkeyp
 async def test_download_has_complete_text_masks_credentials_and_never_replays_input(kernel):
     bot = enable(kernel)
     secret = "new-secret-added-after-capture"
-    text = "A thought 🐱\n```<think>literal</think>```\n" + secret + "\n" + "Long thought.\n" * 400
+    text = (
+        "A thought 🐱\n```<think>literal</think>```\nbearer doors; Bearer EXAMPLE_TOKEN; Bearer "
+        + secret
+        + "\n"
+        + "Long thought.\n" * 400
+    )
     request(kernel, text=text)
     kernel.vault.put("plugin/fake/api_key", secret)
     row = await binding(kernel, bot)
@@ -304,6 +309,14 @@ async def test_download_has_complete_text_masks_credentials_and_never_replays_in
     assert downloaded == [text.replace(secret, "[REDACTED]")]
     assert "DO NOT EXPORT REPLAY" not in downloaded[0]
     assert item.response.defer.await_args.kwargs["ephemeral"] is True
+
+
+def test_reasoning_page_preserves_bearer_prose_but_masks_known_credentials():
+    secret = "reasoning-known-credential-test-only"
+    text = f"bearer doors; Bearer EXAMPLE_TOKEN; Authorization: Bearer {secret}"
+    page, count = page_capture(json.dumps({"reasoning_content": text}), 0, secrets=(secret,))
+    assert page == "```\n" + text.replace(secret, "[REDACTED]") + "\n```"
+    assert count == 1
 
 
 @pytest.mark.parametrize("stream", [False, True])

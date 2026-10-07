@@ -9,7 +9,7 @@ from hortator.app import create_app
 from hortator.discord_gateway import owner_message
 from hortator.models import ControlError, OWNER_ID
 from hortator.plugins import ToolContext, public_url, PublicResolver
-from hortator.security import Actor
+from hortator.security import Actor, Vault
 
 
 @pytest.mark.parametrize(
@@ -56,7 +56,7 @@ async def test_vault_encrypts_and_redacts_nested_values(kernel):
     )
     assert secret not in str(event)
     assert "[REDACTED]" in str(event)
-    assert "[REDACTED]" in kernel.vault.redact("Bearer abc.def.ghi")
+    assert kernel.vault.redact("Bearer " + secret) == "Bearer [REDACTED]"
 
 
 @pytest.mark.parametrize(
@@ -245,3 +245,78 @@ async def test_deleted_identity_cannot_inherit_historical_memory(kernel, owner):
         await kernel.service.save(
             owner, "bots", "socrates", {k: v for k, v in bot.items() if k != "revision"}, create=True
         )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "keys are just auth bearer doors into the same pool",
+        "Bearer DOORS into the pool",
+        "a bearer of bad news",
+        "a bearer\nof bad news",
+        "Bearer EXAMPLE_TOKEN",
+        "Bearer abc.def.ghi",
+        "Authorization: Bearer $OPENROUTER_API_KEY",
+        "Authorization: Bearer ${OPENROUTER_API_KEY}",
+    ],
+)
+def test_redaction_preserves_bearer_prose_and_variable_references(text):
+    vault = Vault.__new__(Vault)
+    vault.values = {}
+    assert vault.redact(text) == text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Authorization: Bearer fixture.unknown-token_123~+/==",
+        "authorization:\tBEARER fixture.unknown-token_123~+/==",
+        'curl -H "Authorization: Bearer fixture.unknown-token_123~+/=="',
+        '{"Authorization": "Bearer fixture.unknown-token_123~+/=="}',
+        "{'authorization': 'Bearer fixture.unknown-token_123~+/=='}",
+        'Authorization="Bearer fixture.unknown-token_123~+/=="',
+        "Proxy-Authorization: Bearer fixture.unknown-token_123~+/==",
+    ],
+)
+def test_unrecognized_bearer_examples_are_not_guessed_to_be_secrets(text):
+    vault = Vault.__new__(Vault)
+    vault.values = {}
+    assert vault.redact(text) == text
+
+
+def test_known_credentials_and_secret_fields_remain_redacted_in_bearer_prose():
+    vault = Vault.__new__(Vault)
+    vault.values = {"provider/example/api_key": "known-key-fixture-123"}
+    assert vault.redact(
+        {
+            "text": "bearer doors; known-key-fixture-123; Bearer known-key-fixture-123",
+            "headers": {"AUTHORIZATION": "Bearer unknown-key-fixture-456"},
+            "nested": [{"api_key": "unknown-key-fixture-789"}],
+        }
+    ) == {
+        "text": "bearer doors; [REDACTED]; Bearer [REDACTED]",
+        "headers": {"AUTHORIZATION": "[REDACTED]"},
+        "nested": [{"api_key": "[REDACTED]"}],
+    }
+
+
+async def test_bearer_prose_survives_answer_delivery_and_ledger(kernel):
+    from conftest import configured, ingest
+    from support.provider import install_client
+    from support.runtime import completion, settle
+
+    bot = configured(kernel)
+    channel = "222222222222222222"
+    ingest(kernel, channel_id=channel)
+    secret = "known-delivery-key-fixture-123"
+    kernel.vault.put("provider/example/api_key", secret)
+    prose = "keys are just auth bearer doors into the same pool"
+    await install_client(kernel, lambda r: completion(prose + "; " + secret))
+    kernel.engine.transport = AsyncMock()
+    kernel.engine.transport.send.return_value = "888888888888888888"
+    kernel.engine.launch(bot, channel)
+    await settle(kernel)
+    kernel.engine.transport.send.assert_awaited_once()
+    assert kernel.engine.transport.send.await_args.args[2] == prose + "; [REDACTED]"
+    assert kernel.store.one("SELECT content FROM outbox")["content"] == prose + "; [REDACTED]"
+    assert secret not in str(kernel.store.events())

@@ -234,7 +234,6 @@ def plain(value):
 def safe_text(value, *, include_reasoning=False, full_urls=False):
     if not include_reasoning:
         value = strip_reasoning(value)
-    value = re.sub(r"(?i)\b(bearer\s+)[\w.~+/-]+=*", r"\1[REDACTED]", value)
     value = re.sub(
         r"(?i)\b(authorization|api[_-]?key|token|password|secret|cookie|csrf)([\s\"']*[:=][\s\"']*)[^\s,;\"'&#]+",
         r"\1\2[REDACTED]",
