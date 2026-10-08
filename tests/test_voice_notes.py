@@ -13,6 +13,8 @@ from hortator.runtime import DeliveryError
 from hortator.store import dumps
 from hortator.voice_notes import convert
 from test_frenchy_tts import wav
+from support.provider import install_client
+from support.runtime import completion, settle
 
 
 META = {"duration_secs": 1.2, "waveform": base64.b64encode(bytes([0, 20, 0])).decode()}
@@ -184,3 +186,53 @@ def test_conversion_rejects_overlong_input_before_encoding(tmp_path, monkeypatch
     with pytest.raises(ControlError, match="20 minutes"):
         convert(wav(), tmp_path)
     assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("engram", [False, True])
+async def test_cancelled_companion_consumes_confirmed_answer_before_next_cadence(kernel, monkeypatch, engram):
+    from test_engram_integration import response, state, PRIVATE
+
+    plugin = kernel.store.get("plugins", "engram")
+    plugin.pop("revision")
+    kernel.store.put("plugins", {**plugin, "enabled": engram})
+    bot = configured(
+        kernel,
+        cooldown_seconds=0,
+        interval_seconds=1,
+        evaluate_when_idle=False,
+        enabled_plugins=["engram"] if engram else [],
+    )
+    ingest(kernel)
+    await install_client(
+        kernel,
+        lambda request: completion(response(json.loads(request.content)) if engram else "Written answer"),
+    )
+    original = kernel.engine.deliver
+
+    async def with_note(bot, profile, provider, context, content, reply_to, artifact_ids, **kwargs):
+        return await original(
+            bot, profile, provider, context, content, reply_to, [note(kernel, context)], **kwargs
+        )
+
+    monkeypatch.setattr(kernel.engine, "deliver", with_note)
+    kernel.engine.transport = SimpleNamespace(
+        send=AsyncMock(side_effect=["666666666666666666", asyncio.CancelledError()])
+    )
+    await kernel.engine.tick()
+    task = kernel.engine.tasks[bot["id"]]
+    await settle(kernel)
+    assert task.cancelled(), "Owner cancellation must still propagate"
+    assert kernel.store.one("SELECT status FROM turns")["status"] == "sent"
+    assert kernel.store.context(bot["id"], "222222222222222222")["last_seen"] == 1
+    assert [r["status"] for r in kernel.store.rows("SELECT status FROM outbox ORDER BY created_at")] == [
+        "sent",
+        "unknown",
+    ]
+    kernel.store.execute("UPDATE bot_runtime SET next_at=0 WHERE bot_id=?", (bot["id"],))
+    await kernel.engine.tick()
+    await settle(kernel)
+    assert len(kernel.store.rows("SELECT * FROM turns")) == 1
+    assert kernel.engine.transport.send.await_count == 2
+    if engram:
+        assert state(kernel)[0]["MEM"] == PRIVATE
+        assert kernel.store.one("SELECT status FROM engram_candidates")["status"] == "committed"

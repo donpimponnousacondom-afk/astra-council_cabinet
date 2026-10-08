@@ -31,6 +31,19 @@ replacement, clone uncertainty, conversion fallback, native multipart metadata,
 upload cleanup, separate text/voice receipts, late canonical echo, configuration
 revocation and cancellation/timeout/definite-failure outcomes.
 
+Initial-head full local collection: 2,031 passed, 1 skipped, exit 0, 480.69 seconds.
+The skipped public package-network test is opt-in. Luna/Sol review then exposed
+a companion-cancellation gap: confirmed text was left unread by the turn cursor.
+The correction preserves cancellation propagation while recording the sent
+answer, advancing handled input and binding its still-current Engram candidate.
+The added full-Engine regression tests both ordinary and Engram turns with idle
+evaluation disabled, verifying no duplicate cadence activation. Final-head
+focused and complete CI evidence is recorded separately in PR #92.
+
+Correction-focused run: 129 passed, exit 0, 26.70 seconds (`test_voice_notes`,
+`test_runtime`, `test_engrams`, `test_engram_integration`, `test_response_recovery`).
+Ruff lint passed. This is a focused pass, not a second full local collection.
+
 ## Character-based tool-result pages (2026-10-08)
 
 

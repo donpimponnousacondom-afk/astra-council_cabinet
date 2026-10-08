@@ -660,6 +660,7 @@ class Engine:
         retry_delay = 0
         typing_task = None
         engram_candidate = None
+        ordinary_delivery_id = None
         context = ToolContext(bot, channel_id, turn_id, owner_verified=bot["role"] == "hortator")
         try:
             if self.is_single_shot(bot):
@@ -993,7 +994,8 @@ class Engine:
                                 request_id=result.request_id,
                                 level="warning",
                             )
-                        outbox_id = await self.deliver(
+                        ordinary_delivery_id = uid("out_")
+                        await self.deliver(
                             bot,
                             profile,
                             provider,
@@ -1003,9 +1005,8 @@ class Engine:
                             artifact_ids,
                             request_id=result.request_id,
                             draft_deadline=document_deadline,
+                            delivery_id=ordinary_delivery_id,
                         )
-                        if engram_candidate is not None:
-                            self.registry.engrams.bind_outbox(engram_candidate, outbox_id)
                         status, decision = "sent", "reply" if reply_to else "speak"
                     else:
                         raise ControlError(
@@ -1272,25 +1273,27 @@ class Engine:
                 raise ControlError(
                     "Tool round budget exhausted without a valid final answer; no further calls executed"
                 )
-            if status in ("sent", "silent"):
-                # Seeing another human's question in context does not answer it.
-                # Keep it above the read cursor until its own turn claims it.
-                waiting = self.attention(bot, channel_id)
-                handled_through = min(through, min((row["seq"] - 1 for row in waiting), default=through))
-                self.store.execute(
-                    "UPDATE contexts SET last_seen=?,updated_at=? WHERE bot_id=? AND channel_id=?",
-                    (handled_through, time.time(), bot["id"], channel_id),
-                )
-                self.store.execute("UPDATE bot_runtime SET error=NULL WHERE bot_id=?", (bot["id"],))
         except TurnSuperseded:
             status, error = "cancelled", "New human-directed message superseded an unsent draft"
         except asyncio.CancelledError:
-            status, error = (
-                "cancelled",
-                "New human-directed message superseded a cooldown wait"
-                if turn_id in self.human_superseded
-                else "Stopped by operator, configuration change, or shutdown",
+            confirmed = ordinary_delivery_id and self.store.one(
+                "SELECT 1 FROM outbox WHERE id=? AND status='sent'", (ordinary_delivery_id,)
             )
+            if confirmed:
+                # Owner cancellation still propagates, but cannot make a delivered
+                # answer unread or discard its state because a companion was pending.
+                status, decision, error = (
+                    "sent",
+                    "reply" if reply_to else "speak",
+                    "Companion delivery interrupted after the written reply was confirmed",
+                )
+            else:
+                status, error = (
+                    "cancelled",
+                    "New human-directed message superseded a cooldown wait"
+                    if turn_id in self.human_superseded
+                    else "Stopped by operator, configuration change, or shutdown",
+                )
             raise
         except Exception as exc:
             status, error = "failed", self.vault.redact(error_text(exc))[:3000]
@@ -1311,6 +1314,18 @@ class Engine:
                 level="error",
             )
         finally:
+            if status in ("sent", "silent"):
+                # Seeing another human's question in context does not answer it.
+                # Keep it above the read cursor until its own turn claims it.
+                waiting = self.attention(bot, channel_id)
+                handled_through = min(through, min((row["seq"] - 1 for row in waiting), default=through))
+                self.store.execute(
+                    "UPDATE contexts SET last_seen=MAX(last_seen,?),updated_at=? WHERE bot_id=? AND channel_id=?",
+                    (handled_through, time.time(), bot["id"], channel_id),
+                )
+                self.store.execute("UPDATE bot_runtime SET error=NULL WHERE bot_id=?", (bot["id"],))
+            if engram_candidate is not None and status == "sent" and ordinary_delivery_id:
+                self.registry.engrams.bind_outbox(engram_candidate, ordinary_delivery_id)
             await self.finalize_turn(
                 bot,
                 provider,

@@ -52,6 +52,11 @@ reconciliation can confirm it later. Cancellation joins upload cleanup and
 suppresses undispatched companions. The complete batch holds the existing
 destination send lock. This is not a background delivery service.
 
+Cancellation after confirmed text still propagates to the task owner. The turn
+records the written answer as sent, consumes its handled input and commits any
+still-current Engram candidate. The companion keeps its own interrupted receipt;
+the next cadence does not treat the original human input as unanswered.
+
 `delivery:"file"` opts out for a call; operator configuration can make it the
 default. Slash-command and panel interaction responses retain ordinary file
 delivery in their existing response scope. They do not spawn public companion
