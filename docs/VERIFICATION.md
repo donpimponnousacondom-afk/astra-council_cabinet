@@ -25,11 +25,16 @@ The `.latest-requested` pointer identifies this verified copy. The harness was
 restarted in shared Screen before remote transfer.
 
 Archival selection: all five completed manual copies, with this newest copy
-uploaded first and retained locally; four older local copies may be removed only
-after their source comparison and remote SHA-256 checks. The dashboard snapshot
-collection was empty. Transfer was not yet complete when this entry was written;
-completion, space reclaimed and independent reviews are recorded with PR #93
-and the per-copy receipts in
+uploaded first and retained locally. All five selected paths reconciled with
+five remote SHA-256 and completion receipts; all four older local sources were
+removed only after source comparison and remote archive/sidecar verification.
+The dashboard snapshot collection and temporary archive staging are empty.
+Transfer finished at 17:47:37 UTC: 5,265,488,723 compressed bytes (4.90 GiB)
+uploaded, 7.8 GiB retained locally, and 63.31 GiB available on the filesystem
+(reported as 64G by `df -h`, up from approximately 42G before the new capture).
+No live data was deleted. Independent PR review publication is pending at this
+entry's commit; its final digest belongs to PR #93. Per-copy receipts and
+`summary.json` are in
 `~/.local/share/hortator-archive-runs/20261008T174420Z/`.
 Capture evidence: `audit/2026-10-08/backup-on-request/backup-receipt.json`.
 No actual restore, scheduled cleanup or application retention change was made.

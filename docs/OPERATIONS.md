@@ -124,7 +124,7 @@ This workspace sets `HORTATOR_DATA_DIR=/home/codexy/.local/share/hortator`, outs
 
 The data directory is mode 0700; database/key/artifacts are owner-readable. **The master key is required to recover credentials.** Protect the key separately from the database and restrict host access. Conversations, prompt snapshots and provider response content are intentionally stored as readable observability data; secret encryption is not full-disk encryption. Never commit the data directory.
 
-The application retains history instead of silently discarding observability. Monitor available disk space and back it up. Large contexts and many bots increase CPU, memory, database and provider usage; tune concurrency and cadence for the host. SQLite is appropriate for this single-host design; this implementation does not claim a horizontally distributed scheduler.
+The application retains history instead of silently discarding observability. Monitor available disk space; back up and offload on the owner's explicit request using the [backup procedure](#backup-and-restore). Large contexts and many bots increase CPU, memory, database and provider usage; tune concurrency and cadence for the host. SQLite is appropriate for this single-host design; this implementation does not claim a horizontally distributed scheduler.
 
 Dashboard reporting uses a bounded read worker and summary polling; see
 [reporting ownership and migration](CONCURRENCY.md#reporting-reads) and
@@ -816,9 +816,10 @@ Owner decision, 2026-10-08: **create full backups only when explicitly requested
 not for every feature, hotfix or deployment**. This supersedes earlier generic
 instructions to back up before deploying or migrating a schema. Offloading is
 also on request, with no scheduled worker. Keep one newest verified usable local
-recovery copy after cleanup; older completed copies go to the Storage Box only
-with the checks below. An explicit request to back up everything also archives
-the newest copy remotely while retaining its local source. The dashboard's
+recovery copy after cleanup; archive completed copies to the Storage Box with
+the checks below, including the newest copy while retaining its local source.
+Each requested offload must verify that this retained copy also exists remotely.
+The dashboard's
 existing recovery snapshot during an explicitly requested restore is unchanged.
 
 From the repository root, or with `--data-dir` before the command:
@@ -852,8 +853,8 @@ pipes, redirects and uploaded scripts are unavailable.
 
 1. Inventory only completed copies under `~/.local/share/hortator-backups` and
    `~/.local/share/hortator-snapshots`; select explicit paths and mark which newest
-   usable copy stays local. Preserve `.latest-requested` as above. When asked to
-   back up everything, include the retained copy in uploads too. Do not archive live data or an
+   usable copy stays local. Preserve `.latest-requested` as above. Include the
+   retained copy in remote verification/uploads too. Do not archive live data or an
    active backup/restore. Keep the source list and receipts in a dated private
    `~/.local/share/hortator-archive-runs/` folder outside Git.
 2. Compress each selected directory locally as a separate `.tar.zst`, including
