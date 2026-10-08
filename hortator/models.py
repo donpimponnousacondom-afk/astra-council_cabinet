@@ -220,7 +220,9 @@ class Bot(Entity):
     work_task_rounds: int = Field(default=20, ge=0, le=100)
     work_task_calls_per_round: int = Field(default=8, ge=1, le=20)
     work_task_seconds: float = Field(default=900, ge=30, le=7200)
-    tool_working_set_tokens: int = Field(default=6000, ge=512, le=24000)
+    # Accepted for older API clients/snapshots; no longer controls result paging.
+    tool_working_set_tokens: int | None = Field(default=None, ge=512, le=24000, exclude=True)
+    tool_working_set_chars: int = Field(default=120000, ge=12000, le=1000000)
     hourly_turn_limit: int = Field(default=120, ge=1, le=10000)
     daily_cost_limit: float | None = Field(default=None, gt=0)
     color: str = Field(default="#b9de89", pattern=r"^#[0-9a-fA-F]{6}$")

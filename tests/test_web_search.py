@@ -274,9 +274,18 @@ async def test_large_combined_results_keep_structured_metadata_within_registry_c
 
     context = setup(kernel, monkeypatch, respond, key="key")
     result = await call(kernel, context, engine="both", count=10)
-    assert result["ok"] and result["truncated"] and result["engine_status"]
-    assert len(result["results"]) < 20 and len(json.dumps(result)) < 60000
-    assert {e for r in result["results"] for e in r["engines"]} == {"brave", "duckduckgo"}
+    assert result["ok"] and result["result_is_paged"] and result["text"]
+    assert not result["truncated"]
+    assert {e["engine"] for e in result["engine_status"]} == {"brave", "duckduckgo"}
+    assert all(e["http_response"]["http_status"] == 200 for e in result["engine_status"])
+    assert len(json.dumps(result)) < 30000
+    pieces, page = [result["text"]], result
+    while page["next"]:
+        page = await kernel.registry.call_raw("web_search", json.dumps(page["next"]), context, "page")
+        pieces.append(page["text"])
+    complete = json.loads("".join(pieces))
+    assert complete["engine_status"] and len(complete["results"]) == 20
+    assert {e for r in complete["results"] for e in r["engines"]} == {"brave", "duckduckgo"}
 
 
 async def test_per_bot_config_and_call_overrides_preserve_global_settings(kernel, monkeypatch):

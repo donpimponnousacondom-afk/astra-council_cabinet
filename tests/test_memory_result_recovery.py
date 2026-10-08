@@ -58,9 +58,7 @@ def test_carried_references_refresh_reader_even_below_budget(kernel, indexed):
             {"role": "tool", "tool_call_id": "call", "content": dumps(reference)},
         ]
     before = copy.deepcopy(extras)
-    changed, _ = bound_exchanges(
-        extras, kernel.engine.contexts.estimate, 6000, available_readers=("dumb_search",)
-    )
+    changed, _ = bound_exchanges(extras, 24000, available_readers=("dumb_search",))
     assert extras == before
 
     def get_reference(messages):
@@ -71,7 +69,7 @@ def test_carried_references_refresh_reader_even_below_budget(kernel, indexed):
         )
 
     assert get_reference(changed)["reread_tool"] == "dumb_search"
-    exhausted, _ = bound_exchanges(changed, kernel.engine.contexts.estimate, 6000, available_readers=())
+    exhausted, _ = bound_exchanges(changed, 24000, available_readers=())
     final = get_reference(exhausted)
     assert final["reread_unavailable"] is True
     assert "reread" not in final and "reread_tool" not in final
@@ -106,8 +104,8 @@ async def test_runtime_large_memory_read_recovers_every_note_through_named_local
     kernel, memory, exhausted
 ):
     rounds = 1 if exhausted else 30
-    ready(kernel, enabled_plugins=[memory], max_tool_rounds=rounds, tool_working_set_tokens=3000)
-    context = grant(kernel, memory, max_tool_rounds=rounds, tool_working_set_tokens=3000)
+    ready(kernel, enabled_plugins=[memory], max_tool_rounds=rounds, tool_working_set_chars=12000)
+    context = grant(kernel, memory, max_tool_rounds=rounds, tool_working_set_chars=12000)
     expected = [
         "".join(f"Note {key} entry {n:05d}: café 🙂 verified observation.\n" for n in range(90))
         for key in range(5)
@@ -130,14 +128,13 @@ async def test_runtime_large_memory_read_recovers_every_note_through_named_local
             return reply(tool(memory, {"operation": "read"}))
         result = responses(body)[-1]
         if len(bodies) == 2:
-            assert result["omitted_from_active_prompt"]
+            assert result["result_is_paged"] and result["text"]
             if exhausted:
-                assert result["reread_unavailable"] and "reread_tool" not in result
-                assert "reread" not in result
-                return reply(tool("council_silence", {"label": "Unable to verify omitted notes"}))
-            assert result["reread_tool"] == memory
-            assert result["reread_tool"] in {t["function"]["name"] for t in body["tools"]}
-            return reply(tool(result["reread_tool"], result["reread"]))
+                assert result["reread_unavailable"] and not result["next"]
+                assert result["has_more"]
+                return reply(tool("council_silence", {"label": "Only first page read"}))
+            assert result["next_tool"] == memory
+            assert result["next_tool"] in {t["function"]["name"] for t in body["tools"]}
         assert "error" not in result and not result.get("omitted_from_active_prompt")
         chunks.append(result["text"])
         if result["next"]:

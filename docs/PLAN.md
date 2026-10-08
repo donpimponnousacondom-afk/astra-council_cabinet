@@ -17,6 +17,21 @@ current checkout or running configuration.
 
 ## Current work and acceptance
 
+- On 2026-10-08 the owner chose Claude Code-style character-based tool-result
+  pages and recoverable saved output as the direction for correcting Curie's
+  repeated-read loop. Do not size those pages using an OpenAI tokenizer: the
+  council uses multiple model families, and the owner prefers the conventions
+  of Claude Code for these tools. Read-only investigation confirmed that the
+  shared active tool-exchange limiter can omit a newly returned `web_fetch`
+  body before its first model exposure; its scope includes ordinary results
+  from other tools too. The owner authorized the shared fix, dual review and
+  normal rollout. Character-based result pages and the scoped fallback reader
+  implement that decision; live model acceptance remains separate. Distinguish
+  character-based result paging from the separate overall provider-context
+  budget. Preserve complete results before shortening model-facing copies,
+  including the remaining generic registry truncation path. See the current
+  [tool-result contract](AGENTIC_TOOLS.md#task-and-active-context-budgets).
+
 - On 2026-10-06 the owner authorized lossless memory-result pagination after
   discussing Loki's keyed-read and paging suggestions. Preserve the full reply
   before bounding its prompt copy, expose a native reader on both memory tools,

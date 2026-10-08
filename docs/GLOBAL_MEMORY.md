@@ -42,8 +42,8 @@ Returns complete usage, examples and the bot's current aggregate allowance witho
 
 Returns this bot's notes in key order and its current budget. Add `"key":"owner-preference"` to read only that exact key (surrounding whitespace is trimmed); an unmatched key returns an empty notes list. Budget accounting still covers all notes. Each note includes `key`, `value`, `source_channel_id` and `updated_at`. Timestamps shown to the model use the configured council timezone and explicit offset.
 
-Model-facing replies larger than 60,000 serialized Unicode characters are saved
-intact before returning a first page of 6,000 characters. The reply preserves its
+Model-facing replies larger than 30,000 serialized Unicode characters are saved
+intact before returning a first page of up to 6,000 source characters. The reply preserves its
 budget/warning and names `next_tool` with complete `next` arguments. Call that
 tool until `next` is null; one page is not a complete read. These pages contain
 serialized JSON, which can span page boundaries; join `text` in range order to

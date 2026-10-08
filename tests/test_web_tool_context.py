@@ -49,8 +49,8 @@ async def test_search_results_survive_paging_http_evidence_without_changing_capt
     before = copy.deepcopy(extras)
     estimate = kernel.engine.contexts.estimate
     assert estimate(extras) > 6000
-    bounded, meta = bound_exchanges(extras, estimate, 6000)
-    assert extras == before and meta["estimated_tokens"] <= 6000
+    bounded, meta = bound_exchanges(extras, 12000)
+    assert extras == before and meta["characters"] <= 12000
     assert meta["paged_http_results"] and not meta["minimized_results"]
     values = [json.loads(m["content"]) for m in bounded if m["role"] == "tool"]
     assert [v["results"] for v in values] == [v["results"] for v in originals]
@@ -146,11 +146,10 @@ def test_parallel_batch_minimizes_only_until_remaining_results_fit(kernel):
         }
         for i in range(3)
     ]
-    estimate = kernel.engine.contexts.estimate
-    bounded, meta = bound_exchanges(extras, estimate, 2000)
-    assert meta["estimated_tokens"] <= 2000 and meta["minimized_results"] == 1
+    bounded, meta = bound_exchanges(extras, 8000)
+    assert meta["characters"] <= 8000 and meta["paged_results"] >= 1
     results = [json.loads(m["content"]) for m in bounded if m["role"] == "tool"]
-    assert results[0]["omitted_from_active_prompt"]
+    assert results[0]["result_is_paged"] and results[0]["text"]
     assert results[1]["text"] == results[2]["text"] == "source words " * 160
 
 

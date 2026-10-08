@@ -90,7 +90,14 @@ def register(registry):
 
 Install the package in the same environment, restart the runtime, enable it in **Plugins**, and grant `clock` to the desired bots. New registry entries are seeded disabled unless they are the explicitly chosen built-ins. Duplicate/reserved IDs are rejected. Tool schemas use the standard OpenAI function-call envelope.
 
-The registry validates arguments, checks global and per-bot authorization at execution time, enforces a 120-second tool deadline (shell.run instead allows max(120, configured command seconds + 30), up to 630), bounds serialized results, records start/result/failure/cancellation, resolves per-bot credential overrides, and redacts known secret values. Bot-level tool-round and call limits are enforced separately in the council engine.
+The registry validates arguments, checks global and per-bot authorization at execution time, enforces a 120-second tool deadline (shell.run instead allows max(120, configured command seconds + 30), up to 630), records complete results before character-based paging, records start/result/failure/cancellation, resolves per-bot credential overrides, and redacts known secret values. Bot-level tool-round and call limits are enforced separately in the council engine. The reserved `tool_result_read` fallback gives packs without a native reader access to their own saved replies under the original scope and grants; never register that name. [Shared result limits and continuation](AGENTIC_TOOLS.md#task-and-active-context-budgets).
+
+Saved tool results and their exposed JSON share one coordinate space. New list
+or scalar results are stored in a `value` envelope. Plugin objects that use the
+registry-owned `result_id` or `source_result_id` names are also enveloped, so
+plugin source identifiers cannot be confused with evidence receipts. Every
+original value remains present. Historical raw evidence rows remain readable
+without migration. Inspector recovery metadata is included before persistence.
 
 Plugin configuration is normally shallow merged: built-in defaults → global plugin config → this bot's plugin config. A nested object such as `request_json` is replaced as a unit, allowing exact vendor control. The document pack deliberately limits per-bot overrides to `local_base_url`: automatic publication, the public URL and remote SSH destination are global operator policy. Secrets are resolved separately: `bot/{id}/plugin:{name}` first, then `plugin/{name}/api_key`. Keyless built-ins do not require those fields; the publishing worker separately accesses its named vault SSH identity and never exposes it to a model.
 

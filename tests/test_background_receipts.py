@@ -51,10 +51,10 @@ def index(messages):
 def test_large_native_job_batch_keeps_every_compact_receipt(kernel, count):
     extras = job_batch(count)
     original = copy.deepcopy(extras)
-    bounded, meta = bound_exchanges(extras, kernel.engine.contexts.estimate, 6000)
+    bounded, meta = bound_exchanges(extras, 24000)
     assert extras == original
     assert meta["omitted_groups"] == 1
-    assert kernel.engine.contexts.estimate(prompt_exchanges(bounded)) <= 6000
+    assert len(dumps(prompt_exchanges(bounded))) <= 24000
     saved = index(bounded)
     assert saved["omitted_jobs"] == 0
     assert len(saved["jobs"]) == count
@@ -69,18 +69,18 @@ def test_large_native_job_batch_keeps_every_compact_receipt(kernel, count):
 
 def test_extreme_job_batch_is_bounded_and_explains_scoped_recovery(kernel):
     extras = job_batch(100)
-    bounded, _ = bound_exchanges(extras, kernel.engine.contexts.estimate, 1800)
+    bounded, _ = bound_exchanges(extras, 7200)
     saved = index(bounded)
     assert 0 < len(saved["jobs"]) < 100
     assert saved["omitted_jobs"] == 100 - len(saved["jobs"])
     assert "list operation" in bounded[0]["content"]
     assert "this bot/channel" in bounded[0]["content"]
-    assert kernel.engine.contexts.estimate(prompt_exchanges(bounded)) <= 1800
+    assert len(dumps(prompt_exchanges(bounded))) <= 7200
 
 
 def test_job_receipts_survive_repeated_pruning_and_track_result_offsets(kernel):
     first = job_batch(5)
-    bounded, _ = bound_exchanges(first, kernel.engine.contexts.estimate, 6000)
+    bounded, _ = bound_exchanges(first, 24000)
     prior = copy.deepcopy(bounded)
     status_call = tool(
         "research_assistant",
@@ -110,7 +110,7 @@ def test_job_receipts_survive_repeated_pruning_and_track_result_offsets(kernel):
     ]
     continuation = [*bounded, *second]
     unchanged = copy.deepcopy(continuation)
-    bounded, _ = bound_exchanges(continuation, kernel.engine.contexts.estimate, 1800)
+    bounded, _ = bound_exchanges(continuation, 7200)
     assert continuation == unchanged
     assert prior == unchanged[: len(prior)]
     saved = index(bounded)
@@ -120,7 +120,7 @@ def test_job_receipts_survive_repeated_pruning_and_track_result_offsets(kernel):
     assert first_receipt["state"] == "succeeded"
     assert first_receipt["read_offset"] == 6000
     assert first_receipt["next_offset"] == 12000
-    assert kernel.engine.contexts.estimate(prompt_exchanges(bounded)) <= 1800
+    assert len(dumps(prompt_exchanges(bounded))) <= 7200
 
 
 def test_cross_tool_reference_and_job_receipt_both_survive(kernel):
@@ -135,10 +135,10 @@ def test_cross_tool_reference_and_job_receipt_both_survive(kernel):
             },
         ]
     )
-    bounded, _ = bound_exchanges(extras, kernel.engine.contexts.estimate, 1400)
+    bounded, _ = bound_exchanges(extras, 5600)
     saved = index(bounded)
     assert len(saved["jobs"]) == 5
     assert any(ref.get("result_id") == "web-result" for ref in saved["references"]) or any(
         "web-result" in message.get("content", "") for message in bounded if message["role"] == "tool"
     )
-    assert kernel.engine.contexts.estimate(prompt_exchanges(bounded)) <= 1400
+    assert len(dumps(prompt_exchanges(bounded))) <= 5600

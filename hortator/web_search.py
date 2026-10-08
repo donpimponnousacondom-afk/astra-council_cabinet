@@ -547,16 +547,14 @@ async def search(args, context, config, key, store, vault):
     statuses = [status for status, _ in responses]
     ok = any(s["status"] == "ok" for s in statuses)
     results = list(combined.values())
-    truncated = False
-    while len(json.dumps(results, ensure_ascii=False)) > 48000:
-        results.pop()
-        truncated = True
+    # The registry saves the complete bounded engine selection and pages its
+    # prompt view. Do not discard matches before they reach that evidence store.
     return {
         "ok": ok,
         "mode": mode,
         "results": results,
         "engine_status": statuses,
-        "truncated": truncated,
+        "truncated": False,
         "partial": any(s["status"] == "failed" for s in statuses) and ok,
         "fallback_used": mode == "auto" and len(responses) == 2,
         "error": None if ok else "All selected search engines failed; inspect engine_status before retrying.",

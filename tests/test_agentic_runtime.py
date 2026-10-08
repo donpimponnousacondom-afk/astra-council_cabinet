@@ -75,7 +75,7 @@ async def test_complete_near_megabyte_reading_keeps_small_active_prompt_and_orig
         enabled_plugins=["web_fetch"],
         max_tool_rounds=1,
         work_task_rounds=100,
-        tool_working_set_tokens=4800,
+        tool_working_set_chars=24000,
     )
     profile = kernel.store.get("profiles", "balanced")
     kernel.store.put(
@@ -191,7 +191,9 @@ async def test_working_set_accounts_for_large_existing_summary_before_calling_pr
         requests.append(body)
         if len(requests) == 1:
             return reply(tool("web_fetch", {"url": "https://example.com/large"}))
-        assert responses(body)[-1]["omitted_from_active_prompt"] is True
+        assert responses(body)[-1]["result_is_paged"] is True
+        assert responses(body)[-1]["text"]
+        assert kernel.engine.contexts.estimate_request(body["messages"], body.get("tools", [])) < 12500
         return reply(tool("council_silence", {"label": "Reference retained"}))
 
     await install_client(kernel, handle)
@@ -218,7 +220,7 @@ def test_retained_tool_pairs_preserve_native_assistant_continuation(kernel):
         {"role": "assistant", "tool_calls": [tool("web_fetch", {"operation": "start"}, "new")]},
         {"role": "tool", "tool_call_id": "new", "content": "{}"},
     ]
-    messages, _ = bound_exchanges(extras, kernel.engine.contexts.estimate, 1000)
+    messages, _ = bound_exchanges(extras, 4000)
     retained = [m for m in messages if m.get("tool_calls", [{}])[0].get("id") == "old"]
     assert not retained or retained[0] == assistant
 
@@ -289,10 +291,10 @@ def test_prompt_minimization_preserves_original_objects_and_complete_tool_pairs(
             },
         ]
     original = copy.deepcopy(extras)
-    bounded, meta = bound_exchanges(extras, kernel.engine.contexts.estimate, 1000)
+    bounded, meta = bound_exchanges(extras, 4000)
     assert extras == original
     assert meta["omitted_groups"] > 0
-    assert kernel.engine.contexts.estimate(prompt_exchanges(bounded)) <= 1000
+    assert len(dumps(prompt_exchanges(bounded))) <= 4000
     model_input = prompt_exchanges(bounded)
     assert all("_working_set_index" not in message for message in model_input)
     ids = {call["id"] for message in model_input for call in message.get("tool_calls", [])}
