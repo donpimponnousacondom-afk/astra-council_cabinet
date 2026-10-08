@@ -90,7 +90,7 @@ Models cannot alter these endpoints or receive the saved credential.
 
 The additive `artifact_voice_notes` table stores delivery metadata and spoken
 text alongside owned artifacts. Existing complete database/artifact backups
-include it. Take a stopped, consistent backup before the first deployment;
+include it. Follow the owner's [on-request backup policy](OPERATIONS.md#backup-and-restore);
 restoring only the database without its artifacts is not sufficient.
 
 ## Owner decisions

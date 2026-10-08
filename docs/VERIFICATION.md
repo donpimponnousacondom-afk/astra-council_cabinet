@@ -4,6 +4,41 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## On-request backup policy and full recovery capture (2026-10-08)
+
+Commit: documentation branch `dev/backups-on-request`, based on
+`5ebbc5b43c1df9a761e703d0081ca6c7fa7d879f`; dirty during documentation checks.
+Backend scope/result: not run; no application code changed.
+Frontend/browser tests: not run for this documentation change. The refresh build
+passed and server/dashboard matched documentation commit `2ff944a65fcc`.
+Validation: `git diff --check` and the one-off archival script's `bash -n` passed.
+Classification: live local stopped-runtime backup and read-only Storage Box
+connectivity check, not a restore test or live model/provider acceptance.
+
+The owner's requested recovery copy is
+`20261008T174139Z-requested-full-recovery`, captured from source commit
+`5ebbc5b43c1df9a761e703d0081ca6c7fa7d879f`. SQLite integrity and foreign-key checks
+passed; all 33 encrypted entries decrypted with the matching key; 3,357 payload
+files passed SHA-256 verification. All SQLite handles closed before immutable
+verification and manifest hashing; the copy contains no SQLite WAL/SHM sidecars.
+The `.latest-requested` pointer identifies this verified copy. The harness was
+restarted in shared Screen before remote transfer.
+
+Archival selection: all five completed manual copies, with this newest copy
+uploaded first and retained locally. All five selected paths reconciled with
+five remote SHA-256 and completion receipts; all four older local sources were
+removed only after source comparison and remote archive/sidecar verification.
+The dashboard snapshot collection and temporary archive staging are empty.
+Transfer finished at 17:47:37 UTC: 5,265,488,723 compressed bytes (4.90 GiB)
+uploaded, 7.8 GiB retained locally, and 63.31 GiB available on the filesystem
+(reported as 64G by `df -h`, up from approximately 42G before the new capture).
+No live data was deleted. Independent PR review publication is pending at this
+entry's commit; its final digest belongs to PR #93. Per-copy receipts and
+`summary.json` are in
+`~/.local/share/hortator-archive-runs/20261008T174420Z/`.
+Capture evidence: `audit/2026-10-08/backup-on-request/backup-receipt.json`.
+No actual restore, scheduled cleanup or application retention change was made.
+
 ## Frenchy TTS voice experiments (2026-10-08)
 
 Commit: implementation on `feat/frenchy-tts`, based on

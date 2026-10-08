@@ -124,7 +124,7 @@ This workspace sets `HORTATOR_DATA_DIR=/home/codexy/.local/share/hortator`, outs
 
 The data directory is mode 0700; database/key/artifacts are owner-readable. **The master key is required to recover credentials.** Protect the key separately from the database and restrict host access. Conversations, prompt snapshots and provider response content are intentionally stored as readable observability data; secret encryption is not full-disk encryption. Never commit the data directory.
 
-The application retains history instead of silently discarding observability. Monitor available disk space and back it up. Large contexts and many bots increase CPU, memory, database and provider usage; tune concurrency and cadence for the host. SQLite is appropriate for this single-host design; this implementation does not claim a horizontally distributed scheduler.
+The application retains history instead of silently discarding observability. Monitor available disk space; back up and offload on the owner's explicit request using the [backup procedure](#backup-and-restore). Large contexts and many bots increase CPU, memory, database and provider usage; tune concurrency and cadence for the host. SQLite is appropriate for this single-host design; this implementation does not claim a horizontally distributed scheduler.
 
 Dashboard reporting uses a bounded read worker and summary polling; see
 [reporting ownership and migration](CONCURRENCY.md#reporting-reads) and
@@ -177,7 +177,7 @@ Keep the database, encryption key, bootstrap password, artifacts, and logs in th
 
 Before switching a running application's branch, stop the foreground server with Ctrl-C in Screen. Switch to the intended feature branch, rebuild `web/dist` for the selected commit (including after a squash merge even when UI code is identical), then run `hortator serve --host 127.0.0.1 --port 8000 --color`. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
 
-For branches that change database schemas, make an external backup first; separating storage from Git does not make schema changes reversible. Use an explicit `--data-dir` pointing to separate temporary storage for tests or experiments that should not use live configuration.
+Separating storage from Git does not make schema changes reversible. Follow the owner's [on-request backup policy](#backup-and-restore), including for branches with schema changes; do not create a backup implicitly for each deployment. Use an explicit `--data-dir` pointing to separate temporary storage for tests or experiments that should not use live configuration.
 
 ### Repeating the squash-merge workflow
 
@@ -202,7 +202,7 @@ hortator-next-feature --refresh  # Build/restart the clean current task; no fetc
 
 `--refresh` is useful after committing a feature before its PR is merged. It also repairs a stale dashboard on the current task branch. Invoke from a shell prompt: text typed into the active runtime console is not a shell command. If invoked at the shared Screen's own idle Bash prompt, the workflow runs there directly and hands the terminal to the server. Missing Screen sessions are reported, not recreated automatically; follow the shared-terminal recovery procedure below if needed.
 
-Preflight failures leave the runtime running. After shutdown, a failed dependency/build/startup step leaves an explicit failure in Screen and does not start a partially built release. Inspect the error, fix its cause and retry (use `--refresh` if the branch transition already completed). Runtime shutdown uses the existing cancellation rules. This command does not create a configuration backup or change bot/provider settings; take a complete backup before deployments that require one, especially schema changes.
+Preflight failures leave the runtime running. After shutdown, a failed dependency/build/startup step leaves an explicit failure in Screen and does not start a partially built release. Inspect the error, fix its cause and retry (use `--refresh` if the branch transition already completed). Runtime shutdown uses the existing cancellation rules. This command does not create a configuration backup or change bot/provider settings. Backups follow the owner's [on-request policy](#backup-and-restore).
 
 The tracked shell entry point is `scripts/hortator-next-feature`, with its standard-library controller in `scripts/next_feature.py`. The workspace installation is a symlink in the user's existing PATH:
 
@@ -812,6 +812,16 @@ Default storage is `$HORTATOR_DATA_DIR`'s sibling with `-snapshots` appended: `/
 
 ## Backup and restore
 
+Owner decision, 2026-10-08: **create full backups only when explicitly requested,
+not for every feature, hotfix or deployment**. This supersedes earlier generic
+instructions to back up before deploying or migrating a schema. Offloading is
+also on request, with no scheduled worker. Keep one newest verified usable local
+recovery copy after cleanup; archive completed copies to the Storage Box with
+the checks below, including the newest copy while retaining its local source.
+Each requested offload must verify that this retained copy also exists remotely.
+The dashboard's
+existing recovery snapshot during an explicitly requested restore is unchanged.
+
 From the repository root, or with `--data-dir` before the command:
 
 ```bash
@@ -824,13 +834,13 @@ This workspace uses timestamped snapshots under `/home/codexy/.local/share/horta
 
 ### On-request Storage Box archival
 
-Owner decision, 2026-10-03: archive older completed manual backups and dashboard
+Owner decision, 2026-10-03, retention updated 2026-10-08: archive completed manual backups and dashboard
 snapshots to `u390720@u390720.your-storagebox.de:council-snapshots/`, using SSH
-port **23** and the existing `codexy` SSH key. Keep the **two newest copies
-overall**, not two per collection. Inspect timestamps/manifests and preserve
-the manual `.latest-requested` target. The initial selection keeps the October 1
-and September 26 manual backups and moves all older copies, including every
-dashboard snapshot. Archived snapshots leave the local dashboard catalog until
+port **23** and the existing `codexy` SSH key. Keep **one newest verified usable
+copy overall**, not one per collection. Inspect timestamps/manifests and preserve
+the manual `.latest-requested` target. If that pointer would identify a copy
+selected for removal, first replace it with a freshly verified requested manual
+backup and keep that new copy. Archived snapshots leave the local dashboard catalog until
 downloaded and extracted back into its snapshot directory.
 
 Run only when requested. This is a one-off compression/rsync procedure, not a
@@ -842,8 +852,9 @@ describes its restricted shell: invoke `sha256sum` directly over SSH; remote
 pipes, redirects and uploaded scripts are unavailable.
 
 1. Inventory only completed copies under `~/.local/share/hortator-backups` and
-   `~/.local/share/hortator-snapshots`; select explicit paths, leaving the newest
-   two overall and `.latest-requested` intact. Do not archive live data or an
+   `~/.local/share/hortator-snapshots`; select explicit paths and mark which newest
+   usable copy stays local. Preserve `.latest-requested` as above. Include the
+   retained copy in remote verification/uploads too. Do not archive live data or an
    active backup/restore. Keep the source list and receipts in a dated private
    `~/.local/share/hortator-archive-runs/` folder outside Git.
 2. Compress each selected directory locally as a separate `.tar.zst`, including
@@ -863,7 +874,9 @@ pipes, redirects and uploaded scripts are unavailable.
    council-snapshots/ARCHIVE.tar.zst`, and compare it with the local checksum.
    Check the uploaded sidecar too. Recheck source contents and its file inventory
    after the transfer, then record the verified remote path and digest. Only
-   after these succeed, remove that exact local source and its temporary archive.
+   after these succeed, remove that exact older local source and its temporary archive.
+   For the retained newest copy, remove only temporary archive staging and keep
+   the verified local source. Record upload and local-retention outcomes separately.
    Any failure stops the run with unverified sources retained.
 5. A single detached shell run may continue with a PID, progress log and per-copy
    receipts. No automatic retries or recurring schedule. Inspect these when
