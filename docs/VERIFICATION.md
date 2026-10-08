@@ -4,6 +4,36 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## On-request backup policy and full recovery capture (2026-10-08)
+
+Commit: documentation branch `dev/backups-on-request`, based on
+`5ebbc5b43c1df9a761e703d0081ca6c7fa7d879f`; dirty during documentation checks.
+Backend scope/result: not run; no application code changed.
+Frontend/browser tests: not run for this documentation change. The refresh build
+passed and server/dashboard matched documentation commit `2ff944a65fcc`.
+Validation: `git diff --check` and the one-off archival script's `bash -n` passed.
+Classification: live local stopped-runtime backup and read-only Storage Box
+connectivity check, not a restore test or live model/provider acceptance.
+
+The owner's requested recovery copy is
+`20261008T174139Z-requested-full-recovery`, captured from source commit
+`5ebbc5b43c1df9a761e703d0081ca6c7fa7d879f`. SQLite integrity and foreign-key checks
+passed; all 33 encrypted entries decrypted with the matching key; 3,357 payload
+files passed SHA-256 verification. All SQLite handles closed before immutable
+verification and manifest hashing; the copy contains no SQLite WAL/SHM sidecars.
+The `.latest-requested` pointer identifies this verified copy. The harness was
+restarted in shared Screen before remote transfer.
+
+Archival selection: all five completed manual copies, with this newest copy
+uploaded first and retained locally; four older local copies may be removed only
+after their source comparison and remote SHA-256 checks. The dashboard snapshot
+collection was empty. Transfer was not yet complete when this entry was written;
+completion, space reclaimed and independent reviews are recorded with PR #93
+and the per-copy receipts in
+`~/.local/share/hortator-archive-runs/20261008T174420Z/`.
+Capture evidence: `audit/2026-10-08/backup-on-request/backup-receipt.json`.
+No actual restore, scheduled cleanup or application retention change was made.
+
 ## Frenchy TTS voice experiments (2026-10-08)
 
 Commit: implementation on `feat/frenchy-tts`, based on
