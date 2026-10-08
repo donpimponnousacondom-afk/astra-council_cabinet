@@ -84,7 +84,7 @@ async def read_response(response, limit):
     return bytes(data)
 
 
-async def voices(args, config, key):
+async def voices(args, config, key, *, tool_name="tts"):
     adapter = api_format(config)
     if adapter != "mistral":
         return {
@@ -127,8 +127,8 @@ async def voices(args, config, key):
         "voices": items,
         "configured_voice": config.get("request_json", {}).get("voice_id"),
         "next": {"operation": "voices", **params, "page_token": token} if token else None,
-        "next_tool": "tts",
-        "guidance": "Use a returned voice id as tts.voice to select it for one generation. Follow next for more voices.",
+        "next_tool": tool_name,
+        "guidance": f"Use a returned voice id as {tool_name}.voice to select it for one generation. Follow next for more voices.",
     }
 
 

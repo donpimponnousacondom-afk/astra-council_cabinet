@@ -1351,7 +1351,9 @@ class Engine:
         content = self.vault.redact(strip_reasoning(content))
         if not content:
             raise ControlError("No visible content remained after removing reasoning")
-        paths = [self.registry.resolve_artifact(artifact_id, context) for artifact_id in artifact_ids]
+        paths, voice_notes = self.registry.voice_notes.split(artifact_ids, context)
+        voice_ids = {note["artifact_id"] for note in voice_notes}
+        regular_ids = [artifact_id for artifact_id in artifact_ids if artifact_id not in voice_ids]
         if len(content) > 12000:
             raise ControlError("Council contribution exceeds 12,000 characters")
         request = (
@@ -1380,7 +1382,7 @@ class Engine:
                 destination,
                 content,
                 reply_to,
-                dumps(artifact_ids),
+                dumps(regular_ids),
                 "pending",
                 time.time(),
                 dumps(routing or {}),
@@ -1392,7 +1394,8 @@ class Engine:
                 "outbox_id": outbox_id,
                 "content": content,
                 "reply_to": reply_to,
-                "artifact_ids": artifact_ids,
+                "artifact_ids": regular_ids,
+                **({"voice_note_artifact_ids": list(voice_ids)} if voice_ids else {}),
                 "footer": footer,
                 "request_id": request_id,
                 **({"routing": routing} if routing else {}),
@@ -1548,9 +1551,26 @@ class Engine:
                     bot_id=bot["id"],
                     turn_id=context.turn_id,
                 )
+                if voice_notes:
+
+                    def voice_guard():
+                        check_deadline()
+                        if not self.valid(bot, profile, provider) or not self.channel_allowed(
+                            bot, context.channel_id
+                        ):
+                            raise ControlError(
+                                "Bot configuration or channel grant changed before voice-note dispatch"
+                            )
+
+                    await self.registry.voice_notes.deliver(
+                        self, voice_notes, bot, context, destination, outbox_id, discord_id, room, voice_guard
+                    )
                 return outbox_id
         except (Exception, asyncio.CancelledError) as exc:
             row = self.store.one("SELECT status FROM outbox WHERE id=?", (outbox_id,))
+            if row["status"] == "sent":
+                # A cancelled companion voice note cannot undo confirmed text delivery.
+                raise
             uncertain = row["status"] == "sending" and (not isinstance(exc, DeliveryError) or exc.uncertain)
             status = (
                 "unknown"

@@ -755,11 +755,13 @@ class DiscordManager:
         if not existing["bot_id"]:
             return content
         sent = self.store.one(
-            "SELECT id,turn_id,content FROM outbox WHERE discord_id=? AND bot_id=? AND channel_id=?",
+            "SELECT id,turn_id,content,routing FROM outbox WHERE discord_id=? AND bot_id=? AND channel_id=?",
             (existing["discord_id"], existing["bot_id"], existing["channel_id"]),
         )
         if not sent:
             return content
+        if json.loads(sent["routing"]).get("kind") == "voice_note":
+            return sent["content"]
         queued = self.store.one(
             "SELECT data FROM events WHERE turn_id=? AND kind='delivery.queued' AND json_extract(data,'$.outbox_id')=? ORDER BY seq DESC LIMIT 1",
             (sent["turn_id"], sent["id"]),
@@ -1252,6 +1254,7 @@ class DiscordManager:
         destination_guard=None,
         panel=None,
         reasoning=None,
+        voice_note=None,
     ):
         client = self.clients.get(bot["id"])
         if not client or not client.is_ready():
@@ -1271,6 +1274,27 @@ class DiscordManager:
                     raise DeliveryError("Owner DM destination or capability is no longer valid")
             if isinstance(channel, discord.ForumChannel):
                 raise DeliveryError("Forum messages must target a thread; create one with !thread")
+            if voice_note is not None:
+                from .voice_notes import send_native
+
+                if len(paths) != 1 or content or panel or reasoning:
+                    raise DeliveryError(
+                        "A native voice note requires one audio file and no text or components"
+                    )
+                reference = (
+                    discord.MessageReference(
+                        message_id=int(reply_to), channel_id=int(channel_id), fail_if_not_exists=strict_reply
+                    )
+                    if reply_to
+                    else None
+                )
+                if destination_guard:
+                    try:
+                        destination_guard()
+                    except ControlError as exc:
+                        raise DeliveryError(str(exc)) from exc
+                async with asyncio.timeout(60):
+                    return await send_native(client, channel_id, paths[0], voice_note, nonce, reference)
             files = [discord.File(path) for path in paths]
             footer = self.footer(bot) if footer is None else footer
             message, attached = model_message(content, footer)

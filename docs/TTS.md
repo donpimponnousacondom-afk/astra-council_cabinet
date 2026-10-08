@@ -1,5 +1,8 @@
 # Speech generation and voice discovery
 
+For saved cloning, one-shot references and native Discord voice notes, use the
+separate opt-in [Frenchy TTS experiment](FRENCHY_TTS.md).
+
 The existing `tts` plugin generates current-turn audio artifacts. Enable it
 globally and grant it to a bot through the existing capability controls. Its
 credential stays in the vault: per-bot override first, then the global plugin key.

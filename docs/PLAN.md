@@ -1,5 +1,12 @@
 # Implementation and acceptance plan
 
+On 2026-10-08 the owner requested a separate experimental Frenchy TTS plugin:
+preset discovery and choice, emotions/languages from provider metadata, saved
+cloning, one-shot reference audio and native Discord voice notes with a separate
+written answer. Copy this installation's TTS settings/key and switch Curie's
+grant, preserving Marie Excited; new installations stay opt-in. See
+[Frenchy TTS](FRENCHY_TTS.md) for the implemented contract and provider limits.
+
 On 2026-10-07 the owner authorized a one-use user-role recovery note containing
 that bot's retained failed-response draft and readable reasoning, including
 content-filtered output. Append it after the existing prompt, let the bot use or
