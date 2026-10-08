@@ -394,6 +394,7 @@ def page_result(body, limit, *, available_readers=(), tool_name=None):
                 **metadata,
                 "document_id": body["document_id"],
                 "result_id": body["result_id"],
+                "truncated": end < total,
                 "next_tool": continuation_reader,
                 "next": {
                     "operation": "read",

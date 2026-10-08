@@ -200,6 +200,7 @@ async def test_paged_native_fetch_keeps_http_failure_evidence_and_exhausted_roun
     )
     value = await kernel.registry.call_raw("web_fetch", dumps({"url": url}), context, "fetch")
     assert value["result_is_paged"] and value["text"]
+    assert value["truncated"] is True and value["has_more"] is True
     assert value["url"] == url and value["status"] == "ready"
     assert value["http_response"]["http_status"] == 404
     assert value["http_response"]["http_reason"] == "Not Found"
