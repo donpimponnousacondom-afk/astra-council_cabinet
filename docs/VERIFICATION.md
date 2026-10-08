@@ -44,6 +44,15 @@ Correction-focused run: 129 passed, exit 0, 26.70 seconds (`test_voice_notes`,
 `test_runtime`, `test_engrams`, `test_engram_integration`, `test_response_recovery`).
 Ruff lint passed. This is a focused pass, not a second full local collection.
 
+Review follow-up scoped native companions to ordinary final answers. Explicit
+`discord_send` keeps the generated OGG in its existing single file-delivery
+receipt, so successful routed text cannot hide a failed companion upload. Its
+status lookup also distinguishes routing destinations from ordinary voice-note
+metadata. A regression exercises both boundaries. General cross-turn replay of
+tool side effects is pre-existing and is not changed by this feature.
+Final boundary-focused run: 63 passed, exit 0, 16.43 seconds (`test_voice_notes`,
+`test_frenchy_tts`, `test_discord_dispatch`, `test_engram_integration`); Ruff passed.
+
 ## Character-based tool-result pages (2026-10-08)
 
 

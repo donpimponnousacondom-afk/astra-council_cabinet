@@ -131,6 +131,27 @@ async def test_revoked_configuration_after_text_prevents_voice(kernel):
     assert kernel.engine.transport.send.await_count == 1
 
 
+async def test_routed_post_keeps_audio_in_its_single_delivery_receipt(kernel):
+    from test_discord_dispatch import setup, call, send
+
+    context = setup(kernel)
+    artifact_id = note(kernel, context)
+    result = await call(kernel, context, send(artifact_ids=[artifact_id]))
+    assert result["ok"] and result["status"] == "sent"
+    assert kernel.engine.transport.send.await_count == 1
+    args = kernel.engine.transport.send.await_args
+    assert "voice_note" not in args.kwargs and len(args.args[4]) == 1
+    rows = kernel.store.rows("SELECT * FROM outbox")
+    assert len(rows) == 1 and json.loads(rows[0]["artifacts"]) == [artifact_id]
+    # Ordinary voice companions carry routing metadata, but are not cross-posts.
+    kernel.store.execute(
+        "UPDATE outbox SET routing=? WHERE id=?",
+        (dumps({"kind": "voice_note", "parent_outbox_id": "parent"}), rows[0]["id"]),
+    )
+    status = await call(kernel, context, {"operation": "status", "delivery_id": rows[0]["id"]})
+    assert status["ok"] is False and "No routed delivery" in status["error"]
+
+
 @pytest.mark.parametrize("cancel", [False, True])
 async def test_native_gateway_payload_and_file_cleanup(kernel, tmp_path, cancel):
     bot = configured(kernel)

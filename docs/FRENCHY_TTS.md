@@ -59,8 +59,9 @@ the next cadence does not treat the original human input as unanswered.
 
 `delivery:"file"` opts out for a call; operator configuration can make it the
 default. Slash-command and panel interaction responses retain ordinary file
-delivery in their existing response scope. They do not spawn public companion
-messages. Confirmed ordinary notes store the supplied speech text as a labelled
+delivery in their existing response scope. Explicit `discord_send` cross-posts
+also attach the OGG as a file, preserving their single delivery receipt. These
+paths do not spawn companion messages. Confirmed ordinary notes store the supplied speech text as a labelled
 canonical transcript; it is not a public text caption or speech recognition.
 
 Native output is mono 48 kHz Opus in OGG at 32 kbit/s, with measured duration and

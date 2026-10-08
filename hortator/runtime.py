@@ -1366,7 +1366,13 @@ class Engine:
         content = self.vault.redact(strip_reasoning(content))
         if not content:
             raise ControlError("No visible content remained after removing reasoning")
-        paths, voice_notes = self.registry.voice_notes.split(artifact_ids, context)
+        if routing:
+            # Explicit cross-post actions retain their single, atomic file receipt.
+            # Native companions belong to ordinary conversation answers only.
+            paths = [self.registry.resolve_artifact(artifact_id, context) for artifact_id in artifact_ids]
+            voice_notes = []
+        else:
+            paths, voice_notes = self.registry.voice_notes.split(artifact_ids, context)
         voice_ids = {note["artifact_id"] for note in voice_notes}
         regular_ids = [artifact_id for artifact_id in artifact_ids if artifact_id not in voice_ids]
         if len(content) > 12000:

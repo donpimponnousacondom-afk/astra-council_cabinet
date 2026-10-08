@@ -22,7 +22,7 @@ DESCRIPTION = (
     "current-turn audio instead of a Discord attachment. References must be audio up to 30 seconds. "
     "Saved cloning can require a paid provider plan. Do not guess voice names or claim a clone was created without a returned ID. A timed-out clone "
     "may already exist: list custom voices before trying again. Prepare the artifact with discord_attach "
-    "and answer normally. Slash/panel interaction replies retain ordinary audio attachments."
+    "and answer normally. Slash/panel replies and explicit discord_send posts retain ordinary audio attachments."
 )
 
 PARAMETERS = copy.deepcopy(tts.PARAMETERS)
