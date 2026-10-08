@@ -1,6 +1,7 @@
 import asyncio
 import json
 import errno
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
@@ -222,7 +223,31 @@ async def test_compaction_retries_same_context_without_reintroducing_output_caps
 async def test_slash_deadline_cancels_retry_wait(kernel, monkeypatch):
     bot = enable(kernel)
     policy(kernel, delay=10)
-    monkeypatch.setattr("hortator.slash_commands.MAX_SECONDS", 0.1)
+    monkeypatch.setattr("hortator.slash_commands.MAX_SECONDS", 60)
+    deadline = None
+
+    def capture_timeout(seconds):
+        nonlocal deadline
+        if seconds > 30:
+            deadline = asyncio.timeout(None)
+            return deadline
+        return asyncio.timeout(seconds)
+
+    # Expire the real asyncio deadline once the retry is scheduled, rather than
+    # racing cold context preparation against a 100-ms wall-clock deadline.
+    monkeypatch.setattr(
+        "hortator.slash_commands.asyncio", SimpleNamespace(**{**vars(asyncio), "timeout": capture_timeout})
+    )
+    emit = kernel.store.emit
+
+    def expire_on_retry(kind, *args, **kwargs):
+        value = emit(kind, *args, **kwargs)
+        if kind == "request.retry_scheduled":
+            assert deadline is not None
+            deadline.reschedule(asyncio.get_running_loop().time())
+        return value
+
+    monkeypatch.setattr(kernel.store, "emit", expire_on_retry)
     await install_client(kernel, lambda _: httpx.Response(503, json={"error": "busy"}))
     item = interaction(bot)
     await kernel.connector.slash.receive(bot["id"], item)

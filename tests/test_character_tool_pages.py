@@ -6,6 +6,9 @@ import json
 from dataclasses import replace
 from unittest.mock import AsyncMock
 
+import pytest
+
+from hortator.http_evidence import HTTPResponse
 from hortator.models import Bot
 from hortator.plugins import ToolContext
 from hortator.store import dumps
@@ -149,25 +152,36 @@ def test_legacy_token_setting_is_accepted_but_does_not_control_character_pages()
     assert "tool_working_set_tokens" not in bot.model_dump()
 
 
-async def test_plugin_without_native_reader_gets_scoped_fallback_and_preserves_source_grants(kernel):
+@pytest.mark.parametrize("shape", ["object", "list", "string", "foreign_source"])
+async def test_plugin_without_native_reader_gets_scoped_fallback_and_preserves_source_grants(kernel, shape):
     context = grant(kernel, "research_assistant")
     expected = {"rows": ["🙂 observation " * 3000], "tail": "complete"}
-    handler = AsyncMock(return_value=expected)
+    result = expected if shape == "object" else [expected] if shape == "list" else dumps(expected)
+    if shape == "foreign_source":
+        result = {
+            "source_result_id": "plugin-document-42",
+            "text": "x" * 40000,
+            "range": {"start": 0, "end": 40000},
+            "total_chars": 40000,
+        }
+    handler = AsyncMock(return_value=result)
     kernel.registry.specs["research_assistant"] = replace(
         kernel.registry.specs["research_assistant"], handler=handler
     )
     names = {x["function"]["name"] for x in kernel.registry.schemas(context)}
     assert names == {"research_assistant", "tool_result_read"}
-    first = await kernel.registry.call("research_assistant", {"operation": "list"}, context, "list")
+    first = await kernel.registry.call_raw(
+        "research_assistant", dumps({"operation": "list"}), context, "list"
+    )
     assert first["next_tool"] == "tool_result_read"
     foreign = ToolContext(context.bot, "other-channel", context.turn_id)
     denied = await kernel.registry.call("tool_result_read", first["next"], foreign, "foreign")
     assert not denied["ok"] and "another bot, channel or turn" in denied["error"]
     parts, page = [first["text"]], first
     while page["next"]:
-        page = await kernel.registry.call("tool_result_read", page["next"], context, "page")
+        page = await kernel.registry.call_raw("tool_result_read", dumps(page["next"]), context, "page")
         parts.append(page["text"])
-    assert json.loads("".join(parts)) == expected
+    assert json.loads("".join(parts)) == (result if shape == "object" else {"value": result})
     handler.assert_awaited_once()
     # A newly granted reader cannot recover pages whose original grant was revoked.
     current = grant(kernel, "memory")
@@ -175,3 +189,35 @@ async def test_plugin_without_native_reader_gets_scoped_fallback_and_preserves_s
         "memory", {"operation": "read_result", "result_id": page["result_id"]}, current, "revoked"
     )
     assert not denied["ok"] and "grant" in denied["error"]
+
+
+async def test_paged_native_fetch_keeps_http_failure_evidence_and_exhausted_round_is_explicit(kernel):
+    context = grant(kernel, "web_fetch")
+    url = "https://example.com/error"
+    text = "\n" * 18000
+    kernel.registry.fetched_documents.fetcher = AsyncMock(
+        return_value=HTTPResponse(text.encode(), "text/plain", url, 404, "Not Found")
+    )
+    value = await kernel.registry.call_raw("web_fetch", dumps({"url": url}), context, "fetch")
+    assert value["result_is_paged"] and value["text"]
+    assert value["url"] == url and value["status"] == "ready"
+    assert value["http_response"]["http_status"] == 404
+    assert value["http_response"]["http_reason"] == "Not Found"
+    assert value["http_response"]["capture_complete"] is True
+    raw = await kernel.registry.call_raw(
+        "web_fetch", dumps(value["http_response"]["read_response"]), context, "response"
+    )
+    assert '"http_status":404' in raw["text"]
+    # Fresh native output can also be first projected by the working-set bound
+    # when the result itself fits the per-result ceiling but tool rounds ran out.
+    fresh = {**value, "text": "x" * 18000, "range": {"start": 0, "end": 18000}}
+    fresh.pop("result_is_paged")
+    extras = [
+        {"role": "assistant", "tool_calls": [tool("web_fetch", {"url": url})]},
+        {"role": "tool", "tool_call_id": "call", "content": dumps(fresh)},
+    ]
+    bounded, _ = bound_exchanges(extras, 12000, available_readers=())
+    page = json.loads(bounded[-1]["content"])
+    assert page["text"] and page["has_more"] and page["reread_unavailable"]
+    assert page["next"] is None and page["next_tool"] is None
+    assert page["http_response"]["http_status"] == 404

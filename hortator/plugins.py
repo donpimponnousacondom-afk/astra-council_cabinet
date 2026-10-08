@@ -911,7 +911,7 @@ class Registry:
             return result
 
     async def call_raw(self, name, raw, context, call_id):
-        if not self.allowed(name, context) or not self.specs[name].model_tool:
+        if not self.allowed(name, context) or not self.spec_for(name, context).model_tool:
             return await self.call(name, None, context, call_id)
         try:
             args = parse_arguments(raw)

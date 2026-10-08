@@ -58,11 +58,11 @@ async def test_bot_configuration_and_context_are_explicit_separate_inspections(k
     assert "persona" in detail and "contexts" not in detail
     result = await call(kernel, context, {"resource": "context", "id": "ada"}, "context")
     assert result["result_is_paged"]
-    assert len(dumps(result)) < 1000
+    assert result["text"] and len(dumps(result)) <= 30000
     assert not result.get("truncated")
     # The handle is the complete original, not a second record of the notice.
     stored = kernel.store.one("SELECT content FROM tool_result_evidence WHERE id=?", (result["result_id"],))
-    assert json.loads(stored["content"])[0]["summary"] == summary
+    assert json.loads(stored["content"])["value"][0]["summary"] == summary
     pieces = []
     args = {**result["read_response"], "length": 18000}
     while args:
@@ -72,7 +72,8 @@ async def test_bot_configuration_and_context_are_explicit_separate_inspections(k
         pieces.append(page["text"])
         args = page["next"]
     assert "".join(pieces) == stored["content"]
-    assert json.loads("".join(pieces))[0]["summary"].endswith("FINAL SUMMARY MARKER")
+    assert json.loads("".join(pieces))["value"][0]["summary"].endswith("FINAL SUMMARY MARKER")
+    assert result["text"] == stored["content"][: result["range"]["end"]]
     assert not kernel.registry.allowed("workspace", context)
 
 
@@ -138,7 +139,9 @@ async def test_large_inspections_redact_secrets_before_persisting_and_paging(ker
     row = kernel.store.one("SELECT content FROM tool_result_evidence WHERE id=?", (result["result_id"],))
     assert secret not in row["content"]
     assert "[REDACTED] end-of-evidence" in row["content"]
-    tail = await call(kernel, context, {**result["read_response"], "offset": len(row["content"]) - 100})
+    tail = await call(
+        kernel, context, {**result["read_response"], "offset": row["content"].index("[REDACTED]")}
+    )
     assert secret not in tail["text"] and "end-of-evidence" in tail["text"]
 
 

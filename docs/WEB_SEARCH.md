@@ -91,14 +91,14 @@ Both starts the two searches concurrently inside one tool call. It interleaves t
 | `engine_status` | Each attempted engine's status, count, duration, and failure category/message when applicable |
 | `partial` | One engine failed while another completed successfully |
 | `fallback_used` | Auto attempted DuckDuckGo after Brave |
-| `truncated` | The combined preview list was shortened to preserve structured output limits |
+| `truncated` | Whether extracted results were discarded; false for the current complete saved selection (prompt pages use `result_is_paged`/`has_more`) |
 | `error` | Summary when all selected engines failed; otherwise null |
 
 Missing Brave credentials, HTTP responses, transport failures, overlong Brave queries, invalid responses and DuckDuckGo challenges remain visible in `engine_status`. Auto can still return DuckDuckGo results after a Brave configuration error; Both preserves whichever engine succeeded. An explicit Brave-only request fails when its key is missing. If all selected engines fail, the model receives structured engine evidence plus full usage, and the ledger records `tool.failed`. Do not repeat an identical failed request blindly or claim the failed engine supplied evidence.
 
 Brave accepts at most 600 query characters or 75 words; the shared tool accepts up to 1,000 characters for DuckDuckGo. Queries are not silently truncated or split. A Brave query-limit failure permits Auto's DuckDuckGo fallback. Each engine has a 25-second wall-clock deadline and a 1,000,000-byte decompressed download ceiling. Redirects are not followed, and the Brave subscription token is sent only on its own engine request. No challenge solver, account impersonation, browser-cookie import or host-shell workaround is part of this adapter.
 
-The parser bounds HTML structure and strips script/style text. Titles are capped at 300 characters, snippets at 1,000 and URLs at 2,048. Combined results stay below a 48,000-character serialized preview budget, leaving room for engine status within the registry cap. Search never downloads result pages or injects their full contents into a model context.
+The parser bounds HTML structure and strips script/style text. Titles are capped at 300 characters, snippets at 1,000 and URLs at 2,048. The complete requested selection is saved before the shared character-based result pager prepares a prompt view. Large result lists are recoverable through `read_result`; they are no longer destructively shortened to the former 48,000-character preview allowance. Search never downloads result pages or injects their full contents into a model context.
 
 `web_search.engine_completed` and `web_search.engine_failed` belong to console scope **tools (`t`)**. Use **T** and the existing evidence paging keys to inspect the original call and stored result. One engine's warning alongside a successful `tool.completed` means partial search recovery, not a model/provider completion failure. Search events do not change shared model-provider health.
 

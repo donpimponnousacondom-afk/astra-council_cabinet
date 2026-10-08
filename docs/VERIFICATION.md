@@ -29,6 +29,26 @@ historical claims retain their original date and scope.
   CI and deployment outcomes are recorded after completion. Ignored receipts:
   `audit/2026-10-08/character-tool-pages/`.
 
+- Initial full local collection: **1,980 passed / three failed / one skipped**;
+  initial PR CI: **1,963 passed / two failed / 19 skipped**. Inspector/search
+  assertions still expected destructive truncation; the local-only failure was
+  a 100-ms slash deadline racing preparation. Updated assertions reconstruct
+  all saved output; the deadline test now expires the real asyncio timeout at
+  the retry boundary, without depending on machine preparation speed.
+- Independent review found mismatched coordinates for non-object results,
+  missing dynamic-reader dispatch, plugin/source identifier collisions, lost
+  HTTP metadata and unavailable final-round continuation hints. Fixes normalize
+  new evidence envelopes before storage, dispatch the dynamic reader through
+  the normal model path, retain HTTP diagnostics, and explicitly mark exhausted
+  reads. Search's earlier 48,000-character destructive list cap is removed;
+  its existing per-engine selection and input/download/field bounds remain.
+- Corrected expanded suite: **165 passed in 42.92 s**. Includes real producer
+  shapes, scalar/list/foreign-source envelopes, inspector read-back, 20-result
+  search reconstruction, HTTP response evidence, memory/grant boundaries,
+  background receipts, retries and final no-tools rounds. Full corrected-head
+  gates and dual-review verdicts are recorded on [PR #90](https://github.com/donpimponnousacondom-afk/astra-council_cabinet/pull/90)
+  after completion; these focused results alone do not establish readiness.
+
 ## Native audio input (2026-10-07)
 
 - Base `7719e8102a89a7abe4ef88eefd172ede461e27bf`, branch `feat/audio-input`.

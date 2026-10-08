@@ -77,6 +77,21 @@ class ToolEvidence:
 
     def record(self, context, name, call_id, result, *, source_result_id=None):
         result_id = uid("result_")
+        # Persist the same JSON object that the model sees, before adding the
+        # receipt ID. Scalar/list adapters use a value envelope consistently.
+        wrap = (
+            not isinstance(result, dict)
+            or "result_id" in result
+            or ("source_result_id" in result and not source_result_id)
+        )
+        result = self.vault.redact({"value": result} if wrap else dict(result))
+        if name == "council_inspect":
+            result["read_response"] = {
+                "resource": "read_result",
+                "result_id": result_id,
+                "offset": 0,
+                "length": 6000,
+            }
         required = {name}
         if source_result_id:
             source = self.store.one(
@@ -100,22 +115,7 @@ class ToolEvidence:
                 dumps(sorted(required)),
             ),
         )
-        reference = (
-            {**result, "result_id": result_id}
-            if isinstance(result, dict)
-            else {
-                "value": result,
-                "result_id": result_id,
-            }
-        )
-        if name == "council_inspect":
-            reference["read_response"] = {
-                "resource": "read_result",
-                "result_id": result_id,
-                "offset": 0,
-                "length": 6000,
-            }
-        return reference
+        return {**result, "result_id": result_id}
 
     def read(self, args, context, allowed):
         row = self.store.one(
@@ -310,6 +310,9 @@ def page_result(body, limit, *, available_readers=(), tool_name=None):
         and isinstance(body.get("text"), str)
         and isinstance(body.get("range"), dict)
     )
+    continuation_reader = "web_fetch" if native and "web_fetch" in available_readers else reader
+    if native and "web_fetch" not in available_readers:
+        continuation_reader = None
     is_page = bool(body.get("source_result_id")) and isinstance(body.get("text"), str)
     if native or is_page:
         text = body["text"]
@@ -332,6 +335,7 @@ def page_result(body, limit, *, available_readers=(), tool_name=None):
             "state",
             "task_budget",
             "partial",
+            "truncated",
             "rejected_results",
             "http_status",
             "http_reason",
@@ -339,9 +343,45 @@ def page_result(body, limit, *, available_readers=(), tool_name=None):
             "error_count",
             "offset",
             "submission_id",
+            "url",
+            "status",
+            "local_issue",
+            "outcome",
+            "content_type",
+            "content_sha256",
+            "fetched_at",
+            "expires_at",
         )
         if k in body and len(dumps(body[k])) <= 1200
     }
+
+    def http_summary(http):
+        # Native document pages address extracted text, not this response JSON.
+        # Keep the HTTP outcome and its evidence handle visible independently.
+        summary = {
+            key: value
+            for key, value in http.items()
+            if key not in ("body", "response_headers", "redirects") and len(dumps(value)) <= 1200
+        }
+        omitted = [key for key in http if key not in summary]
+        if omitted:
+            summary["paged_fields"] = omitted
+        return summary
+
+    http = body.get("http_response")
+    if isinstance(http, dict):
+        metadata["http_response"] = http_summary(http)
+    if isinstance(body.get("engine_status"), list):
+        metadata["engine_status"] = []
+        for engine in body["engine_status"]:
+            summary = {
+                key: engine[key]
+                for key in ("engine", "status", "count", "category", "error", "local_issue")
+                if key in engine and len(dumps(engine[key])) <= 1200
+            }
+            if isinstance(engine.get("http_response"), dict):
+                summary["http_response"] = http_summary(engine["http_response"])
+            metadata["engine_status"].append(summary)
     if body.get("job_id"):
         following = body.get("job_next") or body.get("next")
         if isinstance(following, dict) and following.get("job_id"):
@@ -354,14 +394,14 @@ def page_result(body, limit, *, available_readers=(), tool_name=None):
                 **metadata,
                 "document_id": body["document_id"],
                 "result_id": body["result_id"],
-                "next_tool": "web_fetch",
+                "next_tool": continuation_reader,
                 "next": {
                     "operation": "read",
                     "document_id": body["document_id"],
                     "offset": end,
                     "length": min(RESULT_PREVIEW_CHARS, max(1, length)),
                 }
-                if end < total
+                if continuation_reader and end < total
                 else None,
             }
         else:
@@ -388,7 +428,7 @@ def page_result(body, limit, *, available_readers=(), tool_name=None):
                     "offset": start,
                     "length": min(RESULT_PREVIEW_CHARS, max(1, length)),
                 }
-        if not reader and not native:
+        if not continuation_reader:
             value["reread_unavailable"] = True
         return {
             **value,
@@ -396,7 +436,7 @@ def page_result(body, limit, *, available_readers=(), tool_name=None):
             "notice": (
                 "Partial view of saved tool output. Only the text in range is present. "
                 "Follow next with next_tool to read more; do not repeat the original action."
-                if reader or native
+                if continuation_reader
                 else "Partial view of saved tool output. No result reader is available this round. "
                 "Do not claim the rest was read or repeat the original action."
             ),
