@@ -16,7 +16,7 @@ def configure(kernel, count):
             "interval_seconds": 1,
             "max_tool_rounds": 3,
             "max_calls_per_round": count,
-            "tool_working_set_tokens": 6000,
+            "tool_working_set_chars": 120000,
             "cooldown_seconds": 0,
         },
     )

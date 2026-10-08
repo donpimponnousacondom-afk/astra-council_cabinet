@@ -136,11 +136,11 @@ export function WorkTaskSettings({
               7200,
             ],
             [
-              "tool_working_set_tokens",
-              "Active tool context (estimated tokens)",
-              6000,
-              512,
-              24000,
+              "tool_working_set_chars",
+              "Active tool context (characters)",
+              120000,
+              12000,
+              1000000,
             ],
           ] as [string, string, number, number, number][]
         ).map(([key, label, fallback, min, max]) => (

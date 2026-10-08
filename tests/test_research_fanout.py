@@ -113,18 +113,31 @@ async def test_operator_limits_above_previous_caps_and_all_outstanding_jobs_rema
     for job in jobs:
         assert job["job_id"]
     inventory = kernel.jobs.inventory(bot_id="ada", plugin=ID)
-    listing = await call(kernel, context, operation="list")
+
+    async def read_inventory():
+        result = await call(kernel, context, operation="list")
+        if not result.get("result_is_paged"):
+            return result
+        parts = [result["text"]]
+        while result["next"]:
+            result = await kernel.registry.call(
+                result["next_tool"], result["next"], context, "inventory-page"
+            )
+            parts.append(result["text"])
+        return json.loads("".join(parts))
+
+    listing = await read_inventory()
     assert len(inventory) == len(listing["jobs"]) == 60
     assert listing["capacity"]["available_slots"] == 4
     for job in jobs[:35]:
         await call(kernel, context, operation="read_result", job_id=job["job_id"])
-    listing = await call(kernel, context, operation="list")
+    listing = await read_inventory()
     assert len(listing["jobs"]) == 25 + 30  # All pending + bounded recent settled history.
     assert len(kernel.jobs.inventory(bot_id="ada")) == 60
     for job in jobs[35:]:
         await call(kernel, context, operation="read_result", job_id=job["job_id"])
     assert len(kernel.jobs.inventory(bot_id="ada")) == 50
-    assert len((await call(kernel, context, operation="list"))["jobs"]) == 30
+    assert len((await read_inventory())["jobs"]) == 30
 
 
 @pytest.mark.parametrize("change", ["pause", "plugin", "allowance"])
@@ -255,7 +268,7 @@ async def test_engine_charges_one_call_per_researcher_and_preserves_round_budget
             "interval_seconds": 1,
             "max_tool_rounds": 1,
             "max_calls_per_round": calls_per_round,
-            "tool_working_set_tokens": 24000,
+            "tool_working_set_chars": 120000,
         },
     )
     set_limit(kernel, 16)

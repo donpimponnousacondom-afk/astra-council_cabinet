@@ -161,9 +161,10 @@ class Service:
                 "work_task_rounds",
                 "work_task_calls_per_round",
                 "work_task_seconds",
-                "tool_working_set_tokens",
+                "tool_working_set_chars",
             ):
                 value.setdefault(field, SCHEMAS["bots"].model_fields[field].default)
+            value.pop("tool_working_set_tokens", None)
             value["token_configured"] = bool(self.vault.get(f"bot/{value['id']}/token"))
             value["key_override_configured"] = bool(self.vault.get(f"bot/{value['id']}/provider_key"))
             value["plugin_keys_configured"] = [

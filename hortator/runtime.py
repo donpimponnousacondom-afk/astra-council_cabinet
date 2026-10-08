@@ -19,7 +19,7 @@ from .provider import strip_reasoning
 from .response_recovery import queue_failed_response, read_note
 from .store import dumps, uid
 from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage
-from .working_set import bound_exchanges, prompt_exchanges
+from .working_set import DEFAULT_WORKING_SET_CHARS, bound_exchanges, prompt_exchanges
 
 
 REPLY_REPAIR = (
@@ -765,16 +765,13 @@ class Engine:
                     - base_meta["estimated_tokens"]
                     - 128
                 )
-                working_limit = min(
-                    bot.get("tool_working_set_tokens", 6000),
-                    max(64, headroom),
-                )
+                working_limit = bot.get("tool_working_set_chars", DEFAULT_WORKING_SET_CHARS)
                 extras, working_meta = await asyncio.to_thread(
                     bound_exchanges,
                     extras,
-                    self.contexts.estimate,
                     working_limit,
                     available_readers=tuple(tool["function"]["name"] for tool in available_tools),
+                    fits_context=lambda exchanges: self.contexts.estimate(exchanges) <= max(64, headroom),
                 )
                 messages, meta = await self.contexts.assemble(
                     budget_bot,
@@ -797,7 +794,7 @@ class Engine:
                     extended_task=document_started,
                     calls_per_round=calls_limit,
                     task_plugin=task_plugin,
-                    tool_working_set={**working_meta, "token_limit": working_limit},
+                    tool_working_set={**working_meta, "char_limit": working_limit},
                 )
                 if document_deadline is not None:
                     meta["document_seconds_remaining"] = max(

@@ -21,8 +21,8 @@ Empty-call and argument-error usage includes the same current guidance.
 
 `read` optionally accepts a `key` to select exactly one note; unmatched keys
 return an empty notes list without changing aggregate budget accounting. Both
-channel and global memory save model replies exceeding 60,000 serialized Unicode
-characters intact and return a 6,000-character first page. Follow `next_tool`
+channel and global memory save model replies exceeding 30,000 serialized Unicode
+characters intact and return a first page of up to 6,000 source characters. Follow `next_tool`
 with the returned `next` arguments until null. Both tools now advertise native
 `read_result` for saved evidence, retaining the original bot/channel/turn and
 transitive source-grant checks. JSON may span pages; `range` and `total_chars`
@@ -106,7 +106,13 @@ The extended budget adds work capacity, never permissions. It does not enable a 
 
 Document files have their own bounded read workflow: 4,000 characters by default, at most 12,000, with a complete `next_read` pinned to the same immutable revision. Exact replacement, append and single-file restoration require an observed `expected_revision` so stale edits are refused. Public-source copies also support a pinned published revision; neither those reads nor ordinary reads grant another bot's write permissions. These operations let small-context models inspect and repair individual assets without resending monolithic HTML or losing access to the original evidence.
 
-Active tool exchanges have a per-bot estimated working-set cap and must fit actual calibrated prompt headroom. Older bodies/pairs may be explicitly omitted from future requests while original evidence stays immutable. Granted `workspace`, `shell` and `web_fetch` support bounded `read_result` with a unique `result_id`; reads enforce original bot/channel/turn and transitive source grants. Native continuation metadata remains unchanged in retained assistant messages. See [the complete contract](AGENTIC_TOOLS.md).
+Active tool exchanges have a per-bot character cap and must also fit overall
+calibrated prompt headroom. New large results return readable character pages
+with exact continuation positions. Older bodies/pairs may be omitted from future
+requests while original evidence stays immutable. Native readers and the reserved
+`tool_result_read` fallback enforce original bot/channel/turn and transitive source
+grants. Native assistant continuation metadata is preserved.
+See [the complete contract](AGENTIC_TOOLS.md#task-and-active-context-budgets).
 
 ## Global memories belong to one bot
 

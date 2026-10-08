@@ -4,6 +4,31 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Character-based tool-result pages (2026-10-08)
+
+- Base `72ff09fc3360f3f35815bdc7b7bd02c064a0078d`, branch
+  `hotfix/character-tool-pages`. Owner authorized shared Claude Code-style
+  character pages, complete saved output and normal dual-review rollout.
+  The [current contract](AGENTIC_TOOLS.md#task-and-active-context-budgets)
+  separates result pages, active exchanges and overall provider-context checks.
+- Read-only inspection of Curie's GLM turns at 17:18–17:25 Europe/Madrid found
+  successful web reads omitted before their first model exposure, repeated
+  large reads, oversized batches, and document/evidence offset confusion.
+  A local replay of the old limiter omitted the 18,000-character fetch at
+  7,786 estimated tokens and the repeated evidence page at 7,157, against the
+  6,000-token allowance. Replaying those same saved replies with the new
+  character policy retains both complete 18,000-character text sections.
+  No provider calls, bot settings or historical request evidence were changed.
+- Focused recovery, research, validation and new character-page regressions:
+  **130 passed in 24.40 s**. New cases include token-dense native web text,
+  batched Unicode/escaped previews, repeated source-coordinate projection,
+  whole-prompt headroom, generic results above the old destructive cutoff,
+  compatibility with old bot fields, and fallback reader scope/grant revocation.
+  These are synthetic transports and local integration, not live model acceptance.
+- Repository Ruff lint/format and diff checks passed. Full-suite, dual-review,
+  CI and deployment outcomes are recorded after completion. Ignored receipts:
+  `audit/2026-10-08/character-tool-pages/`.
+
 ## Native audio input (2026-10-07)
 
 - Base `7719e8102a89a7abe4ef88eefd172ede461e27bf`, branch `feat/audio-input`.

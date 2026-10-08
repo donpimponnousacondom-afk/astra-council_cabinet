@@ -40,11 +40,37 @@ For long reading, call `web_fetch` with `{"operation":"start"}`, then `{"url":"h
 | `work_task_rounds` | 20 | Additional work rounds after the first successful workspace/web start; zero disables this extension |
 | `work_task_calls_per_round` | 8 | Calls allowed in each subsequent extended round, executed sequentially |
 | `work_task_seconds` | 900 | Elapsed extended work deadline, bounded to 30–7,200 seconds |
-| `tool_working_set_tokens` | 6,000 | Maximum estimated active tool-exchange working set; reduced further to fit actual calibrated input headroom |
+| `tool_working_set_chars` | 120,000 | Maximum serialized Unicode characters in active tool exchanges; configurable from 12,000 to 1,000,000 |
 
 The existing `document_task_*` defaults and successful document-start behavior are retained. Only the **first successful task start** of any of these packs can extend a turn. Repeated starts, changing task IDs, starting shell jobs or switching between document/workspace/web tools cannot stack rounds or reset the clock. Zero additional rounds on that first start also prevents another pack from opening a later extension. Normal final-response opportunities, cancellation, provider concurrency, hourly activation and measured daily-cost checks remain in force. Exhausting the time deadline stops work and retains previously saved files; it does not promise a late Discord send.
 
-Before every provider request, the runtime counts the assembled prompt, including schemas, fixed conversation, summary, current tool exchanges and trusted remaining-budget facts. Older large result bodies may be replaced by explicit references, then entire completed call/result pairs may leave the active prompt. Retained assistant continuation fields/signatures remain unchanged. The newest bounded result is retained whenever it fits. No helper model or unmetered summary request is used.
+Tool-result pages use character counts, independent of the generation model's
+tokenizer. The inline ceiling is **30,000 serialized Unicode characters per
+result**. Larger replies are saved completely before returning a readable preview
+of up to **6,000 source characters**, shortened further when JSON escaping or
+metadata requires it. `result_is_paged`, `range`, `total_chars`, `has_more`,
+`next_tool` and `next` identify exactly what was shown and how to continue.
+Native fetched-text pages keep document offsets; evidence pages keep offsets in
+the original saved JSON. Repeated paging never nests wrappers or repeats the
+original action. The registry's former generic 50,000-character destructive
+fallback is removed for all plugins.
+
+The active exchange budget is separate from the per-result ceiling. Older large
+bodies may become explicit references, then complete old call/result pairs may
+leave the active prompt. Fresh results are shortened into readable pages when a
+batch does not fit; one large result does not automatically hide its siblings.
+If even the batch's native assistant payload and minimum protocol metadata cannot
+fit, the complete pair may be omitted with bounded recovery/job receipts.
+Retained assistant continuation fields/signatures remain unchanged. No helper
+model or unmetered summary request is used.
+
+The existing calibrated whole-prompt context check remains separate. It accounts
+for conversation, schemas, summary, response reserve and tool exchanges; it can
+require shorter character pages when actual prompt headroom is low. It is not
+the old fixed 6,000-token tool allowance. Legacy `tool_working_set_tokens` fields
+are accepted on old API/snapshot input but ignored and removed on normal saves.
+Existing records without the new field use 120,000 characters; deployment does
+not rewrite their configuration or change rounds, grants or provider settings.
 
 Successful search results first page duplicated raw HTTP previews/headers when
 the tool working set exceeds its budget, preserving extracted entries and their
@@ -65,11 +91,18 @@ Channel and global memory now also advertise native `read_result`, so their
 own omitted replies can be paged without a web/workspace grant. The same original
 scope and transitive source-grant checks apply through every reader; a reference
 does not grant another tool's capability. [Memory paging](GLOBAL_MEMORY.md)
-preserves oversized replies before limiting their model-facing pages.
+preserves oversized replies before limiting their model-facing pages. When a bot
+has callable tools but none of these native readers, the harness advertises
+`tool_result_read(result_id, offset, length)` as a fallback. This is a reserved
+read-only runtime tool, not a dashboard plugin or an extra capability grant. It
+rechecks the original tool and transitive grants and enforces the same bot,
+channel and turn boundary. It consumes ordinary tool-call/round budgets.
 An exhausted tool budget or absent reader yields `reread_unavailable`, with no
 invented paging call. Carried references are refreshed for the next round's
 available tools. Paging continuations retain the source and offset, and a complete
-read requires following `next` to null; a partial page is not full verification.
+read requires reaching the reported end; a partial page is not full verification.
+When a reader is unavailable, `next: null` with `reread_unavailable` and
+`has_more: true` means unread text remains, not end of evidence.
 
 When an omitted result was itself a `read_result` page, its recovery arguments
 point to `source_result_id` at the original `range.start`, not at the new page's
@@ -123,3 +156,7 @@ The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
 
 - Workspace, fetched-document and job bytes belong outside Git and in complete backups. Preserve active references during retention cleanup. One successful document/workspace/web task start may extend a turn; switching tools must never renew that budget. Active-prompt minimization must leave original request/tool evidence intact and recheck source grants on rereads.
+- On 2026-10-08 the owner chose character-based pages and recoverable saved output,
+  following Claude Code conventions across the council's different model families.
+  Do not use an OpenAI tokenizer to set tool page sizes. Keep the separate overall
+  provider-context check and preserve original evidence before projection.
