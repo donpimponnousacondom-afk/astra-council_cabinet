@@ -46,6 +46,7 @@ from .web_search import (
     DESCRIPTION as SEARCH_DESCRIPTION,
     PARAMETERS as SEARCH_PARAMETERS,
 )
+from . import tts as speech
 
 
 def schema(properties, required=()):
@@ -339,12 +340,13 @@ class Registry:
             PluginSpec(
                 "tts",
                 "Text to speech",
-                "Generate an audio attachment from text. Returns an artifact ID.",
-                schema({"text": {"type": "string", "minLength": 1, "maxLength": 4000}}, ("text",)),
+                speech.DESCRIPTION,
+                speech.PARAMETERS,
                 self.tts,
                 {
                     "endpoint": "https://api.openai.com/v1/audio/speech",
                     "request_json": {"model": "tts-1", "voice": "alloy", "response_format": "mp3"},
+                    "api_format": "auto",
                 },
             )
         )
@@ -517,6 +519,7 @@ class Registry:
             self.specs[name].keyless = True
         for name in (
             "shell",
+            "tts",
             "web_search",
             "memory",
             "global_memory",
@@ -944,13 +947,8 @@ class Registry:
             async with client.stream(
                 "POST", config["endpoint"], json=body, headers=headers, timeout=100
             ) as response:
-                response.raise_for_status()
-                data = bytearray()
-                async for chunk in response.aiter_bytes():
-                    data.extend(chunk)
-                    if len(data) > 20_000_000:
-                        raise ControlError("Media response exceeds 20 MB")
-                return bytes(data), response.headers.get("content-type", "application/octet-stream")
+                data = await speech.read_response(response, 20_000_000)
+                return data, response.headers.get("content-type", "application/octet-stream")
 
     def artifact(self, data, mime, suffix, context):
         if len(data) > 8_000_000:
@@ -989,13 +987,11 @@ class Registry:
         return {**self.artifact(image, mime, suffix, context), "usage": result.get("usage")}
 
     async def tts(self, args, context, config, key):
-        body = {**config.get("request_json", {}), "input": args["text"]}
-        fmt = body.get("response_format", "mp3")
-        if fmt not in ("mp3", "opus", "aac", "flac", "wav", "pcm"):
-            raise ControlError("Unsupported audio response format")
+        if args.get("operation") == "voices":
+            return await speech.voices(args, config, key)
+        body, fmt = speech.speech_body(args, config)
         data, mime = await self.media_request(config, key, body)
-        if not data or "json" in mime or "html" in mime:
-            raise ControlError("TTS endpoint did not return audio")
+        data, mime = speech.decode_audio(data, mime, fmt)
         return self.artifact(data, mime, "." + fmt, context)
 
     async def memory(self, args, context, config, key):

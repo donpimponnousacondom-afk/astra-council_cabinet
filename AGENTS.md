@@ -106,6 +106,7 @@ including superseded behavior, and must not be treated as current configuration.
 - Experimental Parallel Fast search: [DUMB_SEARCH.md](docs/DUMB_SEARCH.md).
 - Shared image intake and per-bot visibility: [VISION.md](docs/VISION.md).
 - Opt-in native voice-note/audio input: [AUDIO_INPUT.md](docs/AUDIO_INPUT.md).
+- Speech generation and authenticated voice discovery: [TTS.md](docs/TTS.md).
 - Profile pricing and usage provenance: [PRICING.md](docs/PRICING.md).
 - Document ownership, publication and SSH identity: [DOCUMENTS.md](docs/DOCUMENTS.md).
 - Scoped agentic tools and task budgets: [AGENTIC_TOOLS.md](docs/AGENTIC_TOOLS.md).

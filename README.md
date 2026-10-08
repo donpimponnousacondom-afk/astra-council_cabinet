@@ -130,7 +130,7 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 | `dumb_search` | Opt-in [Parallel Fast search experiment](docs/DUMB_SEARCH.md) | Parallel plugin key; one search per call; disabled by default |
 | `secretary` | Experimental reminders, snooze and recurring alarms that wake the bot | Keyless, off by default; [setup and behavior](docs/SECRETARY.md) |
 | `image_generation` | Image generation to a Discord attachment | OpenAI-style image endpoint, raw request JSON, key |
-| `tts` | Speech generation to an audio attachment | OpenAI-style speech endpoint, model/voice/options JSON, key |
+| `tts` | Speech generation and provider-specific voice discovery | OpenAI-style or Mistral speech, model/voice/options JSON, key; [voice discovery](docs/TTS.md) |
 | `audio_input` | Hear new voice notes/audio through the current model | Keyless, opt-in, requires ffprobe and audio-capable transport; [audio input](docs/AUDIO_INPUT.md) |
 | `memory` | Persistent bot + channel scoped notes | No key; per-bot budget (default 48,000/channel), 5% temporary headroom, 8,000/note |
 | `council_inspect` | Running version, status, statistics, configuration, context and trajectory queries | Hortator only, for authenticated owner questions; read-only |

@@ -88,6 +88,12 @@ Shell execution requires an existing task: first call **workspace** with `{"oper
 
 ## Normal and extended turns
 
+The existing `tts` plugin supports `{"operation":"voices"}` for authenticated
+Mistral voice discovery and `{"text":"Hello","voice":"<returned-id>"}` for a
+single generation. Existing text-only calls use the saved default. Credentials
+stay in the registry; other providers explicitly report unsupported discovery.
+See [TTS](TTS.md) for pagination, configuration and response handling.
+
 Models send their final answer as ordinary OpenAI assistant `content` (a string or ordered text parts). There is **no `council_speak` tool**. Genuine `tool_calls` execute actions; accompanying narration is not sent to Discord. After reading tool results, the model answers normally or, when enabled for this bot, calls `council_silence` with a short label. Empty/reasoning-only completions are reported as failures, not invented silence decisions. Length/content-filter stops withhold incomplete output and retain private provider evidence.
 
 The per-bot **Allow intentional silence** capability (`allow_silence`, default true) is the operator's control over that terminal decision. False omits its schema at all rounds and adds runtime guidance to finish with a text contribution. A stray disabled call, including `{}`, is refused rather than treated as a successful silent activation or executable discovery; it includes usage and all detectable argument errors. Repeated calls consume the existing round budget and eventually fail visibly, without executing other calls in the rejected batch or adding retries. Other granted actions and attachment preparation remain available. The same rule applies during extended document/workspace/web tasks. No saved persona/shared prompt is rewritten.
