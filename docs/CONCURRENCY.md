@@ -53,8 +53,8 @@ the original requests. Startup backfills older rows; SQLite triggers maintain it
 on request insertion/context updates, and request deletion cascades. Statistics
 and calibration query those scalars without decoding full prompt snapshots.
 The calibration selection, ratio and context/compaction decisions are unchanged.
-Take a consistent pre-deployment backup before this additive schema migration;
-the first backfill reads historical contexts once and can lengthen startup.
+The first backfill reads historical contexts once and can lengthen startup.
+Backups follow the owner's [on-request policy](OPERATIONS.md#backup-and-restore).
 
 Dashboard summaries and on-demand full evidence are specified in
 [API.md](API.md#reporting-summaries). Full persisted evidence is retained.

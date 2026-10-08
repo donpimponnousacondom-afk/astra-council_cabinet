@@ -1,5 +1,11 @@
 # Implementation and acceptance plan
 
+On 2026-10-08 the owner stopped per-feature/hotfix backup creation because local
+disk space is scarce. Backups and Storage Box offloads are on request; retain
+one newest verified usable local recovery copy after requested cleanup. See
+[backup operations](OPERATIONS.md#backup-and-restore) for verification and remote
+storage. No scheduler or automatic deletion policy is introduced.
+
 On 2026-10-08 the owner requested a separate experimental Frenchy TTS plugin:
 preset discovery and choice, emotions/languages from provider metadata, saved
 cloning, one-shot reference audio and native Discord voice notes with a separate
