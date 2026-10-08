@@ -4,6 +4,33 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Private Engram update feedback (2026-10-08)
+
+Commit: draft `feat/engram-feedback`, based on
+`212ba31d5c5e7cdaada505d3269dc28a67c2a3cf`; dirty during focused verification.
+Backend scope: `test_engrams.py`, `test_engram_integration.py`,
+`test_prompt_layers.py`, `test_snapshots.py`, `test_response_recovery.py`,
+`test_voice_notes.py`.
+Backend result: 168 passed, 2 dependency deprecation warnings, exit 0, 36.62 seconds.
+Ruff lint/format and `git diff --check` passed. An earlier focused run had one
+test-fixture failure: the prefix comparison froze epoch time but not the existing
+runtime datetime field. Freezing both clocks corrected that test; no production
+timestamp behavior changed. One initial invocation named a nonexistent prompt
+test file and collected no tests; the corrected six-file selection is above.
+Frontend/browser checks: not run; no UI source changed.
+Classification: mocked provider/Discord integration and isolated SQLite state
+checks; no new live provider calls, Discord sends or production state mutations.
+
+Coverage includes confirmed receipts versus pending/failed/uncertain sends,
+idempotent restart counting, per-bot/conversation scope, resets and old epochs,
+accepted replacements clearing the count, disabled/slash/panel behavior,
+provider limits/filtering/silence exclusions, tool rounds and companion
+cancellation. Prompt tests verify a user-role tail reminder without changing the
+preceding messages, no transcript/public leakage, and no automatic repair call.
+Deployment and live model response to the reminder remain unverified at this
+entry. Current model-written memory remains a complete replacement; this change
+does not add automatic summarization, semantic repair or history reduction.
+
 ## On-request backup policy and full recovery capture (2026-10-08)
 
 Commit: documentation branch `dev/backups-on-request`, based on

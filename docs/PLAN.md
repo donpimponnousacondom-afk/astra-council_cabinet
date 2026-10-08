@@ -1,5 +1,16 @@
 # Implementation and acceptance plan
 
+On 2026-10-08 the owner requested private, factual feedback when Engram updates
+are absent, with counts based on delivered replies and useful rejection reasons.
+They clarified that retaining unchanged memory is a legitimate model choice.
+Keep complete replacement semantics and public jokes before the private block;
+do not force invented updates or add repair inference. See
+[Engram feedback](ENGRAMS.md#feedback-when-memory-stays-unchanged).
+The owner confirmed the reminder remains in scope while switching Curie between
+models; assess memory quality after several days of that experiment. Keep history
+reduction off and memory management with the model, rather than adding automatic
+rewriting or a scheduled monitor.
+
 On 2026-10-08 the owner stopped per-feature/hotfix backup creation because local
 disk space is scarce. Backups and Storage Box offloads are on request; retain
 one newest verified usable local recovery copy after requested cleanup. See

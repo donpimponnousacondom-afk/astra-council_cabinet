@@ -443,6 +443,10 @@ class ContextBuilder:
             protocol = {"id": "engram_protocol", "role": "system", "content": self.engrams.protocol(engram)}
             layers.append(protocol)
             messages.append({"role": protocol["role"], "content": protocol["content"]})
+            if reminder := self.engrams.reminder(engram):
+                feedback = {"id": "engram_feedback", "role": "user", "content": reminder}
+                layers.append(feedback)
+                messages.append({"role": feedback["role"], "content": feedback["content"]})
         if not messages:
             raise ControlError(
                 "All prompt layers are disabled or empty; enable conversation input or supply a prompt"
@@ -485,6 +489,7 @@ class ContextBuilder:
                 "revision": engram["revision"],
                 "covered_through": engram["covered_through"],
                 "reduce_history": engram["config"]["reduce_history"],
+                "missed_updates": engram.get("missed_updates", {"count": 0, "reason": None}),
             }
         return messages, meta
 
