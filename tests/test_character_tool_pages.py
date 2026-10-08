@@ -222,3 +222,47 @@ async def test_paged_native_fetch_keeps_http_failure_evidence_and_exhausted_roun
     assert page["text"] and page["has_more"] and page["reread_unavailable"]
     assert page["next"] is None and page["next_tool"] is None
     assert page["http_response"]["http_status"] == 404
+
+
+def test_zero_fit_native_reference_does_not_advertise_an_unavailable_document_read():
+    body = {
+        "result_id": "result_receipt",
+        "document_id": "fetch_document",
+        "text": "x" * 18000,
+        "range": {"start": 0, "end": 18000},
+        "total_chars": 30000,
+        "next": {"operation": "read", "document_id": "fetch_document", "offset": 18000},
+        "http_response": {"http_status": 404, "url": "https://example.com/" + "x" * 900},
+    }
+    result = page_result(body, 800, available_readers=(), tool_name="web_fetch")
+    assert result["reread_unavailable"]
+    assert not result.get("next") and not result.get("next_tool")
+
+
+async def test_many_tool_pairs_fit_the_final_request_including_message_overhead(kernel):
+    ready(kernel, enabled_plugins=["memory"], max_tool_rounds=20)
+    grant(kernel, "memory", max_tool_rounds=20)
+    profile = kernel.store.get("profiles", "balanced")
+    kernel.store.put("profiles", {**profile, "context_window": 8000, "response_tokens": 1000})
+    handler = AsyncMock(return_value={"notes": "Small observation. " * 25})
+    kernel.registry.specs["memory"] = replace(kernel.registry.specs["memory"], handler=handler)
+    count = 0
+
+    async def handle(request):
+        nonlocal count
+        count += 1
+        body = json.loads(request.content)
+        assert kernel.engine.contexts.estimate_request(body["messages"], body.get("tools", [])) < 7000
+        if count <= 19:
+            return reply(
+                tool("memory", {"operation": "read"}, "first"),
+                tool("memory", {"operation": "read"}, "second"),
+            )
+        return reply(tool("council_silence", {"label": "Completed tool sequence"}))
+
+    await install_client(kernel, handle)
+    await kernel.engine.tick()
+    await settle(kernel)
+    turn = kernel.store.one("SELECT status,error FROM turns")
+    assert turn["status"] == "silent", turn["error"]
+    assert count == 20

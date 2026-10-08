@@ -771,7 +771,9 @@ class Engine:
                     extras,
                     working_limit,
                     available_readers=tuple(tool["function"]["name"] for tool in available_tools),
-                    fits_context=lambda exchanges: self.contexts.estimate(exchanges) <= max(64, headroom),
+                    fits_context=lambda exchanges: (
+                        self.contexts.estimate_request(exchanges, []) <= max(64, headroom)
+                    ),
                 )
                 messages, meta = await self.contexts.assemble(
                     budget_bot,

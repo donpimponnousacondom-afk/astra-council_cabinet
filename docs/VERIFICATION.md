@@ -49,6 +49,14 @@ historical claims retain their original date and scope.
   gates and dual-review verdicts are recorded on [PR #90](https://github.com/donpimponnousacondom-afk/astra-council_cabinet/pull/90)
   after completion; these focused results alone do not establish readiness.
 
+- Further delta review caught contradictory native completion flags, a zero-fit
+  reference retaining unavailable document-read hints, and uncounted per-message
+  overhead in the separate overall-context check. Native flags now follow the
+  exposed range, unavailable references drop action hints, and the fit check
+  includes request-message overhead. A valid 20-round/two-call sequence fails
+  with the old estimator in an isolated shim and completes with the correction.
+  The character/agentic/web-context selection passed **30 tests in 19.29 s**.
+
 ## Native audio input (2026-10-07)
 
 - Base `7719e8102a89a7abe4ef88eefd172ede461e27bf`, branch `feat/audio-input`.

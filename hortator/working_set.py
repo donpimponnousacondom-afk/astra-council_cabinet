@@ -225,10 +225,21 @@ def result_reference(message, *, available_readers=(), tool_name=None):
             )
         else:
             reference["reread_unavailable"] = True
+            reference.pop("_working_set", None)
             notice += (
                 "No result-reading tool is available this round; do not claim the omitted content was read."
             )
         following = reference.get("next")
+        if (
+            isinstance(following, dict)
+            and following.get("operation") == "read"
+            and following.get("document_id")
+            and preferred == "web_fetch"
+            and "web_fetch" not in available_readers
+        ):
+            reference.pop("next", None)
+            reference.pop("next_tool", None)
+            reference.pop("_working_set", None)
         if (
             isinstance(following, dict)
             and following.get("result_id")
