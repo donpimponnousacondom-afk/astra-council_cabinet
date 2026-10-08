@@ -1,5 +1,9 @@
 # Extending the plugin registry
 
+The optional [Frenchy TTS](FRENCHY_TTS.md) is an experimental Mistral voice tool
+with independent settings, key and grants. It shares ordinary TTS adapters and
+adds reference audio, saved cloning and prepared native voice-note artifacts.
+
 Plugins are ordinary installed Python packages with an `hortator.plugins` entry point. The runtime loads these trusted local packages at startup; it never installs or executes code named by a model or Discord message.
 
 The optional [Audio input](AUDIO_INPUT.md) is a keyless, non-tool conversation

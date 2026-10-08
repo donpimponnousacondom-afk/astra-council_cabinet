@@ -1,5 +1,9 @@
 # Tool discovery, repair and task budgets
 
+Experimental [Frenchy TTS](FRENCHY_TTS.md) extends voice generation with saved
+clones, one-shot references and prepared native voice notes. Its separate grant
+does not change the standard TTS tool or ordinary text-answer protocol.
+
 This is a deliberate model compatibility contract for **every built-in and future plugin**, including `council_silence` and optional `discord_attach`. Keep it when changing validators or tool schemas. Small models should receive enough information to repair a call in one attempt instead of spending successive rounds discovering one missing field at a time.
 
 Built-in memory, inspection, fetched-document, workspace, shell and document-site results present known timestamp metadata in the council's configured timezone, with explicit offsets. Raw content, commands, schemas, old notes and embedded request/response evidence remain original. Model clock and compaction instructions explain how to normalize old UTC references without changing their instant. [CONCURRENCY.md](CONCURRENCY.md) also defines required TaskGroup ownership and cancellation for tool implementations.

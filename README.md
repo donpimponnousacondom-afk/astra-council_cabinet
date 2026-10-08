@@ -1,5 +1,8 @@
 # Hortator Council
 
+Experimental [Frenchy TTS](docs/FRENCHY_TTS.md) adds Mistral voice experiments
+and native Discord voice notes alongside separate written replies.
+
 The canonical project root is **`/home/codexy/codex/astra-council_cabinet`**. Inspect actual Git state and continue the user's active task branch. **Never push to main.** Begin with [AGENTS.md](AGENTS.md) for standing instructions and [operations](docs/OPERATIONS.md) for runtime/storage procedures. The [design](docs/PLAN.md) and [dated verification evidence](docs/VERIFICATION.md) record product decisions and checks.
 
 An observable council of independent Discord applications. Each bot has its own Discord token, identity, personality, tool grants, cadence, credentials overrides, and channel-scoped memory. Reusable model profiles let you change the model without changing the bot.

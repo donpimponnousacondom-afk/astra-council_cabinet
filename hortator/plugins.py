@@ -47,6 +47,7 @@ from .web_search import (
     PARAMETERS as SEARCH_PARAMETERS,
 )
 from . import tts as speech
+from .voice_notes import VoiceNotes
 
 
 def schema(properties, required=()):
@@ -285,6 +286,7 @@ class Registry:
         self.application_emojis = ApplicationEmojis(store)
         self.directory = directory / "artifacts"
         self.directory.mkdir(parents=True, exist_ok=True)
+        self.voice_notes = VoiceNotes(self)
         self.inspect = inspect
         self.discord_dispatch = None
         self.evidence = ToolEvidence(store, vault)
@@ -502,6 +504,9 @@ class Registry:
         from .dumb_search import register as register_dumb_search
 
         register_dumb_search(self)
+        from .frenchy_tts import register as register_frenchy_tts
+
+        register_frenchy_tts(self)
         # Built-in catalog policy is declared at installation, not in Service.
         for name in (
             "memory",

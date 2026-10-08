@@ -124,7 +124,7 @@ class DiscordDispatch:
             }
         if args["operation"] == "status":
             row = self.store.one(
-                "SELECT * FROM outbox WHERE id=? AND bot_id=? AND routing!='{}'",
+                "SELECT * FROM outbox WHERE id=? AND bot_id=? AND json_extract(routing,'$.target_channel_id') IS NOT NULL",
                 (args["delivery_id"], context.bot["id"]),
             )
             if not row:

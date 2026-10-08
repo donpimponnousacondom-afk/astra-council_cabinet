@@ -4,7 +4,57 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Frenchy TTS voice experiments (2026-10-08)
+
+Commit: implementation on `feat/frenchy-tts`, based on
+`549b72845456f1ad73ebe8ad8b6f774af9bc6efa`; dirty during focused tests.
+Backend scope: focused `test_frenchy_tts.py`, `test_voice_notes.py`, `test_tts.py`,
+`test_discord_dispatch.py`, `test_footer.py`.
+Backend result: 87 passed, exit 0, 19.19 seconds. Ruff lint/format passed.
+Frontend/browser checks: not run for this backend-only change at this stage.
+Classification: mocked provider/Discord tests plus real local ffmpeg conversion.
+Full collection and published-head CI are separate gates; their final evidence
+and the independent Luna/Sol digest belong to the PR and ignored audit directory.
+
+Live Mistral: current credential listed 30 presets, generated a synthetic Marie
+sample, then generated from that one-shot reference. The reference call and
+native preparation took 1.14 seconds and produced 3.115083 seconds of Opus/OGG.
+Saved clone creation returned HTTP 403, `Custom voices require an active paid
+plan.` No clone was created; saved-clone generation could not be live-tested.
+The successful clone wire contract is mocked, not claimed as live acceptance.
+No Discord test message was posted and no production configuration changed
+during these isolated tests. Evidence: `audit/2026-10-08/frenchy-tts/`.
+
+Tests cover independent grants/keys, invalid argument combinations, owned and
+observed reference scope, revocation/deletion during preparation, one-shot voice
+replacement, clone uncertainty, conversion fallback, native multipart metadata,
+upload cleanup, separate text/voice receipts, late canonical echo, configuration
+revocation and cancellation/timeout/definite-failure outcomes.
+
+Initial-head full local collection: 2,031 passed, 1 skipped, exit 0, 480.69 seconds.
+The skipped public package-network test is opt-in. Luna/Sol review then exposed
+a companion-cancellation gap: confirmed text was left unread by the turn cursor.
+The correction preserves cancellation propagation while recording the sent
+answer, advancing handled input and binding its still-current Engram candidate.
+The added full-Engine regression tests both ordinary and Engram turns with idle
+evaluation disabled, verifying no duplicate cadence activation. Final-head
+focused and complete CI evidence is recorded separately in PR #92.
+
+Correction-focused run: 129 passed, exit 0, 26.70 seconds (`test_voice_notes`,
+`test_runtime`, `test_engrams`, `test_engram_integration`, `test_response_recovery`).
+Ruff lint passed. This is a focused pass, not a second full local collection.
+
+Review follow-up scoped native companions to ordinary final answers. Explicit
+`discord_send` keeps the generated OGG in its existing single file-delivery
+receipt, so successful routed text cannot hide a failed companion upload. Its
+status lookup also distinguishes routing destinations from ordinary voice-note
+metadata. A regression exercises both boundaries. General cross-turn replay of
+tool side effects is pre-existing and is not changed by this feature.
+Final boundary-focused run: 63 passed, exit 0, 16.43 seconds (`test_voice_notes`,
+`test_frenchy_tts`, `test_discord_dispatch`, `test_engram_integration`); Ruff passed.
+
 ## Character-based tool-result pages (2026-10-08)
+
 
 - Base `72ff09fc3360f3f35815bdc7b7bd02c064a0078d`, branch
   `hotfix/character-tool-pages`. Owner authorized shared Claude Code-style
