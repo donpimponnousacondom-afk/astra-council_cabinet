@@ -107,6 +107,12 @@ Installed plugins run in the Python process and are **trusted code**, not an OS 
 
 ## Shared model-facing contract
 
+The `tts` pack shares its existing grant/key between generation and read-only
+voice discovery. Mistral uses a v2 catalog and JSON/base64 speech; ordinary
+OpenAI-style binary speech remains compatible. `api_format` and optional
+`voices_endpoint` are operator JSON settings. See [TTS](TTS.md); voice discovery
+is not a universal `/v1/audio/voices` capability.
+
 The separate opt-in [Dumb Search](DUMB_SEARCH.md) uses Parallel Fast for one
 retrieval per call. It retains the shared credential, grant, validation, HTTP
 evidence and paged-result contracts, with no change to `web_search` routing.

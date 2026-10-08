@@ -195,3 +195,13 @@ same CPA route already works in another harness and explicitly chose to leave
 the new plugin disabled for manual enablement. Preserve existing wake rules,
 per-bot handled boundaries, original bytes and text-only compaction; no separate
 transcription model or voice-channel listener. See [AUDIO_INPUT](AUDIO_INPUT.md).
+
+### TTS voice discovery and Mistral response support — 2026-10-08
+
+The owner requested model-accessible voice discovery without exposing API keys.
+Extend the existing TTS pack with read-only `operation: voices`, Mistral v2 cursor
+pagination and an optional per-generation voice choice. Retain old text-only calls
+and saved defaults. Decode Mistral JSON/base64 speech alongside existing binary
+audio; expose bounded upstream error details through existing redaction. This is
+provider-specific, with no new dashboard controls or voice-list promises for
+other services. The current contract is [TTS](TTS.md).

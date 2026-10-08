@@ -2376,3 +2376,28 @@ Before the fix, final-scope regressions reported 15 failures and two passes. Aft
 The owner's follow-up inventory found duplicate Bearer heuristics in console rendering and private reasoning pages/downloads; both are removed under the same authorization. The separate console assignment heuristic, structured-field/header masking, reasoning/Engram boundaries and answer-format validation are documented in OPERATIONS and unchanged. Synthetic probes confirm that `secret: garden` is still masked in console text and literal reasoning tags are still removed from public content. No publication-blocking credential scanner was found in the sync worker or receiver.
 
 The expanded focused run, adding `tests/test_console.py` and `tests/test_reasoning_viewer.py`, passed **235 tests**, two existing dependency warnings, in 36.08 s. Initial presentation tests failed before removal; one new page assertion also needed the viewer's existing code-fence wrapper, corrected without changing product formatting. Regression coverage preserves ordinary Bearer prose in console, private pages and full downloads while masking a synthetic known credential, including a credential installed after capture. These are isolated fixtures, not live Discord/provider validation. Evidence is retained in ignored `audit/2026-10-07/01-bearer-prose/`.
+
+### TTS discovery and Mistral JSON speech — 2026-10-08
+
+- Focused verification: `uv run --frozen pytest -q tests/test_tts.py
+  tests/test_plugins.py tests/test_tool_feedback.py`: **94 passed**. Covers existing
+  binary media, authenticated listing, per-bot credentials/configuration, cursor
+  continuation, per-call voice isolation, unsupported providers, grants/help,
+  malformed JSON/base64/catalogs, existing size limits, HTTP errors, redirects
+  and cancellation. Two initial failures were test setup errors (nonexistent
+  Vault.delete and a recursively patched HTTP factory), corrected before this run.
+- Whole-repository Ruff lint/format, four verification-runner tests and diff
+  whitespace checks passed. Full application-suite evidence belongs to PR CI;
+  the focused count is not a full-suite result.
+- Live read-only Mistral probes verified `/v2/audio/voices`: `page_size=2` yields
+  two records and a `next_page_token`; `page_token` retrieves different records.
+  `limit` is not the v2 page-size parameter. Default preset inventory: 30 voices.
+- An isolated Kernel exercised the real registry, saved credential, catalog and
+  generation with Marie Curious (`fr_marie_curious`). The 21-character test
+  returned an 8,761-byte MP3, validated with ffprobe (1.326762 seconds). This
+  confirms JSON/base64 conversion through the artifact path; it is not a live
+  Discord delivery or a model-choice acceptance test. No live configuration or
+  default voice was changed, and no bot key was printed. Provider billing was
+  not reported, so no measured price is claimed.
+- Private evidence: `audit/2026-10-08/tts-voices/`. Sources and operational limits
+  are in [TTS](TTS.md). No database migration or dependency change is involved.
