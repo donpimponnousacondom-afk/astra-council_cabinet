@@ -23,8 +23,10 @@ receives its state and writes updates, but ordinary transcript/compaction behavi
 continues. Inspect results before enabling reduction. Both state output and the
 visible answer consume the existing model profile's completion allowance; reserve
 enough output for both. There is no second inference or background memory worker.
-This experiment can increase cost on short conversations because each final answer
-rewrites state. It does not guarantee recall, speed or savings for a particular model.
+This experiment can increase cost on short conversations because each accepted update
+rewrites the full state. If nothing useful has changed, the model may omit the
+block and retain existing memory. It does not guarantee recall, speed or savings
+for a particular model.
 
 For the owner's future isolated memory trial, create a new empty-context bot in a
 separate test conversation, with no global or private channel-memory grants or
@@ -72,7 +74,7 @@ experiment. Latest-only prompt experiments remain available with Engram disabled
 This input-configuration rejection is distinct from an invalid returned state:
 the latter may still deliver its safe ordinary answer without advancing memory.
 
-The final completion consists of ordinary visible answer text followed by a
+When updating memory, the final completion consists of ordinary visible answer text followed by a
 nonce-bound terminal block:
 
 ```text
@@ -93,6 +95,38 @@ An unambiguous visible answer prefix may still be delivered when an update is
 missing or rejected; `engram.update_skipped` records the reason. No extra repair
 inference is started for a missing memory update. Private suffix data remains
 withheld, and uncovered input stays eligible for later turns.
+
+### Feedback when memory stays unchanged
+
+After a confirmed ordinary reply with a missing or invalid state block, the next
+ordinary turn receives a private **user-role** reminder after the Engram protocol
+at the end of the assembled context. It reports the count of tracked, successfully
+delivered replies without an accepted replacement and the latest format/limit
+result. The stable prompt prefix is unchanged; there is no dynamic timestamp,
+new model call, tool or dashboard control. The generated layer and count are
+inspectable in the owner's stored request evidence. They are not transcript,
+compaction input or saved MEM/FACTS, and are never sent directly to Discord.
+
+Missing state can be deliberate when there is nothing useful to preserve. The
+reminder asks the model to review whether an update is needed; it does not demand
+invented changes or classify omission as disobedience. There is no separate
+"keep existing memory" acknowledgement. Omitting the block retains old memory
+and leaves the reminder active; a valid complete replacement (even unchanged)
+clears it after commit. Invalid JSON, markers and budget failures include an
+actionable reason. Any public joke, sign-off or model-written footer belongs
+before the private block; nothing may follow its END marker.
+
+Counts are scoped to bot, conversation, memory epoch and state revision. They
+start with replies tracked by this implementation; old event logs are not
+backfilled or prompt snapshots rescanned. A small indexed `engram_misses` table
+ties each rejected final to its request and intended ordinary outbox receipt.
+Only a matching confirmed send counts, including written replies whose later
+voice companion was cancelled. Tool rounds, provider retries/failures, filtered
+or length-truncated output, silence, routed tool sends, failed/uncertain sends
+and slash/panel invocations do not count. Durable receipts make restart counting
+idempotent. An accepted state replacement or applicable memory reset ends the
+previous count; late old-epoch receipts cannot resurrect it. Disabling Engram
+suppresses its prompt layers, including this reminder, while keeping stored data.
 
 ## Retention and delivery
 
@@ -162,6 +196,18 @@ weights or implement that architecture.
   uncovered input. Do not disable the required input/state layers to mimic this.
 - Loki is an alpha tester, not a special runtime case. Every eligible bot can use
   the same plugin with explicit grants; stable council bots retain their settings.
+
+### Private update feedback (2026-10-08)
+
+- Add a factual reminder after missed updates, counting delivered ordinary
+  replies rather than provider/tool rounds. Report current evidence, not guessed
+  causes or unrelated historical provider failures.
+- The owner permits deliberately keeping memory unchanged when there is nothing
+  useful to preserve. Reminders request a review, not a mandatory rewrite. Memory
+  remains complete replacement, never automatic accumulation or append.
+- Preserve public jokes/footers before the private terminal block. Do not alter
+  the owner's editable personalities, add automatic repair inference or enable
+  history reduction as part of this feedback change.
 
 ### Pending human requests and history reduction (2026-10-06)
 

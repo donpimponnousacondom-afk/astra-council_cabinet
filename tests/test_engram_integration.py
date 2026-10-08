@@ -125,6 +125,78 @@ async def test_invalid_or_incomplete_final_cannot_advance_coverage(kernel, inval
         assert transport.send.await_args.args[2] == "Public answer"
 
 
+async def test_feedback_counts_delivered_replies_repeats_privately_and_clears_on_commit(kernel):
+    bot, transport = enable(kernel)
+    bodies = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        bodies.append(body)
+        if len(bodies) <= 2:
+            return completion("Public reply and a cat joke.")
+        if len(bodies) == 3:
+            return completion(response(body).replace('{"MEM":', '{"BROKEN":'))
+        return completion(response(body))
+
+    await install_client(kernel, handler)
+    for index in range(5):
+        if index:
+            ingest(kernel, content="New input", discord_id=str(555555555555555555 + index))
+            transport.send.return_value = str(888888888888888888 + index)
+        await run(kernel)
+    assert len(bodies) == 5  # No automatic repair inference.
+    counts = (0, 1, 2, 3, 0)
+    for body, count in zip(bodies, counts, strict=True):
+        reminders = [
+            m for m in body["messages"] if "AUTOMATIC PRIVATE ENGRAM FEEDBACK" in str(m.get("content"))
+        ]
+        assert len(reminders) == bool(count)
+        if count:
+            assert reminders[0] is body["messages"][-1]
+            assert reminders[0]["role"] == "user"
+            assert f"{count} tracked, successfully delivered" in reminders[0]["content"]
+            assert "If nothing useful has changed" in reminders[0]["content"]
+    assert "only fields, both JSON strings" in bodies[3]["messages"][-1]["content"]
+    assert not any("AUTOMATIC PRIVATE" in call.args[2] for call in transport.send.await_args_list)
+    assert "AUTOMATIC PRIVATE" not in str(kernel.store.rows("SELECT content FROM messages"))
+    assert state(kernel)[0]["revision"] == 2
+    assert kernel.registry.engrams.capture(bot, CHANNEL, "next")["missed_updates"]["count"] == 0
+
+
+@pytest.mark.parametrize("kind", ["length", "content_filter", "silence", "send_failed", "send_uncertain"])
+async def test_feedback_excludes_failed_filtered_silent_and_uncertain_turns(kernel, kind):
+    bot, transport = enable(kernel)
+    if kind.startswith("send_"):
+        transport.send.side_effect = DeliveryError("fixture send failure", uncertain=kind == "send_uncertain")
+
+    def handler(request):
+        if kind in ("length", "content_filter"):
+            return httpx.Response(
+                200, json={"choices": [{"message": {"content": "Partial reply"}, "finish_reason": kind}]}
+            )
+        return completion("Public answer without memory", silence=kind == "silence")
+
+    await install_client(kernel, handler)
+    await run(kernel)
+    assert kernel.registry.engrams.capture(bot, CHANNEL, "next")["missed_updates"]["count"] == 0
+
+
+async def test_feedback_counts_written_reply_when_companion_is_cancelled(kernel):
+    bot, transport = enable(kernel)
+    original = kernel.engine.deliver
+
+    async def interrupted_companion(*args, **kwargs):
+        await original(*args, **kwargs)
+        raise asyncio.CancelledError()
+
+    kernel.engine.deliver = interrupted_companion
+    await install_client(kernel, lambda request: completion("Confirmed reply without memory"))
+    await run(kernel)
+    assert transport.send.await_count == 1
+    assert kernel.store.one("SELECT status FROM turns")["status"] == "sent"
+    assert kernel.registry.engrams.capture(bot, CHANNEL, "next")["missed_updates"]["count"] == 1
+
+
 async def test_intermediate_tool_suffix_is_stripped_but_never_staged(kernel):
     bot, transport = enable(kernel)
     bot.pop("revision")
@@ -159,6 +231,8 @@ async def test_intermediate_tool_suffix_is_stripped_but_never_staged(kernel):
     assert transport.send.await_args.args[2] == "Public final without an update"
     assert not state(kernel)
     assert not kernel.store.rows("SELECT * FROM engram_candidates")
+    assert len(kernel.store.rows("SELECT * FROM engram_misses")) == 1
+    assert kernel.registry.engrams.capture(bot, CHANNEL, "next")["missed_updates"]["count"] == 1
 
 
 async def test_partial_provider_failure_keeps_suffix_out_of_model_evidence(kernel):

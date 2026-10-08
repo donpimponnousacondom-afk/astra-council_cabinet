@@ -995,6 +995,18 @@ class Engine:
                                 level="warning",
                             )
                         ordinary_delivery_id = uid("out_")
+                        if (
+                            engram is not None
+                            and parsed_engram is not None
+                            and parsed_engram.get("invalid")
+                            and result.finish_reason == "stop"
+                        ):
+                            self.registry.engrams.record_miss(
+                                engram,
+                                result.request_id,
+                                ordinary_delivery_id,
+                                parsed_engram["invalid"],
+                            )
                         await self.deliver(
                             bot,
                             profile,

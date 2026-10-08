@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+from datetime import datetime
 
 import pytest
 
@@ -313,6 +314,102 @@ async def test_final_state_replaces_atomically_only_after_confirmed_delivery(ker
     saved = memory.inspect(bot["id"])["states"][0]
     assert saved["revision"] == 2 and saved["covered_through"] == 22 and saved["FACTS"] == ""
     assert "prefers concise" not in json.dumps(kernel.store.events())
+
+
+@pytest.mark.parametrize(
+    "delivery_status,discord_id,expected",
+    [
+        ("pending", None, 0),
+        ("sending", None, 0),
+        ("failed", None, 0),
+        ("uncertain", None, 0),
+        ("sent", None, 0),
+        ("sent", "confirmed", 1),
+    ],
+)
+def test_feedback_counts_only_confirmed_receipts_and_survives_restart(
+    kernel, memory, delivery_status, discord_id, expected
+):
+    bot = enabled(kernel)
+    snapshot = memory.capture(bot, "room", "missing-turn")
+    generation(kernel, snapshot)
+    memory.record_miss(snapshot, "req", "out", "missing_state")
+    memory.record_miss(snapshot, "req", "out", "missing_state")
+    assert memory.missed_updates(snapshot)["count"] == 0
+    # A confirmed answer still counts if the process stops before turn finalization.
+    delivered(kernel, snapshot, status=delivery_status, turn_status="interrupted")
+    kernel.store.execute("UPDATE outbox SET discord_id=? WHERE id='out'", (discord_id,))
+    restarted = Engrams(kernel.store, kernel.vault)
+    later = restarted.capture(bot, "room", "later-turn")
+    assert later["missed_updates"]["count"] == expected
+    assert bool(restarted.reminder(later)) == bool(expected)
+    assert len(kernel.store.rows("SELECT * FROM engram_misses")) == 1
+
+
+async def test_feedback_scope_success_and_resets(kernel, memory):
+    bot = enabled(kernel)
+    for channel in ("room", "thread"):
+        snapshot = memory.capture(bot, channel, "turn-" + channel)
+        generation(kernel, snapshot, request_id="req-" + channel)
+        memory.record_miss(snapshot, "req-" + channel, "out-" + channel, "missing_state")
+        delivered(kernel, snapshot, outbox_id="out-" + channel)
+    assert memory.capture(bot, "room", "next")["missed_updates"]["count"] == 1
+    other_bot = enabled(kernel, bot_id="socrates")
+    assert memory.capture(other_bot, "room", "other")["missed_updates"]["count"] == 0
+    assert memory.capture(bot, "other-room", "other")["missed_updates"]["count"] == 0
+    memory.reset(bot["id"], "thread")
+    assert memory.capture(bot, "thread", "next")["missed_updates"]["count"] == 0
+    assert memory.capture(bot, "room", "next")["missed_updates"]["count"] == 1
+    snapshot, _, candidate = await staged(
+        kernel, memory, bot, channel_id="room", turn_id="valid-turn", request_id="valid-req"
+    )
+    delivered(kernel, snapshot, outbox_id="valid-out")
+    assert memory.finalize(candidate)
+    assert memory.capture(bot, "room", "next")["missed_updates"]["count"] == 0
+    # A late receipt from an older revision cannot resurrect the reminder.
+    assert memory.reminder(memory.capture(bot, "room", "next")) is None
+
+
+def test_feedback_global_reset_fences_late_delivery_and_disabled_capture(kernel, memory):
+    bot = enabled(kernel)
+    snapshot = memory.capture(bot, "room", "old-turn")
+    generation(kernel, snapshot)
+    memory.record_miss(snapshot, "req", "out", "invalid_state_json")
+    memory.reset(bot["id"])
+    delivered(kernel, snapshot)
+    assert memory.capture(bot, "room", "new-turn")["missed_updates"]["count"] == 0
+    assert memory.capture(bot, "slash:room", "slash-turn") is None
+    assert memory.capture(bot, "panel:room", "panel-turn") is None
+    kernel.store.put("bots", {**bot, "enabled_plugins": []})
+    assert memory.capture(bot, "room", "disabled-turn") is None
+
+
+async def test_feedback_is_a_tail_only_user_layer_and_snapshot_stays_frozen(kernel, memory, monkeypatch):
+    bot = enabled(kernel)
+    ingest(kernel)
+    channel = "222222222222222222"
+    profile = kernel.store.get("profiles", bot["model_profile_id"])
+    contexts = kernel.engine.contexts
+    rows, summary, _, original = await contexts.prepare(bot, profile, channel, "preview", [])
+    snapshot = original["_engram_snapshot"]
+    monkeypatch.setattr("hortator.context.time.time", lambda: 1791480000.0)
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.fromtimestamp(1791480000.0, tz)
+
+    monkeypatch.setattr("hortator.context.datetime", FixedDatetime)
+    before, _ = await contexts.assemble(bot, profile, channel, rows, summary, engram=snapshot)
+    with_feedback = {**snapshot, "missed_updates": {"count": 7, "reason": "invalid_state_json"}}
+    after, meta = await contexts.assemble(bot, profile, channel, rows, summary, engram=with_feedback)
+    assert after[:-1] == before
+    assert after[-1]["role"] == "user"
+    assert "7 tracked, successfully delivered" in after[-1]["content"]
+    assert "not valid JSON" in after[-1]["content"]
+    assert meta["prompt_layers"][-1]["id"] == "engram_feedback"
+    assert meta["engram"]["missed_updates"]["count"] == 7
+    assert snapshot["missed_updates"]["count"] == 0
 
 
 @pytest.mark.parametrize(
