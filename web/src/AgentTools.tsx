@@ -56,8 +56,8 @@ export function AgentToolSettings({
   return (
     <section className="agent-tools" aria-label="Working limits">
       <Notice>
-        No API key is required. Bash needs a ready isolated runner. Omit the task
-        for disposable files; keeping files between commands also needs the
+        No API key is required. Bash needs a ready isolated runner. Omit the
+        task for disposable files; keeping files between commands also needs the
         workspace grant and an existing task. Job logs remain inspectable.
       </Notice>
       {error && <Notice warning>{error}</Notice>}

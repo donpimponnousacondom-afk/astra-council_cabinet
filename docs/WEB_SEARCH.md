@@ -106,7 +106,7 @@ The parser bounds HTML structure and strips script/style text. Titles are capped
 
 The separate `web_fetch` default download ceiling remains **1,000,000 bytes**. Paged reading bounds model-facing text after a successful download; it does not raise that network ceiling. See [WEB_READING.md](WEB_READING.md). Changing search engines cannot make an oversized source fetchable.
 
-Before a `shell.run`, explicitly create/resume its named task through `workspace` with `{"operation":"start","task":"aa-data"}` and wait for success. Reuse that task in the shell call. `shell` has no `start` operation and never creates a missing workspace. Filesystem/shell grants and runner readiness remain required; search fallback does not grant them.
+Before a persistent `shell.run`, explicitly create/resume its named task through `workspace` with `{"operation":"start","task":"aa-data"}` and wait for success. Reuse that task in the shell call. `shell` has no `start` operation and never creates a missing workspace. Persistent jobs require workspace and shell grants. Omit `task` for disposable execution with only shell. Runner readiness remains required; search fallback grants neither capability. See [shell storage modes](SHELL_RUNNER.md#disposable-commands-and-persistent-tasks).
 
 Private memory writes always include `{"operation":"write","key":"topic","value":"Concise note"}`. Sending key/value alone fails validation; `{}` asks for usage. See [TOOLS.md](TOOLS.md) for the shared complete-error and explicit-example contract. Guidance changes never rewrite existing memories, clear historical evidence, infer missing mutation operations or add unbounded repair rounds.
 
@@ -118,7 +118,7 @@ As of 2026-09-14, the HTTP adapter captures every response before parsing, inclu
 The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
 
-- Web search supports Brave and keyless DuckDuckGo with Auto fallback, explicit engine selection and combined results. Preserve successful partial results, per-engine provenance/errors, bounded downloads/previews and credential separation; never forward the Brave key to DuckDuckGo or bypass a search challenge. See [docs/WEB_SEARCH.md](WEB_SEARCH.md). Memory guidance must show complete operation-bearing examples; do not infer a write from key/value alone. Shell guidance must name the separate `workspace.start` prerequisite. These refinements do not authorize clearing memories or resetting bot databases; the owner deferred that work.
+- Web search supports Brave and keyless DuckDuckGo with Auto fallback, explicit engine selection and combined results. Preserve successful partial results, per-engine provenance/errors, bounded downloads/previews and credential separation; never forward the Brave key to DuckDuckGo or bypass a search challenge. See [docs/WEB_SEARCH.md](WEB_SEARCH.md). Memory guidance must show complete operation-bearing examples; do not infer a write from key/value alone. Shell guidance must name the separate `workspace.start` prerequisite for persistent tasks. The 2026-10-09 owner decision additionally permits disposable shell commands without a task or workspace grant. These refinements do not authorize clearing memories or resetting bot databases; the owner deferred that work.
 
 ## Owner decision · 2026-09-28
 
