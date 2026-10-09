@@ -16,6 +16,7 @@ done
 if [[ ${#packages[@]} -eq 0 ]]; then usage; fi
 action=create
 if [[ -d /packages/native/conda-meta ]]; then action=install; fi
-exec micromamba --no-rc "$action" --yes --prefix /packages/native \
+# An explicit read-only RC file replaces ambient config-file discovery.
+exec micromamba "$action" --rc-file /runner/mambarc --yes --prefix /packages/native \
   --root-prefix /packages/mamba --override-channels --channel conda-forge \
   --ssl-verify /etc/ssl/certs/ca-certificates.crt -- "${packages[@]}"

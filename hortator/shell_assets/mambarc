@@ -1,0 +1,2 @@
+# micromamba 2.9.0 supports this setting only through an RC file, not an env var.
+repodata_shards_threads: 1

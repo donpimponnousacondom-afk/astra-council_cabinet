@@ -36,8 +36,9 @@ def test_pkg_confirmation_flags_preserve_fixed_installer_arguments(tmp_path, arg
     separator = argv.index("--")
     assert argv[separator + 1 :] == packages
     assert argv[:separator] == [
-        "--no-rc",
         "create",
+        "--rc-file",
+        "/runner/mambarc",
         "--yes",
         "--prefix",
         "/packages/native",
