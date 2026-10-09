@@ -313,10 +313,12 @@ def job_outcome(data):
         data.get("status") == "failed"
         and type(data.get("exit_code")) is int
         and data["exit_code"] != 0
-        and data.get("workspace_committed") is True
         and not data.get("error")
     ):
-        return "command_exit (nonzero exit; valid workspace changes saved)"
+        if data.get("workspace_committed") is True:
+            return "command_exit (nonzero exit; valid workspace changes saved)"
+        if data.get("storage") == "disposable":
+            return "command_exit (nonzero exit; disposable files discarded)"
     if data.get("error") and data.get("status") == "failed":
         return "runner_or_validation_failure (inspect retained error)"
     if data.get("status") == "failed":

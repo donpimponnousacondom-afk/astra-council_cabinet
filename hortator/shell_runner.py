@@ -209,6 +209,7 @@ class ShellRunner:
         fields = (
             "job_id",
             "task",
+            "storage",
             "status",
             "elapsed_seconds",
             "exit_code",
@@ -732,7 +733,10 @@ class ShellRunner:
             "PIP_CACHE_DIR": "/packages/cache/pip",
             "PIP_DISABLE_PIP_VERSION_CHECK": "1",
             "MAMBA_ROOT_PREFIX": "/packages/mamba",
-            "MAMBA_DOWNLOAD_THREADS": "2",
+            # Metadata parsing and downloads share the small job process/thread
+            # budget with extraction. Bound all three, not just extraction.
+            "MAMBA_REPODATA_SHARDS_THREADS": "1",
+            "MAMBA_DOWNLOAD_THREADS": "1",
             "MAMBA_EXTRACT_THREADS": "1",
             "MAMBA_REPODATA_USE_ZST": "true",
             "GIT_EXEC_PATH": "/usr/lib/git-core",

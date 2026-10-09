@@ -1,13 +1,21 @@
 #!/bin/bash
 set -euo pipefail
-if [[ ${1:-} != install || $# -lt 2 ]]; then
+usage() {
   echo 'Usage: pkg install PACKAGE... (conda-forge native packages, e.g. zstd)' >&2
   echo 'Installs to /packages/native for this job only. Save outputs in /workspace.' >&2
+  echo 'Confirmation is automatic; -y and --yes are optional.' >&2
   exit 2
-fi
+}
+if [[ ${1:-} != install || $# -lt 2 ]]; then usage; fi
 shift
+packages=()
+for package in "$@"; do
+  # These confirmation flags are redundant with our fixed --yes below.
+  if [[ $package != -y && $package != --yes ]]; then packages+=("$package"); fi
+done
+if [[ ${#packages[@]} -eq 0 ]]; then usage; fi
 action=create
 if [[ -d /packages/native/conda-meta ]]; then action=install; fi
 exec micromamba --no-rc "$action" --yes --prefix /packages/native \
   --root-prefix /packages/mamba --override-channels --channel conda-forge \
-  --ssl-verify /etc/ssl/certs/ca-certificates.crt -- "$@"
+  --ssl-verify /etc/ssl/certs/ca-certificates.crt -- "${packages[@]}"

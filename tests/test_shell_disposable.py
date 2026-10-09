@@ -214,6 +214,12 @@ async def test_disposable_cleanup_on_unsuccessful_run(kernel, ending):
             timeout_seconds=0.2 if ending == "timeout" else None,
         )
         assert result["status"] == ("timed_out" if ending == "timeout" else "failed")
+    events = [
+        event
+        for event in kernel.store.events(limit=30)
+        if event["kind"].startswith("job.") and event["data"].get("job_id") == result["job_id"]
+    ]
+    assert events and all(event["data"]["storage"] == "disposable" for event in events)
     assert not runner.active and not runner.workspaces._active
     assert not list(runner.root.glob("job_*/.execution"))
     assert not kernel.store.rows("SELECT * FROM workspaces")
