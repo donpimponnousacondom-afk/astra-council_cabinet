@@ -43,17 +43,21 @@ async def read_file(workspace, context, path, task="default"):
 
 async def test_real_pipeline_scripts_cwd_and_nonzero_exit_persist(sandbox):
     runner, workspace, context = sandbox
-    first = await runner.run(context, command="mkdir nested; cd nested; printf 'z\\na\\n' | sort > names.txt")
+    first = await runner.run(
+        context, task="default", command="mkdir nested; cd nested; printf 'z\\na\\n' | sort > names.txt"
+    )
     assert first["status"] == "succeeded", first
     assert first["workspace_committed"] and first["cwd"] == "nested"
-    second = await runner.run(context, command="pwd; cat names.txt; printf 'why\\n' >&2; exit 7")
+    second = await runner.run(
+        context, task="default", command="pwd; cat names.txt; printf 'why\\n' >&2; exit 7"
+    )
     assert second["status"] == "failed" and second["exit_code"] == 7
     assert second["workspace_committed"]
     assert second["stdout"]["text"] == "/workspace/nested\na\nz\n"
     assert second["stderr"]["text"] == "why\n"
     assert (await read_file(workspace, context, "nested/names.txt"))["content"] == "a\nz\n"
     third = await runner.run(
-        context, command="printf '#!/bin/bash\\nprintf script-ok' > check.sh; bash check.sh"
+        context, task="default", command="printf '#!/bin/bash\\nprintf script-ok' > check.sh; bash check.sh"
     )
     assert third["stdout"]["text"] == "script-ok"
     assert not list(runner.root.glob("job_*/.execution"))
@@ -70,7 +74,11 @@ async def test_real_command_accepts_600_second_budget_without_changing_default(s
 
     monkeypatch.setattr("hortator.shell_runner.asyncio.timeout", timeout)
     job = await runner.run(
-        context, command="printf long-budget", timeout_seconds=600, configuration={"timeout_seconds": 600}
+        context,
+        task="default",
+        command="printf long-budget",
+        timeout_seconds=600,
+        configuration={"timeout_seconds": 600},
     )
     assert job["stdout"]["text"] == "long-budget"
     assert runner.status(context, job["job_id"])["limits"]["timeout_seconds"] == 600
@@ -84,6 +92,7 @@ async def test_real_stdout_stderr_concurrent_byte_paging_and_limit(sandbox):
     runner, _, context = sandbox
     job = await runner.run(
         context,
+        task="default",
         command="python3 - <<'PY'\nimport os\nfor _ in range(100):\n os.write(1, '雪\\n'.encode()*50)\n os.write(2, b'error\\n'*50)\nPY",
     )
     assert job["status"] == "succeeded", job
@@ -101,6 +110,7 @@ async def test_real_stdout_stderr_concurrent_byte_paging_and_limit(sandbox):
         assert runner.read(context, job["job_id"], stream, len(expected))["text"] == ""
     limited = await runner.run(
         context,
+        task="default",
         command='python3 -c \'import os; os.write(1,b"x"*200000); os.write(2,b"y"*200000)\'',
         configuration={"output_bytes": 4096},
     )
@@ -124,11 +134,14 @@ def namespace_pids(namespace):
 async def test_real_timeout_cancel_background_cleanup_and_closed_streams(sandbox):
     runner, workspace, context = sandbox
     detached = "python3 - <<'PY'\nimport subprocess\nsubprocess.Popen(['python3','-c','import time; time.sleep(30)'],start_new_session=True)\nprint('spawned')\nPY"
-    job = await runner.run(context, command=detached, timeout_seconds=1)
+    job = await runner.run(context, task="default", command=detached, timeout_seconds=1)
     assert job["status"] == "succeeded", job
     assert not namespace_pids(job["pid_namespace"])
     timeout = await runner.run(
-        context, command="echo scratch > lost.txt; exec 1>&- 2>&-; sleep 30", timeout_seconds=0.2
+        context,
+        task="default",
+        command="echo scratch > lost.txt; exec 1>&- 2>&-; sleep 30",
+        timeout_seconds=0.2,
     )
     assert timeout["status"] == "timed_out", timeout
     assert timeout["elapsed_seconds"] < 3
@@ -136,7 +149,7 @@ async def test_real_timeout_cancel_background_cleanup_and_closed_streams(sandbox
     assert not namespace_pids(timeout["pid_namespace"])
     with pytest.raises(ControlError):
         await read_file(workspace, context, "lost.txt")
-    task = asyncio.create_task(runner.run(context, command=detached + "\nsleep 30"))
+    task = asyncio.create_task(runner.run(context, task="default", command=detached + "\nsleep 30"))
     while not runner.active or next(iter(runner.active.values())).process is None:
         await asyncio.sleep(0.01)
     job_id = next(iter(runner.active))
@@ -147,7 +160,7 @@ async def test_real_timeout_cancel_background_cleanup_and_closed_streams(sandbox
     assert cancelled["status"] == "cancelled"
     assert not cancelled["workspace_committed"]
     assert not runner.active and not workspace._active
-    task = asyncio.create_task(runner.run(context, command="sleep 30"))
+    task = asyncio.create_task(runner.run(context, task="default", command="sleep 30"))
     while not runner.active or next(iter(runner.active.values())).process is None:
         await asyncio.sleep(0.01)
     job_id = next(iter(runner.active))
@@ -196,7 +209,7 @@ except PermissionError:
 print('isolated')
 PY"""
     try:
-        result = await runner.run(context, command=script)
+        result = await runner.run(context, task="default", command=script)
     finally:
         server.close()
         await server.wait_closed()
@@ -232,7 +245,10 @@ finally:
  for child in children: child.wait()
 PY"""
     result = await runner.run(
-        context, command=script, configuration={"memory_bytes_per_process": 67_108_864, "process_limit": 8}
+        context,
+        task="default",
+        command=script,
+        configuration={"memory_bytes_per_process": 67_108_864, "process_limit": 8},
     )
     assert result["status"] == "succeeded", result
     assert "memory-bounded" in result["stdout"]["text"]
@@ -240,12 +256,14 @@ PY"""
     # /tmp's independent hard 16 MiB tmpfs limit includes separate files.
     result = await runner.run(
         context,
+        task="default",
         command="python3 - <<'PY'\nimport errno\ntry:\n for i in range(8):\n  with open('/tmp/f'+str(i),'wb') as f: f.write(b'x'*4194304)\n raise AssertionError('tmpfs byte cap bypassed')\nexcept OSError as e:\n assert e.errno == errno.ENOSPC,e\n print('tmpfs-bounded')\nPY",
     )
     assert result["status"] == "succeeded", result
     assert "tmpfs-bounded" in result["stdout"]["text"]
     result = await runner.run(
         context,
+        task="default",
         command="python3 - <<'PY'\nimport pathlib,time\nfor i in range(2000):\n pathlib.Path('/workspace/f'+str(i)).touch()\ntime.sleep(3)\nPY",
     )
     assert result["status"] == "resource_limited", result
@@ -273,7 +291,7 @@ async def main():
  context=ToolContext({'id':'ada'},'channel','parent-turn')
  await workspace.call({'operation':'start','task':'default'},context)
  runner=ShellRunner(root/'jobs',workspace)
- await runner.run(context,command="echo child-ready; python3 -c 'import time;time.sleep(30)'")
+ await runner.run(context, task="default",command="echo child-ready; python3 -c 'import time;time.sleep(30)'")
 asyncio.run(main())
 """
     controller = await asyncio.create_subprocess_exec(
@@ -330,7 +348,7 @@ asyncio.run(main())
 
 async def test_close_waits_for_actual_tree_cleanup_and_workspace_release(sandbox):
     runner, workspace, context = sandbox
-    task = asyncio.create_task(runner.run(context, command="sleep 30"))
+    task = asyncio.create_task(runner.run(context, task="default", command="sleep 30"))
     while not runner.active or next(iter(runner.active.values())).process is None:
         await asyncio.sleep(0.01)
     started = time.monotonic()
@@ -347,10 +365,12 @@ async def test_real_workspace_byte_and_export_file_limits(sandbox, monkeypatch):
     runner, workspace, context = sandbox
     config = workspace_limits({"max_workspace_bytes": 20 * 1024 * 1024, "max_file_bytes": 20 * 1024 * 1024})
     monkeypatch.setattr(workspace, "effective_config", lambda bot: config)
-    result = await runner.run(context, command="truncate -s 21M too-big")
+    result = await runner.run(context, task="default", command="truncate -s 21M too-big")
     assert result["status"] == "failed" and not result["workspace_committed"]
     assert "per-file" in result["error"]
-    result = await runner.run(context, command="dd if=/dev/zero of=full bs=1M count=21; rm -f full")
+    result = await runner.run(
+        context, task="default", command="dd if=/dev/zero of=full bs=1M count=21; rm -f full"
+    )
     assert result["status"] == "succeeded", result
     assert "No space left" in result["stderr"]["text"]
     assert result["workspace_committed"]
@@ -358,7 +378,7 @@ async def test_real_workspace_byte_and_export_file_limits(sandbox, monkeypatch):
 
 async def test_job_retention_preserves_running_turn_and_archives_completed_history(sandbox):
     runner, workspace, context = sandbox
-    job = await runner.run(context, command="echo retained-output")
+    job = await runner.run(context, task="default", command="echo retained-output")
     metadata = runner._load(job["job_id"])
     metadata["started_at"] -= 8 * 86_400
     runner._save(metadata)
@@ -378,15 +398,19 @@ async def test_job_retention_preserves_running_turn_and_archives_completed_histo
             1,
         ),
     )
-    await runner.run(context, command="true")
+    await runner.run(context, task="default", command="true")
     assert runner.read(context, job["job_id"])["text"] == "retained-output\n"
     with pytest.raises(ControlError, match="count quota.*|Recent shell job count"):
-        await runner.run(context, command="echo should-not-run", configuration={"max_jobs_per_bot": 1})
+        await runner.run(
+            context, task="default", command="echo should-not-run", configuration={"max_jobs_per_bot": 1}
+        )
     workspace.store.execute("UPDATE turns SET status='completed' WHERE id=?", (context.turn_id,))
-    await runner.run(context, command="true")
+    await runner.run(context, task="default", command="true")
     with pytest.raises(ControlError, match="expired"):
         runner.read(context, job["job_id"])
-    completed = await runner.run(context, command="echo admitted", configuration={"max_jobs_per_bot": 1})
+    completed = await runner.run(
+        context, task="default", command="echo admitted", configuration={"max_jobs_per_bot": 1}
+    )
     assert completed["stdout"]["text"] == "admitted\n"
     assert runner.status(context, job["job_id"])["archived"]
     assert not workspace._active
@@ -402,7 +426,7 @@ async def test_job_storage_rejects_symlinks_and_hardlinks(sandbox, tmp_path):
     root_link.symlink_to(runner.root, target_is_directory=True)
     with pytest.raises(ControlError, match="symlink"):
         ShellRunner(root_link)
-    job = await runner.run(context, command="echo safe")
+    job = await runner.run(context, task="default", command="echo safe")
     log = runner.root / job["job_id"] / "stdout.log"
     sentinel = tmp_path / "private-output"
     sentinel.write_text("do-not-read")
@@ -421,8 +445,8 @@ async def test_job_ownership_rejected_paths_unsafe_copyback_and_restart_metadata
     runner, workspace, context = sandbox
     for path in ("/home/codexy", "../other", "x/../../out"):
         with pytest.raises(ControlError):
-            await runner.run(context, command="true", cwd=path)
-    job = await runner.run(context, command="echo okay > normal.txt")
+            await runner.run(context, task="default", command="true", cwd=path)
+    job = await runner.run(context, task="default", command="echo okay > normal.txt")
     for unauthorized in (
         ToolContext({"id": "curie"}, context.channel_id, context.turn_id),
         ToolContext(context.bot, "other-channel", context.turn_id),
@@ -435,7 +459,9 @@ async def test_job_ownership_rejected_paths_unsafe_copyback_and_restart_metadata
         with pytest.raises(ControlError):
             await runner.cancel(unauthorized, job["job_id"])
     bad = await runner.run(
-        context, command='python3 -c \'import os;os.symlink("/source/normal.txt","link.txt")\''
+        context,
+        task="default",
+        command='python3 -c \'import os;os.symlink("/source/normal.txt","link.txt")\'',
     )
     assert bad["status"] == "failed" and not bad["workspace_committed"]
     assert "symlink" in bad["error"]
@@ -541,7 +567,7 @@ python3.14 -m venv /packages/second
 /bin/python3.14 -m pip install --no-index example 2> /packages/system-pip-error && exit 9
 cat /packages/system-pip-error
 """
-    result = await runner.run(context, command=command)
+    result = await runner.run(context, task="default", command=command)
     assert result["status"] == "succeeded", result
     assert "externally-managed-environment" in result["stdout"]["text"]
     assert result["workspace_committed"]
@@ -566,12 +592,13 @@ uv venv --python python3.14 --system-site-packages /packages/uv-env
 /packages/uv-env/bin/python3.14 -c 'import sandbox_fixture; assert sandbox_fixture.VALUE == 42'
 printf saved > deliverable.txt
 """
-    result = await runner.run(context, command=command)
+    result = await runner.run(context, task="default", command=command)
     assert result["status"] == "succeeded", result
     assert result["workspace_committed"]
     assert (await read_file(workspace, context, "deliverable.txt"))["content"] == "saved"
     next_job = await runner.run(
         context,
+        task="default",
         command="python3.14 -c 'import importlib.util; assert importlib.util.find_spec(\"sandbox_fixture\") is None'; test ! -e /packages/uv-env; cat deliverable.txt",
     )
     assert next_job["status"] == "succeeded", next_job
@@ -582,6 +609,7 @@ async def test_real_package_storage_byte_and_entry_limits(sandbox):
     runner, _, context = sandbox
     result = await runner.run(
         context,
+        task="default",
         command="dd if=/dev/zero of=/packages/full bs=1M count=70; rm -f /packages/full; echo retained > result.txt",
         configuration={"package_bytes": 67_108_864},
     )
@@ -589,6 +617,7 @@ async def test_real_package_storage_byte_and_entry_limits(sandbox):
     assert "No space left" in result["stderr"]["text"]
     result = await runner.run(
         context,
+        task="default",
         command="python3.14 -c 'from pathlib import Path; import time; [Path(f\"/packages/f{i}\").touch() for i in range(2000)]; time.sleep(3)'",
         configuration={"package_entries": 1000},
     )
@@ -602,6 +631,7 @@ async def test_real_public_https_and_native_package_install(sandbox):
     runner, _, context = sandbox
     result = await runner.run(
         context,
+        task="default",
         command="set -eu; curl -fsS https://pypi.org/simple/six/ -o /packages/curl-index; wget -q https://pypi.org/simple/six/ -O /packages/wget-index; uv pip install six==1.17.0; python3.14 -c 'import six; assert six.__version__ == \"1.17.0\"'; git ls-remote --exit-code https://github.com/mamba-org/micromamba-releases.git refs/tags/2.9.0-0 > /packages/git-refs; pkg install zstd; zstd --version; pkg install zstd; echo installed > native-result.txt",
     )
     assert result["status"] == "succeeded" and result["workspace_committed"], result

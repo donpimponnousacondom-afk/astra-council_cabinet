@@ -24,6 +24,7 @@ import time
 from .concurrency import join_tasks, task_group, error_text
 
 from .models import ControlError
+from .workspaces import DEFAULTS as WORKSPACE_DEFAULTS
 
 
 DEFAULTS = {
@@ -36,6 +37,13 @@ DEFAULTS = {
     "retention_days": 7,
     "max_jobs_per_bot": 200,
     "job_storage_bytes_per_bot": 104_857_600,
+}
+# Disposable jobs use the same baseline filesystem bounds without consulting a
+# workspace plugin grant, configuration, persistent task or lease.
+DISPOSABLE_LIMITS = {
+    "quota_bytes": WORKSPACE_DEFAULTS["max_workspace_bytes"],
+    "max_file_bytes": WORKSPACE_DEFAULTS["max_file_bytes"],
+    "max_files": WORKSPACE_DEFAULTS["max_files"],
 }
 CONFIG_SCHEMA = {
     "type": "object",
@@ -765,6 +773,9 @@ class ShellRunner:
     async def _execute(self, directory, source, config, active):
         execution = directory / ".execution"
         execution.mkdir(mode=0o700)
+        if source is None:
+            source = execution / "source"
+            source.mkdir(mode=0o700)
         staged = execution / "result"
         staged.mkdir(mode=0o700)
         config_path = execution / "config.json"
@@ -838,6 +849,8 @@ class ShellRunner:
                                 }
                             )
                         elif kind in ("file", "directory"):
+                            if not config.get("persist_files", True):
+                                raise ControlError("Disposable jobs cannot export files")
                             if output_file is not None or metadata.get("status") not in (
                                 "succeeded",
                                 "failed",
@@ -955,9 +968,7 @@ class ShellRunner:
             process.kill()
         await process.wait()
 
-    async def run(
-        self, context, *, command, task="default", cwd=None, timeout_seconds=None, configuration=None
-    ):
+    async def run(self, context, *, command, task=None, cwd=None, timeout_seconds=None, configuration=None):
         if self._closed:
             raise ControlError("Shell runner is shutting down")
         config = limits(configuration)
@@ -977,7 +988,7 @@ class ShellRunner:
             raise ControlError("Shell runner is shutting down")
         if not readiness["ready"]:
             raise ControlError(readiness["error"] + " " + SETUP)
-        if self.workspaces is None:
+        if task is not None and self.workspaces is None:
             raise ControlError("Workspace store is unavailable")
         bot, channel, turn = _identity(context)
         # Concurrent provider work is separate; a finite global shell slot also
@@ -985,7 +996,7 @@ class ShellRunner:
         if self.active:
             raise ControlError("The shell runner is busy; inspect the active job and retry after completion")
         self._reserve(bot, config)
-        prepared = self.workspaces.prepare_job(context, task, None)
+        prepared = self.workspaces.prepare_job(context, task, None) if task is not None else None
         job_id = "job_" + secrets.token_hex(16)
         directory = self.root / job_id
         metadata = {
@@ -994,10 +1005,11 @@ class ShellRunner:
             "channel_id": channel,
             "turn_id": turn,
             "task": task,
-            "workspace_id": prepared["workspace_id"],
+            "storage": "workspace" if prepared else "disposable",
+            "workspace_id": prepared["workspace_id"] if prepared else None,
             "status": "running",
             "started_at": time.time(),
-            "cwd": cwd or prepared["cwd"],
+            "cwd": cwd or (prepared["cwd"] if prepared else "."),
             "workspace_committed": False,
             "limits": config,
             "stdout_bytes": 0,
@@ -1010,7 +1022,8 @@ class ShellRunner:
             self._save(metadata)
             self._event(metadata, "job.started")
         except BaseException:
-            self.workspaces.release_job(prepared["workspace_id"])
+            if prepared:
+                self.workspaces.release_job(prepared["workspace_id"])
             if created:
                 shutil.rmtree(directory, ignore_errors=True)
             raise
@@ -1021,12 +1034,15 @@ class ShellRunner:
         try:
             run_config = {
                 **config,
-                **{name: prepared[name] for name in ("quota_bytes", "max_file_bytes", "max_files")},
+                **{name: (prepared or DISPOSABLE_LIMITS)[name] for name in DISPOSABLE_LIMITS},
+                "persist_files": prepared is not None,
                 "cwd": metadata["cwd"],
                 "command": command,
             }
-            staged = await self._execute(directory, Path(prepared["path"]), run_config, active)
-            if staged is not None and metadata["status"] in ("succeeded", "failed"):
+            staged = await self._execute(
+                directory, Path(prepared["path"]) if prepared else None, run_config, active
+            )
+            if prepared and staged is not None and metadata["status"] in ("succeeded", "failed"):
                 self.workspaces.finish_job(prepared["workspace_id"], staged, metadata["cwd"])
                 metadata["workspace_committed"] = True
         except asyncio.CancelledError:
@@ -1035,7 +1051,8 @@ class ShellRunner:
         except Exception as error:
             metadata.update(status="failed", error=error_text(error)[:1200])
         finally:
-            self.workspaces.release_job(prepared["workspace_id"])
+            if prepared:
+                self.workspaces.release_job(prepared["workspace_id"])
             metadata.update(finished_at=time.time(), elapsed_seconds=round(time.monotonic() - started, 3))
             try:
                 self._save(metadata)

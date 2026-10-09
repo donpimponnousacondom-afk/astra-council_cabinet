@@ -5,13 +5,15 @@ Bots can import an observed attachment, inspect its measured size/dimensions, co
 ## Enablement
 
 1. In **Plugins**, enable **Private workspaces** (`workspace`) for file operations. Enable **Isolated Bash** (`shell`) when execution is wanted. Both are disabled in a newly seeded configuration and require no API key. Existing installations receive these disabled entries without changing any bot grant or provider configuration.
-2. In **Bots → Edit → Capabilities**, grant the desired tools to each bot. Bash requires both workspace and shell grants. **Web fetch** retains its existing ID/global setting and URL-only behavior; grant it for durable reading. Hortator still accepts only the genuine human owner `1482143139828596916`.
+2. In **Bots → Edit → Capabilities**, grant the desired tools to each bot. Bash alone supports disposable commands; persistent task runs additionally require the workspace grant. **Web fetch** retains its existing ID/global setting and URL-only behavior; grant it for durable reading. Hortator still accepts only the genuine human owner `1482143139828596916`.
 3. Inspect **Files, web reading and jobs** for actual runner readiness and selected utilities. A non-root Linux account, a compatible Bubblewrap, unprivileged namespaces, pidfds, libseccomp, Bash and the installed Python 3.14/Pillow/pip, uv, micromamba and documented utilities are needed. Readiness executes a real isolated probe. The runner fails closed when these requirements are unavailable. See [operator setup and execution boundary](SHELL_RUNNER.md).
 4. Adjust the visible global working limits and per-bot **Extended file and reading tasks** fields. Advanced per-bot plugin JSON overrides the global configuration under the same validation. Provider keys, Discord credentials and document publication settings are independent.
 
-Model commands may install Python/native packages into disposable sandbox storage; they cannot install host packages or change host policy. Installing/enabling the feature in another checkout requires the ordinary integration, backup, committed build and shared-Screen rollout procedure; the parallel implementation branch itself is not a deployment.
+Model commands may install Python/native packages into disposable sandbox storage; they cannot install host packages or change host policy. Installing/enabling the feature in another checkout requires the ordinary integration, committed build and shared-Screen rollout procedure; the parallel implementation branch itself is not a deployment.
 
 ## Model workflow
+
+For one-off commands, call `shell` with `{"operation":"run","command":"python3 -c \"print(1 + 1)\""}` and omit `task`. This needs only shell, starts with empty disposable files and keeps job logs. To retain files between calls, use the task workflow below. See [storage modes and limits](SHELL_RUNNER.md#disposable-commands-and-persistent-tasks).
 
 Each available tool accepts `{}` for full usage without executing its handler. Invalid calls return all detectable argument errors and complete usage. Arguments are named JSON fields. See the permanent [tool contract](TOOLS.md).
 

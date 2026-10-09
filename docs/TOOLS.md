@@ -88,7 +88,7 @@ Schemas may supply complete top-level `examples`. Shared usage selects a schema-
 
 `web_search` supports `{"query":"topic","engine":"both","count":5}` as well as query-only Auto, explicit Brave and keyless DuckDuckGo. Its engine status/provenance distinguish partial recovery from total failure; all-engine failures retain full usage. See [WEB_SEARCH.md](WEB_SEARCH.md) for limits and examples. A `web_fetch` download-limit error remains distinct from the size of a returned text page.
 
-Shell execution requires an existing task: first call **workspace** with `{"operation":"start","task":"your-task"}`, wait for success, then reuse its task in `shell.run`. The shell tool has no start operation and never creates a workspace implicitly. Missing-task errors name this exact prerequisite. Existing grant, budget and isolation checks still apply.
+Shell execution with `task` requires an existing persistent workspace: first call **workspace** with `{"operation":"start","task":"your-task"}`, wait for success, then reuse its task in `shell.run`. The shell tool has no start operation and never creates a workspace implicitly. Missing-task errors name this exact prerequisite. Omit `task` for a disposable command requiring only shell; files vanish when the call ends and job logs remain. See [shell storage modes](SHELL_RUNNER.md#disposable-commands-and-persistent-tasks). Existing budget and isolation checks still apply.
 
 ## Normal and extended turns
 

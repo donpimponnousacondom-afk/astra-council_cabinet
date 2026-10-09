@@ -13,9 +13,12 @@ SHELL_DESCRIPTION = (
     "All /packages installs/caches are disposable and vanish when this job ends: install AND use them in "
     "one command. Save deliverables in /workspace; never put venvs, linked trees or package caches there. "
     "The base Python 3.14 is read-only; no host apt/sudo. Large downloads/builds can hit finite job limits. "
-    'Requires both shell and workspace grants. First call workspace with {"operation":"start","task":"your-task"} '
-    "and wait for success; use that returned task here. shell has no start operation and cannot create a workspace. run uses its saved working "
-    "directory unless cwd is supplied. Commands use the configured time limit (default 90 seconds, "
+    "Omit task for a disposable command with only the shell grant: /workspace starts empty and all files "
+    "vanish after this call; stdout/stderr and job evidence remain readable. To keep files between calls, "
+    'also obtain the workspace grant, call workspace with {"operation":"start","task":"your-task"}, '
+    "then pass that task to run. A supplied task must exist; shell never creates one or falls back to disposable storage. "
+    "A persistent task uses its saved working directory unless cwd is supplied; disposable jobs start at '.'. "
+    "Commands use the configured time limit (default 90 seconds, "
     "configurable up to 600); timeout_seconds may shorten it. No detached job "
     "survives completion. Original imported files are protected; write transformed copies to new paths. "
     "Operations: run(task,command,cwd,timeout_seconds), status(job_id), read(job_id,stream,offset,limit), "
@@ -26,7 +29,7 @@ SHELL_FIELDS = {
     "operation": {"type": "string", "enum": ["run", "status", "read", "cancel", "read_result"]},
     "task": {
         **workspaces.PROPERTIES["task"],
-        "description": "Existing workspace task slug in this bot/channel. First call workspace.start with the same task; shell.run cannot create it.",
+        "description": "Optional: omit for disposable files and shell-only access. Supply an existing task to keep files; requires the workspace grant and a successful workspace.start first.",
     },
     "command": {
         "type": "string",
@@ -45,7 +48,7 @@ SHELL_FIELDS = {
     "length": {"type": "integer", "minimum": 1, "maximum": 18000, "default": 6000},
 }
 SHELL_OPERATIONS = {
-    "run": (["task", "command"], ["task", "command", "cwd", "timeout_seconds"]),
+    "run": (["command"], ["task", "command", "cwd", "timeout_seconds"]),
     "status": (["job_id"], ["job_id"]),
     "read": (["job_id"], ["job_id", "stream", "offset", "limit"]),
     "cancel": (["job_id"], ["job_id"]),
@@ -105,29 +108,39 @@ class AgentTools:
         )
 
     async def shell(self, args, context, config, key):
-        if not self.registry.allowed("workspace", context):
-            raise ControlError("Shell operations also require an enabled workspace plugin and bot grant", 403)
         operation = args["operation"]
+        persistent = (
+            "task" in args
+            if operation == "run"
+            else self.runner.status(context, args["job_id"]).get("storage") != "disposable"
+        )
+        if persistent and not self.registry.allowed("workspace", context):
+            raise ControlError(
+                "Persistent shell jobs also require an enabled workspace plugin and bot grant; omit task for a disposable run",
+                403,
+            )
         if operation == "run":
             return await self.runner.run(
                 context,
-                task=args["task"],
+                task=args.get("task"),
                 command=args["command"],
                 cwd=args.get("cwd"),
                 timeout_seconds=args.get("timeout_seconds"),
                 configuration=config,
             )
         if operation == "status":
-            return self.runner.status(context, args["job_id"])
-        if operation == "read":
-            return self.runner.read(
+            result = self.runner.status(context, args["job_id"])
+        elif operation == "read":
+            result = self.runner.read(
                 context,
                 args["job_id"],
                 stream=args.get("stream", "stdout"),
                 offset=args.get("offset", 0),
                 limit=args.get("limit", 8000),
             )
-        return await self.runner.cancel(context, args["job_id"])
+        else:
+            result = await self.runner.cancel(context, args["job_id"])
+        return {**result, "storage": "workspace" if persistent else "disposable"}
 
     async def catalog(self, bot_id=None, limit=30):
         return self.registry.vault.redact(

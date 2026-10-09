@@ -1,5 +1,20 @@
 # Implementation and acceptance plan
 
+## Owner decision — independent disposable shell (2026-10-09)
+
+Shell-only bots must be able to run one-off commands, curl/POST and inline Python using the existing sandbox toolchain without a persistent workspace. Omit `task` for empty disposable storage; an explicit task retains the existing workspace workflow and grant. Keep job evidence, cancellation, quotas, network boundaries and bot settings intact. The current contract is in [SHELL_RUNNER.md](SHELL_RUNNER.md).
+
+## Recent owner decisions
+
+On 2026-10-08, after investigating native tokenizers, the owner chose to keep
+one fixed `cl100k_base` fallback for unreported token counts across models.
+Do not implement the proposed per-model tokenizer mappings. Reported usage stays
+authoritative and local estimates remain marked `~`. The owner confirmed that
+the proxy was rewriting reasoning parameters and is patching it separately to
+preserve them; evaluate subsequent reasoning observations after that repair.
+The repair is owner-reported work in progress, not verified Council behavior.
+See [token reporting](OPERATIONS.md#discord-message-footers).
+
 On 2026-10-08 the owner requested private, factual feedback when Engram updates
 are absent, with counts based on delivered replies and useful rejection reasons.
 They clarified that retaining unchanged memory is a legitimate model choice.

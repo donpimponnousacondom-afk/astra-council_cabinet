@@ -74,8 +74,23 @@ class ToolEvidence:
             store.execute(
                 "ALTER TABLE tool_result_evidence ADD COLUMN required_tools TEXT NOT NULL DEFAULT '[]'"
             )
+        if "grant_version" not in {
+            row["name"] for row in store.rows("PRAGMA table_info(tool_result_evidence)")
+        }:
+            store.execute(
+                "ALTER TABLE tool_result_evidence ADD COLUMN grant_version INTEGER NOT NULL DEFAULT 0"
+            )
 
-    def record(self, context, name, call_id, result, *, source_result_id=None):
+    @staticmethod
+    def _required_tools(row):
+        required = {row["tool"], *json.loads(row["required_tools"])}
+        # Before independent shell grants, shell implicitly required workspace,
+        # including through pages saved by another reader. Keep that boundary.
+        if row["grant_version"] == 0 and "shell" in required:
+            required.add("workspace")
+        return required
+
+    def record(self, context, name, call_id, result, *, source_result_id=None, required_tools=()):
         result_id = uid("result_")
         # Persist the same JSON object that the model sees, before adding the
         # receipt ID. Scalar/list adapters use a value envelope consistently.
@@ -92,17 +107,17 @@ class ToolEvidence:
                 "offset": 0,
                 "length": 6000,
             }
-        required = {name}
+        required = {name, *required_tools}
         if source_result_id:
             source = self.store.one(
-                "SELECT tool,required_tools FROM tool_result_evidence WHERE id=? AND bot_id=? AND channel_id=? AND turn_id=?",
+                "SELECT tool,required_tools,grant_version FROM tool_result_evidence WHERE id=? AND bot_id=? AND channel_id=? AND turn_id=?",
                 (source_result_id, context.bot["id"], context.channel_id, context.turn_id),
             )
             if not source:
                 raise ControlError("Source tool evidence is missing", 404)
-            required.update([source["tool"], *json.loads(source["required_tools"])])
+            required.update(self._required_tools(source))
         self.store.execute(
-            "INSERT INTO tool_result_evidence VALUES(?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO tool_result_evidence (id,bot_id,channel_id,turn_id,tool,call_id,content,created_at,required_tools,grant_version) VALUES(?,?,?,?,?,?,?,?,?,1)",
             (
                 result_id,
                 context.bot["id"],
@@ -124,7 +139,7 @@ class ToolEvidence:
         )
         if not row:
             raise ControlError("Tool result is missing or belongs to another bot, channel or turn", 404)
-        for name in {row["tool"], *json.loads(row["required_tools"])}:
+        for name in self._required_tools(row):
             if name not in ("council_speak", "council_silence", "discord_attach") and not allowed(
                 name, context
             ):

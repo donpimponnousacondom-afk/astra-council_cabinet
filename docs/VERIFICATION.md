@@ -4,6 +4,18 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Independent disposable shell (2026-10-09)
+
+Commit: draft based on `cdccd265cf0513577f97911358d5732b1bd82eb4`; dirty during initial verification.
+Backend scope: focused `tests/test_shell_disposable.py`, `tests/test_shell_runner.py`, `tests/test_agentic_runtime.py`, `tests/test_agentic_delivery.py`, `tests/test_agentic_api.py`.
+Backend result: **45 passed, 1 skipped**, 2 dependency deprecation warnings, exit 0, 84.75 seconds with `HORTATOR_REQUIRE_SANDBOX=1`. The opt-in public native-package download check was skipped. A subsequent discovery/schema test and shell-only memory-reader coverage are included in the full gate below.
+Ruff lint/format and `git diff --check` passed during development.
+Classification: real local Bubblewrap execution, local HTTP POST receiver, isolated SQLite, mocked provider/Discord adapters. No live Discord sends, real provider calls or changes to production bot settings.
+
+The new tests exercise curl and inline Python POST with workspace disabled; fresh files/cwd on the next command; retained logs without persistent workspace rows or file generations; timeout/cancellation/failure and restart cleanup; explicit-task persistence and missing-task rejection; current/stale grants and bot/channel/turn scope; historical and transitively paged shell evidence after the grant-version migration. Existing sandbox toolchain, limits, persistent image workflow and archival checks also ran.
+
+Full `./scripts/check.sh --suite full`: in progress at the implementation commit. Final results and independent local review evidence will be recorded before completion; no remote CI monitoring has started.
+
 ## Private Engram update feedback (2026-10-08)
 
 Commit: draft `feat/engram-feedback`, based on
