@@ -1,0 +1,176 @@
+# Simple filesystem
+
+`filesystem` is a separate, optional keyless plugin. Enable it globally and grant
+it to each bot that should use it. It supplies one persistent directory per
+stable bot identity, shared across that bot's authorized conversations. Renaming
+the bot does not change its files. There is no task name, start operation, or
+workspace selector. Private workspaces retain their existing contract in
+[WORKSPACES.md](WORKSPACES.md).
+
+## Owner decisions
+
+On 2026-10-10 the owner authorized this independent plugin for experimentation,
+without migrating existing tasks or changing bot grants automatically. The final
+decision **supersedes the earlier read-only-on-disable proposal**: OFF unmounts
+the saved filesystem completely. Stored files remain for re-enabling, but the
+bot cannot read or write them while OFF. Do not add a read-only mode.
+
+The default capacity is 256 MiB, with no inactivity expiry or automatic eviction.
+Show used/total capacity and a whole-number percentage. The owner removed the
+proposed "Keep your own files organized" instruction; do not add a tidiness,
+cleanup-pressure or punishment prompt. Intentionally saved compatible dependency
+files use the same quota. Default disposable installations remain disposable.
+Do not add package-specific bans or silently relax the inherited path, original
+attachment, link or credential boundaries. No background shell process may
+survive the end of its shell call.
+
+When the mount is OFF, explicitly tell previously provisioned bots that their
+saved files still exist, cannot currently be accessed, and require the owner's
+help if needed. Do not imply that disabling the mount deleted files. A bot that
+has never provisioned this filesystem must not be told it already has saved
+files. Unrelated bots receive no filesystem mount notice.
+
+## Model-visible behavior
+
+| Grants and global switches | Available behavior |
+| --- | --- |
+| Filesystem and Bash ON | File operations; Bash automatically uses the same saved `/workspace` |
+| Filesystem ON, Bash OFF | File operations without command execution |
+| Filesystem OFF, Bash ON | Saved files inaccessible; a no-task Bash call gets empty disposable `/workspace` |
+| Both OFF | Neither capability; stored files remain for re-enabling |
+
+If Private workspaces is also granted, an explicit existing `task` selects that
+legacy store; omission selects Simple filesystem while mounted. Without Private
+workspaces, the mounted Bash schema has no `task` argument. An invalid explicit
+task never falls back to another store. Saved Simple filesystem job/evidence
+reads retain the filesystem grant, including pages reread through other tools.
+Turning it off is not a transcript erasure; previously returned text can already
+be in conversation context.
+
+Runtime facts at the prompt tail report mount state and current usage, without
+rewriting stable schemas with byte counters. The ON notice is:
+
+> Simple filesystem is ON. Your saved files are at /workspace. The filesystem
+> tool and, when available, shell.run use this same directory automatically.
+> Files remain until deleted; /packages and running shell processes do not
+> survive a shell call.
+
+Usage includes `display: "182/256 MiB (71%)"`, exact used/limit/remaining bytes,
+integer percent, entry count and file/entry limits. Displayed MiB and percent are
+rounded to whole numbers; very small usage can display zero, with exact bytes
+still available in the same result. Status, file actions and filesystem shell
+results also report usage.
+
+The OFF notice for previously saved files is:
+
+> Your filesystem mount is OFF. Your saved files still exist, but you cannot
+> access them for now. Ask the owner if you need something there. Do not invent
+> file contents or claim to have inspected the unavailable filesystem. If Bash
+> is available, its /workspace is temporary storage, not your saved files.
+
+The actual wording is defined by `DESCRIPTION`, `MOUNT_ON` and `MOUNT_OFF` in
+`hortator/filesystem.py`, and `FILESYSTEM_SHELL_DESCRIPTION` in
+`hortator/agentic.py`. Operator-owned prompt overrides remain operator-owned.
+
+## Tool schema and discovery
+
+The model receives the available tool schema before calling it. `filesystem({})`
+returns complete schema/help and an example, with `usage_only: true` and
+`executed: false`; it creates no files. Named JSON arguments, full validation
+feedback and durable result paging follow [TOOLS.md](TOOLS.md). Help is optional
+and consumes ordinary call/round budgets. File operations do not implicitly
+extend the configured tool budget.
+
+| `operation` | Required arguments | Optional arguments |
+| --- | --- | --- |
+| `status` | none | none |
+| `list` | none | `path` (default `.`), `cursor`, `limit` |
+| `stat` | `path` | none |
+| `read` | `path` | `offset`, `limit_bytes`, `encoding` |
+| `write` | `path`, `content` | `encoding`, `overwrite`, `expected_sha256` |
+| `edit` | `path`, `old_text`, `new_text` | `replace_all`, `expected_sha256` |
+| `mkdir` | `path` | none |
+| `move` | `path`, `destination` | `overwrite` |
+| `delete` | `path` | `recursive` |
+| `import_attachment` | `path`, `message_id`, `attachment_id` | `overwrite`, `expected_sha256` |
+| `export` | `path` | none |
+| `read_result` | `result_id` | `offset`, `length` |
+
+Paths are relative to `/workspace`. `list` lists directory contents and returns
+explicit `next` arguments when another page exists. File offsets count bytes;
+saved-result offsets count characters. Writes create parents and require explicit
+overwrite of an existing file. Edits require an unambiguous text match unless
+`replace_all` is true. Move destinations require existing parent directories;
+only files can overwrite files. Nonempty directory deletion requires
+`recursive: true`. The root itself cannot be removed or moved.
+
+```json
+{"operation":"write","path":"notes/USAGE.md","content":"Working notes"}
+{"operation":"list","path":"notes"}
+```
+
+Then, through the separately granted shell:
+
+```json
+{"operation":"run","command":"cat /workspace/notes/USAGE.md"}
+```
+
+Observed attachment IDs remain scoped to the actual current channel even though
+saved files span conversations. Imported originals retain the existing protection
+against alteration, moving and deletion; save transformed copies to other paths.
+Export registers a current-turn artifact for `discord_attach`; it does not post.
+Original intake/export sizes and delivery grants are unchanged.
+
+## Limits and persistence
+
+Global configuration and per-bot overrides use these strict integer settings:
+
+| Setting | Default |
+| --- | --- |
+| `max_bytes` | 268,435,456 bytes (256 MiB) |
+| `max_file_bytes` | 33,554,432 bytes (32 MiB) |
+| `max_files` | 1,000 files and directories |
+| `max_read_bytes` | 12,000 bytes per file-read page |
+
+There is no task-count setting or retention timer. Filling the filesystem blocks
+growth, not deletion or directory listing. The direct delete operation does not
+copy the whole filesystem, and remains usable after an operator lowers a quota.
+The byte quota counts saved logical data; shell snapshots and atomic replacement
+require additional temporary space. It is not a cap on total host disk, job logs
+or package scratch.
+
+Bash retains the existing [sandbox lifecycle](SHELL_RUNNER.md): a fresh bounded
+working copy, validated save on normal completion (including ordinary nonzero
+exits), and rollback on timeout, cancellation or invalid output. The runner
+terminates children before returning the tool result. File access from another
+conversation is rejected while a job/import holds the same bot's filesystem.
+Configuration edits cancel affected bot turns; save also rechecks the current
+grant and limits before committing. Turning OFF cannot commit an in-flight
+filesystem job under its previous grant.
+
+Default pip/uv/native installs in `/packages` vanish after every shell call.
+Compatible package files explicitly installed under `/workspace` can persist;
+later calls must select their import path again. This is not a complete persistent
+container: links are rejected, saved execute bits are not preserved, and ordinary
+virtual environments are not supported unchanged. Supplied runtimes remain
+read-only and are provided afresh. The planning probe in
+[VERIFICATION.md](VERIFICATION.md) records these existing limitations.
+
+## Operator inspection and backups
+
+Use **Plugins → Simple filesystem** for enablement and limits, and grant it
+through **Bots → Capabilities**. The existing **Files, web reading and jobs**
+panel shows each bot's single directory and used/total percentage, with file
+inspection. The authenticated operator can inspect saved files while the bot's
+mount is OFF.
+
+Storage is `$HORTATOR_DATA_DIR/filesystems/<opaque-filesystem-id>/<generation>/`.
+SQLite `filesystems` holds the unique bot identity and active generation;
+`filesystem_imports` holds protected originals. The same validated generation
+engine is shared with Private workspaces, with separate tables and storage roots.
+
+Explicitly requested full snapshots and CLI backups include the database and
+`filesystems/` together. Follow [OPERATIONS.md](OPERATIONS.md#backup-and-restore).
+Enabling the feature does not create a backup, migrate old tasks, or enable a bot.
+Partial conversation restore retains its existing scope; it is not a filesystem
+restore. New installations leave this plugin disabled.

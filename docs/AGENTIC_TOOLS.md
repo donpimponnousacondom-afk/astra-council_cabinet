@@ -4,6 +4,10 @@ Bots can import an observed attachment, inspect its measured size/dimensions, co
 
 ## Enablement
 
+For one directory per bot without task selection, use the separate optional
+[Simple filesystem](FILESYSTEM.md). Its files are automatically mounted by Bash
+while enabled. The task-based setup below remains available independently.
+
 1. In **Plugins**, enable **Private workspaces** (`workspace`) for file operations. Enable **Isolated Bash** (`shell`) when execution is wanted. Both are disabled in a newly seeded configuration and require no API key. Existing installations receive these disabled entries without changing any bot grant or provider configuration.
 2. In **Bots → Edit → Capabilities**, grant the desired tools to each bot. Bash alone supports disposable commands; persistent task runs additionally require the workspace grant. **Web fetch** retains its existing ID/global setting and URL-only behavior; grant it for durable reading. Hortator still accepts only the genuine human owner `1482143139828596916`.
 3. Inspect **Files, web reading and jobs** for actual runner readiness and selected utilities. A non-root Linux account, a compatible Bubblewrap, unprivileged namespaces, pidfds, libseccomp, Bash and the installed Python 3.14/Pillow/pip, uv, micromamba and documented utilities are needed. Readiness executes a real isolated probe. The runner fails closed when these requirements are unavailable. See [operator setup and execution boundary](SHELL_RUNNER.md).
@@ -121,6 +125,7 @@ Authenticated **Files, web reading and jobs** panels show bounded recent records
 
 | Store | Location under external `HORTATOR_DATA_DIR` | Policy |
 | --- | --- | --- |
+| Simple filesystem | `filesystems/` + SQLite bot/generation/import metadata | One directory per bot; see [FILESYSTEM.md](FILESYSTEM.md) for limits and mount behavior |
 | Workspaces | `workspaces/` + SQLite scope/import/turn metadata | Default 128 MiB/task, 512 MiB/bot, 32 tasks/bot, 1,000 entries/task; 30-day inactivity expiry, protected active references |
 | Jobs | `jobs/` | Default 1 MiB combined output/job, 100 MiB output/bot, 200 recent job records/bot; oldest eligible completed metadata is automatically archived under `jobs/archive/` without consuming slots; recent/archived inactive logs expire after 7 days |
 | Fetched text | `fetched_documents/` + SQLite snapshot/reference metadata | Default 50 MB/bot, 7-day fixed snapshot expiry, at most 1,000 ready snapshots and bounded expired metadata |
@@ -128,7 +133,7 @@ Authenticated **Files, web reading and jobs** panels show bounded recent records
 
 Expiry cleanup happens on new work admission and protects active jobs/running-turn references; it never treats another store's files as disposable workspace scratch. Quota reductions do not delete history; a lower recent-job limit can archive additional inactive records on the next admission. Missing or expired snapshots have explicit errors and a separate refetch operation. Job restart recovery marks unfinished jobs interrupted and never replays commands. Monitor retained trajectory/storage; automatic shell metadata archival preserves active references. Manual storage maintenance still requires stopping the runtime and checking references. [Workspace details](WORKSPACES.md), [job limits and resource scope](SHELL_RUNNER.md)
 
-Backups/restores must include **workspaces, jobs and fetched_documents**, in addition to the existing database, matching key, artifacts, images and sites. The CLI includes these directories. Stop the runtime for a complete consistent archive; copying only SQLite cannot restore owned file bytes or logs. Restore into an empty external directory with 0700 directories/0600 files. [Backup procedure](OPERATIONS.md#backup-and-restore)
+Backups/restores must include **filesystems, workspaces, jobs and fetched_documents**, in addition to the existing database, matching key, artifacts, images and sites. The CLI includes these directories. Stop the runtime for a complete consistent archive; copying only SQLite cannot restore owned file bytes or logs. Restore into an empty external directory with 0700 directories/0600 files. [Backup procedure](OPERATIONS.md#backup-and-restore)
 
 The shell has hard per-process address-space/process/file/output/time limits and finite tmpfs byte mounts. File counts are monitored during execution and strictly checked before copyback; this is not a hard aggregate cgroup resident/kernel-memory controller. Read [the exact boundary and measured limitations](SHELL_RUNNER.md#limits-and-their-scope) before changing those settings.
 

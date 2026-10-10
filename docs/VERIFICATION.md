@@ -4,6 +4,70 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Simple filesystem implementation (2026-10-10)
+
+Commit: implementation based on `91e630e6a525ee40014615f6a2f62562abe484e8`;
+working tree dirty during focused checks. Final review/deployment revisions are
+recorded in the ignored `audit/2026-10-10/simple-filesystem/` evidence.
+Backend scope: `HORTATOR_REQUIRE_SANDBOX=1 uv run --frozen pytest -q
+tests/test_filesystem.py tests/test_filesystem_api.py tests/test_workspaces.py
+tests/test_shell_disposable.py tests/test_snapshots.py tests/test_agentic_api.py
+tests/test_prompt_layers.py`.
+Backend result: **88 passed**, 2 dependency deprecation warnings, exit 0,
+64.00 seconds. Earlier draft failures exposed a legacy task field used after
+filesystem save and an incorrect profile field in a new test; both were fixed
+before this passing run. Static lint, formatting and `git diff --check` passed.
+Full repository check: started; its final result must be recorded before a
+full-suite readiness claim. No remote CI run exists for this unpublished work.
+
+Classification: real local Bubblewrap execution and temporary files/SQLite;
+local ASGI inspection and synthetic package/source data. No live model/provider
+requests, Discord sends, production filesystem migration or bot grant changes.
+Coverage includes cross-channel same-bot storage, foreign bot separation, rename
+and store reconstruction, optional discovery without filesystem creation,
+complete argument errors, usage presentation, quota cleanup, protected imports,
+artifact preparation, both global and per-bot unmount/re-enable, transitive
+evidence authorization, in-flight disable, busy scope, invalid-tree/timeout
+rollback, legacy task coexistence, prompt-tail mount notices and full snapshot
+byte/database inclusion. These are not live bot acceptance checks.
+
+## Simple filesystem planning: package reuse and child cleanup (2026-10-10)
+
+Commit: `91e630e6a525ee40014615f6a2f62562abe484e8`; dirty at start/end:
+true/true (planning documentation only).
+Backend scope: no pytest collection; isolated diagnostic with the existing
+`Workspaces` and `ShellRunner`, real Bubblewrap, temporary SQLite/files, and a
+locally generated synthetic wheel. Five shell calls completed with all probe
+assertions satisfied; diagnostic exit 0. Duration was not recorded.
+Frontend format/build and browser tests: not run; no implementation changed.
+Evidence: `audit/2026-10-10/simple-filesystem-planning/package-process-probe.json`.
+Classification: real local sandbox integration, synthetic package, no network
+package downloads, live bot/provider calls, or Discord activity.
+
+Observed outcomes:
+
+- `pip install --target /workspace/vendor` saved a pure-Python fixture. A second
+  shell call imported it via `PYTHONPATH` without reinstalling; the temporary
+  wheel was absent, and the package was absent from the fresh default import
+  path. Its use must be explicitly selected again on later calls.
+- A saved executable script returned with mode `0600` in the next call; running
+  it through `bash script.sh` worked. Executable permissions are not preserved.
+- A normal `uv venv /workspace/env` command exited 0 but its output snapshot
+  failed validation because it contained symbolic links. `workspace_committed`
+  was false and the environment was absent in the next call. This expected
+  rejection demonstrates a current constraint, not a failed new feature check.
+- A detached `nohup` Python child scheduled to write a marker was stopped when
+  its shell call ended. A later call waited beyond the child delay and confirmed
+  that no marker appeared. Source inspection confirms descendant cleanup occurs
+  before each shell result returns, without waiting for a Discord reply.
+
+Limitations: this verifies the existing task workspace, not the proposed Simple
+filesystem. It does not establish arbitrary native-package, npm, whole-venv,
+read-only-mode or full-suite compatibility. No sandbox policy, grants, runtime
+configuration or running service changed. The temporary fixture was removed
+after runner cleanup; compact diagnostic evidence remains in the ignored audit
+directory.
+
 ## Curie shell failures and disposable outcome reporting (2026-10-10)
 
 Commit: changes based on `fb13a506d9cf7f36a39b001b7721c63abc393883`; dirty during verification.

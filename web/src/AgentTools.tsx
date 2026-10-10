@@ -4,9 +4,10 @@ import type { RecordData } from "./api";
 import { Badge, Empty, Field, Notice } from "./components";
 import "./AgentTools.css";
 
-export const agentToolIds = ["workspace", "shell", "web_fetch"];
+export const agentToolIds = ["workspace", "filesystem", "shell", "web_fetch"];
 
 const labels: Record<string, string> = {
+  max_bytes: "Saved filesystem capacity (bytes)",
   max_download_bytes: "Download limit (bytes)",
   chunk_chars: "Returned chunk (Unicode characters)",
   storage_quota_bytes: "Fetched text storage per bot (bytes)",
@@ -56,9 +57,11 @@ export function AgentToolSettings({
   return (
     <section className="agent-tools" aria-label="Working limits">
       <Notice>
-        No API key is required. Bash needs a ready isolated runner. Omit the
-        task for disposable files; keeping files between commands also needs the
-        workspace grant and an existing task. Job logs remain inspectable.
+        No API key is required. Simple filesystem provides one saved directory
+        per bot. Bash mounts it automatically while enabled; disabling it hides
+        saved files without deleting them. Without that mount, Bash uses
+        disposable files unless an existing Private workspace task is explicitly
+        selected. Job logs remain inspectable under their original grants.
       </Notice>
       {error && <Notice warning>{error}</Notice>}
       <div className="form-grid">
@@ -66,9 +69,13 @@ export function AgentToolSettings({
           <Field
             key={key}
             label={
-              pluginId === "shell" && key === "retention_days"
-                ? "Job log retention (days)"
-                : labels[key] || property.title || key.replaceAll("_", " ")
+              pluginId === "filesystem" && key === "max_files"
+                ? "Files and directories"
+                : pluginId === "filesystem" && key === "max_file_bytes"
+                  ? "Maximum file size (bytes)"
+                  : pluginId === "shell" && key === "retention_days"
+                    ? "Job log retention (days)"
+                    : labels[key] || property.title || key.replaceAll("_", " ")
             }
             hint={property.description}
           >
@@ -233,6 +240,7 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
           </p>
           {[
             ["workspaces", "Workspaces"],
+            ["filesystems", "Simple filesystems"],
             ["documents", "Fetched documents"],
             ["jobs", "Shell jobs"],
           ].map(([kind, title]) => (
@@ -251,12 +259,20 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
                     key={item.id || item.document_id || item.job_id || index}
                   >
                     <strong>
-                      {item.task || item.document_id || item.job_id || item.id}
+                      {kind === "filesystems"
+                        ? `${item.bot_id} · /workspace`
+                        : item.task ||
+                          item.document_id ||
+                          item.job_id ||
+                          item.id}
                     </strong>
                     <span className="muted">
-                      {item.bot_id} · channel {item.channel_id}
+                      {kind === "filesystems"
+                        ? "Shared across this bot's conversations · retained until deleted"
+                        : `${item.bot_id} · channel ${item.channel_id}`}
                     </span>
                     {item.url && <span>{item.url}</span>}
+                    {item.usage && <strong>{item.usage.display}</strong>}
                     <span>
                       {item.status || "Saved"}
                       {item.archived ? " · Archived" : ""} ·{" "}
@@ -280,13 +296,17 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
                       onClick={() =>
                         inspect({
                           resource:
-                            kind === "workspaces"
-                              ? "files"
-                              : kind === "documents"
-                                ? "document"
-                                : "job",
+                            kind === "filesystems"
+                              ? "filesystem_files"
+                              : kind === "workspaces"
+                                ? "files"
+                                : kind === "documents"
+                                  ? "document"
+                                  : "job",
                           bot_id: item.bot_id,
-                          channel_id: item.channel_id,
+                          ...(kind === "filesystems"
+                            ? {}
+                            : { channel_id: item.channel_id }),
                           ...(kind === "workspaces"
                             ? { task: item.task }
                             : {
@@ -296,7 +316,7 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
                       }
                     >
                       Inspect{" "}
-                      {kind === "workspaces"
+                      {kind === "workspaces" || kind === "filesystems"
                         ? "files"
                         : kind === "documents"
                           ? "text"
@@ -312,6 +332,22 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
       {selected && query && (
         <div className="agent-tool-inspection" aria-label="Tool inspection">
           <h4>Private inspection · untrusted source content</h4>
+          {query.resource.startsWith("filesystem") && (
+            <button
+              type="button"
+              className="text-button"
+              disabled={busy}
+              onClick={() =>
+                inspect({
+                  bot_id: query.bot_id,
+                  resource: "filesystem_files",
+                  path: ".",
+                })
+              }
+            >
+              Filesystem root
+            </button>
+          )}
           {selected.files?.map((file: RecordData) => (
             <button
               type="button"
@@ -320,8 +356,16 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
               onClick={() =>
                 inspect({
                   ...query,
-                  resource: file.kind === "directory" ? "files" : "file",
+                  resource: query.resource.startsWith("filesystem")
+                    ? file.kind === "directory"
+                      ? "filesystem_files"
+                      : "filesystem_file"
+                    : file.kind === "directory"
+                      ? "files"
+                      : "file",
                   path: file.path,
+                  offset: "0",
+                  cursor: "0",
                 })
               }
             >

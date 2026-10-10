@@ -948,6 +948,13 @@ For the separate text reader, a **1,000,000-byte download-limit** failure occurs
 
 ### Workspace and shell setup
 
+For the separate single-directory mode, enable **Simple filesystem** and grant
+`filesystem` to the desired bot. See [FILESYSTEM.md](FILESYSTEM.md) for the
+ON/OFF mount, usage display and tool schema. Files live under the external data
+directory's `filesystems/`; both requested CLI backups and full snapshots include
+this store with the database. Disabling the mount retains files without model
+read access. Private workspaces and their grants remain independent.
+
 Enable/grant private workspaces and isolated Bash separately in the dashboard; neither needs a key. Web fetch keeps its current ID and adds durable reading/search. The tool panel exposes runner readiness, selected utilities, working limits, bounded private inspection and per-bot extended file/reading budgets. Read [setup and resource scope](SHELL_RUNNER.md) before enabling execution. Bubblewrap, namespaces/pidfds, libseccomp and the Python/Pillow toolchain are operator-supplied; no readiness failure falls back to host Bash. The existing human Screen shell and production launcher stay unchanged.
 
 Backups now include `workspaces/`, `jobs/` and `fetched_documents/`, with their SQLite scope/reference/evidence tables. Restore the matching directories and database/key into empty external storage; stopped-runtime snapshots are needed for file/DB consistency. Job recovery marks unfinished commands interrupted, never replayed. Default inactive retention is 30 days for workspaces and seven days for fetched snapshots/job logs; active jobs/running-turn references are protected. Cleanup occurs on new work admission, so time expiry is an eligibility/read-access limit, not a promise of immediate physical erasure. The recent-job count limit now automatically archives the oldest completed records outside running turns into `jobs/archive/`, preserving IDs/history and freeing slots. Archived logs still follow the same age/byte limits; workspace files and trajectory evidence are unchanged. In Plugins → Isolated Bash, **Command time limit (seconds)** accepts up to 600 (default remains 90); shell registry timing follows it, while parent task deadlines still apply. Immutable tool-result evidence follows existing trajectory retention. See the [storage policies](AGENTIC_TOOLS.md#inspection-storage-and-retention) before archiving data.

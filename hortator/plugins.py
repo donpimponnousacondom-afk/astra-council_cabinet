@@ -518,6 +518,7 @@ class Registry:
             "discord_send",
             "document_site",
             "workspace",
+            "filesystem",
             "shell",
             "web_fetch",
         ):
@@ -687,9 +688,22 @@ class Registry:
         )
 
     def shell_spec(self, context):
+        from .agentic import FILESYSTEM_SHELL_DESCRIPTION, filesystem_shell_parameters
         from .shell_runner import limits
 
         spec = self.specs["shell"]
+        if self.allowed("filesystem", context):
+            private_tasks = self.allowed("workspace", context)
+            spec = replace(
+                spec,
+                description=FILESYSTEM_SHELL_DESCRIPTION
+                + (
+                    " An explicit task instead selects an existing Private workspace."
+                    if private_tasks
+                    else ""
+                ),
+                parameters=with_usage(filesystem_shell_parameters(private_tasks=private_tasks)),
+            )
         config = limits(
             {
                 **self.store.get("plugins", "shell")["config"],
@@ -798,6 +812,7 @@ class Registry:
                         "web_search",
                         "dumb_search",
                         "workspace",
+                        "filesystem",
                         "shell",
                         "memory",
                         "global_memory",
@@ -815,6 +830,7 @@ class Registry:
                 "council_inspect",
                 "web_fetch",
                 "workspace",
+                "filesystem",
                 "shell",
                 "document_site",
             }:
@@ -840,6 +856,7 @@ class Registry:
                     name
                     in (
                         "workspace",
+                        "filesystem",
                         "shell",
                         "web_fetch",
                         "web_search",
@@ -863,8 +880,8 @@ class Registry:
                 call_id,
                 result,
                 source_result_id=source_result_id,
-                required_tools=("workspace",)
-                if name == "shell" and result.get("storage") == "workspace"
+                required_tools=(result["storage"],)
+                if name == "shell" and result.get("storage") in {"workspace", "filesystem"}
                 else (),
             )
             result = page_result(
