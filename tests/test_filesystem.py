@@ -47,10 +47,23 @@ async def test_discovery_single_directory_schema_and_complete_errors(kernel):
     errors = await call(kernel, context, "write", content=5, unexpected="x")
     assert errors["executed"] is False and len(errors["errors"]) >= 3
     assert not kernel.store.rows("SELECT * FROM filesystems")
-    parameters = full_schema(kernel.registry.spec_for("shell", context).parameters)
+    shell_config = kernel.store.get("plugins", "shell")
+    kernel.store.put("plugins", {**shell_config, "config": {"timeout_seconds": 17}})
+    parameters = kernel.registry.spec_for("shell", context).parameters
+    shell_help = await kernel.registry.call("shell", {}, context, "shell-help")
+    assert shell_help["usage"]["parameters"] == parameters
+    assert parameters["properties"]["timeout_seconds"]["maximum"] == 17
     assert "task" not in parameters["properties"]
     validator = Draft202012Validator(parameters)
     assert validator.is_valid({"operation": "run", "command": "pwd"})
+    assert not validator.is_valid({"operation": "run", "command": "pwd", "timeout_seconds": 18})
+    advertised = next(
+        spec["function"]["parameters"]
+        for spec in kernel.registry.schemas(context)
+        if spec["function"]["name"] == "shell"
+    )
+    assert full_schema(advertised) == parameters
+    assert Draft202012Validator(advertised).is_valid({})
     assert not validator.is_valid({"operation": "run", "command": "pwd", "task": "invented"})
 
 

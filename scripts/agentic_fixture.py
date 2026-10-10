@@ -30,6 +30,31 @@ async def seed_agentic(kernel):
         },
         context,
     )
+    # Exercise directory cursors and file-byte paging with saved files while OFF.
+    bot = kernel.store.get("bots", "ada")
+    plugin = kernel.store.get("plugins", "filesystem")
+    try:
+        kernel.store.put("plugins", {**plugin, "enabled": True})
+        mounted_bot = kernel.store.put(
+            "bots", {**bot, "enabled_plugins": [*bot["enabled_plugins"], "filesystem"]}
+        )
+        filesystem_context = ToolContext(mounted_bot, context.channel_id, context.turn_id)
+        for index in range(101):
+            await kernel.registry.filesystems.call(
+                {"operation": "write", "path": f"file-{index:03}.txt", "content": "saved file"},
+                filesystem_context,
+            )
+        await kernel.registry.filesystems.call(
+            {
+                "operation": "write",
+                "path": "sub/notes.txt",
+                "content": "SIMPLE FILESYSTEM NOTES\n" + "Unicode café 🙂\n" * 1800,
+            },
+            filesystem_context,
+        )
+    finally:
+        kernel.store.put("bots", bot)
+        kernel.store.put("plugins", plugin)
     original = kernel.registry.fetched_documents.fetcher
 
     async def fetcher(url, limit):

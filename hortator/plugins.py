@@ -702,7 +702,7 @@ class Registry:
                     if private_tasks
                     else ""
                 ),
-                parameters=with_usage(filesystem_shell_parameters(private_tasks=private_tasks)),
+                parameters=filesystem_shell_parameters(private_tasks=private_tasks),
             )
         config = limits(
             {

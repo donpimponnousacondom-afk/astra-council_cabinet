@@ -17,8 +17,20 @@ Backend result: **88 passed**, 2 dependency deprecation warnings, exit 0,
 64.00 seconds. Earlier draft failures exposed a legacy task field used after
 filesystem save and an incorrect profile field in a new test; both were fixed
 before this passing run. Static lint, formatting and `git diff --check` passed.
-Full repository check: started; its final result must be recorded before a
-full-suite readiness claim. No remote CI run exists for this unpublished work.
+First full repository check: **1 failed, 2089 passed, 2 skipped**, exit 1,
+626.70 seconds for pytest; frontend checks were not run after that failure.
+The all-tool discovery contract exposed an extra help-schema wrapper in the new
+mounted Bash variant. Removing it keeps the configured timeout constraint,
+argument validation, advertised schema and empty-call help consistent. Added
+regressions cover that agreement. Both independent reviewers also found the
+dashboard directory-cursor continuation bug; it is corrected with a real-store
+browser regression for directory pages, byte pages and root navigation.
+After those corrections, `uv run --frozen pytest -q tests/test_tool_feedback.py
+tests/test_filesystem.py tests/test_agentic_api.py` passed **88 tests** in
+36.26 seconds, with 2 dependency warnings, exit 0. The fixture-only API check
+also passed 2 tests in 3.27 seconds. The corrected full gate is pending;
+no full-suite readiness claim yet.
+No remote CI run exists for this unpublished work.
 
 Classification: real local Bubblewrap execution and temporary files/SQLite;
 local ASGI inspection and synthetic package/source data. No live model/provider

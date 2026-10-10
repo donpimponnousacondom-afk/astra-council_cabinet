@@ -394,7 +394,11 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
               onClick={() =>
                 inspect({
                   ...query,
-                  offset: selected.next.offset ?? selected.next_offset,
+                  ...(selected.next.cursor !== undefined
+                    ? { cursor: selected.next.cursor }
+                    : {
+                        offset: selected.next.offset ?? selected.next_offset,
+                      }),
                 })
               }
             >
