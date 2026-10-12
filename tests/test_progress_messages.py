@@ -191,6 +191,37 @@ async def test_cancellation_after_progress_is_not_a_completed_answer(kernel):
     assert kernel.store.one("SELECT value FROM memories")["value"] == "Saved fact"
 
 
+async def test_unknown_progress_does_not_delay_same_turn_final_by_personal_cooldown(kernel):
+    _, transport = ready(
+        kernel, response_protocol="progress", enabled_plugins=["memory"], cooldown_seconds=600
+    )
+    transport.send.side_effect = [DeliveryError("Uncertain progress", uncertain=True), "888888888888888889"]
+    requests = 0
+
+    def handler(request):
+        nonlocal requests
+        requests += 1
+        if requests == 1:
+            return mixed("Saving", write_call())
+        assert responses(json.loads(request.content))[-1]["saved"] is True
+        return completion("Saved")
+
+    await install_client(kernel, handler)
+    await kernel.engine.tick()
+    await asyncio.wait_for(settle(kernel), 3)
+    assert transport.send.await_count == 2
+    assert [row["status"] for row in kernel.store.rows("SELECT status FROM outbox ORDER BY created_at")] == [
+        "unknown",
+        "sent",
+    ]
+    assert kernel.store.one("SELECT status FROM turns")["status"] == "sent"
+    assert not kernel.store.one(
+        "SELECT 1 FROM events WHERE kind='delivery.cooldown' AND json_extract(data,'$.scope')='bot'"
+    )
+    # The cadence timestamp remains in place for future turns.
+    assert kernel.store.runtime("ada")["last_sent"] > 0
+
+
 async def test_silence_does_not_publish_accompanying_text(kernel):
     _, transport = ready(kernel, response_protocol="progress")
     await install_client(

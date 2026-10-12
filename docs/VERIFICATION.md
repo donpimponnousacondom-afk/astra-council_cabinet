@@ -59,6 +59,15 @@ original-head full local gate was already running; its source metadata must be
 read alongside this delta evidence and the corrected-head GitHub checks, rather
 than mislabelled as a full local run of the corrected head.
 
+Luna independently reproduced a second failure: uncertain progress advanced
+`last_sent`, but the final reply did not qualify for same-turn continuation and
+waited the full personal cooldown (about 600 seconds in the reproduction). The
+parent reproduced the wait before correction, then included same-turn `unknown`
+progress in the continuation check. No uncertain text is retried; room spacing
+and future-turn cadence remain unchanged. The two progress suites passed after
+both fixes: **42 passed**, 15.19 s. Each pushed head requires renewed published-PR
+review and current-head check evidence.
+
 ## GitHub PR workflow authorization (2026-10-12)
 
 Classification: owner decision, documentation and operator-helper checks; no bot

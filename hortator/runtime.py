@@ -1592,10 +1592,13 @@ class Engine:
                 (bot["id"], context.turn_id),
             )
             continuing = self.store.one(
-                "SELECT 1 FROM outbox WHERE turn_id=? AND bot_id=? AND status='sent' "
+                "SELECT 1 FROM outbox WHERE turn_id=? AND bot_id=? AND status IN ('sent','unknown') "
                 "AND json_extract(routing,'$.kind')='progress' LIMIT 1",
                 (context.turn_id, bot["id"]),
             )
+            # Unknown progress already advances last_sent conservatively. It may
+            # have reached Discord, so allow this same turn's final answer just
+            # as for confirmed progress, without replaying the uncertain text.
             # A personal cooldown must never hold the channel send lock. Another
             # bot may be responding to a human while this draft waits its cadence.
             wait = (

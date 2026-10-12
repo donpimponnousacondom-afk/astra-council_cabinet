@@ -136,9 +136,10 @@ cooldown, busy channel send lock or active room send gap instead of waiting for
 them. Ordinary transport failure or timeout does not prevent the associated
 tool batch. Owner cancellation, superseding input, changed configuration,
 channel scope and task deadlines still stop work through their existing paths.
-Uncertain sends are not automatically replayed. Confirmed progress bypasses only
-the personal cooldown for subsequent messages in that same turn; room gaps and
-subsequent-turn cooldowns remain.
+Uncertain sends are not automatically replayed. Confirmed or uncertain progress
+bypasses only the personal cooldown for subsequent messages in that same turn;
+room gaps and subsequent-turn cooldowns remain. An uncertain optional send must
+not impose a fresh full personal cooldown on its own final answer.
 
 Progress preserves destination, reply targeting and outbox uncertainty. It does
 not acknowledge input, commit Engrams, consume prepared attachments/panels, or
