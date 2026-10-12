@@ -201,6 +201,20 @@ or run paid/live acceptance. See the dated history for original scope and ration
 
 ## Deferred operational follow-ups
 
+- Owner decision, 2026-10-11: improve provider-failure console readability with
+  the next substantive Council patch; do not implement or deploy a standalone
+  logging change now. Lead with the failed operation, HTTP status and upstream
+  explanation. Distinguish outgoing request settings from the provider's error;
+  when no rejected field is identified, say so rather than guessing. Keep zero
+  image/audio counters and unrelated size-limit metadata out of the concise
+  explanation, while preserving them in structured/expanded diagnostics.
+  Curie's text-only MiMo research HTTP 400 (`req_e32ee467fa1f4b10bede`) displayed
+  image counters beside a generic parameter error, misleading the owner into
+  suspecting image handling. The owner identified their CPA parameter-forwarding
+  patch as the cause; the saved Council request alone does not establish the
+  exact fields received or rejected downstream. This is a deferred presentation
+  fix, not authorization to translate parameters or change saved profiles.
+
 - Owner deferred the recurring Loki DM history-import warning on 2026-09-26
   (`discord.history_failed`, event `61308`, stage `validate_scope`, channel
   `1553280213004062780`). Review the manually configured DM-as-guild-room entry:
