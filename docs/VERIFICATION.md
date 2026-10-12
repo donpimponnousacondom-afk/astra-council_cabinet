@@ -42,6 +42,18 @@ live model can produce text and tool calls together; no live provider/Discord
 probe or production setting change was made. Full GitHub checks and independent
 published-PR reviews must settle on the final head before merge.
 
+CI follow-up, 2026-10-13 Madrid: run `38313629141` on `0889b31` reported
+**2 failed, 2,253 passed, 31 skipped** (604.81 s). Both failures were the same
+stale identity-prompt phrase assertion in `test_plain_content_is_the_final_answer_without_a_reply_tool`,
+one for string content and one for ordered text parts. The mock provider raised
+before returning either fixture response. A focused local reproduction failed
+both cases. The test now checks the current ordinary-content/protocol guidance
+outside the mock handler and retains the exact once-only delivery assertions;
+the full reply-protocol file then passed **15 tests** (4.85 s), with Ruff clean.
+This is a corrected test-contract regression, not a claim of a green full suite.
+The browser suite separately passed **76 tests** (2.7 min) on runtime tree
+`0d74f89`; `0889b31` changed only the API reference. No live rollout occurred.
+
 ## Reply behavior controls and audit closure wording (2026-10-12, after #110)
 
 The owner's screenshot showed the new checkboxes/descriptions running together:
