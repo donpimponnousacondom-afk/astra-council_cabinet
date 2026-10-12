@@ -3,10 +3,13 @@
 ## GitHub PR workflow — owner decision (2026-10-12)
 
 Completed task changes are automatically committed on their task branch, pushed
-and opened as a PR to main under standing owner authorization. Never commit,
-merge or push directly to main. The owner handles GitHub squash merging unless
-explicitly delegated. This supersedes earlier requirements for a fresh push/PR
-request and local-only review substitutes.
+and opened as a PR to main under standing owner authorization. The agent also
+performs GitHub squash merging after both independent reviews, resolution of
+blocking findings and passing required checks. Do not stop at readiness or ask
+again for an ordinary merge unless the owner explicitly pauses or reserves it.
+Never make local implementation commits/merges on main or push directly to it.
+This supersedes earlier per-push/PR/merge permission requirements, owner-only
+merge wording and local-only review substitutes.
 
 Every open PR receives two independent reviewers: `gpt-6-luna` at `max` reasoning
 and `gpt-6.1-sol` at `high`. Latest verified newer successors in those model

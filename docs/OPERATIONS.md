@@ -1,13 +1,15 @@
 # Operations
 
-All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The agent publishes completed changes as task-branch PRs targeting `main`; the owner performs GitHub **Squash and merge** unless explicitly delegated. After a merge, update main with a fast-forward pull and create a fresh task branch. Never commit or push directly to main, create merge commits, rewrite history or force-push.
+All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The agent publishes completed changes as task-branch PRs targeting `main`; the agent performs GitHub **Squash and merge** after both reviews and required checks pass, under standing owner authorization. After a merge, update main with a fast-forward pull and create a fresh task branch. Never make local implementation commits/merges on main, push directly to main, create merge commits, rewrite history or force-push.
 
 ## Publication and local development deployment
 
 Owner decision, 2026-10-12: every completed change must be committed on its task
 branch, pushed, and included in an open GitHub PR targeting `main`. Task-branch
-pushes, PR creation, routine review comments and confirmed review/CI fixes have
-standing authorization; a separate question for each push is unnecessary. Preserve
+pushes, PR creation, routine review comments, confirmed review/CI fixes and
+GitHub squash merges after the merge gates pass have standing authorization.
+Do not ask separately for an ordinary push or merge, or stop at readiness, unless
+the owner explicitly pauses or reserves that particular action. Preserve
 existing user changes and inspect root, branch and working tree before Git mutations.
 
 Run appropriate local checks, commit the finished change, publish its branch and
@@ -21,8 +23,10 @@ remote checks/reviews remain pending; they do not establish merge readiness.
 Rebuild the dashboard after the final commit and restart through shared Screen so
 the dashboard and server identify the intended commit. A review or CI fix requires
 another ordinary task-branch commit/push and fresh evidence for the new head; use
-the same deployment conditions for that update. Squash merging remains with the
-owner unless explicitly delegated; do not bypass required checks.
+the same deployment conditions for that update. The parent completes GitHub
+squash merging after both reviews, resolution of blocking findings and passing
+required checks, then verifies the recorded merge and main commit. Never bypass
+required checks or push directly to main.
 
 The owner also explicitly authorized a narrow recovery exception on 2026-10-12:
 publish the eleven unpublished commits following PR #94, in their existing order,
@@ -31,15 +35,21 @@ authorized combining faulty intermediate PRs #95, #97 and #99 into their correct
 successors #96, #98 and #100. Close the superseded PRs without merging, preserve
 their commits and review evidence, and renew both reviews against the combined
 successor diffs. Register the remaining dependencies as a native GitHub stack.
-The bottom PR targets `main`; each
-higher PR initially targets the preceding PR's branch. The owner squash-merges
-from the bottom upward, and GitHub manages restacking of the remaining unmerged
+The bottom PR targets `main`; each higher PR initially targets the preceding
+PR's branch. The agent squash-merges through GitHub from the bottom upward,
+and GitHub manages restacking of the remaining unmerged
 PRs so each change ultimately reaches `main`. Every changed PR head after such a
 restack needs renewed reviews and checks. Inspect the actual Git/PR/stack state;
 preserve the original local history without local rebases or force-pushes. This
 exception permits publishing the recovery stack before its lower PRs merge; it
 does not authorize rewriting `main` or historical merged commits, general stacking
 of future tasks, or implementing `end_cycle`.
+
+For this native recovery stack, GitHub can squash-merge a contiguous group in
+one ordered operation, producing one commit per PR. Use the supported asynchronous
+stack merge API with the reviewed top head pinned and rule bypass disabled;
+recheck every included head/review/check first. An accepted request is not a
+completed merge: poll its result and verify each PR's merge commit on main.
 
 ## Independent PR review and check monitoring
 
@@ -79,8 +89,12 @@ PR-workflow-only listing can omit other checks. Missing, pending, cancelled or
 failed required checks do not pass, and older-head results cannot certify a new
 head. Each reviewer updates or supersedes its own comment for the new head. The
 parent may publish a concise comparison digest after validating the findings;
-keep comments distinct from formal GitHub approval. Squash merging remains an
-owner action unless explicitly delegated.
+keep comments distinct from formal GitHub approval. Once the reviewed head has
+passing required checks and no blocking findings, the parent squash-merges it
+through GitHub under standing authorization. Pin the reviewed head in the merge
+request and verify the returned merge result. An explicit owner hold still wins;
+otherwise a ready PR is an intermediate state, not task completion. No direct
+push to main or bypass of required checks is permitted.
 
 Use real review outcomes to refine the skill. Distinguish prompt/model mistakes
 from application bugs and CI infrastructure problems. Repeated issues despite a
@@ -300,7 +314,7 @@ npm run build --prefix web &&
 /home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000 --color
 ```
 
-When the feature is finished and locally verified, commit it on its task branch, push and open its PR targeting `main` **before** the final build/restart. Builds embed commit metadata, so a build produced before that commit correctly identifies the older commit plus uncommitted changes. Start both independent PR reviews and CI watches; local development deployment may proceed while they run. Publication has standing owner authorization. The owner retains the PR squash merge unless explicitly delegated.
+When the feature is finished and locally verified, commit it on its task branch, push and open its PR targeting `main` **before** the final build/restart. Builds embed commit metadata, so a build produced before that commit correctly identifies the older commit plus uncommitted changes. Start both independent PR reviews and CI watches; local development deployment may proceed while they run. Publication and GitHub squash merging after both reviews and required checks have standing owner authorization. Complete and verify the merge rather than stopping at readiness.
 
 ## Running code identity
 

@@ -15,12 +15,16 @@ published PR. Latest verified newer successors in those families are permitted;
 older Sol models are excluded. Both reviewers monitor GitHub Actions/current-head
 checks and post their own comments. The parent may assign fixes to available
 reviewers, and local rollout can proceed after PR opening and successful local
-checks while CI/reviews continue. Squash merging stays with the owner unless
-explicitly delegated; direct main commits, merges and pushes remain forbidden.
+checks while CI/reviews continue. The owner clarified that this standing workflow
+also includes the agent completing GitHub squash merges after both reviews and
+passing required checks. Earlier owner-only merge wording was a documentation
+error, not an approval gate. Local implementation commits/merges on main and
+direct pushes to main remain forbidden; approved GitHub PR squash merges are
+the normal completion path.
 
-This decision supersedes earlier no-automatic-push, local-review fallback and
-CI/review-before-local-rollout instructions. The prior dated records below retain
-their actual scope, including local-only reviews and periods without a published
+This decision supersedes earlier no-automatic-push, owner-only merge, local-review
+fallback and CI/review-before-local-rollout instructions. The prior dated records
+below retain their actual scope, including local-only reviews and periods without a published
 PR. They are not remote review or current-head CI evidence. Actual publication,
 review comments, Actions results and rollout receipts must be recorded after
 they occur; none is inferred from this authorization. See the
