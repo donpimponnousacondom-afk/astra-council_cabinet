@@ -131,6 +131,70 @@ def merged(root, branch, head, remote_main):
     )
 
 
+def published(root, branch, head):
+    """Require the exact task snapshot on an open PR before local rollout."""
+    if branch == TARGET and head == git(root, "rev-parse", "refs/remotes/origin/main"):
+        return "empty placeholder at origin/main"
+    if not shutil.which("gh"):
+        raise Stop("--refresh needs GitHub CLI to verify the published task PR; Screen was not interrupted.")
+    candidates = json.loads(
+        run(
+            [
+                "gh",
+                "pr",
+                "list",
+                "--state",
+                "open",
+                "--head",
+                branch,
+                "--limit",
+                "100",
+                "--json",
+                "number,state,headRefName,headRefOid,baseRefName,isCrossRepository",
+            ],
+            root,
+        )
+    )
+    for pr in candidates:
+        if (
+            pr.get("state") != "OPEN"
+            or pr.get("headRefName") != branch
+            or pr.get("headRefOid") != head
+            or pr.get("isCrossRepository") is not False
+        ):
+            continue
+        if pr.get("baseRefName") == "main":
+            return f"open PR #{pr['number']} at the local head"
+        stacks = json.loads(
+            run(
+                [
+                    "gh",
+                    "api",
+                    "-H",
+                    "X-GitHub-Api-Version: 2026-03-10",
+                    f"repos/{{owner}}/{{repo}}/stacks?pull_request={pr['number']}",
+                ],
+                root,
+            )
+        )
+        for stack in stacks:
+            if stack.get("open") is not True or (stack.get("base") or {}).get("ref") != "main":
+                continue
+            for layer in stack.get("pull_requests", []):
+                if (
+                    layer.get("number") == pr["number"]
+                    and layer.get("state") == "open"
+                    and layer.get("merged_at") is None
+                    and (layer.get("head") or {}).get("ref") == branch
+                    and (layer.get("head") or {}).get("sha") == head
+                ):
+                    return f"open PR #{pr['number']} in native stack #{stack['number']} rooted at main"
+    raise Stop(
+        f"{branch} needs an OPEN PR at the exact local head targeting main (or a native stack rooted there). "
+        "Push the task commits and open its PR before --refresh; Screen was not interrupted."
+    )
+
+
 def preflight(root, refresh=False):
     clean(root)
     branch = git(root, "branch", "--show-current")
@@ -140,7 +204,8 @@ def preflight(root, refresh=False):
     if refresh:
         if branch == "main":
             raise Stop("--refresh expects a task branch; use the normal workflow to leave main.")
-        return {"root": str(root), "branch": branch, "head": head, "refresh": True}
+        proof = published(root, branch, head)
+        return {"root": str(root), "branch": branch, "head": head, "refresh": True, "proof": proof}
     say("Fetching origin/main and checking the previous task…")
     git(root, "fetch", "--no-tags", "origin", "refs/heads/main:refs/remotes/origin/main")
     remote_main = git(root, "rev-parse", "refs/remotes/origin/main")

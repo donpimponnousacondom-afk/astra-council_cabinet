@@ -49,12 +49,16 @@ def repo(tmp_path):
     return root
 
 
-def fake_prs(monkeypatch, records):
+def fake_prs(monkeypatch, records, stacks=None):
     original = workflow.run
 
     def run(args, *positional, **kwargs):
         if args[:3] == ["gh", "pr", "list"]:
             return json.dumps(records)
+        if args[:2] == ["gh", "api"]:
+            assert "X-GitHub-Api-Version: 2026-03-10" in args
+            assert args[-1].startswith("repos/{owner}/{repo}/stacks?pull_request=")
+            return json.dumps(stacks or [])
         return original(args, *positional, **kwargs)
 
     monkeypatch.setattr(workflow, "run", run)
@@ -172,8 +176,9 @@ def test_checkout_race_is_refused(repo):
 
 def test_refresh_does_not_require_merge_or_change_branch(repo, monkeypatch):
     tip = commit(repo, "not-yet-merged")
-    fake_prs(monkeypatch, [])
+    fake_prs(monkeypatch, [open_pr(tip)])
     plan = workflow.preflight(repo, refresh=True)
+    assert plan["proof"] == "open PR #42 at the local head"
     assert workflow.transition(plan) is None
     assert git(repo, "rev-parse", "HEAD") == tip
     assert git(repo, "branch", "--show-current") == "feat/task"
@@ -182,8 +187,84 @@ def test_refresh_does_not_require_merge_or_change_branch(repo, monkeypatch):
         workflow.preflight(repo, refresh=True)
 
 
+def open_pr(head, **overrides):
+    return {
+        "number": 42,
+        "state": "OPEN",
+        "headRefName": "feat/task",
+        "headRefOid": head,
+        "baseRefName": "main",
+        "isCrossRepository": False,
+        **overrides,
+    }
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        None,
+        {"headRefOid": "0" * 40},
+        {"headRefName": "feat/another-task"},
+        {"state": "MERGED"},
+        {"state": "CLOSED"},
+        {"isCrossRepository": True},
+        {"baseRefName": "dev/unregistered-parent"},
+    ],
+)
+def test_refresh_rejects_missing_stale_closed_foreign_or_unregistered_pr(repo, monkeypatch, overrides):
+    tip = commit(repo, "unpublished-work")
+    fake_prs(monkeypatch, [] if overrides is None else [open_pr(tip, **overrides)])
+    with pytest.raises(workflow.Stop, match="needs an OPEN PR at the exact local head"):
+        workflow.preflight(repo, refresh=True)
+    assert git(repo, "rev-parse", "HEAD") == tip
+    assert git(repo, "branch", "--show-current") == "feat/task"
+
+
+def test_refresh_empty_placeholder_needs_no_pr_or_github_cli(repo, monkeypatch):
+    git(repo, "branch", "-m", "feat/next_feature")
+    monkeypatch.setattr(workflow.shutil, "which", lambda name: None)
+    plan = workflow.preflight(repo, refresh=True)
+    assert plan["proof"] == "empty placeholder at origin/main"
+    commit(repo, "new-task")
+    with pytest.raises(workflow.Stop, match="needs GitHub CLI"):
+        workflow.preflight(repo, refresh=True)
+
+
+@pytest.mark.parametrize(
+    "invalid", [None, "wrong_root", "closed_stack", "wrong_head", "closed_layer", "missing_layer"]
+)
+def test_refresh_requires_matching_open_layer_in_registered_stack_rooted_at_main(repo, monkeypatch, invalid):
+    tip = commit(repo, "stack-layer")
+    layer = {
+        "number": 42,
+        "state": "open",
+        "merged_at": None,
+        "head": {"ref": "feat/task", "sha": tip},
+    }
+    stack = {"number": 7, "open": True, "base": {"ref": "main"}, "pull_requests": [layer]}
+    if invalid == "wrong_root":
+        stack["base"]["ref"] = "dev/another-root"
+    elif invalid == "closed_stack":
+        stack["open"] = False
+    elif invalid == "wrong_head":
+        layer["head"]["sha"] = "0" * 40
+    elif invalid == "closed_layer":
+        layer["state"] = "closed"
+    elif invalid == "missing_layer":
+        layer["number"] = 43
+    fake_prs(monkeypatch, [open_pr(tip, baseRefName="feat/parent")], stacks=[stack])
+    if invalid:
+        with pytest.raises(workflow.Stop, match="needs an OPEN PR at the exact local head"):
+            workflow.preflight(repo, refresh=True)
+    else:
+        plan = workflow.preflight(repo, refresh=True)
+        assert plan["proof"] == "open PR #42 in native stack #7 rooted at main"
+        assert workflow.transition(plan) is None
+
+
 @pytest.mark.parametrize("failure", [None, "dependencies", "mismatched_stamp", "interrupted"])
 def test_screen_worker_build_and_start_order_is_fail_closed(repo, monkeypatch, failure):
+    git(repo, "branch", "-m", "feat/next_feature")
     data = repo.parent / "runtime"
     data.mkdir()
     path = repo.parent / "job.json"

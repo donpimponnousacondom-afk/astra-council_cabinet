@@ -4,6 +4,64 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## GitHub PR workflow authorization (2026-10-12)
+
+Classification: owner decision, documentation and operator-helper checks; no bot
+behavior or live Discord/provider validation is claimed by this entry.
+
+The owner authorized automatic task-branch commits, pushes and PR creation to
+main, followed by independent Luna/max and GPT-6.1 Sol/high reviews of the actual
+published PR. Latest verified newer successors in those families are permitted;
+older Sol models are excluded. Both reviewers monitor GitHub Actions/current-head
+checks and post their own comments. The parent may assign fixes to available
+reviewers, and local rollout can proceed after PR opening and successful local
+checks while CI/reviews continue. The owner clarified that this standing workflow
+also includes the agent completing GitHub squash merges after both reviews and
+passing required checks. Earlier owner-only merge wording was a documentation
+error, not an approval gate. Local implementation commits/merges on main and
+direct pushes to main remain forbidden; approved GitHub PR squash merges are
+the normal completion path.
+
+This decision supersedes earlier no-automatic-push, owner-only merge, local-review
+fallback and CI/review-before-local-rollout instructions. The prior dated records
+below retain their actual scope, including local-only reviews and periods without a published
+PR. They are not remote review or current-head CI evidence. Actual publication,
+review comments, Actions results and rollout receipts must be recorded after
+they occur; none is inferred from this authorization. See the
+[decision](PLAN.md#github-pr-workflow--owner-decision-2026-10-12) and
+[procedure](OPERATIONS.md#independent-pr-review-and-check-monitoring).
+
+The operator helper now refuses `--refresh` before touching Screen unless an
+open same-repository PR matches the exact local branch/head and targets main,
+directly or through a registered native stack. Empty placeholders at the known
+origin/main remain usable. Focused verification: **33 tests passed** in 3.14 s
+(`uv run pytest tests/test_next_feature.py -q`), Ruff formatting/lint and diff
+whitespace checks passed. These tests use isolated repositories and simulated
+GitHub responses; they do not restart the shared runtime.
+
+The original eleven unpublished commits after #94 were pushed without rewriting
+their local history and opened as **PRs #95–#105**, registered in native GitHub
+stack **#106** rooted at main. At publication, Actions were running; no passing
+remote verdict is implied. Each PR was linked to this thread. The installed
+`council-pr-babysitter` skill was aligned with the new policy and its skill
+validator passed. Publication receipts and original-SHA mapping are preserved
+in ignored `audit/2026-10-12/pr-recovery/`. The proposed `end_cycle` behavior is
+explicitly outside this change.
+
+Remote review and Actions exposed faulty intermediate layers: #95 failed
+frontend formatting, #97's micromamba metadata-thread environment setting was
+ineffective, and #99 failed its mounted-shell help/schema test and had an
+inspector paging defect. Each immediate successor already contained the fix.
+The owner authorized consolidating **#95 into #96, #97 into #98 and #99 into
+#100**. The three intermediate PRs were closed as superseded, with `merged_at`
+remaining null. Changing the successors' bases exposed both original commits
+in each combined diff; no commit or source tree was rewritten. The original
+stack #106 was dissolved and the nine remaining PRs registered in native stack
+**#108**, rooted at main. Original review/failure evidence remains on the closed
+PRs. Both reviewers were assigned the combined successor diffs; their verdicts
+and current-head checks must be read from those PRs. No PR was merged and no
+runtime restart was performed during this consolidation.
+
 ## Progress messages and provider-error display (2026-10-12)
 
 Base: `6fe871c`; focused checks ran with the implementation uncommitted.
