@@ -50,6 +50,15 @@ sample. This is retained-response evidence, not a test of provider capability or
 Discord delivery. The exact aggregate report is retained in the ignored audit
 folder; no response text or tool arguments are printed by the command.
 
+PR #109 review follow-up: Sol independently reproduced `aiohttp.ClientPayloadError`
+and `ServerDisconnectedError` escaping the optional progress boundary. The parent
+confirmed both failures before correction (2 failed), then included `ClientError`
+in that boundary while retaining cancellation/access/deadline checks. The full
+progress and boundary suites passed afterward: **41 passed**, 14.62 s. The
+original-head full local gate was already running; its source metadata must be
+read alongside this delta evidence and the corrected-head GitHub checks, rather
+than mislabelled as a full local run of the corrected head.
+
 ## GitHub PR workflow authorization (2026-10-12)
 
 Classification: owner decision, documentation and operator-helper checks; no bot

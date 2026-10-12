@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import discord
+import aiohttp
 import httpx
 import pytest
 
@@ -115,7 +116,7 @@ async def test_incomplete_mixed_response_neither_posts_nor_executes(kernel, fini
     assert kernel.store.one("SELECT status FROM turns")["status"] == "failed"
 
 
-@pytest.mark.parametrize("failure", ["definite", "uncertain", "timeout", "os_error"])
+@pytest.mark.parametrize("failure", ["definite", "uncertain", "timeout", "os_error", "payload", "disconnect"])
 async def test_progress_delivery_failure_keeps_tools_and_final_answer(kernel, monkeypatch, failure):
     _, transport = ready(kernel, response_protocol="progress", enabled_plugins=["memory"], cooldown_seconds=0)
     monkeypatch.setattr("hortator.runtime.PROGRESS_SEND_TIMEOUT", 0.01)
@@ -132,6 +133,10 @@ async def test_progress_delivery_failure_keeps_tools_and_final_answer(kernel, mo
                     stopped_send.set()
             if failure == "os_error":
                 raise OSError("Synthetic transport failure")
+            if failure == "payload":
+                raise aiohttp.ClientPayloadError("Synthetic truncated Discord body")
+            if failure == "disconnect":
+                raise aiohttp.ServerDisconnectedError("Synthetic Discord disconnect")
             raise DeliveryError("Synthetic send failure", uncertain=failure == "uncertain")
         assert args[2] == "Both saved"
         return "888888888888888888"

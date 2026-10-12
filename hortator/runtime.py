@@ -7,6 +7,8 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 
+from aiohttp import ClientError
+
 from .answer_validation import wrapped_reply
 from .concurrency import cancel_and_wait, join_tasks, task_group, error_text
 from .context import ContextBuilder
@@ -1473,7 +1475,7 @@ class Engine:
                     delivery_id=delivery_id,
                     progress=True,
                 )
-        except (DeliveryError, TimeoutError, OSError) as exc:
+        except (DeliveryError, TimeoutError, OSError, ClientError) as exc:
             check_work()
             row = self.store.one("SELECT status FROM outbox WHERE id=?", (delivery_id,))
             if row and row["status"] == "sent":
