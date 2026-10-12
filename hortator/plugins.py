@@ -573,7 +573,6 @@ class Registry:
             and current_bot
             and name in current_bot["enabled_plugins"]
             and (context.bot["role"] != "hortator" or context.owner_verified)
-            and (name != "shell" or self.allowed("workspace", context))
             and (not spec.owner_only or (context.bot["role"] == "hortator" and context.owner_verified))
         )
 
@@ -858,7 +857,16 @@ class Registry:
                 result = {**result, "next_tool": name}
             # Preserve every complete result before producing its model-facing page.
             # This includes third-party tools and avoids the old destructive fallback.
-            result = self.evidence.record(context, name, call_id, result, source_result_id=source_result_id)
+            result = self.evidence.record(
+                context,
+                name,
+                call_id,
+                result,
+                source_result_id=source_result_id,
+                required_tools=("workspace",)
+                if name == "shell" and result.get("storage") == "workspace"
+                else (),
+            )
             result = page_result(
                 result,
                 INLINE_RESULT_CHARS,

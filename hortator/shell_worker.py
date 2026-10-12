@@ -250,6 +250,10 @@ def main():
     )
     if state in ("succeeded", "failed"):
         for kind, relative, size in files(root, config):
+            # Validate the same filesystem bounds, but never send disposable
+            # file contents back to the host for staging or persistence.
+            if not config.get("persist_files", True):
+                continue
             emit(kind, path=relative, size=size)
             if kind == "file":
                 with open(root / relative, "rb") as source:

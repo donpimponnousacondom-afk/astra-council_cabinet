@@ -18,8 +18,7 @@ from support.runtime_feedback import ready, reply, responses, tool
 @pytest.mark.parametrize("memory", ["memory", "global_memory"])
 @pytest.mark.parametrize("reader", RESULT_READERS)
 async def test_memory_reference_names_an_executable_granted_reader(kernel, memory, reader):
-    dependencies = ["workspace"] if reader == "shell" else []
-    context = grant(kernel, memory, reader, *dependencies, role="hortator")
+    context = grant(kernel, memory, reader, role="hortator")
     context = ToolContext(context.bot, context.channel_id, context.turn_id, owner_verified=True)
     written = await kernel.registry.call(
         memory, {"operation": "write", "key": "topic", "value": "café 🙂 preserved"}, context, "write"
@@ -35,9 +34,7 @@ async def test_memory_reference_names_an_executable_granted_reader(kernel, memor
     assert json.loads(page["text"])["notes"][0]["value"] == "café 🙂 preserved"
     # Advice is not a grant: the existing source-grant check still owns access.
     current = kernel.store.get("bots", "ada")
-    kernel.store.put(
-        "bots", {**current, "enabled_plugins": [reader, *dependencies] if reader != memory else []}
-    )
+    kernel.store.put("bots", {**current, "enabled_plugins": [reader] if reader != memory else []})
     denied = await kernel.registry.call(reader, reference["reread"], context, "revoked")
     assert denied["ok"] is False
     assert "grant" in denied["error"] or "not enabled" in denied["error"]

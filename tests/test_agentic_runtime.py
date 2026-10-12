@@ -234,7 +234,7 @@ async def test_shell_argument_errors_are_complete_without_executing(kernel):
         "invalid",
     )
     assert result["executed"] is False
-    assert {e["path"] for e in result["errors"]} >= {"$", "$.command", "$.cwd", "$.timeout_seconds"}
+    assert {e["path"] for e in result["errors"]} >= {"$.command", "$.cwd", "$.timeout_seconds"}
     assert not kernel.registry.agentic.runner.inspect()
 
 

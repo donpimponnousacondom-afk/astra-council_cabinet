@@ -98,8 +98,8 @@ test("keyless workspace and reading controls persist with private inspection", a
     .getByLabel("Additional file and reading rounds", { exact: true })
     .fill("24");
   await dialog
-    .getByLabel("Active tool context (estimated tokens)", { exact: true })
-    .fill("4800");
+    .getByLabel("Active tool context (characters)", { exact: true })
+    .fill("24000");
   await page.setViewportSize({ width: 390, height: 844 });
   const box = await dialog
     .getByRole("checkbox", { name: /^Private workspaces/ })
@@ -121,7 +121,8 @@ test("keyless workspace and reading controls persist with private inspection", a
   await expect(dialog).toHaveCount(0);
   const bot = await (await page.request.get("/api/config/bots/ada")).json();
   expect(bot.work_task_rounds).toBe(24);
-  expect(bot.tool_working_set_tokens).toBe(4800);
+  expect(bot.tool_working_set_chars).toBe(24000);
+  expect(bot).not.toHaveProperty("tool_working_set_tokens");
   expect(bot.enabled_plugins).toContain("shell");
 });
 

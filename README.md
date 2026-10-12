@@ -127,7 +127,7 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 | --- | --- | --- |
 | `web_fetch` | Complete public text snapshots, chunking and search | No key; 1 MB download cap, owned stable offsets, storage/retention limits |
 | `workspace` | Private task files, observed attachments and current-turn exports | No key; bot/channel isolation, quotas and bounded retention |
-| `shell` | Real isolated Bash/Python 3.14/Pillow jobs | No key; workspace grant plus ready Linux/Bubblewrap boundary; host networking and disposable packages |
+| `shell` | Real isolated Bash/Python 3.14/Pillow jobs | No key; ready Linux/Bubblewrap boundary; disposable commands need only shell, persistent tasks also need workspace; host networking and disposable packages |
 | `document_site` | Owned static documents, paged editing, revision recovery and automatic publication | Keyless bot tools; global SSH delivery settings, immutable revisions and private snapshot history |
 | `web_search` | Brave + DuckDuckGo search, fallback or combined | Brave key; DuckDuckGo keyless; engine/endpoint/count configurable |
 | `dumb_search` | Opt-in [Parallel Fast search experiment](docs/DUMB_SEARCH.md) | Parallel plugin key; one search per call; disabled by default |

@@ -4,6 +4,24 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Independent disposable shell (2026-10-09)
+
+Commit: draft based on `cdccd265cf0513577f97911358d5732b1bd82eb4`; dirty during initial verification.
+Backend scope: focused `tests/test_shell_disposable.py`, `tests/test_shell_runner.py`, `tests/test_agentic_runtime.py`, `tests/test_agentic_delivery.py`, `tests/test_agentic_api.py`.
+Backend result: **45 passed, 1 skipped**, 2 dependency deprecation warnings, exit 0, 84.75 seconds with `HORTATOR_REQUIRE_SANDBOX=1`. The opt-in public native-package download check was skipped. A subsequent discovery/schema test and shell-only memory-reader coverage are included in the full gate below.
+Ruff lint/format and `git diff --check` passed during development.
+Classification: real local Bubblewrap execution, local HTTP POST receiver, isolated SQLite, mocked provider/Discord adapters. No live Discord sends, real provider calls or changes to production bot settings.
+
+The new tests exercise curl and inline Python POST with workspace disabled; fresh files/cwd on the next command; retained logs without persistent workspace rows or file generations; timeout/cancellation/failure and restart cleanup; explicit-task persistence and missing-task rejection; current/stale grants and bot/channel/turn scope; historical and transitively paged shell evidence after the grant-version migration. Existing sandbox toolchain, limits, persistent image workflow and archival checks also ran.
+
+Implementation commit: `5c2af5350d854193ed5f66b961fd8421eaf996ad`. Full backend collection: **2,057 passed, 1 skipped**, exit 0, 505.201 seconds. The single skip is the opt-in public native-package download; local namespace tests ran. Locked dependency install, Ruff lint/format and verification-runner self-tests passed.
+
+The initial `./scripts/check.sh --suite full` stopped at frontend formatting (exit 1, 509.058 seconds overall), after its complete backend pass. Prettier repaired only the wrapping of the updated help text. The repository frontend format/build commands then passed (1.979/5.301 seconds). The first complete browser run had **73 passed, 1 failed** (171.553 seconds): `tests/legacy/agentic.spec.ts` still expected the removed estimated-token control from before PR #90. Its selector and saved-value assertion now verify the existing character control at 24,000 characters and absence of the removed token field. No legacy UI or product behavior changed. A second **full browser collection passed all 74 tests**, exit 0, 149.103 seconds. Frontend formatting passed again after that test repair. Backend source/tests did not change after their full pass and were not redundantly rerun. These are resolved component results, not a claim that the original all-in-one invocation exited successfully.
+
+Evidence: `audit/2026-10-09/disposable-shell/` retains `result.json`, `frontend-recovery.json`, `browser-recovery.json`, complete logs, JUnit and the initial browser failure diagnostics. Initial source was the dirty base above; subsequent frontend checks used dirty `5c2af53` with documentation/formatting/test repairs. Independent Luna (max) and GPT-6.1 Sol (high) local reviews of `5c2af53` found no runtime regression. Luna identified stale mandatory-workspace guidance in WEB_SEARCH/OPERATIONS; Sol identified the README equivalent. All were confirmed and corrected. Settings, measured review times and the comparison are in `initial-reviews.json`; no token/cost measurements were available. No PR is published and remote CI monitoring has not started.
+
+After verifying fixture processes exited and no files were open, removed the two exact inactive `/tmp/hortator-e2e-*` directories from these runs and generated `web/test-results` scratch. Preserved diagnostics first; `cleanup.json` records paths and sizes. No production data, backups or unrelated temporary files were removed. Live bot/provider/Discord acceptance remains an operator test; the commands above use isolated fixtures.
+
 ## Private Engram update feedback (2026-10-08)
 
 Commit: draft `feat/engram-feedback`, based on
