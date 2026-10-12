@@ -44,6 +44,20 @@ validator passed. Publication receipts and original-SHA mapping are preserved
 in ignored `audit/2026-10-12/pr-recovery/`. The proposed `end_cycle` behavior is
 explicitly outside this change.
 
+Remote review and Actions exposed faulty intermediate layers: #95 failed
+frontend formatting, #97's micromamba metadata-thread environment setting was
+ineffective, and #99 failed its mounted-shell help/schema test and had an
+inspector paging defect. Each immediate successor already contained the fix.
+The owner authorized consolidating **#95 into #96, #97 into #98 and #99 into
+#100**. The three intermediate PRs were closed as superseded, with `merged_at`
+remaining null. Changing the successors' bases exposed both original commits
+in each combined diff; no commit or source tree was rewritten. The original
+stack #106 was dissolved and the nine remaining PRs registered in native stack
+**#108**, rooted at main. Original review/failure evidence remains on the closed
+PRs. Both reviewers were assigned the combined successor diffs; their verdicts
+and current-head checks must be read from those PRs. No PR was merged and no
+runtime restart was performed during this consolidation.
+
 ## Progress messages and provider-error display (2026-10-12)
 
 Base: `6fe871c`; focused checks ran with the implementation uncommitted.

@@ -26,8 +26,12 @@ owner unless explicitly delegated; do not bypass required checks.
 
 The owner also explicitly authorized a narrow recovery exception on 2026-10-12:
 publish the eleven unpublished commits following PR #94, in their existing order,
-as eleven single-commit PRs followed by the protocol PR. Register
-their dependencies as a native GitHub stack. The bottom PR targets `main`; each
+as eleven single-commit PRs followed by the protocol PR. The owner subsequently
+authorized combining faulty intermediate PRs #95, #97 and #99 into their corrected
+successors #96, #98 and #100. Close the superseded PRs without merging, preserve
+their commits and review evidence, and renew both reviews against the combined
+successor diffs. Register the remaining dependencies as a native GitHub stack.
+The bottom PR targets `main`; each
 higher PR initially targets the preceding PR's branch. The owner squash-merges
 from the bottom upward, and GitHub manages restacking of the remaining unmerged
 PRs so each change ultimately reaches `main`. Every changed PR head after such a
