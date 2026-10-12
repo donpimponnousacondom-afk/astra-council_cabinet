@@ -203,12 +203,15 @@ async def test_empty_finish_preserves_allowed_write_once_without_regeneration(ke
     def handler(request):
         nonlocal count
         count += 1
-        assert count == 1, "The observed empty-finish loop must never recur"
+        assert count <= 2, "The observed empty-finish loop must never recur"
+        if count == 2:
+            assert tool_names(json.loads(request.content)) == []
+            return mixed("", end())
         return mixed("", *([write_call()] if write else []), end())
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert count == 1
+    assert count == 2
     assert len(kernel.store.rows("SELECT * FROM memories")) == int(write)
     transport.send.assert_not_awaited()
     assert cycle(kernel)["strikes"] == 1 and cycle(kernel)["reason"] == "incomplete"

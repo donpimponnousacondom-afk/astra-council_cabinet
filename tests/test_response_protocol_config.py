@@ -111,7 +111,7 @@ async def test_mode_template_runtime_facts_and_inspection_match_all_contexts(ker
     profile = kernel.store.get("profiles", "balanced")
     messages, meta = await contexts.assemble(bot, profile, CHANNEL, [], "")
     selected = next(item for item in meta["prompt_layers"] if item["id"] == "response_protocol")
-    expected_template = "runtime-response-protocol-" + protocol + ("-v2" if protocol == "end_cycle" else "")
+    expected_template = "runtime-response-protocol-" + protocol + ("-v3" if protocol == "end_cycle" else "")
     assert selected["template_id"] == expected_template
     content = "\n".join(message["content"] for message in messages)
     assert f"Current response protocol: {protocol}." in content
@@ -229,7 +229,7 @@ async def test_new_default_does_not_overwrite_legacy_protocol_or_custom_guidance
     saved_guidance = kernel.store.put("prompts", {**guidance, "content": "OWNER TOOL GUIDANCE"})
     kernel.service.seed_prompt_templates()
     selected = kernel.engine.contexts.prompt(bot, "response_protocol")
-    assert selected["template_id"] == "runtime-response-protocol-end_cycle-v2"
+    assert selected["template_id"] == "runtime-response-protocol-end_cycle-v3"
     assert "never a usage query" in selected["content"]
     assert kernel.store.get("prompts", legacy["id"]) == saved
     assert kernel.store.get("prompts", guidance["id"]) == saved_guidance
@@ -244,7 +244,7 @@ async def test_exact_previous_seed_guidance_is_upgraded_once(kernel):
             "To answer, write your contribution directly as ordinary assistant content. The runtime posts it to Discord.",
         ),
         "runtime-tool-guidance": (
-            "Tool discovery and repair: call an available action tool with {} to receive its usage. end_cycle is NOT a discovery tool: {} confirms publication and ends the cycle. Action-tool usage includes",
+            "Tool discovery and repair: call an available action tool with {} to receive its usage. end_cycle is NOT a discovery tool: {} closes tool work, then publishes the current or saved answer; if no answer exists, it permits exactly one tool-free first-answer request. Action-tool usage includes",
             "Tool discovery and repair: call any available tool with {} to receive its usage,",
         ),
     }

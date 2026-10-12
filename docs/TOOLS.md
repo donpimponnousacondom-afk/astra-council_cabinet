@@ -119,8 +119,9 @@ that contain both ordinary text and genuine action `tool_calls`:
 **`end_cycle` mode.** The normal finish is ordinary assistant answer text plus
 `end_cycle {}` in the same response. The answer never goes inside tool arguments.
 `end_cycle {}` executes a terminal decision; it is **not** an empty-call usage
-query. The runtime has a work phase and, after recoverable failure, a draft
-confirmation phase. Confirmation never returns to work.
+query. After work, the runtime either publishes immediately, confirms an existing
+draft, or permits one first answer after an accepted finish call. Neither final
+phase returns to work.
 
 - *Text + valid `end_cycle`*: publish through the ordinary final path (footer,
   Engram commit, prepared files/panels, reasoning button) and end the cycle.
@@ -140,11 +141,18 @@ confirmation phase. Confirmation never returns to work.
   failed protocol responses, including failed confirmations (1–5, default 2).
   Reaching it stops the cycle immediately. Thus 2 allows one failure followed
   by one confirmation chance; 1 stops at the first failure. No extra attempt is
-  added beyond the configured failure limit.
-- *No answer to retain*: `end_cycle` without ordinary answer text or an existing
-  draft stops incomplete. Independently valid permitted writes may already have
-  completed once; their actual receipts are retained. The harness does not ask
-  for a newly generated answer and does not pretend that a draft exists.
+  added beyond the configured failure limit. A valid finish before the first
+  answer is a supported order, not a failed response.
+- *Finish before the first answer*: a valid `end_cycle {}` without ordinary
+  answer text or a frozen draft permits exactly **one tool-free model request**
+  for the first public answer. This is legal and consumes no strike, even when
+  the strike limit is 1. Permitted companions execute once before this request;
+  their actual receipts remain available. Any companion failure stops the cycle.
+  The extra request must return ordinary answer text only: any tool call
+  (including another `end_cycle`), empty text or incomplete provider output ends
+  the cycle without another request. Private reasoning is never an answer
+  source. This path cannot regenerate or replace an existing draft, reopen
+  action tools, replay writes or create a loop.
 - *Companions*: during normal work, `end_cycle` may accompany only
   `memory`/`global_memory` writes and `discord_attach`, executed once before
   publication. A failed companion stops the cycle without publishing a possibly
@@ -173,14 +181,18 @@ confirmation phase. Confirmation never returns to work.
 - Background-job acknowledgements (tool list empty) publish text-only as before.
 
 Every turn, in every mode, ends with a `cycle.ended` ledger event carrying the
-protocol, status, reason (`end_cycle`, `draft_published`, `text_only`, `silence`, `compacted`,
+protocol, status, reason (`end_cycle`, `end_cycle_then_text`, `draft_published`, `text_only`, `silence`, `compacted`,
 `incomplete`, `cancelled`, `failed`), rounds, strikes, executed action count,
 whether text was published, and whether a draft or finalization occurred. Rounds
 count attempted model generations, including the final answer; preparation
 failures have zero and still emit the event. The action count includes successful
 attachment preparation, not help or rejected calls; terminal controls do not count
 as actions. This
-is the evidence for comparing narration behaviour across bots and modes.
+is the evidence for comparing narration behaviour across bots and modes. The
+finish-first path also emits `cycle.answer_pending` and `cycle.answer_published`,
+linking the accepted finish request/call with the later public-answer request.
+Engram state, footer and answer provenance use that public-answer source, while
+the earlier finish remains separately auditable.
 
 Existing records without the setting use `narrate`; installing this change does
 not opt any bot into progress. The modern bot editor exposes the mode under
@@ -270,6 +282,14 @@ The optional `global_memory` tool mirrors channel memory's `read`, `write` (same
 
 The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
+
+- On 2026-10-13 the owner approved a bounded reverse-order finish: valid
+  `end_cycle {}` with no draft allows exactly one tool-free request for the
+  first public answer, without a strike. Existing drafts remain immutable.
+  Permitted companions run once before that request; a failed companion or an
+  invalid first-answer response stops the cycle without retry. This supersedes
+  the initial no-draft stop in the previous correction, not the no-regeneration
+  rule for answers that already exist.
 
 - Late on 2026-10-12, after observing repeated empty finishes and discarded
   memory writes, the owner rejected regeneration-based recovery. The original

@@ -28,6 +28,25 @@ by this PR protocol. See the
 [operating procedure](OPERATIONS.md#independent-pr-review-and-check-monitoring)
 and [standing agent instructions](../AGENTS.md).
 
+## Bounded first answer after end_cycle — owner decision (2026-10-13)
+
+The owner approved the reverse order when no answer has yet been produced:
+a valid bare `end_cycle {}` with no frozen draft allows exactly one tool-free
+model request for the **first** public answer. This is a legal finish, not a
+strike, including when the configured failure limit is one. Permitted companion
+writes run once before that request; a failed companion stops the cycle and
+preserves successful writes and their receipts. The extra request accepts
+ordinary public answer text only. Empty text, any tool call or incomplete
+output stops without retry. Private reasoning never becomes answer text.
+
+This is not draft regeneration. If an answer already exists, confirmation
+publishes only the frozen original and cannot replace it with new prose. Both
+final paths remove action tools and cannot return to work. The versioned v3
+protocol and dashboard help describe this bounded alternative while preserving
+owner prompt overrides. This supersedes only the no-draft stop in the initial
+correction below; the immutable-draft, strike-ceiling and companion-failure
+contracts remain.
+
 ## Immutable end_cycle recovery — owner correction (2026-10-12, late)
 
 Live failures exposed that the earlier implementation discarded valid work and

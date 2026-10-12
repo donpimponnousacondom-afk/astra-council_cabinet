@@ -102,14 +102,24 @@ export function ResponseProtocolSettings({
             A response that cannot finalize correctly counts one strike. At the
             limit the cycle stops; no extra attempt is added. With a limit of 1,
             the first failure stops the cycle. Tool-only action responses do not
-            count as strikes; ordinary tool budgets still apply.
+            count as strikes; ordinary tool budgets still apply. A valid
+            end_cycle before any answer exists is also allowed and is not a
+            strike, even with a limit of 1.
           </Help>
           <Help label="How saved-draft confirmation works">
             A failed response with useful answer text is kept unchanged. Action
             tools are removed; the bot can only confirm the original draft with
             end_cycle, or choose silence if allowed. It must not regenerate the
-            answer. New text cannot replace the draft. Without any answer text,
-            or when a finishing companion fails, the cycle stops incomplete.
+            answer. New text cannot replace the draft. If a finishing companion
+            fails, completed actions stay saved and the cycle stops incomplete.
+          </Help>
+          <Help label="When the finish call comes first">
+            With no answer or saved draft, a valid end_cycle permits one request
+            for the first public answer. That request has no tools and accepts
+            text only. Empty text, a tool call or incomplete output stops the
+            cycle without retry. Permitted companion writes run once before this
+            request; a failed companion stops it. Existing drafts are never
+            regenerated.
           </Help>
           <div className="reply-option">
             <label>

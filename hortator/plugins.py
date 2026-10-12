@@ -111,7 +111,9 @@ END_CYCLE = {
             "a draft, call this tool alone to publish that exact draft: do not repeat or rewrite it; "
             "new accompanying text cannot replace it. During normal work it may accompany only "
             "memory/global_memory writes and discord_attach, which run once before publication. "
-            "Without answer text or a saved draft the cycle stops incomplete. "
+            "If no answer text or draft exists, a valid call permits exactly one tool-free request for "
+            "your first public answer; this is not a strike. That request accepts ordinary text only, "
+            "never another tool call or private reasoning. Empty or incomplete output stops without retry. "
             "To say nothing, use council_silence instead."
         ),
         "parameters": schema({}),

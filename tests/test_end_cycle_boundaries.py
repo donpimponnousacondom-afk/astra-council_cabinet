@@ -16,8 +16,9 @@ from test_end_cycle import cycle, end, events, mixed, read_call, run, tool, tool
 from test_engram_integration import PRIVATE, enable, response, state
 
 
+@pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("preparation", ["success", "invalid", "help"])
-async def test_attachment_action_count_tracks_successful_preparation(kernel, preparation):
+async def test_attachment_action_count_tracks_successful_preparation(kernel, preparation, reverse):
     bot, transport = ready(kernel, response_protocol="end_cycle", enabled_plugins=["memory"])
     requests = []
 
@@ -37,12 +38,15 @@ async def test_attachment_action_count_tracks_successful_preparation(kernel, pre
                 "invalid": {"artifact_ids": ["missing"]},
                 "help": {},
             }[preparation]
-            return mixed("Here is the file.", tool("discord_attach", args, call_id="attach"), end())
-        return mixed("The attachment was not prepared.", end())
+            return mixed(
+                "" if reverse else "Here is the file.", tool("discord_attach", args, call_id="attach"), end()
+            )
+        assert reverse and preparation == "success" and not tool_names(body)
+        return completion("Here is the file.")
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert len(requests) == 2
+    assert len(requests) == (3 if reverse and preparation == "success" else 2)
     assert transport.send.await_count == (1 if preparation == "success" else 0)
     if preparation == "success":
         assert len(transport.send.await_args.args[4]) == 1
@@ -181,12 +185,25 @@ async def test_slash_notices_share_streak_and_do_not_overwrite_receipt(kernel):
     assert kernel.engine.incomplete_streaks[("ada", str(call.channel_id))] == 4
 
 
-async def test_slash_end_cycle_delivers_normal_final_and_resets_streak(kernel):
+@pytest.mark.parametrize("reverse", [False, True])
+async def test_slash_end_cycle_delivers_normal_final_and_resets_streak(kernel, reverse):
     bot = enable_slash(kernel, response_protocol="end_cycle", notify_incomplete_cycle=True)
     call = interaction(bot)
     key = ("ada", str(call.channel_id))
     kernel.engine.incomplete_streaks[key] = 4
-    await install_client(kernel, lambda _: mixed("The final answer", end()))
+    calls = 0
+
+    def handler(request):
+        nonlocal calls
+        calls += 1
+        if not reverse:
+            return mixed("The final answer", end())
+        if calls == 1:
+            return mixed("", end())
+        assert calls == 2 and not tool_names(json.loads(request.content))
+        return completion("The final answer")
+
+    await install_client(kernel, handler)
     await kernel.connector.slash.receive("ada", call)
     await settle(kernel)
     assert call.edit_original_response.await_count == 1

@@ -80,7 +80,7 @@ async def test_failed_finish_freezes_source_and_uses_only_confirmation(kernel, t
     assert cycle(kernel)["strikes"] == 1
 
 
-async def test_caterpillar_empty_finish_saves_global_note_once_and_stops(kernel):
+async def test_caterpillar_empty_finish_saves_global_note_once_then_answers(kernel):
     _, transport = ready(kernel, response_protocol="end_cycle", enabled_plugins=["global_memory"])
     plugin = kernel.store.get("plugins", "global_memory")
     kernel.store.put("plugins", {**plugin, "enabled": True})
@@ -89,6 +89,9 @@ async def test_caterpillar_empty_finish_saves_global_note_once_and_stops(kernel)
     def handler(request):
         nonlocal count
         count += 1
+        if count == 2:
+            assert tool_names(json.loads(request.content)) == []
+            return completion("Saved the requested note")
         assert count == 1
         return mixed(
             "",
@@ -107,8 +110,8 @@ async def test_caterpillar_empty_finish_saves_global_note_once_and_stops(kernel)
         == "Actual requested note"
     )
     assert cycle(kernel)["actions_executed"] == 1
-    assert cycle(kernel)["reason"] == "incomplete" and cycle(kernel)["rounds"] == 1
-    transport.send.assert_not_awaited()
+    assert cycle(kernel)["reason"] == "end_cycle_then_text" and cycle(kernel)["rounds"] == 2
+    assert transport.send.await_args.args[2] == "Saved the requested note"
 
 
 @pytest.mark.parametrize("source", ["text", "narrated_write", "invalid_end"])
@@ -184,7 +187,7 @@ async def test_engram_without_public_answer_is_not_a_publishable_draft(kernel):
     kernel.store.put("bots", bot)
     await install_client(kernel, lambda req: mixed(response(json.loads(req.content), content=""), end()))
     await run(kernel)
-    assert cycle(kernel)["rounds"] == 1 and not state(kernel)
+    assert cycle(kernel)["rounds"] == 2 and not state(kernel)
     transport.send.assert_not_awaited()
 
 

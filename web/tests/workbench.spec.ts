@@ -728,7 +728,7 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
     .click();
   const cycleInspection = dialog.locator("#inspect-response_protocol");
   await expect(cycleInspection).toContainText(
-    "Template text · runtime-response-protocol-end_cycle-v2",
+    "Template text · runtime-response-protocol-end_cycle-v3",
   );
   await expect(cycleInspection).toContainText(
     "1 failed responses end this cycle",

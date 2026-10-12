@@ -90,7 +90,8 @@ def usage(name, parameters, description="", arguments=None):
         "description": description,
         "calling_convention": "JSON object with named fields; field order does not matter. "
         + (
-            "{} confirms publication and ends the cycle; it is not a usage query."
+            "{} commits finalization: publish the supplied/saved answer, or permit one tool-free "
+            "first answer if none exists. It is not a usage query."
             if name == "end_cycle"
             else "{} returns usage only."
         ),

@@ -3000,3 +3000,32 @@ The expanded focused run, adding `tests/test_console.py` and `tests/test_reasoni
   not reported, so no measured price is claimed.
 - Private evidence: `audit/2026-10-08/tts-voices/`. Sources and operational limits
   are in [TTS](TTS.md). No database migration or dependency change is involved.
+
+## 2026-10-13 — bounded finish-first path (PR #112)
+
+The owner accepted valid bare `end_cycle {}` followed by exactly one tool-free
+request for the first public answer when no draft exists. Existing drafts stay
+immutable. This is a supported ordering, not a strike; even strike limit 1 or
+an exhausted work-round budget permits that single answer request. Any tool
+calls, empty/wrapped text or incomplete output in it stop without another
+request. Allowed companion writes/attachments execute once; a failed companion
+stops before the answer request. Engram provenance validates the preceding
+finish and the actual answer request separately; delivery/footers use the latter.
+No bot modes, grants or provider settings were changed.
+
+Local synthetic evidence: the initial reverse-path/core regression run passed
+69 tests. The broader run passed 256 tests and failed three stale assertions
+expecting prompt v2 rather than the new v3 (ordinary/slash/panel context cases);
+those assertions were updated without dropping the context checks. The affected
+suites were rerun after that correction (result below). Existing immutable-draft
+and once-only write tests remain in place. The response-controls browser test
+passed (1 test, 12.0 seconds), and TypeScript/Vite build, frontend formatting,
+Ruff and diff checks passed. No live provider or Discord experiment was performed.
+The already-open PR requires fresh Luna/Sol reviews and CI for the pushed head;
+previous-head checks do not establish readiness for this extension.
+
+Corrected rerun: `test_response_protocol_config`, `test_end_cycle_reverse`,
+`test_end_cycle_boundaries` and `test_end_cycle` passed **123 tests in 37.81s**,
+with the same two existing Starlette/httpx deprecation warnings. Combined with
+the unaffected passes above, all 259 selected regressions have passing evidence;
+this is focused evidence, not a local full-suite claim.

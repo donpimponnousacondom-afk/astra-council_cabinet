@@ -439,6 +439,9 @@ class Engrams:
                 "In end_cycle mode, append the block to the ordinary answer text that accompanies "
                 "end_cycle, including permitted write companions. A retained text-only draft may "
                 "also contain the block; it is saved only if that exact draft is later published. "
+                "If the harness has already accepted end_cycle and requests your first answer with no tools, "
+                "append the block to that first answer without calling end_cycle again. A retained draft keeps "
+                "its original block; do not generate a replacement during confirmation. "
                 "Do not emit the block on intermediate tool responses or silence. "
                 if snapshot.get("response_protocol") == "end_cycle"
                 else "Do not emit the block on tool-call responses or silence. "
@@ -489,6 +492,7 @@ class Engrams:
         summary_hash=None,
         terminal_call_id=None,
         confirmation_request_id=None,
+        preceding_end_request_id=None,
     ):
         """Stage only a final parsed answer whose coverage the engine verified.
 
@@ -518,7 +522,52 @@ class Engrams:
             raise ControlError("Engram candidate must belong to the current completed generation")
         response = json.loads(request["response"] or "{}")
         terminal = False
-        if confirmation_request_id is not None:
+        if preceding_end_request_id is not None:
+            preceding = self.store.one(
+                "SELECT * FROM requests WHERE id=? AND turn_id=? AND bot_id=?",
+                (preceding_end_request_id, snapshot["turn_id"], snapshot["bot_id"]),
+            )
+            pending = self.store.one(
+                "SELECT request_id,data FROM events WHERE turn_id=? AND bot_id=? "
+                "AND kind='cycle.answer_pending' ORDER BY seq DESC LIMIT 1",
+                (snapshot["turn_id"], snapshot["bot_id"]),
+            )
+            if (
+                snapshot.get("response_protocol") != "end_cycle"
+                or confirmation_request_id is not None
+                or not preceding
+                or preceding["id"] == request_id
+                or preceding["status"] != "completed"
+                or preceding["purpose"] != "generation"
+                or request["started_at"] < preceding["ended_at"]
+                or not pending
+                or pending["request_id"] != preceding_end_request_id
+                or json.loads(pending["data"]).get("end_call_id") != terminal_call_id
+                or response.get("tool_calls")
+                or response.get("finish_reason") != "stop"
+            ):
+                raise ControlError(
+                    "Engram first answer requires its accepted preceding end_cycle in this cycle"
+                )
+            prior = json.loads(preceding["response"] or "{}")
+            endings = [
+                call
+                for call in prior.get("tool_calls", [])
+                if call.get("function", {}).get("name") == "end_cycle"
+            ]
+            try:
+                terminal = (
+                    prior.get("finish_reason") in ("stop", "tool_calls")
+                    and not sanitize_response(prior.get("content", ""), snapshot["nonce"]).strip()
+                    and len(endings) == 1
+                    and endings[0].get("id") == terminal_call_id
+                    and parse_arguments(endings[0]["function"]["arguments"]) == {}
+                )
+            except KeyError, TypeError, ValueError:
+                terminal = False
+            if not terminal:
+                raise ControlError("Engram first answer has an invalid preceding end_cycle")
+        elif confirmation_request_id is not None:
             confirmation = self.store.one(
                 "SELECT * FROM requests WHERE id=? AND turn_id=? AND bot_id=?",
                 (confirmation_request_id, snapshot["turn_id"], snapshot["bot_id"]),

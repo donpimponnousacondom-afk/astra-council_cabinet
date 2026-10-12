@@ -129,17 +129,20 @@ class Service:
         )
 
     def seed_prompt_templates(self):
-        from .prompt_templates import DEFAULT_PROMPTS, PREVIOUS_DEFAULT_CONTENT_SHA256
+        from .prompt_templates import (
+            DEFAULT_PROMPTS,
+            PREVIOUS_DEFAULT_CONTENT_SHA256,
+            PREVIOUS_DRAFT_ONLY_CONTENT_SHA256,
+        )
 
         for prompt in DEFAULT_PROMPTS:
             existing = self.store.get("prompts", prompt["id"])
             if not existing:
                 value = {k: v for k, v in prompt.items() if k != "condition"}
                 self.store.put("prompts", SCHEMAS["prompts"].model_validate(value).model_dump())
-            elif (
-                prompt["id"] in PREVIOUS_DEFAULT_CONTENT_SHA256
-                and hashlib.sha256(existing["content"].encode()).hexdigest()
-                == PREVIOUS_DEFAULT_CONTENT_SHA256[prompt["id"]]
+            elif hashlib.sha256(existing["content"].encode()).hexdigest() in (
+                PREVIOUS_DEFAULT_CONTENT_SHA256.get(prompt["id"]),
+                PREVIOUS_DRAFT_ONLY_CONTENT_SHA256.get(prompt["id"]),
             ):
                 existing.pop("revision", None)
                 self.store.put("prompts", {**existing, "content": prompt["content"]})

@@ -99,8 +99,11 @@ mode's controls; switching modes retains the other mode's saved/draft values.
 End-cycle mode shows **Failed responses allowed** and the separate checkbox
 **Notify when no answer is sent**. The strike count is a failure ceiling, not
 extra work rounds: two allows one failure and one confirmation chance, while
-one stops on the first failure. Saved-draft confirmation is mandatory and has
-no toggle. Longer explanations use keyboard-accessible disclosures beside the
+one stops on the first failure. A valid finish call before any answer exists
+is legal even at a limit of one: it permits a single tool-free first answer.
+The **When the finish call comes first** disclosure explains its hard stop and
+companion behavior. Saved-draft confirmation is mandatory and has no toggle.
+Longer explanations use keyboard-accessible disclosures beside the
 relevant setting, without toggling its value.
 Keep ordinary tool budgets outside this group; protocol behavior and defaults
 remain defined in [TOOLS](TOOLS.md#normal-and-extended-turns).

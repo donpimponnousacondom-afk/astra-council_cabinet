@@ -149,8 +149,18 @@ Public progress messages accompanying tools do not commit state or count as
 delivered final replies for reminders. Their private suffix, if any, is stripped;
 the model must supply any state update with its final answer. In opt-in
 `end_cycle` mode this is the ordinary text accompanying a validated `end_cycle`
-call, after any permitted companions succeed. A failed publication with usable
-answer text freezes that answer and its parsed Engram together. A later valid
+call, after any permitted companions succeed. There is also the approved
+finish-first order: if a valid `end_cycle {}` arrived without an answer or draft,
+the harness permits one tool-free request for the first public answer. Append
+any Engram update to that answer without another tool call. Staging verifies the
+accepted preceding finish request/call, the `cycle.answer_pending` linkage and
+the completed public-answer request; `cycle.answer_published` records the
+publication linkage. The answer request is the state and coverage source, not
+the earlier empty finish. Neither private reasoning nor incomplete output can
+supply an answer or state update.
+
+A failed publication with usable answer text freezes that answer and its parsed
+Engram together. A later valid
 `end_cycle {}` confirms this exact draft; it cannot replace the answer or its
 Engram. Staging verifies both completed requests, the recorded draft hash and the
 confirmation call. State and context coverage come from the original request,
