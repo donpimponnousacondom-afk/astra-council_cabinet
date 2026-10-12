@@ -33,7 +33,7 @@ function selectedTemplates(
       draft.response_protocol === "progress"
         ? "runtime-response-protocol-progress"
         : draft.response_protocol === "end_cycle"
-          ? "runtime-response-protocol-end_cycle-v3"
+          ? "runtime-response-protocol-end_cycle-v4"
           : "runtime-response-protocol-narrate",
     ];
   else if (layer.id === "silence_policy")

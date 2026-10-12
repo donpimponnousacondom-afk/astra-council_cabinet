@@ -3048,3 +3048,42 @@ exception as its cause. The tracked test covers both normal linkage recording
 and rejected diagnostic writes, requiring the confirmed text to remain sent.
 The same reverse/recovery/voice suites passed **56 tests in 18.49s** with the two
 existing warnings. Luna was informed of this finding; it is also Sol-attributed.
+
+## 2026-10-13 — narration is not an answer draft (field-report §7 item 1)
+
+The published #112 implementation froze text accompanying action calls without
+`end_cycle`. A new read/write regression reproduced the reported defect before
+the fix: 2 tests failed because delivery sent “Let me check your notes” / “I will
+save that” instead of the answer produced after receiving tool results.
+
+Only text-only responses and failed finish batches can now create an immutable
+answer draft. Narrated action batches run once, count a strike and remove action
+tools; bounded finalization can publish its first answer with `end_cycle` using
+the results. Finalization cannot replay the work. If it produces a text-only
+answer, that real answer becomes immutable for later confirmation. The existing
+bare-finish/one-tool-free-answer order also remains available when no draft
+exists. Strike defaults/limits, grants, bot modes, and owner-reserved policies
+are unchanged. Mode-aware v4 guidance and dashboard help distinguish these paths.
+
+Local synthetic evidence: 106 focused cycle/narration/recovery/reverse/boundary
+tests passed in 36.29s (two existing dependency warnings). This includes final
+answer Engram and delivery provenance, strike limits 2/3/5, preventing action
+replay, freezing a later real text-only answer, and finish-first ordering after
+narration. The response-controls browser check passed (1 test, 12.0s), including
+current prompt preview and help text. Ruff, frontend formatting, TypeScript/Vite
+build and diff checks passed. No live provider or Discord probe was performed.
+Remote CI and the two independent reviews must target the published PR head.
+
+The additional response-configuration, tool-feedback, ordinary-reply and Engram
+integration suites passed **163 tests in 38.30s**, with the same two dependency
+warnings. Total selected local evidence: **269 passed**; this is focused evidence,
+not a local full-suite claim. Logs are in the ignored dated narration audit folder.
+
+Luna's independent review of open PR #113 at `02e0342` found that ordinary
+failed/help action receipts during narration still triggered the finish-companion
+hard stop. The parent reproduced three cases (invalid arguments, usage-only help,
+and a partial-success batch): each stopped before the first final answer. The
+classification now applies only to actual `end_cycle` batches. Narration can
+report those receipts in its bounded final answer without retrying actions; real
+finish-companion failures remain terminal. All three regressions pass in 1.14s.
+The finding was disclosed to Sol after both initial reviews and is Luna-attributed.

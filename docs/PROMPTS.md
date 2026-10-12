@@ -45,16 +45,19 @@ it. The current delivery contract and limits are in
 
 The `response_protocol` layer automatically selects
 `runtime-response-protocol-narrate`, `runtime-response-protocol-progress` or
-`runtime-response-protocol-end_cycle-v3`. The versioned end-cycle default renders
-`narration_strikes` as the maximum failed responses. It requires the original
-answer to be confirmed, never regenerated. A valid finish call with no answer
+`runtime-response-protocol-end_cycle-v4`. The versioned end-cycle default renders
+`narration_strikes` as the maximum failed responses. Text with action calls but
+no finish is narration: run the actions once, count a strike and finalize from
+their results with action tools removed. That narration is never an answer
+draft. Text-only replies and recoverable failed finish batches retain their
+original answer, to be confirmed rather than regenerated. A valid finish with no answer
 or draft permits one tool-free request for the first public answer and does not
 count as a strike. That request accepts only public answer text: empty text,
 tool calls or incomplete output stop without retry. Failed companions also stop
 the cycle. `end_cycle {}` is explicitly an executing decision, not tool discovery.
 
 The new identifier seeds once without replacing saved legacy protocol records,
-including the previous v2 draft-only contract.
+including the previous v2 and v3 contracts.
 Explicit bot overrides and disabled layers remain authoritative for prompt text;
 runtime gates still apply. Unedited shipped identity/tool-guidance text is
 upgraded only on an exact previous-content fingerprint, including the interim

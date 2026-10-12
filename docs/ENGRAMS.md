@@ -159,12 +159,19 @@ publication linkage. The answer request is the state and coverage source, not
 the earlier empty finish. Neither private reasoning nor incomplete output can
 supply an answer or state update.
 
-A failed publication with usable answer text freezes that answer and its parsed
-Engram together. A later valid
-`end_cycle {}` confirms this exact draft; it cannot replace the answer or its
-Engram. Staging verifies both completed requests, the recorded draft hash and the
-confirmation call. State and context coverage come from the original request,
-including when its answer accompanied successful actions or an invalid finish.
+Text with action calls but no `end_cycle` is intermediate narration, not an
+answer draft. Its text and any private suffix are never frozen for later
+publication or state commit. The actions run once; bounded finalization can
+then produce a final answer from their results. That final answer request is
+the Engram and coverage source. A valid bare finish during this no-draft phase
+may instead use the same bounded first-answer path described above.
+
+A text-only answer missing `end_cycle`, or answer text accompanying a recoverable
+failed `end_cycle` batch, freezes the answer and its parsed Engram together.
+A later valid `end_cycle {}` confirms this exact draft; it cannot replace the
+answer or its Engram. Staging verifies both completed requests, the recorded
+draft hash and the confirmation call. State and context coverage come from the
+original answer request, including when it had permitted finish companions.
 The confirmation request supplies only permission to publish. A failed companion
 or a response with no usable public answer cannot enter this confirmation path.
 Both `stop` and `tool_calls` complete terminal boundaries are supported, while

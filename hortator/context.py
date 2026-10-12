@@ -152,7 +152,7 @@ class ContextBuilder:
         if not variant and key == "response_protocol":
             variant = bot.get("response_protocol", "narrate")
             if variant == "end_cycle":
-                variant = "end_cycle-v3"
+                variant = "end_cycle-v4"
         if (
             not variant
             and bot.get("transcript_format") == "conversation"

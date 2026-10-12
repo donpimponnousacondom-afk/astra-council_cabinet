@@ -77,7 +77,7 @@ export function ResponseProtocolSettings({
         <div className="reply-mode-settings">
           <Field
             label="Failed responses allowed"
-            hint="1–5; default 2. Two allows one failure, then one confirmation chance."
+            hint="1–5; default 2. One stops at the first failure; two allows one finalization chance."
           >
             <input
               type="number"
@@ -106,9 +106,17 @@ export function ResponseProtocolSettings({
             end_cycle before any answer exists is also allowed and is not a
             strike, even with a limit of 1.
           </Help>
+          <Help label="When text accompanies unfinished tools">
+            Text with action calls but no end_cycle is private narration, not an
+            answer draft. The actions run once and one strike is counted. Action
+            tools are then removed. If strikes remain, the bot can use the
+            results to write its final answer with end_cycle; it cannot start
+            more work or replay those calls.
+          </Help>
           <Help label="How saved-draft confirmation works">
-            A failed response with useful answer text is kept unchanged. Action
-            tools are removed; the bot can only confirm the original draft with
+            A text-only answer missing end_cycle, or an answer accompanying a
+            recoverable failed end_cycle batch, is kept unchanged. Action tools
+            are removed; the bot can only confirm the original draft with
             end_cycle, or choose silence if allowed. It must not regenerate the
             answer. New text cannot replace the draft. If a finishing companion
             fails, completed actions stay saved and the cycle stops incomplete.
@@ -118,7 +126,8 @@ export function ResponseProtocolSettings({
             for the first public answer. That request has no tools and accepts
             text only. Empty text, a tool call or incomplete output stops the
             cycle without retry. Permitted companion writes run once before this
-            request; a failed companion stops it. Existing drafts are never
+            request; a failed companion stops it. This also works after
+            narration when no answer draft exists. Existing drafts are never
             regenerated.
           </Help>
           <div className="reply-option">

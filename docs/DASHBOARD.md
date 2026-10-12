@@ -98,11 +98,14 @@ Final reply only (`narrate`), Progress updates (`progress`), or Explicit finish
 mode's controls; switching modes retains the other mode's saved/draft values.
 End-cycle mode shows **Failed responses allowed** and the separate checkbox
 **Notify when no answer is sent**. The strike count is a failure ceiling, not
-extra work rounds: two allows one failure and one confirmation chance, while
+extra work rounds: two allows one failure and one finalization chance, while
 one stops on the first failure. A valid finish call before any answer exists
 is legal even at a limit of one: it permits a single tool-free first answer.
 The **When the finish call comes first** disclosure explains its hard stop and
-companion behavior. Saved-draft confirmation is mandatory and has no toggle.
+companion behavior. **When text accompanies unfinished tools** distinguishes
+private narration from an answer: tools run once, then the bot may use their
+results in a final answer within the failure limit. Narration is never a saved
+draft. Real answer drafts remain immutable; confirmation has no toggle.
 Longer explanations use keyboard-accessible disclosures beside the
 relevant setting, without toggling its value.
 Keep ordinary tool budgets outside this group; protocol behavior and defaults
