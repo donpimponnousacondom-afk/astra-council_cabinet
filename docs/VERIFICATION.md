@@ -28,9 +28,32 @@ browser regression for directory pages, byte pages and root navigation.
 After those corrections, `uv run --frozen pytest -q tests/test_tool_feedback.py
 tests/test_filesystem.py tests/test_agentic_api.py` passed **88 tests** in
 36.26 seconds, with 2 dependency warnings, exit 0. The fixture-only API check
-also passed 2 tests in 3.27 seconds. The corrected full gate is pending;
-no full-suite readiness claim yet.
-No remote CI run exists for this unpublished work.
+also passed 2 tests in 3.27 seconds.
+
+Corrected full gate: `HORTATOR_REQUIRE_SANDBOX=1 ./scripts/check.sh`, clean
+`edefc3bdc6fbc881303f7a3d39992f90d29c9a66` at start and end, **passed**, exit 0,
+762.09 seconds total. Full pytest: **2090 passed, 2 skipped**, 2 dependency
+warnings, 601.23 seconds. The skips are the two opt-in public package-download
+checks; local sandbox execution was required. Locked dependencies, Ruff lint
+and formatting, four verification-runner checks, frontend formatting and build
+all passed. Full Playwright: **75 passed**, 150.423 seconds for its command.
+The additional focused browser run passed both the new filesystem inspector and
+existing agent/document inspection tests (2 tests, 8.3 seconds). Manual T3 preview
+inspection used the isolated port-18000 fixture, with no configuration writes.
+
+Both independent initial reviews (Luna/max and GPT-6.1 Sol/high) found the
+cursor bug. Neither found the extra schema wrapper before the full gate caught
+it. Both reviewed correction `edefc3b` with no new findings; Sol independently
+probed per-bot timeout overrides and rejection before execution with and without
+the legacy workspace grant. Final documentation/review and rollout receipts are
+kept in the ignored evidence directory. No PR is published and remote CI
+monitoring has not started.
+
+After the checks stopped, seven confirmed inactive project-owned test/browser
+fixture directories were removed (9,185,681 logical bytes). Logs, the first
+failure's JUnit, corrected gate evidence, screenshot and review comparison were
+preserved in `audit/2026-10-10/simple-filesystem/`. No production backup or
+runtime data was removed.
 
 Classification: real local Bubblewrap execution and temporary files/SQLite;
 local ASGI inspection and synthetic package/source data. No live model/provider
