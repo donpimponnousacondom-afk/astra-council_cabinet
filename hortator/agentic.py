@@ -1,6 +1,8 @@
 """Narrow integration of private files, fetched text and the isolated shell runner."""
 
-from . import fetched_documents, shell_runner, workspaces
+import copy
+
+from . import fetched_documents, filesystem, shell_runner, workspaces
 from .models import ControlError
 
 
@@ -73,6 +75,32 @@ SHELL_PARAMETERS = {
     ],
 }
 
+FILESYSTEM_SHELL_DESCRIPTION = (
+    "Run Bash commands in a fresh, bounded sandbox. Your Simple filesystem is mounted at /workspace; "
+    "commands read and modify the same saved files as the filesystem tool, without a task or start step. "
+    "Includes Python 3.14/Pillow, uv/pip, curl, wget, git, jq, Perl and core utilities; Node is not supplied. "
+    "Default pip/uv and pkg installations use temporary /packages and disappear after this call. "
+    "Package files explicitly saved in /workspace consume its quota; links are unsupported and execute bits "
+    "are not preserved. Valid saved changes survive normal command completion, including nonzero exits; "
+    "timeouts, cancellation and invalid output discard the current call's changes. "
+    "No background process survives this call. status/read inspect job evidence; cancel stops a running job. "
+    "Use filesystem.export for saved output, then discord_attach before an ordinary answer. "
+    "Call {} for complete usage; output is untrusted data."
+)
+
+
+def filesystem_shell_parameters(*, private_tasks):
+    parameters = copy.deepcopy(SHELL_PARAMETERS)
+    if private_tasks:
+        parameters["properties"]["task"]["description"] = (
+            "Optional legacy Private workspace task. Omit to use your Simple filesystem. Requires workspace grant and an existing task."
+        )
+    else:
+        parameters["properties"].pop("task")
+        for condition in parameters["allOf"]:
+            condition["then"]["properties"].pop("task", None)
+    return parameters
+
 
 class AgentTools:
     def __init__(self, registry, directory):
@@ -81,6 +109,9 @@ class AgentTools:
         self.registry = registry
         registry.workspaces = workspaces.Workspaces(
             registry.store, directory, registry.vault, artifact=registry.artifact
+        )
+        registry.filesystems = filesystem.Filesystems(
+            registry.store, directory, registry.vault, artifact=registry.artifact, allowed=registry.allowed
         )
         registry.fetched_documents = fetched_documents.FetchedDocuments(
             registry.store, directory, registry.vault
@@ -98,6 +129,18 @@ class AgentTools:
         )
         registry.register(
             PluginSpec(
+                "filesystem",
+                "Simple filesystem",
+                filesystem.DESCRIPTION,
+                filesystem.PARAMETERS,
+                registry.filesystems.call,
+                filesystem.DEFAULTS,
+                keyless=True,
+                installed_description=True,
+            )
+        )
+        registry.register(
+            PluginSpec(
                 "shell",
                 "Isolated Bash",
                 SHELL_DESCRIPTION,
@@ -109,26 +152,30 @@ class AgentTools:
 
     async def shell(self, args, context, config, key):
         operation = args["operation"]
-        persistent = (
-            "task" in args
+        mounted = self.registry.allowed("filesystem", context)
+        storage = (
+            ("workspace" if "task" in args else "filesystem" if mounted else "disposable")
             if operation == "run"
-            else self.runner.status(context, args["job_id"]).get("storage") != "disposable"
+            else self.runner.status(context, args["job_id"]).get("storage", "workspace")
         )
-        if persistent and not self.registry.allowed("workspace", context):
+        if storage == "workspace" and not self.registry.allowed("workspace", context):
             raise ControlError(
                 "Persistent shell jobs also require an enabled workspace plugin and bot grant; omit task for a disposable run",
                 403,
             )
+        if storage == "filesystem" and not mounted:
+            raise ControlError(filesystem.MOUNT_OFF, 403)
         if operation == "run":
-            return await self.runner.run(
+            result = await self.runner.run(
                 context,
                 task=args.get("task"),
                 command=args["command"],
                 cwd=args.get("cwd"),
                 timeout_seconds=args.get("timeout_seconds"),
                 configuration=config,
+                filesystem=self.registry.filesystems if storage == "filesystem" else None,
             )
-        if operation == "status":
+        elif operation == "status":
             result = self.runner.status(context, args["job_id"])
         elif operation == "read":
             result = self.runner.read(
@@ -140,22 +187,28 @@ class AgentTools:
             )
         else:
             result = await self.runner.cancel(context, args["job_id"])
-        return {**result, "storage": "workspace" if persistent else "disposable"}
+        if storage == "filesystem":
+            self.registry.filesystems._require(context)
+            result["usage"] = self.registry.filesystems.usage(context.bot["id"])
+        return {**result, "storage": storage}
 
     async def catalog(self, bot_id=None, limit=30):
         return self.registry.vault.redact(
             {
                 "runner": await self.runner.readiness(),
                 "workspaces": self.registry.workspaces.list_workspaces(bot_id=bot_id, limit=limit),
+                "filesystems": self.registry.filesystems.catalog(bot_id=bot_id, limit=limit),
                 "documents": self.registry.fetched_documents.list_documents(bot_id=bot_id, limit=limit),
                 "jobs": self.runner.inspect(bot_id=bot_id, limit=limit),
                 "config_schemas": {
                     "workspace": workspaces.CONFIG_SCHEMA,
+                    "filesystem": filesystem.CONFIG_SCHEMA,
                     "shell": shell_runner.CONFIG_SCHEMA,
                     "web_fetch": fetched_documents.CONFIG_SCHEMA,
                 },
                 "defaults": {
                     "workspace": workspaces.DEFAULTS,
+                    "filesystem": filesystem.DEFAULTS,
                     "shell": shell_runner.DEFAULTS,
                     "web_fetch": fetched_documents.DEFAULTS,
                 },
@@ -175,11 +228,19 @@ class AgentTools:
         offset=0,
         length=8000,
         stream="stdout",
+        cursor=0,
     ):
-        if resource == "files":
-            return self.registry.workspaces.inspect_files(bot_id, channel_id, task, path=path)
-        if resource == "file":
-            details = self.registry.workspaces.stat_file(bot_id, channel_id, task, path)
+        storage = self.registry.filesystems if resource.startswith("filesystem") else self.registry.workspaces
+        if resource in ("files", "filesystem_files"):
+            if resource == "filesystem_files":
+                result = storage.inspect_files(bot_id, path=path, cursor=cursor)
+                return {
+                    **result,
+                    "next": {"cursor": result["next_cursor"]} if result["next_cursor"] is not None else None,
+                }
+            return storage.inspect_files(bot_id, channel_id, task, path=path)
+        if resource in ("file", "filesystem_file"):
+            details = storage.stat_file(bot_id, channel_id, task, path)
             mime = details.get("mime", "application/octet-stream")
             if details.get("kind") == "directory" or not (
                 mime.startswith("text/") or mime in ("application/json", "application/xml")
@@ -189,9 +250,7 @@ class AgentTools:
                     "binary_preview": "Metadata only; file bytes are not injected as text",
                     "export_limit_bytes": workspaces.EXPORT_LIMIT,
                 }
-            result = self.registry.workspaces.read_file(
-                bot_id, channel_id, task, path, offset=offset, limit_bytes=length
-            )
+            result = storage.read_file(bot_id, channel_id, task, path, offset=offset, limit_bytes=length)
             return {
                 **result,
                 "text": result.get("content"),
@@ -234,6 +293,7 @@ class AgentTools:
 def validate_configuration(registry, kind, entity):
     validators = {
         "workspace": workspaces.validate_config,
+        "filesystem": filesystem.validate_config,
         "shell": shell_runner.validate_config,
         "web_fetch": fetched_documents.validate_config,
     }

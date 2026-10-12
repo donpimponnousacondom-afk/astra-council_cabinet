@@ -26,6 +26,7 @@ STORES = (
     "sites",
     "ssh",
     "workspaces",
+    "filesystems",
     "jobs",
     "fetched_documents",
     "site_history",

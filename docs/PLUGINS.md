@@ -1,5 +1,10 @@
 # Extending the plugin registry
 
+The keyless [Simple filesystem](FILESYSTEM.md) is a separate opt-in `filesystem`
+tool. Its per-bot saved directory is automatically selected by no-task Bash calls
+while mounted; disabling it removes access without deleting files. Private
+workspaces remain independently granted and retain named task behavior.
+
 The optional [Frenchy TTS](FRENCHY_TTS.md) is an experimental Mistral voice tool
 with independent settings, key and grants. It shares ordinary TTS adapters and
 adds reference audio, saved cloning and prepared native voice-note artifacts.

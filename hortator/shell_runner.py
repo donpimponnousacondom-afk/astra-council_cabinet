@@ -972,7 +972,17 @@ class ShellRunner:
             process.kill()
         await process.wait()
 
-    async def run(self, context, *, command, task=None, cwd=None, timeout_seconds=None, configuration=None):
+    async def run(
+        self,
+        context,
+        *,
+        command,
+        task=None,
+        cwd=None,
+        timeout_seconds=None,
+        configuration=None,
+        filesystem=None,
+    ):
         if self._closed:
             raise ControlError("Shell runner is shutting down")
         config = limits(configuration)
@@ -1000,7 +1010,10 @@ class ShellRunner:
         if self.active:
             raise ControlError("The shell runner is busy; inspect the active job and retry after completion")
         self._reserve(bot, config)
-        prepared = self.workspaces.prepare_job(context, task, None) if task is not None else None
+        storage = filesystem if filesystem is not None else self.workspaces
+        prepared = (
+            storage.prepare_job(context, task, None) if filesystem is not None or task is not None else None
+        )
         job_id = "job_" + secrets.token_hex(16)
         directory = self.root / job_id
         metadata = {
@@ -1009,8 +1022,9 @@ class ShellRunner:
             "channel_id": channel,
             "turn_id": turn,
             "task": task,
-            "storage": "workspace" if prepared else "disposable",
-            "workspace_id": prepared["workspace_id"] if prepared else None,
+            "storage": "filesystem" if filesystem is not None else "workspace" if prepared else "disposable",
+            "workspace_id": prepared["workspace_id"] if prepared and filesystem is None else None,
+            "filesystem_id": prepared["workspace_id"] if prepared and filesystem is not None else None,
             "status": "running",
             "started_at": time.time(),
             "cwd": cwd or (prepared["cwd"] if prepared else "."),
@@ -1027,7 +1041,7 @@ class ShellRunner:
             self._event(metadata, "job.started")
         except BaseException:
             if prepared:
-                self.workspaces.release_job(prepared["workspace_id"])
+                storage.release_job(prepared["workspace_id"])
             if created:
                 shutil.rmtree(directory, ignore_errors=True)
             raise
@@ -1047,7 +1061,7 @@ class ShellRunner:
                 directory, Path(prepared["path"]) if prepared else None, run_config, active
             )
             if prepared and staged is not None and metadata["status"] in ("succeeded", "failed"):
-                self.workspaces.finish_job(prepared["workspace_id"], staged, metadata["cwd"])
+                storage.finish_job(prepared["workspace_id"], staged, metadata["cwd"])
                 metadata["workspace_committed"] = True
         except asyncio.CancelledError:
             metadata.update(status="cancelled", error="Job cancelled; sandbox workspace changes discarded")
@@ -1056,7 +1070,7 @@ class ShellRunner:
             metadata.update(status="failed", error=error_text(error)[:1200])
         finally:
             if prepared:
-                self.workspaces.release_job(prepared["workspace_id"])
+                storage.release_job(prepared["workspace_id"])
             metadata.update(finished_at=time.time(), elapsed_seconds=round(time.monotonic() - started, 3))
             try:
                 self._save(metadata)

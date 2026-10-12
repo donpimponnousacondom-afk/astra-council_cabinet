@@ -8,6 +8,10 @@ This is a deliberate model compatibility contract for **every built-in and futur
 
 Built-in memory, inspection, fetched-document, workspace, shell and document-site results present known timestamp metadata in the council's configured timezone, with explicit offsets. Raw content, commands, schemas, old notes and embedded request/response evidence remain original. Model clock and compaction instructions explain how to normalize old UTC references without changing their instant. [CONCURRENCY.md](CONCURRENCY.md) also defines required TaskGroup ownership and cancellation for tool implementations.
 
+The separate [Simple filesystem](FILESYSTEM.md) keeps this same tool contract.
+Its mount is automatically used by no-task Bash while enabled; the legacy
+workspace prerequisite below applies to explicitly named Private tasks.
+
 ## Discovery without side effects
 
 Calling an available tool with `{}` returns `usage_only: true`, `executed: false`, the complete parameter schema, named-field convention and a concrete example. It does not invoke the handler, resolve its credential or perform its action. Authorization still applies: discovery cannot expose a disabled or ungranted tool. Empty calls consume the ordinary round/call budget so discovery cannot create an unbounded loop.

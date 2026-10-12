@@ -20,6 +20,7 @@ SHARED_RESULT_READER = "tool_result_read"
 RESULT_READERS = (
     "web_fetch",
     "workspace",
+    "filesystem",
     "shell",
     "web_search",
     "dumb_search",

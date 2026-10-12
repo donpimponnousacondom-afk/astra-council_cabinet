@@ -113,6 +113,7 @@ including superseded behavior, and must not be treated as current configuration.
 - Document ownership, publication and SSH identity: [DOCUMENTS.md](docs/DOCUMENTS.md).
 - Scoped agentic tools and task budgets: [AGENTIC_TOOLS.md](docs/AGENTIC_TOOLS.md).
 - Shell sandbox, limits and archival: [SHELL_RUNNER.md](docs/SHELL_RUNNER.md).
+- Single per-bot filesystem and mount toggle: [FILESYSTEM.md](docs/FILESYSTEM.md).
 - Optional Discord panels and automatic attachments: [DISCORD_PANELS.md](docs/DISCORD_PANELS.md).
 - Plugin extension contracts: [PLUGINS.md](docs/PLUGINS.md).
 - Task ownership and cancellation: [CONCURRENCY.md](docs/CONCURRENCY.md).

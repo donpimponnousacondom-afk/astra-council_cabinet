@@ -820,6 +820,53 @@ test("modern document and agent tool inspectors retain private draft downloads a
     .click();
 });
 
+test("simple filesystem inspector pages directories and files while the mount is off", async ({
+  page,
+}) => {
+  await navigate(page, "Plugins");
+  await page
+    .getByRole("button", { name: "Edit Simple filesystem", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("API key", { exact: true })).toHaveCount(0);
+  const filesystem = dialog.getByRole("article").filter({
+    hasText: "ada · /workspace",
+  });
+  await expect(filesystem).toContainText(/\d+\/256 MiB \(\d+%\)/);
+  await filesystem.getByRole("button", { name: "Inspect files" }).click();
+  const inspection = dialog.getByLabel("Tool inspection");
+  await expect(
+    inspection.getByRole("button", { name: /file-000.txt/ }),
+  ).toBeVisible();
+  await expect(
+    inspection.getByRole("button", { name: /file-100.txt/ }),
+  ).toHaveCount(0);
+  await inspection
+    .getByRole("button", { name: "Next chunk", exact: true })
+    .click();
+  await expect(
+    inspection.getByRole("button", { name: /file-100.txt/ }),
+  ).toBeVisible();
+  await expect(
+    inspection.getByRole("button", { name: /file-000.txt/ }),
+  ).toHaveCount(0);
+  await inspection.getByRole("button", { name: /^sub \(/ }).click();
+  await inspection.getByRole("button", { name: /^sub\/notes.txt \(/ }).click();
+  const evidence = inspection.locator("pre");
+  await expect(evidence).toContainText("SIMPLE FILESYSTEM NOTES");
+  await inspection
+    .getByRole("button", { name: "Next chunk", exact: true })
+    .click();
+  await expect(evidence).toContainText("Unicode café");
+  await expect(evidence).not.toContainText("SIMPLE FILESYSTEM NOTES");
+  await inspection
+    .getByRole("button", { name: "Filesystem root", exact: true })
+    .click();
+  await expect(
+    inspection.getByRole("button", { name: /file-000.txt/ }),
+  ).toBeVisible();
+});
+
 test("bot section switching preserves malformed plugin JSON until repaired or explicitly discarded", async ({
   page,
 }) => {

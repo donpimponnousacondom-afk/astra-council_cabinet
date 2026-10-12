@@ -677,9 +677,10 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
 
     @app.get("/api/agentic-tools/inspect")
     async def agentic_inspect(
-        resource: str = Query(pattern="^(files|file|document|job|output)$"),
+        resource: str = Query(pattern="^(files|file|filesystem_files|filesystem_file|document|job|output)$"),
+        cursor: int = Query(0, ge=0, le=10000),
         bot_id: str = Query(max_length=80),
-        channel_id: str = Query(max_length=100),
+        channel_id: str = Query("", max_length=100),
         task: str | None = Query(None, max_length=64),
         path: str = Query(".", max_length=240),
         id: str | None = Query(None, max_length=100),
@@ -694,6 +695,7 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
                 resource,
                 bot_id,
                 channel_id,
+                cursor=cursor,
                 task=task,
                 path=path,
                 identifier=id,

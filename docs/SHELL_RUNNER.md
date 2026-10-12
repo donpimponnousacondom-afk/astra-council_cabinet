@@ -1,10 +1,17 @@
 # Isolated Bash runner
 
-The optional keyless `shell` plugin runs real Bash pipelines, scripts, Python 3.14 and Pillow. Enable and grant `shell` for disposable commands; no workspace grant or task is needed. To keep files between calls, also grant `workspace`, create a task with `workspace.start`, and explicitly pass that task to `shell.run`. The dashboard exposes runner readiness and the independent working limits. Existing owner identity, room policy, global enablement and bot grants still apply. See [AGENTIC_TOOLS.md](AGENTIC_TOOLS.md) for the complete workflow and [TOOLS.md](TOOLS.md) for empty-call discovery and complete argument-error feedback.
+The optional keyless `shell` plugin runs real Bash pipelines, scripts, Python 3.14 and Pillow. Enable and grant `shell` for disposable commands; no workspace grant or task is needed. For named persistent tasks, also grant `workspace`, create a task with `workspace.start`, and explicitly pass that task to `shell.run`. The separate [Simple filesystem](FILESYSTEM.md) provides automatic per-bot storage without task selection. The dashboard exposes runner readiness and the independent working limits. Existing owner identity, room policy, global enablement and bot grants still apply. See [AGENTIC_TOOLS.md](AGENTIC_TOOLS.md) for the complete workflow and [TOOLS.md](TOOLS.md) for empty-call discovery and complete argument-error feedback.
 
 ## Disposable commands and persistent tasks
 
-Omitting `task` selects disposable storage, even when the bot also has a workspace grant or existing tasks:
+The optional [Simple filesystem](FILESYSTEM.md) adds a third storage mode:
+when it is enabled and granted, omitting `task` automatically uses the bot's one
+saved `/workspace`. Disabling that plugin unmounts its files; stored bytes remain
+for re-enabling. Its job evidence retains the filesystem grant. An explicit
+Private workspace `task` still selects the legacy store when separately granted.
+
+Without a mounted Simple filesystem, omitting `task` selects disposable storage,
+even when the bot also has a workspace grant or existing tasks:
 
 ```json
 {"operation":"run","command":"curl --fail --silent --show-error https://example.com"}

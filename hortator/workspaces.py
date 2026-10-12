@@ -216,15 +216,24 @@ def safe_path(value, *, directory=False):
 
 
 class Workspaces:
+    table = "workspaces"
+    imports_table = "workspace_imports"
+    refs_table = "workspace_turn_refs"
+    storage_directory = "workspaces"
+    id_prefix = "ws"
+
     def __init__(self, store, directory, vault, *, artifact=None, image_cache=None):
         self.store, self.vault, self.artifact = store, vault, artifact
-        self.directory = Path(directory) / "workspaces"
+        self.directory = Path(directory) / self.storage_directory
         if self.directory.is_symlink():
             raise ControlError("Workspace storage must not be a symbolic link")
         self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.directory.chmod(0o700)
         self.images = image_cache or ImageCache(store)
         self._active = {}
+        self._initialize_tables()
+
+    def _initialize_tables(self):
         self.store.db.executescript("""
         CREATE TABLE IF NOT EXISTS workspaces (
           id TEXT PRIMARY KEY, bot_id TEXT NOT NULL, channel_id TEXT NOT NULL, task TEXT NOT NULL,
@@ -250,7 +259,7 @@ class Workspaces:
 
     def _workspace(self, bot_id, channel_id, task):
         row = self.store.one(
-            "SELECT * FROM workspaces WHERE bot_id=? AND channel_id=? AND task=?",
+            f"SELECT * FROM {self.table} WHERE bot_id=? AND channel_id=? AND task=?",
             (bot_id, channel_id, safe_task(task)),
         )
         if not row:
@@ -270,11 +279,11 @@ class Workspaces:
     def _touch(self, row, context, config):
         at = time.time()
         self.store.execute(
-            "UPDATE workspaces SET updated_at=?,expires_at=? WHERE id=?",
+            f"UPDATE {self.table} SET updated_at=?,expires_at=? WHERE id=?",
             (at, at + config["retention_days"] * 86400, row["id"]),
         )
         self.store.execute(
-            "INSERT OR IGNORE INTO workspace_turn_refs VALUES(?,?)", (row["id"], context.turn_id)
+            f"INSERT OR IGNORE INTO {self.refs_table} VALUES(?,?)", (row["id"], context.turn_id)
         )
 
     def _durable_state(self):
@@ -316,7 +325,7 @@ class Workspaces:
             parent = os.open(self.directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             descriptors.append(parent)
             for name in (row["id"], row["generation"]):
-                if not re.fullmatch(r"(?:ws|files)_[a-f0-9]{20}", name):
+                if not re.fullmatch(rf"(?:{self.id_prefix}|files)_[a-f0-9]{{20}}", name):
                     raise ControlError("Invalid workspace storage reference")
                 parent = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
                 descriptors.append(parent)
@@ -368,7 +377,7 @@ class Workspaces:
                 if descriptor is not None:
                     os.close(descriptor)
 
-    def _scan(self, root, config, *, metadata=False):
+    def _scan(self, root, config, *, metadata=False, enforce_limits=True):
         entries, total = [], 0
 
         def walk(fd, prefix=""):
@@ -378,7 +387,7 @@ class Workspaces:
                     path = prefix + entry.name
                     safe_path(path)
                     info = entry.stat(follow_symlinks=False)
-                    if len(entries) >= config["max_files"]:
+                    if enforce_limits and len(entries) >= config["max_files"]:
                         raise ControlError(f"Workspace exceeds {config['max_files']} files/directories")
                     if stat.S_ISDIR(info.st_mode):
                         entries.append({"path": path, "kind": "directory", "bytes": 0})
@@ -388,10 +397,10 @@ class Workspaces:
                         finally:
                             os.close(child)
                     elif stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
-                        if info.st_size > config["max_file_bytes"]:
+                        if enforce_limits and info.st_size > config["max_file_bytes"]:
                             raise ControlError(f"File {path!r} exceeds {config['max_file_bytes']} bytes")
                         total += info.st_size
-                        if total > config["max_workspace_bytes"]:
+                        if enforce_limits and total > config["max_workspace_bytes"]:
                             raise ControlError(f"Workspace exceeds {config['max_workspace_bytes']} bytes")
                         item = {"path": path, "kind": "file", "bytes": info.st_size}
                         if metadata:
@@ -453,7 +462,7 @@ class Workspaces:
 
     def _bot_bytes(self, row):
         return self.store.one(
-            "SELECT coalesce(sum(bytes),0) AS n FROM workspaces WHERE bot_id=? AND id!=?",
+            f"SELECT coalesce(sum(bytes),0) AS n FROM {self.table} WHERE bot_id=? AND id!=?",
             (row["bot_id"], row["id"]),
         )["n"]
 
@@ -484,7 +493,7 @@ class Workspaces:
             if value is not None:
                 clauses.append(key + "=?")
                 values.append(value)
-        query = "SELECT * FROM workspaces" + (" WHERE " + " AND ".join(clauses) if clauses else "")
+        query = f"SELECT * FROM {self.table}" + (" WHERE " + " AND ".join(clauses) if clauses else "")
         rows = self.store.rows(
             query + " ORDER BY updated_at DESC,id LIMIT ?", (*values, max(1, min(limit, 100)))
         )
@@ -544,7 +553,7 @@ class Workspaces:
             with self._file(root, path) as (descriptor, info):
                 details = self._metadata(descriptor, path, info)
         protected = self.store.one(
-            "SELECT 1 AS n FROM workspace_imports WHERE workspace_id=? AND path=?", (row["id"], path)
+            f"SELECT 1 AS n FROM {self.imports_table} WHERE workspace_id=? AND path=?", (row["id"], path)
         )
         return {
             **details,
@@ -612,7 +621,7 @@ class Workspaces:
                 f"File exceeds workspace limit {config['max_file_bytes']} bytes; use a smaller separate output"
             )
         protected = self.store.one(
-            "SELECT sha256 FROM workspace_imports WHERE workspace_id=? AND path=?", (row["id"], path)
+            f"SELECT sha256 FROM {self.imports_table} WHERE workspace_id=? AND path=?", (row["id"], path)
         )
         if protected and hashlib.sha256(data).hexdigest() != protected["sha256"]:
             raise ControlError(
@@ -662,20 +671,22 @@ class Workspaces:
                         os.unlink(temporary, dir_fd=parent)
                     except FileNotFoundError:
                         pass
-            self.store.execute("UPDATE workspaces SET bytes=?,entries=? WHERE id=?", (size, count, row["id"]))
+            self.store.execute(
+                f"UPDATE {self.table} SET bytes=?,entries=? WHERE id=?", (size, count, row["id"])
+            )
             with self._file(root, path) as (descriptor, info):
                 return self._metadata(descriptor, path, info)
 
     def _start(self, context, task, config):
         self.prune_expired(bot_id=context.bot["id"])
         row = self.store.one(
-            "SELECT * FROM workspaces WHERE bot_id=? AND channel_id=? AND task=?",
+            f"SELECT * FROM {self.table} WHERE bot_id=? AND channel_id=? AND task=?",
             (context.bot["id"], context.channel_id, task),
         )
         resumed = row is not None
         if not row:
             count = self.store.one(
-                "SELECT count(*) AS n FROM workspaces WHERE bot_id=?", (context.bot["id"],)
+                f"SELECT count(*) AS n FROM {self.table} WHERE bot_id=?", (context.bot["id"],)
             )["n"]
             if count >= config["max_workspaces"]:
                 raise ControlError(
@@ -693,7 +704,7 @@ class Workspaces:
                     os.close(descriptor)
             try:
                 self.store.execute(
-                    "INSERT INTO workspaces VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    f"INSERT INTO {self.table} VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         workspace_id,
                         context.bot["id"],
@@ -853,6 +864,12 @@ class Workspaces:
                 args.get("limit", 50),
                 config,
             )
+        return await self._call_file(args, context, config, row)
+
+    async def _call_file(self, args, context, config, row):
+        """Shared file operations; the owning store resolves scope before entry."""
+        operation = args["operation"]
+        task = row.get("task")
         path = args["path"]
         safe_path(path, directory=operation in ("mkdir", "stat"))
         if operation == "stat":
@@ -948,7 +965,8 @@ class Workspaces:
                     with self._parent(root, path + "/placeholder", create=True):
                         pass
                 self.store.execute(
-                    "UPDATE workspaces SET entries=? WHERE id=?", (len(entries) + len(additions), row["id"])
+                    f"UPDATE {self.table} SET entries=? WHERE id=?",
+                    (len(entries) + len(additions), row["id"]),
                 )
             return {"task": task, "path": path, "kind": "directory", "created": bool(additions)}
         if operation == "import_attachment":
@@ -964,7 +982,7 @@ class Workspaces:
                     expected_sha256=args.get("expected_sha256"),
                 )
                 self.store.execute(
-                    "INSERT INTO workspace_imports VALUES(?,?,?,?,?) ON CONFLICT(workspace_id,path) DO UPDATE SET sha256=excluded.sha256,message_id=excluded.message_id,attachment_id=excluded.attachment_id",
+                    f"INSERT INTO {self.imports_table} VALUES(?,?,?,?,?) ON CONFLICT(workspace_id,path) DO UPDATE SET sha256=excluded.sha256,message_id=excluded.message_id,attachment_id=excluded.attachment_id",
                     (row["id"], path, metadata["sha256"], args["message_id"], args["attachment_id"]),
                 )
                 return {
@@ -1008,10 +1026,7 @@ class Workspaces:
         if not active or active["kind"] != "job":
             raise ControlError("No active sandbox job owns this workspace")
         context, config = active["context"], active["config"]
-        row = self.store.one(
-            "SELECT * FROM workspaces WHERE id=? AND bot_id=? AND channel_id=?",
-            (workspace_id, context.bot["id"], context.channel_id),
-        )
+        row = self._job_row(workspace_id, context)
         if not row:
             raise ControlError("Workspace disappeared while its sandbox job was active")
         parts = safe_path(cwd, directory=True)
@@ -1027,7 +1042,7 @@ class Workspaces:
                 )
             by_path = {entry["path"]: entry for entry in entries}
             for original in self.store.rows(
-                "SELECT path,sha256 FROM workspace_imports WHERE workspace_id=?", (workspace_id,)
+                f"SELECT path,sha256 FROM {self.imports_table} WHERE workspace_id=?", (workspace_id,)
             ):
                 if by_path.get(original["path"], {}).get("sha256") != original["sha256"]:
                     raise ControlError(
@@ -1077,7 +1092,7 @@ class Workspaces:
             finally:
                 os.close(parent_descriptor)
             self.store.execute(
-                "UPDATE workspaces SET generation=?,cwd=?,bytes=?,entries=? WHERE id=?",
+                f"UPDATE {self.table} SET generation=?,cwd=?,bytes=?,entries=? WHERE id=?",
                 (generation, cwd, size, len(entries), workspace_id),
             )
             committed = True
@@ -1090,7 +1105,7 @@ class Workspaces:
                 self.store.emit(
                     "workspace.cleanup_pending",
                     {
-                        "task": row["task"],
+                        "task": row.get("task"),
                         "error": f"{type(error).__name__}: {error}",
                         "notice": "Workspace commit succeeded; obsolete generation cleanup will retry on the next start/job",
                     },
@@ -1100,7 +1115,7 @@ class Workspaces:
                 )
             return {
                 "workspace_id": workspace_id,
-                "task": row["task"],
+                "task": row.get("task"),
                 "cwd": cwd,
                 "bytes": size,
                 "entries": len(entries),
@@ -1111,11 +1126,17 @@ class Workspaces:
             if not committed and destination.exists():
                 shutil.rmtree(destination)
 
+    def _job_row(self, workspace_id, context):
+        return self.store.one(
+            f"SELECT * FROM {self.table} WHERE id=? AND bot_id=? AND channel_id=?",
+            (workspace_id, context.bot["id"], context.channel_id),
+        )
+
     def prune_expired(self, *, bot_id=None, now=None, limit=100):
         at = time.time() if now is None else now
         limit = max(1, min(limit, 100))
         query = (
-            "SELECT * FROM workspaces WHERE expires_at<?"
+            f"SELECT * FROM {self.table} WHERE expires_at<?"
             + (" AND bot_id=?" if bot_id else "")
             + " ORDER BY expires_at LIMIT ?"
         )
@@ -1123,7 +1144,7 @@ class Workspaces:
         removed = []
         for row in self.store.rows(query, values):
             if row["id"] in self._active or self.store.one(
-                "SELECT 1 AS n FROM workspace_turn_refs r JOIN turns t ON t.id=r.turn_id WHERE r.workspace_id=? AND t.ended_at IS NULL AND t.status='running' LIMIT 1",
+                f"SELECT 1 AS n FROM {self.refs_table} r JOIN turns t ON t.id=r.turn_id WHERE r.workspace_id=? AND t.ended_at IS NULL AND t.status='running' LIMIT 1",
                 (row["id"],),
             ):
                 continue
@@ -1135,7 +1156,7 @@ class Workspaces:
                 raise ControlError("Workspace retention refuses a symbolic-link root")
             if path.exists():
                 shutil.rmtree(path)
-            self.store.execute("DELETE FROM workspaces WHERE id=?", (row["id"],))
+            self.store.execute(f"DELETE FROM {self.table} WHERE id=?", (row["id"],))
             removed.append(row["id"])
             self.store.emit(
                 "workspace.expired",

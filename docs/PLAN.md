@@ -1,5 +1,31 @@
 # Implementation and acceptance plan
 
+## Simple filesystem — owner decisions (2026-10-10)
+
+The owner authorized a separate opt-in `filesystem` plugin, preserving Private
+workspaces for Hortator and other bots using named tasks. Each granted bot gets
+one saved directory across its conversations, with 256 MiB by default, no
+inactivity expiry, no model-selected task names and no automatic migration.
+The owner will switch experimental bots' grants themselves.
+
+The final ON/OFF decision supersedes the earlier read-only proposal: disabling
+unmounts saved files completely and preserves them for re-enabling. No-task Bash
+then uses disposable storage. Tell bots with saved files that their mount is OFF,
+their files still exist but cannot be accessed, and they should ask the owner if
+needed rather than inventing file contents or claiming an inspection.
+
+Report used/total space and an integer percentage, such as `182/256 MiB (71%)`.
+Remove the proposed tidiness instruction; the owner is testing their own prompting.
+Keep optional `{}` schema/help, factual file limits and current mount/usage at the
+runtime prompt tail. Compatible explicitly saved dependency files use the same
+quota; this does not promise unchanged virtualenv or Node-install compatibility.
+Preserve per-call process cleanup; no persistent background shell process.
+
+Implementation and model-facing wording are in [FILESYSTEM.md](FILESYSTEM.md).
+Measured checks and limitations are in [VERIFICATION.md](VERIFICATION.md). Package
+persistence findings were first reproduced on the old task workspace and are not
+proof that every package layout works in the new filesystem.
+
 ## Owner decision — independent disposable shell (2026-10-09)
 
 Shell-only bots must be able to run one-off commands, curl/POST and inline Python using the existing sandbox toolchain without a persistent workspace. Omit `task` for empty disposable storage; an explicit task retains the existing workspace workflow and grant. Keep job evidence, cancellation, quotas, network boundaries and bot settings intact. The current contract is in [SHELL_RUNNER.md](SHELL_RUNNER.md).

@@ -48,7 +48,12 @@ class Engine:
         self.store, self.vault, self.pool, self.registry = store, vault, pool, registry
         self.reporting = reporting
         self.contexts = ContextBuilder(
-            store, pool, registry.global_memory, registry.application_emojis, registry.engrams
+            store,
+            pool,
+            registry.global_memory,
+            registry.application_emojis,
+            registry.engrams,
+            registry.filesystems,
         )
         self.transport = transport
         self.tasks: dict[str, asyncio.Task] = {}

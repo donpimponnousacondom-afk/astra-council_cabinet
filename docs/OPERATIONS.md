@@ -117,6 +117,7 @@ This workspace sets `HORTATOR_DATA_DIR=/home/codexy/.local/share/hortator`, outs
 - `sites/`: owned document drafts, immutable publication blobs and local revision data; queue metadata lives in SQLite.
 - `site_history/`: separate private Git snapshots of complete sites selected for remote delivery, with job/revision metadata; no source-code submodule or credentials.
 - `workspaces/`: private bot/channel/task files and generations.
+- `filesystems/`: one saved directory per bot for the opt-in [Simple filesystem](FILESYSTEM.md), retained while unmounted.
 - `jobs/`: isolated execution metadata and retained stdout/stderr logs; `jobs/archive/` keeps automatically archived metadata by original job ID.
 - `fetched_documents/`: complete private text snapshots with stable reading offsets.
 - `ssh/`: public SSH key exports and verified host pins in `known_hosts`. Private SSH keys stay encrypted inside the database, never as plaintext files here.
@@ -833,7 +834,7 @@ From the repository root, or with `--data-dir` before the command:
 hortator backup /absolute/path/to/new-backup-directory
 ```
 
-This uses SQLite's backup API, copies `artifacts/`, `images/`, `audio/`, `sites/`, `ssh/`, `workspaces/`, `jobs/`, `fetched_documents/` and `site_history/` when present, and saves the matching encryption key separately inside the new backup directory. The SSH private identity is already encrypted in SQLite; `ssh/` contains public exports and verified host pins. The separate content history is backed up with its Git metadata, not added to the application repository. The command can read a running database, but filesystem changes during a live copy need not match its database snapshot. **Stop the foreground runtime in shared Screen for a complete point-in-time archive**; merely pausing model work does not stop every writer. Move the key to separate secure storage after verifying the backup.
+This uses SQLite's backup API, copies `artifacts/`, `images/`, `audio/`, `sites/`, `ssh/`, `workspaces/`, `filesystems/`, `jobs/`, `fetched_documents/` and `site_history/` when present, and saves the matching encryption key separately inside the new backup directory. The SSH private identity is already encrypted in SQLite; `ssh/` contains public exports and verified host pins. The separate content history is backed up with its Git metadata, not added to the application repository. The command can read a running database, but filesystem changes during a live copy need not match its database snapshot. **Stop the foreground runtime in shared Screen for a complete point-in-time archive**; merely pausing model work does not stop every writer. Move the key to separate secure storage after verifying the backup.
 
 This workspace uses timestamped snapshots under `/home/codexy/.local/share/hortator-backups`, outside both the code checkout and live data directory. Its **`.latest-requested`** file identifies the latest requested snapshot; inspect that path and the snapshot's `manifest.json` for current evidence rather than relying on a copied session note. [VERIFICATION.md](VERIFICATION.md) records dated checks. A Git repository around a live SQLite database does not provide a consistent snapshot and risks tracking the master key and bootstrap password. Use the CLI's SQLite backup, then capture host settings and logs while the server is stopped for a complete archive. Complete snapshots include a matching key, all nine directories above, redacted configuration export, bootstrap password if present, logs, external launcher/environment and `.screenrc`, with `manifest.json` hashes and `RESTORE.md`. Verify SQLite integrity, hashes and matching-key decryption before declaring a snapshot usable. Keep directories 0700 and files 0600. These local snapshots provide rollback; an independent secure disk copy is still needed for disk-loss recovery. Never overwrite an earlier snapshot, commit these files to the application repository, or confuse a redacted JSON export with a credentials backup.
 
@@ -947,6 +948,13 @@ Failures remain visible per engine and one engine's failure does not discard usa
 For the separate text reader, a **1,000,000-byte download-limit** failure occurs before pagination; small returned pages do not lift that download ceiling. For Bash with persistent task files, the bot must call **workspace** with `{"operation":"start","task":"aa-data"}`, wait for success, then reuse `aa-data` in `shell.run`. Shell has no start action and a supplied nonexistent task means the command was not run. Omit `task` for a disposable command with only the shell grant; files vanish after the call, while logs remain. Private memory writes require the explicit `operation: "write"` field even when key/value are supplied. These hints preserve existing data and strict validation; no reset is part of search setup.
 
 ### Workspace and shell setup
+
+For the separate single-directory mode, enable **Simple filesystem** and grant
+`filesystem` to the desired bot. See [FILESYSTEM.md](FILESYSTEM.md) for the
+ON/OFF mount, usage display and tool schema. Files live under the external data
+directory's `filesystems/`; both requested CLI backups and full snapshots include
+this store with the database. Disabling the mount retains files without model
+read access. Private workspaces and their grants remain independent.
 
 Enable/grant private workspaces and isolated Bash separately in the dashboard; neither needs a key. Web fetch keeps its current ID and adds durable reading/search. The tool panel exposes runner readiness, selected utilities, working limits, bounded private inspection and per-bot extended file/reading budgets. Read [setup and resource scope](SHELL_RUNNER.md) before enabling execution. Bubblewrap, namespaces/pidfds, libseccomp and the Python/Pillow toolchain are operator-supplied; no readiness failure falls back to host Bash. The existing human Screen shell and production launcher stay unchanged.
 
