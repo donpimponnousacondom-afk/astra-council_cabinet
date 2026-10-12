@@ -103,7 +103,8 @@ stay in the registry; other providers explicitly report unsupported discovery.
 See [TTS](TTS.md) for pagination, configuration and response handling.
 
 Models send their final answer as ordinary OpenAI assistant `content` (a string
-or ordered text parts). There is **no `council_speak` or `end_cycle` tool**. A
+or ordered text parts). There is **no `council_speak` tool**; the `end_cycle`
+terminal tool exists only for bots in that mode. In `narrate` and `progress` a
 text-only response ends the turn; tool-only responses execute the batch and
 continue inference with results. Text describing an action never manufactures a
 missing tool call. The per-bot `response_protocol` controls completed responses
@@ -113,7 +114,55 @@ that contain both ordinary text and genuine action `tool_calls`:
 | --- | --- | --- |
 | `narrate` (default) | Withheld from Discord, as before #103 | Execute the calls, read results, then produce the ordinary final answer |
 | `progress` (operator opt-in) | Best-effort progress before the batch, within the per-turn attempt cap | Execute the calls even if optional progress cannot be delivered; final answer remains separate |
-| `end_cycle` (reserved) | Not implemented; configuration saves reject this value | No terminal tool or finalization behavior is added |
+| `end_cycle` (operator opt-in) | Withheld; counts one narration strike, the calls still run | Text is published only when the same response calls `end_cycle` |
+
+**`end_cycle` mode.** Discord receives the model's text only when the same
+response also calls `end_cycle` with `{}` (no arguments; arguments are rejected
+with usage). The schema lists `end_cycle` next to `council_silence` at every
+round, including the final opportunity. The runtime enforces:
+
+- *Text + `end_cycle`*: publish through the ordinary final path (footer, Engram
+  commit, prepared files/panels, reasoning button) and end the activation.
+- *Tool-only*: execute and continue, as in the other modes; no strike.
+- *Text + action tools, no `end_cycle`*: withhold the text, execute the calls,
+  return a private strike notice. At `narration_strikes` strikes (1–5, default 2)
+  the activation enters **finalization**: one more round with only the terminal
+  tools; action calls there are refused with the usual batch error.
+- *Text only, no calls*: withhold it and retain it privately for exactly one
+  finalization round with a warning. A bare `end_cycle` then publishes the
+  retained draft when `publish_retained_draft` is on (default); new text with
+  `end_cycle` replaces it. Any other response ends the activation without an
+  answer. With the setting off, a bare `end_cycle` is rejected instead.
+- *`end_cycle` without text and without a retained draft*: rejected; the model
+  may retry within its round budget.
+- *Companions*: `end_cycle` may share a response only with `memory`/`global_memory`
+  `write` calls and `discord_attach`. They run first; the text is published only
+  if all succeed, otherwise the failures are returned and one finalization
+  attempt follows. Any read, search, fetch, shell or other action in that batch
+  rejects the whole batch without executing anything. `council_silence` cannot
+  be combined with `end_cycle` but still works alone.
+- *Incomplete activation* (budget exhausted or finalization failed): the turn
+  fails with a `CycleIncomplete` error. When `notify_incomplete_cycle` is on
+  (default off) the bot posts one subtext line (`-# <name> stopped without an
+  answer…`) through the outbox with routing kind `harness_notice`, without
+  footer/panels; after three consecutive incomplete activations in a channel
+  the notices pause until that bot publishes or chooses silence there again.
+  Streaks are in-memory and reset on restart.
+  Slash/panel invocations share the bot/channel streak with ordinary turns and
+  keep the invocation's public/private visibility. A sent cycle notice resolves
+  the interaction once. If it is off or suppressed, the existing interaction
+  failure receipt still clears Discord's deferred acknowledgement.
+- Background-job acknowledgements (tool list empty) publish text-only as before.
+
+Every turn, in every mode, ends with a `cycle.ended` ledger event carrying the
+protocol, status, reason (`end_cycle`, `draft_published`, `text_only`, `silence`, `compacted`,
+`incomplete`, `cancelled`, `failed`), rounds, strikes, executed action count,
+whether text was published, and whether a draft or finalization occurred. Rounds
+count attempted model generations, including the final answer; preparation
+failures have zero and still emit the event. The action count includes successful
+attachment preparation, not help or rejected calls; terminal controls do not count
+as actions. This
+is the evidence for comparing narration behaviour across bots and modes.
 
 Existing records without the setting use `narrate`; installing this change does
 not opt any bot into progress. The modern bot editor exposes the mode under
@@ -203,6 +252,17 @@ The optional `global_memory` tool mirrors channel memory's `read`, `write` (same
 
 The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
+
+- Later still on 2026-10-12 the owner decided the five deferred `end_cycle`
+  questions and asked the external auditor to implement the mode locally for
+  the agent to publish: strikes default to two (configurable 1–5, one for the
+  strictest bots); a bare `end_cycle` publishes the retained text-only draft by
+  default; day-one companions are memory/global memory writes and
+  `discord_attach`; the incomplete-cycle Discord notice is per bot, default off,
+  one per activation and paused after three consecutive failures in a channel;
+  no provider-capability measurement gates rollout because the retained-draft
+  path is the universal two-round fallback. Modes are per bot and reversible
+  from the dashboard; bots not opted in keep their exact previous behaviour.
 
 - Later on 2026-10-12, after the external audit, the owner scoped the first
   response-protocol change to a per-bot mode, bounded best-effort progress and

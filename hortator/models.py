@@ -188,13 +188,12 @@ class Bot(Entity):
     allow_silence: bool = True
     response_protocol: Literal["narrate", "progress", "end_cycle"] = "narrate"
     max_progress_messages_per_turn: int = Field(default=1, ge=0, le=20, strict=True)
-
-    @field_validator("response_protocol")
-    @classmethod
-    def implemented_response_protocol(cls, value):
-        if value == "end_cycle":
-            raise ValueError("end_cycle is reserved and not implemented; select narrate or progress")
-        return value
+    # end_cycle mode only: narrated action batches tolerated before finalization,
+    # whether a bare end_cycle may publish the previous text-only draft, and
+    # whether an incomplete cycle posts one short public notice.
+    narration_strikes: int = Field(default=2, ge=1, le=5, strict=True)
+    publish_retained_draft: bool = True
+    notify_incomplete_cycle: bool = False
 
     allow_images: bool = True
     memory_char_limit: int = Field(

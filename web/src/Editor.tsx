@@ -851,7 +851,7 @@ export function Editor({
                     <div className="form-grid">
                       <Field
                         label="Response protocol"
-                        hint="Narrate keeps text accompanying action tools private. Progress attempts to post that text up to this bot's limit. The final reply is unaffected."
+                        hint="Narrate keeps text accompanying action tools private. Progress attempts to post that text up to this bot's limit. End cycle publishes text only when the model also calls the end_cycle tool; the settings below apply to that mode."
                       >
                         <select
                           value={draft.response_protocol ?? "narrate"}
@@ -863,8 +863,8 @@ export function Editor({
                             Narrate · final reply only
                           </option>
                           <option value="progress">Progress messages</option>
-                          <option value="end_cycle" disabled>
-                            End cycle · not available yet
+                          <option value="end_cycle">
+                            End cycle · publish only with end_cycle
                           </option>
                         </select>
                       </Field>
@@ -897,6 +897,89 @@ export function Editor({
                           }
                         />
                       </Field>
+                      <Field
+                        label="Narration strikes before finalization"
+                        hint="End cycle only. 1–5; default 2. Each response that mixes text with action tools but no end_cycle withholds the text, runs the tools and counts one strike. At the limit only end_cycle remains for one final attempt."
+                      >
+                        <input
+                          type="number"
+                          min={1}
+                          max={5}
+                          step={1}
+                          required
+                          disabled={
+                            (draft.response_protocol ?? "narrate") !==
+                            "end_cycle"
+                          }
+                          value={
+                            draft.narration_strikes === undefined
+                              ? 2
+                              : (draft.narration_strikes ?? "")
+                          }
+                          onChange={(e) =>
+                            set(
+                              "narration_strikes",
+                              e.target.value === ""
+                                ? null
+                                : Number(e.target.value),
+                            )
+                          }
+                        />
+                      </Field>
+                    </div>
+                    <div className="checks">
+                      <label>
+                        <input
+                          type="checkbox"
+                          aria-label="Publish retained draft with a bare end_cycle"
+                          checked={draft.publish_retained_draft !== false}
+                          disabled={
+                            (draft.response_protocol ?? "narrate") !==
+                            "end_cycle"
+                          }
+                          onChange={(e) =>
+                            set("publish_retained_draft", e.target.checked)
+                          }
+                        />
+                        <span>
+                          <strong>
+                            Publish retained draft with a bare end_cycle
+                          </strong>
+                          <small>
+                            End cycle only; default on. A text-only response is
+                            withheld and kept for one round with a warning. With
+                            this on, a bare end_cycle then publishes it; with it
+                            off the model must resend the text together with
+                            end_cycle.
+                          </small>
+                        </span>
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          aria-label="Post a notice when a cycle ends without an answer"
+                          checked={draft.notify_incomplete_cycle === true}
+                          disabled={
+                            (draft.response_protocol ?? "narrate") !==
+                            "end_cycle"
+                          }
+                          onChange={(e) =>
+                            set("notify_incomplete_cycle", e.target.checked)
+                          }
+                        />
+                        <span>
+                          <strong>
+                            Post a notice when a cycle ends without an answer
+                          </strong>
+                          <small>
+                            End cycle only; default off. One short subtext line
+                            per incomplete activation; after three consecutive
+                            incomplete activations in a channel the notices
+                            pause until the bot answers or chooses silence there
+                            again.
+                          </small>
+                        </span>
+                      </label>
                     </div>
                     <div className="form-grid">
                       {numeric(

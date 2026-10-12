@@ -38,13 +38,15 @@ and current saved grants are rechecked during actual execution.
 ### Response protocol guidance
 
 **Bots → bot → Capabilities → Response protocol** chooses `narrate` (default,
-including older records) or opt-in `progress`. This runtime setting controls
-publication; editing or disabling prompt text does not override it. `end_cycle`
-is reserved and unavailable. The current delivery contract and limits are in
+including older records), opt-in `progress`, or opt-in `end_cycle`. This runtime
+setting controls publication; editing or disabling prompt text does not override
+it. The current delivery contract and limits are in
 [TOOLS.md](TOOLS.md#normal-and-extended-turns).
 
 The `response_protocol` layer automatically selects
-`runtime-response-protocol-narrate` or `runtime-response-protocol-progress`.
+`runtime-response-protocol-narrate`, `runtime-response-protocol-progress` or
+`runtime-response-protocol-end_cycle`. The end_cycle template renders the bot's
+`narration_strikes` and `publish_retained_draft` settings.
 These new identifiers seed once, without replacing the saved legacy
 `runtime-response-protocol` record or custom prompt edits. An explicit bot
 placement override still selects that saved record; a disabled layer stays
@@ -115,7 +117,7 @@ survive compaction within their current generation turn. See [VISION](VISION.md)
 | --- | --- |
 | `identity` | Bot/Discord identity, addressing and ordinary assistant response instructions |
 | `tool_guidance` | Empty-call usage, repair, tool rounds and task prerequisites |
-| `response_protocol` | Mode-specific narrate/progress default; configured cap and ordinary final-answer guidance; explicit overrides remain authoritative for text only |
+| `response_protocol` | Mode-specific narrate/progress/end_cycle default; configured cap or strike settings and final-answer guidance; explicit overrides remain authoritative for text only |
 | `image_guidance`, `image_disabled` | General image guidance; additional guidance when image inputs are off |
 | `director` | Hortator-only instructions |
 | `universal`, `persona` | Existing global prompt and per-bot personality |

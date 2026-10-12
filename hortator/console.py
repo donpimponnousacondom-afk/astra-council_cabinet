@@ -277,7 +277,7 @@ def scope_for(kind):
         return "providers"
     if prefix in {"discord", "message", "delivery", "notification"}:
         return "discord"
-    if prefix in {"turn", "decision", "activation"}:
+    if prefix in {"turn", "decision", "activation", "cycle"}:
         return "bots"
     if prefix in {"tool", "workspace", "job", "shell", "web_fetch", "web_search", "document", "publishing"}:
         return "tools"

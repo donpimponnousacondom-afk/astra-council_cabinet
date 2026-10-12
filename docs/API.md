@@ -117,9 +117,10 @@ The configuration kinds are `providers`, `profiles`, `bots`, `prompts`, `rooms`,
 Bots expose `response_protocol` and `max_progress_messages_per_turn` through the
 existing configuration/control routes. Effective defaults for older records are
 `narrate` and `1`; reads expose them without opting bots into progress.
-`response_protocol` accepts `narrate` or `progress`. The schema also names
-`end_cycle` as reserved, but saves reject it until its implementation is approved;
-there is no corresponding model tool. The cap is a strict integer **0–20**:
+`response_protocol` accepts `narrate`, `progress` or `end_cycle`. The
+end_cycle mode adds `narration_strikes` (strict integer **1–5**, default 2),
+`publish_retained_draft` (default true) and `notify_incomplete_cycle` (default
+false); older records expose those defaults. The cap is a strict integer **0–20**:
 zero withholds all progress, and booleans, fractions and numeric strings are
 rejected. It counts attempted progress sends across one turn and its extensions;
 final-answer delivery is unchanged. For example, save

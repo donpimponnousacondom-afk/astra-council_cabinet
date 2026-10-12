@@ -28,6 +28,24 @@ by this PR protocol. See the
 [operating procedure](OPERATIONS.md#independent-pr-review-and-check-monitoring)
 and [standing agent instructions](../AGENTS.md).
 
+## end_cycle response protocol — owner decision (2026-10-12, later)
+
+After the first increment merged (#109) the owner resolved the five deferred
+questions and had the external auditor implement `end_cycle` locally, leaving
+publication, PR review and merge to the project agent. Decisions: text is
+published only together with a no-argument `end_cycle` call; narrated action
+batches are withheld but executed, with two strikes by default (1–5) before a
+single finalization round; a text-only response is retained for that one round
+and a bare `end_cycle` publishes it by default; day-one companions are memory and
+global-memory writes plus `discord_attach`, executed before publication; the
+incomplete-cycle Discord notice is per bot, default off, one per activation and
+paused after three consecutive incomplete activations in a channel; no
+provider-capability measurement is required because the retained-draft path
+lets a provider that cannot combine text and tool calls finish in two rounds.
+The mode is a per-bot setting beside `narrate` and `progress`; bots that are not
+opted in run their previous code paths unchanged, and `cycle.ended` events give
+the comparison data. This supersedes the deferral in the next section.
+
 ## Response protocols, first increment — owner decision (2026-10-12)
 
 Following the external audit, the owner authorized per-bot `response_protocol`

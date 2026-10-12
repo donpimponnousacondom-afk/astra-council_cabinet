@@ -498,7 +498,11 @@ Opt one bot into `progress` under **Bots → Capabilities → Response protocol*
 its separate attempt cap defaults to one, and zero withholds all progress.
 Best-effort progress precedes the batch without ending the turn or acknowledging
 input. Final text-only answers retain metrics, prepared files/panels and Engram
-handling; typing continues while work remains. See
+handling; typing continues while work remains. `end_cycle` mode publishes text
+only with the terminal tool; its `cycle.draft_retained`, `cycle.finalizing`,
+`cycle.notice_*` and per-turn `cycle.ended` events appear under the bots scope,
+and withheld narration keeps using `request.progress_withheld` with
+`end_cycle_strike`/`end_cycle_finalizing` reasons. See
 [the current response protocol](TOOLS.md#normal-and-extended-turns).
 
 Folded warnings/errors allow up to 640 characters, prioritizing operation, channel and explanation before secondary metrics (ordinary INFO remains 320). `notice`/`note`, handler, phase, retry, site, exit and output-finish fields are visible when present. Different channels, operations and publication sites are not combined as one repeating incident. Use `f`, `T` or `P` for retained detail; console filtering and folding never change the event ledger.
