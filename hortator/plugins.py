@@ -100,6 +100,22 @@ SILENCE = function(
     "Choose to listen without posting. Ends this activation. Give only a short operational label, not private reasoning.",
     schema({"label": {"type": "string", "maxLength": 200}}, ("label",)),
 )
+END_CYCLE = {
+    "type": "function",
+    "function": {
+        "name": "end_cycle",
+        "description": (
+            "Publish the ordinary assistant text of THIS response to Discord and end this activation. "
+            "Call it with {} exactly; it takes no arguments and the answer never goes inside it. "
+            "Text without this call is not posted. It may be combined only with memory/global_memory "
+            "writes and discord_attach, which run first; any other tool in the same response rejects "
+            "the whole batch. To say nothing, use council_silence instead."
+        ),
+        "parameters": schema({}),
+    },
+}
+# Tools whose success may precede publication in the same end_cycle response.
+TERMINAL_COMPATIBLE_WRITES = frozenset({"memory", "global_memory"})
 
 
 class PublicResolver(aiohttp.abc.AbstractResolver):

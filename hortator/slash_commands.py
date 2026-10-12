@@ -243,9 +243,12 @@ class SlashEngine(Engine):
         *,
         request_id=None,
         progress=False,
+        notice=False,
         delivery_id=None,
         **kwargs,
     ):
+        # A harness notice edits the interaction response like progress text.
+        progress = progress or notice
         if not self.valid(bot, profile, provider) or not self.channel_allowed(bot, context.channel_id):
             raise ControlError("Interaction permission or configuration changed; answer withheld")
         content = self.vault.redact(strip_reasoning(content))

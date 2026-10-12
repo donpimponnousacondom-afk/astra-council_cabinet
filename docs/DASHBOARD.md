@@ -87,7 +87,7 @@ The following inventory was audited against the frozen application and existing 
 | Identity | Display name, stable ID, role, identity color, room grants and activation setting |
 | Model and rhythm | Selected model profile, activation interval, personal send cooldown, evaluate-with-no-new-messages toggle, hourly activation limit and optional daily cost stop |
 | Prompts | Personality, ordered shared prompt assignments, dynamic tail and inherited global prompt preview |
-| Capabilities | Plugin grants, global-off indicators, intentional-silence toggle, ordinary tool rounds/calls, per-bot non-secret plugin JSON and key overrides only for plugins that use keys |
+| Capabilities | Plugin grants, global-off indicators, intentional-silence toggle, response protocol (narrate/progress/end_cycle) with its progress cap or strike/draft/notice settings, ordinary tool rounds/calls, per-bot non-secret plugin JSON and key overrides only for plugins that use keys |
 | Extended work | Document task rounds/calls/time, permitted local preview URL override, file/reading task budget and active tool-context budget; no extra budget renewal implied |
 | Footer | Per-bot enablement, role defaults, bounded literal template, supported placeholders, validation and preview; no executable template expressions |
 | Discord | Application ID, separate write-only verified Bot token, reconnect, gateway/scheduling evidence, invite URL/copy, setup blockers and per-bot provider-key override |

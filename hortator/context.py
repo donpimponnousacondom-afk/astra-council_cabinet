@@ -141,6 +141,8 @@ class ContextBuilder:
             "timezone": settings["timezone"],
             "response_protocol": bot.get("response_protocol", "narrate"),
             "max_progress_messages_per_turn": bot.get("max_progress_messages_per_turn", 1),
+            "narration_strikes": bot.get("narration_strikes", 2),
+            "publish_retained_draft": bot.get("publish_retained_draft", True),
         }
         return {**base, **(values or {})}
 
@@ -226,6 +228,8 @@ class ContextBuilder:
             "allow_silence": bot.get("allow_silence", True),
             "response_protocol": bot.get("response_protocol", "narrate"),
             "max_progress_messages_per_turn": bot.get("max_progress_messages_per_turn", 1),
+            "narration_strikes": bot.get("narration_strikes", 2),
+            "publish_retained_draft": bot.get("publish_retained_draft", True),
             "allow_images": bot.get("allow_images", True),
             "context_tokens": estimated,
             "context_window": profile["context_window"],

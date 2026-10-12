@@ -569,8 +569,11 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   await expect(protocol).toHaveValue("narrate");
   await expect(protocol.locator('option[value="end_cycle"]')).toHaveJSProperty(
     "disabled",
-    true,
+    false,
   );
+  await expect(
+    dialog.getByLabel("Narration strikes before finalization", { exact: true }),
+  ).toBeDisabled();
   await expect(limit).toBeDisabled();
   await expect(limit).toHaveValue("1");
   const inspectProtocol = async (variant: string, cap = 1) => {

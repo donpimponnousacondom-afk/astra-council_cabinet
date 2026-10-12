@@ -72,6 +72,14 @@ DEFAULT_PROMPTS = [
         "condition": "Response protocol is progress (explicit opt-in)",
     },
     {
+        "id": "runtime-response-protocol-end_cycle",
+        "name": "Response protocol — explicit end_cycle",
+        "runtime_layer": "response_protocol",
+        "role": "system",
+        "content": 'Current response protocol: end_cycle. This mode supersedes older narration/publication wording in other prompt layers. Discord receives your text ONLY when the same response also calls the end_cycle tool with {} (no arguments; the answer never goes inside the tool). Text without end_cycle is never posted. Tool-only responses run the tools and continue; you receive their results in the next round. Text together with action tool_calls but without end_cycle is private narration: it is withheld, the tools still run, and it counts as a strike. After {narration_strikes} strikes in this activation every tool except end_cycle (and council_silence when enabled) is removed for one final attempt. A text-only response without end_cycle is not posted: it is retained privately for one round, you are warned, and you must call end_cycle to publish it. Retained-draft publication by a bare end_cycle is currently {publish_retained_draft}; new text with end_cycle replaces the draft. end_cycle may be combined only with memory/global_memory writes and discord_attach: they run first and your text is published only if all of them succeed. Never combine end_cycle with reads, search, fetch, shell or other actions; that batch is rejected and nothing runs. end_cycle without any text and without a retained draft is rejected. council_silence stays the separate way to say nothing. Saying you will use a tool does not call it: emit the actual tool_calls, read the results, then finish with your answer plus end_cycle. Example: content "Saved your preference." with tool_calls memory write and end_cycle {}.',
+        "condition": "Response protocol is end_cycle (explicit opt-in)",
+    },
+    {
         "id": "runtime-image-guidance",
         "name": "Image context guidance",
         "runtime_layer": "image_guidance",
@@ -332,6 +340,8 @@ PLACEHOLDERS = {
     "rounds_remaining",
     "response_protocol",
     "max_progress_messages_per_turn",
+    "narration_strikes",
+    "publish_retained_draft",
     "context_tokens",
     "context_window",
     "seconds_since_last_message",
@@ -427,7 +437,7 @@ INSPECTION_RULES = {
     "director": {"role": "hortator", "when": "Only bots with the Hortator role."},
     "image_disabled": {"images_disabled": True, "when": "Only when this bot's image inputs are disabled."},
     "response_protocol": {
-        "when": "The default variant follows this bot's response_protocol setting: narrate withholds accompanying tool text; progress permits bounded best-effort posting. Explicit overrides and disabled layers remain authoritative for prompt text; they do not change runtime delivery controls.",
+        "when": "The default variant follows this bot's response_protocol setting: narrate withholds accompanying tool text; progress permits bounded best-effort posting; end_cycle publishes text only with the end_cycle tool. Explicit overrides and disabled layers remain authoritative for prompt text; they do not change runtime delivery controls.",
     },
     "silence_policy": {"when": "The default variant follows this bot's intentional-silence setting."},
     "memory_budget": {

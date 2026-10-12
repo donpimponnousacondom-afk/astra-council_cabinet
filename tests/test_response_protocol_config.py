@@ -1,4 +1,4 @@
-"""Response protocol defaults, reserved selection and editable mode-aware guidance."""
+"""Response protocol defaults, end_cycle settings and editable mode-aware guidance."""
 
 import pytest
 from pydantic import ValidationError
@@ -12,17 +12,30 @@ CHANNEL = "222222222222222222"
 BOT = {"id": "protocol-test", "name": "Protocol test", "model_profile_id": "balanced"}
 
 
-def test_response_protocol_defaults_and_reserved_schema_value():
+def test_response_protocol_defaults_and_end_cycle_settings():
     bot = Bot.model_validate(BOT)
     assert bot.response_protocol == "narrate"
     assert bot.max_progress_messages_per_turn == 1
+    assert bot.narration_strikes == 2
+    assert bot.publish_retained_draft is True
+    assert bot.notify_incomplete_cycle is False
     assert Bot.model_json_schema()["properties"]["response_protocol"]["enum"] == [
         "narrate",
         "progress",
         "end_cycle",
     ]
-    with pytest.raises(ValidationError, match="end_cycle is reserved and not implemented"):
-        Bot.model_validate({**BOT, "response_protocol": "end_cycle"})
+    assert Bot.model_validate({**BOT, "response_protocol": "end_cycle"}).response_protocol == "end_cycle"
+
+
+@pytest.mark.parametrize("value", [True, 1.0, "2", None, 0, 6])
+def test_narration_strikes_rejects_coercion_and_out_of_range(value):
+    with pytest.raises(ValidationError, match="narration_strikes"):
+        Bot.model_validate({**BOT, "narration_strikes": value})
+
+
+@pytest.mark.parametrize("value", [1, 5])
+def test_narration_strikes_accepts_strict_integer_bounds(value):
+    assert Bot.model_validate({**BOT, "narration_strikes": value}).narration_strikes == value
 
 
 @pytest.mark.parametrize("value", [True, False, 1.0, "1", None, -1, 21])
@@ -39,11 +52,24 @@ def test_progress_cap_accepts_strict_integer_bounds(value):
     )
 
 
-async def test_reserved_protocol_is_rejected_before_configuration_save(kernel, owner):
+async def test_end_cycle_settings_save_and_unknown_protocol_is_rejected(kernel, owner):
     old = configured(kernel)
-    with pytest.raises(ControlError, match="end_cycle is reserved and not implemented"):
-        await kernel.service.save(owner, "bots", old["id"], {"response_protocol": "end_cycle"})
+    with pytest.raises(ControlError):
+        await kernel.service.save(owner, "bots", old["id"], {"response_protocol": "mystery"})
     assert kernel.store.get("bots", old["id"]) == old
+    updated = await kernel.service.save(
+        owner,
+        "bots",
+        old["id"],
+        {
+            "response_protocol": "end_cycle",
+            "narration_strikes": 1,
+            "publish_retained_draft": False,
+            "notify_incomplete_cycle": True,
+        },
+    )
+    assert updated["response_protocol"] == "end_cycle" and updated["narration_strikes"] == 1
+    assert updated["publish_retained_draft"] is False and updated["notify_incomplete_cycle"] is True
     updated = await kernel.service.save(
         owner, "bots", old["id"], {"response_protocol": "progress", "max_progress_messages_per_turn": 0}
     )
@@ -52,19 +78,30 @@ async def test_reserved_protocol_is_rejected_before_configuration_save(kernel, o
 
 async def test_legacy_public_defaults_do_not_mutate_saved_bot(kernel):
     legacy = configured(kernel)
-    legacy.pop("response_protocol", None)
-    legacy.pop("max_progress_messages_per_turn", None)
+    for field in (
+        "response_protocol",
+        "max_progress_messages_per_turn",
+        "narration_strikes",
+        "publish_retained_draft",
+        "notify_incomplete_cycle",
+    ):
+        legacy.pop(field, None)
     saved = kernel.store.put("bots", legacy)
     public = kernel.service.public("bots", saved)
     assert public["response_protocol"] == "narrate"
     assert public["max_progress_messages_per_turn"] == 1
+    assert public["narration_strikes"] == 2
+    assert public["publish_retained_draft"] is True
+    assert public["notify_incomplete_cycle"] is False
     assert kernel.store.get("bots", saved["id"]) == saved
 
 
 @pytest.mark.parametrize("kind", ["ordinary", "slash", "panel"])
-@pytest.mark.parametrize("protocol", ["narrate", "progress"])
+@pytest.mark.parametrize("protocol", ["narrate", "progress", "end_cycle"])
 async def test_mode_template_runtime_facts_and_inspection_match_all_contexts(kernel, kind, protocol):
-    bot = configured(kernel, response_protocol=protocol, max_progress_messages_per_turn=2)
+    bot = configured(
+        kernel, response_protocol=protocol, max_progress_messages_per_turn=2, narration_strikes=3
+    )
     contexts = (
         kernel.engine.contexts
         if kind == "ordinary"
@@ -78,9 +115,14 @@ async def test_mode_template_runtime_facts_and_inspection_match_all_contexts(ker
     assert f"Current response protocol: {protocol}." in content
     assert '"response_protocol":"' + protocol + '"' in content
     assert '"max_progress_messages_per_turn":2' in content
+    assert '"narration_strikes":3' in content
+    if protocol == "end_cycle":
+        assert "After 3 strikes" in content and "currently True" in content
     assert "{max_progress_messages_per_turn}" not in content
     if protocol == "progress":
         assert "At most 2 progress messages" in content
+    elif protocol == "end_cycle":
+        assert "Text without end_cycle is never posted" in content
     else:
         assert "NOT posted to Discord" in content
     layer = next(item for item in catalog() if item["id"] == "response_protocol")
