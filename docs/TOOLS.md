@@ -159,7 +159,9 @@ protocol, status, reason (`end_cycle`, `draft_published`, `text_only`, `silence`
 `incomplete`, `cancelled`, `failed`), rounds, strikes, executed action count,
 whether text was published, and whether a draft or finalization occurred. Rounds
 count attempted model generations, including the final answer; preparation
-failures have zero and still emit the event. This
+failures have zero and still emit the event. The action count includes successful
+attachment preparation, not help or rejected calls; terminal controls do not count
+as actions. This
 is the evidence for comparing narration behaviour across bots and modes.
 
 Existing records without the setting use `narrate`; installing this change does

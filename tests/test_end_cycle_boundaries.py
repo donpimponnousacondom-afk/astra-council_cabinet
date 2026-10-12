@@ -6,13 +6,45 @@ import json
 import pytest
 
 from hortator.models import ControlError
+from hortator.plugins import ToolContext
 from hortator.runtime import DeliveryError
 from support.provider import install_client
 from support.runtime import completion, settle
 from support.runtime_feedback import ready
 from support.slash_commands import enable as enable_slash, interaction
-from test_end_cycle import end, events, mixed, run, tool_names, write_call
+from test_end_cycle import cycle, end, events, mixed, read_call, run, tool, tool_names, write_call
 from test_engram_integration import PRIVATE, enable, response, state
+
+
+@pytest.mark.parametrize("preparation", ["success", "invalid", "help"])
+async def test_attachment_action_count_tracks_successful_preparation(kernel, preparation):
+    bot, transport = ready(kernel, response_protocol="end_cycle", enabled_plugins=["memory"])
+    requests = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        requests.append(body)
+        if len(requests) == 1:
+            turn_id = kernel.store.one("SELECT id FROM turns")["id"]
+            context = ToolContext(bot, "222222222222222222", turn_id)
+            kernel.registry.artifact(b"Useful output", "text/plain", ".txt", context)
+            return mixed("", read_call())
+        if len(requests) == 2:
+            assert "discord_attach" in tool_names(body)
+            artifact_id = kernel.store.one("SELECT id FROM artifacts")["id"]
+            args = {
+                "success": {"artifact_ids": [artifact_id]},
+                "invalid": {"artifact_ids": ["missing"]},
+                "help": {},
+            }[preparation]
+            return mixed("Here is the file.", tool("discord_attach", args, call_id="attach"), end())
+        return mixed("The attachment was not prepared.", end())
+
+    await install_client(kernel, handler)
+    await run(kernel)
+    assert transport.send.await_count == 1
+    assert len(transport.send.await_args.args[4]) == (1 if preparation == "success" else 0)
+    assert cycle(kernel)["actions_executed"] == (2 if preparation == "success" else 1)
 
 
 @pytest.mark.parametrize("finish", ["tool_calls", "stop"])

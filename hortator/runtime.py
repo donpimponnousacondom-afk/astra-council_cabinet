@@ -1421,6 +1421,7 @@ class Engine:
                                         args.get("reply_to", reply_to) or None,
                                         args["artifact_ids"],
                                     )
+                                    cycle["actions"] += 1
                                     result_value = {
                                         "ok": True,
                                         "prepared": True,

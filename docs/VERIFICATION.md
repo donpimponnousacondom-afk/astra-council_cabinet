@@ -79,6 +79,12 @@ other bot/plugin settings. Initial syntax concerns from running an older host
 Python were retracted: the project requires Python 3.14 and the published syntax
 is valid there; no syntax workaround was applied.
 
+Luna's delta review then found successful `discord_attach` preparation missing
+from the cycle's action count. The parent reproduced the delivered attachment
+with an undercount, corrected that successful branch, and verified help/invalid
+preparation stay uncounted. The combined end_cycle suites passed **46 tests**,
+2 existing dependency warnings, 17.26 s; lint/format and diff checks passed.
+
 Corrected focused backend checks: **239 passed**, 2 existing dependency warnings,
 62.25 s, across end_cycle and boundary, Engram unit/integration, progress/boundary,
 slash and protocol-configuration suites. The expanded browser fixture passed
