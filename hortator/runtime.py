@@ -43,6 +43,13 @@ class TurnSuperseded(ControlError):
     pass
 
 
+class ProgressUnavailable(DeliveryError):
+    """An optional message has no immediate delivery slot; keep doing the work."""
+
+
+PROGRESS_SEND_TIMEOUT = 5
+
+
 class Engine:
     def __init__(self, store, vault, pool, registry, transport=None, *, reporting=None):
         self.store, self.vault, self.pool, self.registry = store, vault, pool, registry
@@ -708,6 +715,12 @@ class Engine:
                 reply_to = origin_job["reply_to"] if origin_job else None
             reply_repairs = 0
             background_handoff = False
+            response_protocol = bot.get("response_protocol", "narrate")
+            if response_protocol not in ("narrate", "progress"):
+                raise ControlError("end_cycle is not implemented; select narrate or progress")
+            progress_limit = bot.get("max_progress_messages_per_turn", 1)
+            progress_attempts = 0
+            progress_notices = set()
 
             async def budgeted(awaitable):
                 try:
@@ -1059,31 +1072,61 @@ class Engine:
                     batch_error = "Tool round budget exhausted; write an ordinary text answer" + (
                         " or call council_silence alone" if silence_tools else ""
                     )
+                progress_notice = None
                 if result.content.strip() and not terminal and not batch_error:
-                    if wrapped_reply(result.content):
-                        # Keep the existing wrapper rejection; real calls still
-                        # run and receive results through the ordinary loop.
-                        self.store.emit(
-                            "request.progress_withheld",
-                            {"reason": "Tool-wrapped narration is not an ordinary progress message"},
-                            bot_id=bot["id"],
-                            turn_id=turn_id,
-                            request_id=result.request_id,
-                            level="warning",
+                    if response_protocol == "narrate":
+                        progress_notice = (
+                            "narrate",
+                            "Your text accompanying tool calls was not posted to Discord. This bot uses "
+                            "narrate mode: action text stays private. Read the tool results and continue "
+                            "needed work; finish with an ordinary text-only answer.",
+                        )
+                    elif wrapped_reply(result.content):
+                        progress_notice = (
+                            "wrapped_text",
+                            "Your tool-wrapped narration was not posted. Only ordinary assistant text "
+                            "can be a progress message. The actual tool calls still receive results.",
+                        )
+                    elif progress_attempts >= progress_limit:
+                        progress_notice = (
+                            "limit",
+                            f"Your progress text was not posted: this turn's limit of {progress_limit} "
+                            "progress attempts has been reached. Further progress text will also be "
+                            "withheld. Tool calls can continue within their existing budget. Read the "
+                            "results and give a final text-only answer when ready; that answer is separate.",
                         )
                     else:
-                        await self.deliver(
+                        # Count attempts, including uncertain or unavailable sends.
+                        # A task extension never renews the public narration cap.
+                        progress_attempts += 1
+                        progress_notice = await self.deliver_progress(
                             bot,
                             profile,
                             provider,
                             context,
                             result.content,
                             reply_to,
-                            [],
                             request_id=result.request_id,
                             draft_deadline=document_deadline,
-                            progress=True,
                         )
+                    if progress_notice:
+                        reason, notice = progress_notice
+                        self.store.emit(
+                            "request.progress_withheld",
+                            {
+                                "reason": reason,
+                                "response_protocol": response_protocol,
+                                "attempts": progress_attempts,
+                                "limit": progress_limit,
+                            },
+                            bot_id=bot["id"],
+                            turn_id=turn_id,
+                            request_id=result.request_id,
+                        )
+                        if reason in progress_notices:
+                            progress_notice = None
+                        else:
+                            progress_notices.add(reason)
                 extras.append(result.message())
                 finished = False
                 if self.jobs:
@@ -1291,6 +1334,16 @@ class Engine:
                     extras.append(
                         {"role": "tool", "tool_call_id": call["id"], "content": dumps(result_value)}
                     )
+                if progress_notice:
+                    # Complete the assistant/tool group before adding private
+                    # feedback. It travels only in this turn's bounded exchanges.
+                    extras.append(
+                        {
+                            "role": "user",
+                            "content": "Automatic harness notice (private, not sent to Discord): "
+                            + progress_notice[1],
+                        }
+                    )
                 if finished:
                     break
                 handoff = self.jobs.handoff(context) if self.jobs else None
@@ -1380,6 +1433,67 @@ class Engine:
             )
             if engram_candidate is not None and status == "sent":
                 self.registry.engrams.finalize(engram_candidate)
+
+    async def deliver_progress(
+        self, bot, profile, provider, context, content, reply_to, *, request_id, draft_deadline
+    ):
+        """Optional commentary must not prevent the associated action batch."""
+
+        def check_work():
+            if not self.valid(bot, profile, provider) or not self.channel_allowed(bot, context.channel_id):
+                raise asyncio.CancelledError()
+            if self.superseding_attention(bot, context.channel_id, context.turn_id):
+                raise TurnSuperseded("New directed human input is waiting; regenerate from current context")
+            if draft_deadline is not None and asyncio.get_running_loop().time() >= draft_deadline:
+                raise ControlError("Extended task time budget exhausted before tool execution")
+
+        check_work()
+        visible = self.vault.redact(strip_reasoning(content))
+        if not visible.strip() or len(visible) > 12000:
+            return (
+                "invalid_text",
+                "Your progress text was not posted because it was empty or exceeded the message limit. "
+                "The tool calls still receive results; the final answer must fit the ordinary limit.",
+            )
+        delivery_id = uid("out_")
+        try:
+            # This timeout owns only the optional send. Delivery records any
+            # in-flight timeout as uncertain; owner cancellation still propagates.
+            async with asyncio.timeout(PROGRESS_SEND_TIMEOUT):
+                await self.deliver(
+                    bot,
+                    profile,
+                    provider,
+                    context,
+                    content,
+                    reply_to,
+                    [],
+                    request_id=request_id,
+                    draft_deadline=draft_deadline,
+                    delivery_id=delivery_id,
+                    progress=True,
+                )
+        except (DeliveryError, TimeoutError, OSError) as exc:
+            check_work()
+            row = self.store.one("SELECT status FROM outbox WHERE id=?", (delivery_id,))
+            if row and row["status"] == "sent":
+                return None
+            uncertain = bool(row and row["status"] == "unknown") or (
+                isinstance(exc, DeliveryError) and exc.uncertain
+            )
+            if uncertain:
+                return (
+                    "delivery_unknown",
+                    "Discord acceptance of your progress message is unknown. Do not assume the user "
+                    "saw it or resend it. The tool calls can continue; read their results before answering.",
+                )
+            return (
+                "delivery_unavailable" if isinstance(exc, ProgressUnavailable) else "delivery_failed",
+                "Your progress message was not delivered. The tool calls can continue; read their "
+                "results before answering. Do not repeat the progress message to retry its delivery.",
+            )
+        check_work()
+        return None
 
     async def deliver(
         self,
@@ -1488,6 +1602,8 @@ class Engine:
                 else self.store.runtime(bot["id"])["last_sent"] + bot["cooldown_seconds"] - time.time()
             )
             if wait > 0:
+                if progress:
+                    raise ProgressUnavailable("Progress skipped while the bot's personal cooldown is active")
                 self.delivery_waiting[bot["id"]] = context.turn_id
                 self.store.emit(
                     "delivery.cooldown",
@@ -1504,6 +1620,8 @@ class Engine:
                     await asyncio.sleep(min(wait, remaining))
                 finally:
                     self.delivery_waiting.pop(bot["id"], None)
+            if progress and self.room_locks[destination].locked():
+                raise ProgressUnavailable("Progress skipped while the channel send slot is busy")
             async with self.room_locks[destination]:
                 room = (
                     self.registry.discord_dispatch.check(context, routing)
@@ -1513,6 +1631,8 @@ class Engine:
                 gap = room["send_gap_seconds"] if room else 1.5
                 wait = self.room_last[destination] + gap - time.time()
                 if wait > 0:
+                    if progress:
+                        raise ProgressUnavailable("Progress skipped while the channel send gap is active")
                     self.store.emit(
                         "delivery.cooldown",
                         {"outbox_id": outbox_id, "wait_seconds": wait},
@@ -1651,7 +1771,7 @@ class Engine:
                 "unknown"
                 if uncertain
                 else "suppressed"
-                if isinstance(exc, (asyncio.CancelledError, TurnSuperseded))
+                if isinstance(exc, (asyncio.CancelledError, TurnSuperseded, ProgressUnavailable))
                 else "failed"
             )
             if uncertain:

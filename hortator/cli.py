@@ -40,8 +40,32 @@ def main():
     ssh_key.add_argument("name", nargs="?", default="publishing")
     backup = sub.add_parser("backup", help="Create a consistent SQLite backup and a separate encryption key")
     backup.add_argument("destination")
+    response_report = sub.add_parser(
+        "response-protocol-report", help="Read-only report of observed text/tool response combinations"
+    )
+    response_report.add_argument("--hours", type=int, default=24, help="Window length, 1–720 hours")
+    response_report.add_argument("--max-rows", type=int, default=1000, help="Newest requests, 1–10,000")
+    response_report.add_argument("--until", help="Window end as ISO 8601 with UTC offset; defaults to now")
     args = parser.parse_args()
     directory = Path(args.data_dir).resolve()
+    if args.command == "response-protocol-report":
+        import json
+
+        from .response_protocol_report import parse_until, response_protocol_report
+
+        try:
+            report = response_protocol_report(
+                directory / "council.sqlite3",
+                hours=args.hours,
+                max_rows=args.max_rows,
+                until=parse_until(args.until) if args.until is not None else None,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+        except sqlite3.Error:
+            parser.error("Cannot read the existing request ledger; no data or credentials were initialized")
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return
     os.environ["HORTATOR_DATA_DIR"] = str(directory)
     if args.command == "serve":
         from .console import SCOPES

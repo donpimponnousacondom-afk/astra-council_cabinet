@@ -201,6 +201,7 @@ async def test_intermediate_tool_suffix_is_stripped_but_never_staged(kernel):
     bot, transport = enable(kernel)
     transport.send.side_effect = ["888888888888888881", "888888888888888882"]
     bot.pop("revision")
+    bot["response_protocol"] = "progress"
     bot["enabled_plugins"].append("memory")
     kernel.store.put("bots", bot)
     calls = []
@@ -246,6 +247,7 @@ async def test_intermediate_tool_suffix_is_stripped_but_never_staged(kernel):
 async def test_final_engram_binds_only_final_outbox_after_progress(kernel):
     bot, transport = enable(kernel)
     bot.pop("revision")
+    bot["response_protocol"] = "progress"
     bot["enabled_plugins"].append("memory")
     kernel.store.put("bots", bot)
     transport.send.side_effect = ["888888888888888881", "888888888888888882"]

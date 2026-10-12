@@ -243,6 +243,7 @@ class SlashEngine(Engine):
         *,
         request_id=None,
         progress=False,
+        delivery_id=None,
         **kwargs,
     ):
         if not self.valid(bot, profile, provider) or not self.channel_allowed(bot, context.channel_id):
@@ -265,7 +266,7 @@ class SlashEngine(Engine):
         )
         footer = "" if progress else render_footer(bot, profile, provider, request, redact=self.vault.redact)
         text, attached = model_message(content, footer)
-        outbox_id = uid("out_")
+        outbox_id = delivery_id or uid("out_")
         self.store.execute(
             "INSERT INTO outbox(id,turn_id,bot_id,channel_id,content,artifacts,status,created_at,routing) VALUES(?,?,?,?,?,?,?,?,?)",
             (
@@ -349,7 +350,12 @@ class SlashEngine(Engine):
             )
             self.store.emit(
                 "delivery.sent",
-                {"outbox_id": outbox_id, "discord_id": str(sent.id), "routing": self.invocation["kind"]},
+                {
+                    "outbox_id": outbox_id,
+                    "discord_id": str(sent.id),
+                    "routing": self.invocation["kind"],
+                    **({"kind": "progress"} if progress else {}),
+                },
                 bot_id=bot["id"],
                 turn_id=context.turn_id,
             )

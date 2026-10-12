@@ -849,6 +849,56 @@ export function Editor({
                       "Independent allowance for this bot's global_memory plugin: 1–128,000, default 48,000, with 5% temporary headroom. Shared across this bot's channels, never other bots. Disable its plugin grant to stop tool access and automatic global-note injection while retaining notes.",
                     )}
                     <div className="form-grid">
+                      <Field
+                        label="Response protocol"
+                        hint="Narrate keeps text accompanying action tools private. Progress attempts to post that text up to this bot's limit. The final reply is unaffected."
+                      >
+                        <select
+                          value={draft.response_protocol ?? "narrate"}
+                          onChange={(e) =>
+                            set("response_protocol", e.target.value)
+                          }
+                        >
+                          <option value="narrate">
+                            Narrate · final reply only
+                          </option>
+                          <option value="progress">Progress messages</option>
+                          <option value="end_cycle" disabled>
+                            End cycle · not available yet
+                          </option>
+                        </select>
+                      </Field>
+                      <Field
+                        label="Progress message attempts per turn"
+                        hint="0–20; default 1. Failed sends count toward this limit and tools continue. Extra progress text stays private, with a notice to the model. Zero keeps all progress text private; the final reply is unaffected."
+                      >
+                        <input
+                          type="number"
+                          min={0}
+                          max={20}
+                          step={1}
+                          required
+                          disabled={
+                            (draft.response_protocol ?? "narrate") !==
+                            "progress"
+                          }
+                          value={
+                            draft.max_progress_messages_per_turn === undefined
+                              ? 1
+                              : (draft.max_progress_messages_per_turn ?? "")
+                          }
+                          onChange={(e) =>
+                            set(
+                              "max_progress_messages_per_turn",
+                              e.target.value === ""
+                                ? null
+                                : Number(e.target.value),
+                            )
+                          }
+                        />
+                      </Field>
+                    </div>
+                    <div className="form-grid">
                       {numeric(
                         "max_tool_rounds",
                         "Tool work rounds",

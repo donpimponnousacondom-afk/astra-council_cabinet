@@ -28,6 +28,33 @@ by this PR protocol. See the
 [operating procedure](OPERATIONS.md#independent-pr-review-and-check-monitoring)
 and [standing agent instructions](../AGENTS.md).
 
+## Response protocols, first increment — owner decision (2026-10-12)
+
+Following the external audit, the owner authorized per-bot `response_protocol`
+controls, a cap on progress attempts, best-effort progress delivery, and a
+read-only ledger report of actual text/tool response combinations. Existing bots
+use the pre-#103 `narrate` behavior; the owner will opt bots into `progress`.
+The cap defaults to one attempt per turn, accepts 0–20, survives task-budget
+extensions, and never limits the final reply. Private withheld notices are
+deduplicated, and optional progress must not delay tool execution through
+cooldowns or fail the batch on ordinary send errors. Existing cancellation and
+delivery-uncertainty contracts still apply.
+
+`end_cycle` is a reserved, rejected configuration value only. The owner deferred
+all five decisions: narration strikes, retained-draft fallback, terminal-compatible
+tools, incomplete-cycle notices, and provider-capability rollout. Finish this
+first increment without implementing its terminal tool or deciding those options.
+The ledger measures returned normalized text/tool combinations independently of
+whether progress was posted; zero observations remain unknown capability.
+
+This supersedes the unconditional progress rollout described in the earlier
+same-day decision below. The current contract is in
+[TOOLS.md](TOOLS.md#normal-and-extended-turns), prompt selection in
+[PROMPTS.md](PROMPTS.md#response-protocol-guidance), and operator reporting in
+[OPERATIONS.md](OPERATIONS.md#observing-text-with-tool-calls). External-audit
+policy questions remain outside this implementation; no merge, vault, ruleset,
+shell-grant or path-redaction policy is changed here.
+
 ## Progress messages with action calls — owner decision (2026-10-12)
 
 Permit completed model responses containing ordinary text and real action calls

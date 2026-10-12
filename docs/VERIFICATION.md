@@ -4,6 +4,52 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Response protocol controls, PR 1 (2026-10-12)
+
+Classification: synthetic provider/Discord fixtures, local SQLite integration,
+dashboard fixture checks and a read-only production-ledger query. No live model
+probe, Discord test post or bot opt-in was performed. Base:
+`c1b893ca46de1e584e996caa43cbdb574b13036f`; implementation checks ran uncommitted.
+
+The external-audit round-2 reply was delivered before implementation and is
+retained in ignored `audit/2026-10-12/fable-external-audit/round2/REPLY.md`, with
+supporting evidence alongside it. The owner then deferred the five `end_cycle`
+decisions and all audit §6 policy decisions. This change implements PR 1 only:
+per-bot mode/defaults, bounded best-effort progress, mode-aware editable guidance
+and passive ledger reporting. No terminal tool or policy change is included.
+
+Regression coverage exercises legacy narrate behavior, strict cap validation,
+saved prompt preservation, normal/slash/panel contexts, multiple narrated action
+batches, private notice placement, task extensions, unavailable send slots,
+definite/uncertain failures, optional-send timeouts, cancellation, superseding
+human input, revocation, deadlines, fragmented SSE and final-only Engrams.
+Reporting tests cover historical revisions, interrupted output, whitespace,
+bounded sampling, read-only WAL access and CLI execution without vault/runtime
+initialization. A focused browser fixture covers mode selection, cap zero and
+validation, prompt previews and preservation of other bot/plugin configuration.
+
+Focused backend command: `uv run --frozen pytest -q
+tests/test_progress_messages.py tests/test_progress_boundaries.py
+tests/test_engram_integration.py tests/test_response_protocol_config.py
+tests/test_response_protocol_report.py tests/test_prompt_layers.py`:
+**129 passed**, 2 existing dependency warnings, 32.01 s, exit 0.
+
+The focused browser fixture passed (1 test, 5.9 s), as did TypeScript/Vite,
+frontend formatting and Python lint/format. Its initial failure was the test
+matcher's unsupported treatment of a disabled HTML `option`; the corrected
+assertion reads the actual DOM `disabled` property. An existing intermediate
+Engram test also needed explicit progress opt-in after the default changed;
+its corrected case passed. Full-gate and independent published-PR evidence will
+be recorded on the PR after completion; focused results do not establish either.
+
+At `2026-10-12T18:41:47.755719Z`, the new read-only report inspected the previous
+24 hours: 127 completed generation requests, 70 text-only and 57 tool-only,
+zero mixed/interrupted/unreadable records, and no row-limit truncation. The two
+historical bot/model groups both had unknown mixed-output capability in this
+sample. This is retained-response evidence, not a test of provider capability or
+Discord delivery. The exact aggregate report is retained in the ignored audit
+folder; no response text or tool arguments are printed by the command.
+
 ## GitHub PR workflow authorization (2026-10-12)
 
 Classification: owner decision, documentation and operator-helper checks; no bot

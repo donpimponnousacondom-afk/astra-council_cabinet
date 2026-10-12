@@ -467,6 +467,135 @@ test("provider headers round-trip and a mocked upstream 401 through API 502 keep
   ).toBeVisible();
 });
 
+test("response protocol controls preserve zero, bounds and unrelated bot configuration", async ({
+  page,
+}) => {
+  const csrf = (await (await page.request.get("/api/auth/session")).json())
+    .csrf;
+  const id = "wb-response-protocol-fixture";
+  for (const [action, target, data] of [
+    ["clone", "ada", { id, name: "Response protocol fixture" }],
+    ["save", id, { plugin_config: { future_fixture: { keep: "unchanged" } } }],
+  ] as const) {
+    const response = await page.request.post("/api/control", {
+      headers: { "X-CSRF-Token": csrf },
+      data: { action, kind: "bots", id: target, data },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+  }
+  const before = await record(page, "bots", id);
+  const otherBot = await record(page, "bots", "hortator");
+  expect(before.response_protocol).toBe("narrate");
+  expect(before.max_progress_messages_per_turn).toBe(1);
+  await page.getByRole("button", { name: "Refresh dashboard" }).click();
+  await navigate(page, "Bots");
+  const dialog = page.getByRole("dialog");
+  const open = async () => {
+    await page
+      .getByRole("button", {
+        name: "Edit Response protocol fixture",
+        exact: true,
+      })
+      .click();
+    await dialog
+      .getByRole("button", { name: "Capabilities", exact: true })
+      .click();
+  };
+  const save = async () => {
+    await dialog
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(dialog).toHaveCount(0);
+  };
+  await open();
+  const protocol = dialog.getByLabel("Response protocol", { exact: true });
+  const limit = dialog.getByLabel("Progress message attempts per turn", {
+    exact: true,
+  });
+  await expect(protocol).toHaveValue("narrate");
+  await expect(protocol.locator('option[value="end_cycle"]')).toHaveJSProperty(
+    "disabled",
+    true,
+  );
+  await expect(limit).toBeDisabled();
+  await expect(limit).toHaveValue("1");
+  const inspectProtocol = async (variant: string, cap = 1) => {
+    await dialog.getByRole("button", { name: "Prompts", exact: true }).click();
+    await dialog
+      .locator('[data-layer="response_protocol"]')
+      .getByRole("button")
+      .click();
+    await expect(
+      dialog.getByText(`Template text · runtime-response-protocol-${variant}`, {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        `Template text · runtime-response-protocol-${variant === "narrate" ? "progress" : "narrate"}`,
+        { exact: true },
+      ),
+    ).toHaveCount(0);
+    if (variant === "progress") {
+      const inspection = dialog.locator("#inspect-response_protocol");
+      await expect(inspection).toContainText(
+        `At most ${cap} progress messages`,
+      );
+      await expect(inspection).not.toContainText(
+        "{max_progress_messages_per_turn}",
+      );
+    }
+    await dialog
+      .getByRole("button", { name: "Capabilities", exact: true })
+      .click();
+  };
+  await inspectProtocol("narrate");
+  await protocol.selectOption("progress");
+  await expect(limit).toBeEnabled();
+  await inspectProtocol("progress");
+  await expect(limit).toHaveAttribute("min", "0");
+  await expect(limit).toHaveAttribute("max", "20");
+  await expect(limit).toHaveAttribute("step", "1");
+  for (const invalid of ["-1", "21", "1.5", ""]) {
+    await limit.fill(invalid);
+    await dialog
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    expect(
+      await limit.evaluate((input: HTMLInputElement) => input.checkValidity()),
+    ).toBe(false);
+    expect((await record(page, "bots", id)).revision).toBe(before.revision);
+  }
+  await limit.fill("0");
+  await inspectProtocol("progress", 0);
+  await save();
+  const after = await record(page, "bots", id);
+  expect(after.response_protocol).toBe("progress");
+  expect(after.max_progress_messages_per_turn).toBe(0);
+  for (const [key, value] of Object.entries(before)) {
+    if (
+      ![
+        "revision",
+        "response_protocol",
+        "max_progress_messages_per_turn",
+      ].includes(key)
+    )
+      expect(after[key], key).toEqual(value);
+  }
+  expect(await record(page, "bots", "hortator")).toEqual(otherBot);
+  await open();
+  await expect(protocol).toHaveValue("progress");
+  await expect(limit).toHaveValue("0");
+  await limit.fill("20");
+  await protocol.selectOption("narrate");
+  await expect(limit).toBeDisabled();
+  await save();
+  const disabled = await record(page, "bots", id);
+  expect(disabled.response_protocol).toBe("narrate");
+  expect(disabled.max_progress_messages_per_turn).toBe(20);
+  expect(disabled.plugin_config).toEqual(before.plugin_config);
+});
+
 test("bot memory budget, silence and footer controls persist in a docked editor without changing other behavior", async ({
   page,
 }, testInfo) => {

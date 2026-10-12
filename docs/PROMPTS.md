@@ -35,6 +35,32 @@ still apply to overrides. Memory-budget variants are both shown because the
 current conversation/usage is not selected in this editor. Plugin/runtime scope
 and current saved grants are rechecked during actual execution.
 
+### Response protocol guidance
+
+**Bots → bot → Capabilities → Response protocol** chooses `narrate` (default,
+including older records) or opt-in `progress`. This runtime setting controls
+publication; editing or disabling prompt text does not override it. `end_cycle`
+is reserved and unavailable. The current delivery contract and limits are in
+[TOOLS.md](TOOLS.md#normal-and-extended-turns).
+
+The `response_protocol` layer automatically selects
+`runtime-response-protocol-narrate` or `runtime-response-protocol-progress`.
+These new identifiers seed once, without replacing the saved legacy
+`runtime-response-protocol` record or custom prompt edits. An explicit bot
+placement override still selects that saved record; a disabled layer stays
+omitted. Older identity/legacy prompts may contain contradictory narration
+wording; the selected new default explicitly states the current mode. Operators
+using their own override should review its wording against that bot's actual
+mode. Changing saved custom prompts is a separate operator action.
+
+The modern inspector follows the unsaved mode and shows the resolved cap in the
+response-protocol text. `{{RESPONSE_PROTOCOL}}` and
+`{{MAX_PROGRESS_MESSAGES_PER_TURN}}` are literal configuration substitutions;
+the runtime-facts object also reports their effective values. They describe the
+configured cap, not remaining attempts. Private withheld/delivery feedback is
+added after tool results and deduplicated by reason within the turn; it is not
+an editable system instruction or a public progress message.
+
 ### Experimental conversation text
 
 **Bots → bot → Prompts → Conversation format** selects either the existing
@@ -89,7 +115,7 @@ survive compaction within their current generation turn. See [VISION](VISION.md)
 | --- | --- |
 | `identity` | Bot/Discord identity, addressing and ordinary assistant response instructions |
 | `tool_guidance` | Empty-call usage, repair, tool rounds and task prerequisites |
-| `response_protocol` | Optional public text alongside action calls; final text-only answers; overrides older saved narration wording |
+| `response_protocol` | Mode-specific narrate/progress default; configured cap and ordinary final-answer guidance; explicit overrides remain authoritative for text only |
 | `image_guidance`, `image_disabled` | General image guidance; additional guidance when image inputs are off |
 | `director` | Hortator-only instructions |
 | `universal`, `persona` | Existing global prompt and per-bot personality |
@@ -118,6 +144,7 @@ Substitution is one pass over the template, never code evaluation. Data containi
 Common generated-template fields: `{{BOT_NAME}}`, `{{BOT_ID}}`, `{{DISCORD_USER_ID}}`, `{{BOSS_ID}}`, `{{TIMEZONE}}`. Bot identity comes from verified runtime/configuration, not conversation claims. Placement-specific fields:
 
 - Universal/persona: `{{GLOBAL_PROMPT}}`, `{{PERSONA}}`.
+- Response controls: `{{RESPONSE_PROTOCOL}}`, `{{MAX_PROGRESS_MESSAGES_PER_TURN}}`; also included in runtime facts.
 - Notes: `{{NOTES}}`; budget guidance: `{{USED_CHARS}}`, `{{LIMIT_CHARS}}`, `{{REMAINING_CHARS}}`, `{{NOTE_LIMIT_CHARS}}`, `{{HARD_LIMIT_CHARS}}`, `{{OVER_BUDGET_CHARS}}`.
 - Summary wrappers: `{{SUMMARY}}`. Compaction instructions additionally use `{{SUMMARY_TOKENS}}` (retained visible text, not combined reasoning/output).
 - Conversation: `{{TRANSCRIPT}}` for all selected attributed records, `{{LATEST_MESSAGE}}` for the last attributed record, or `{{LATEST_CONTENT}}` for its text only. `{{IMAGE_OMISSIONS}}` carries selected-input omissions. A text-only wrapper intentionally removes author/recipient metadata; choose the attributed record when that matters.
