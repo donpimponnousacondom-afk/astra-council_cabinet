@@ -102,7 +102,26 @@ single generation. Existing text-only calls use the saved default. Credentials
 stay in the registry; other providers explicitly report unsupported discovery.
 See [TTS](TTS.md) for pagination, configuration and response handling.
 
-Models send their final answer as ordinary OpenAI assistant `content` (a string or ordered text parts). There is **no `council_speak` tool**. Genuine `tool_calls` execute actions; accompanying narration is not sent to Discord. After reading tool results, the model answers normally or, when enabled for this bot, calls `council_silence` with a short label. Empty/reasoning-only completions are reported as failures, not invented silence decisions. Length/content-filter stops withhold incomplete output and retain private provider evidence.
+Models send their final answer as ordinary OpenAI assistant `content` (a string or ordered text parts). There is **no `council_speak` tool**. A completed response containing both ordinary text and genuine action `tool_calls` first posts the text as a progress message, then executes the calls and continues inference with their results. Tool-only responses remain valid; a text-only response ends the turn. This does not execute prose promises or manufacture a missing tool call. After reading results, the model answers normally or, when enabled, calls `council_silence`. Empty/reasoning-only completions remain failures. Length/content-filter stops withhold incomplete output and retain private provider evidence.
+
+Progress uses the same destination, reply targeting, outbox uncertainty, current
+grants and room send locks as the final answer. A send failure stops the turn
+before that batch executes; uncertain sends are not automatically replayed.
+Confirmed progress bypasses only the personal cooldown for subsequent messages
+in that same turn; room gaps and subsequent-turn cooldowns remain. Progress does
+not acknowledge the input, commit Engrams, consume prepared attachments/panels or
+carry the final metrics/reasoning-viewer footer. Its text remains in the ordinary
+transcript and the assistant/tool exchange. Only a final answer or intentional
+silence completes the turn; cancellation after progress is still cancellation.
+Terminal silence, rejected batches and legacy tool-wrapped narration do not post
+progress. Individual tool argument failures are returned for the next round to
+handle. Existing call/round limits still bound work and progress messages.
+
+For slash/panel invocations, progress updates the existing interaction response;
+later progress/final text replaces it, preserving public/private visibility.
+The editable **Progress messages & final answers** prompt layer explains this
+protocol and supersedes older saved narration wording without rewriting personas
+or operator-edited templates. Engram suffixes remain private and final-only.
 
 The per-bot **Allow intentional silence** capability (`allow_silence`, default true) is the operator's control over that terminal decision. False omits its schema at all rounds and adds runtime guidance to finish with a text contribution. A stray disabled call, including `{}`, is refused rather than treated as a successful silent activation or executable discovery; it includes usage and all detectable argument errors. Repeated calls consume the existing round budget and eventually fail visibly, without executing other calls in the rejected batch or adding retries. Other granted actions and attachment preparation remain available. The same rule applies during extended document/workspace/web tasks. No saved persona/shared prompt is rewritten.
 
@@ -147,6 +166,14 @@ The optional `global_memory` tool mirrors channel memory's `read`, `write` (same
 
 The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
+
+- On 2026-10-12 the owner chose public progress text alongside real tool calls:
+  post the text, execute the calls, then continue with their results. Faster human
+  feedback is the goal; additional model rounds are acceptable. This supersedes
+  the earlier final-answer-only delivery of assistant content and applies to all
+  eligible action tools, not a memory-only allowlist. Models still decide when
+  progress is useful, must emit actual calls, and must distinguish pending work
+  from confirmed results. Preserve private reasoning, Engrams and scope boundaries.
 
 - Models answer through ordinary OpenAI assistant content, never `council_speak`. Keep `council_silence` as the explicit terminal tool when the bot's `allow_silence` capability permits it (default true, including older records). The owner needs this per-bot Capabilities toggle for provider/conversation stress tests. Disabling it removes the schema at every round, updates runtime guidance and rejects stray silence calls within the existing tool budget; it must not invent a successful answer, hide errors, add activations or bypass other limits. Genuine action tools may precede the final text answer; attachment preparation is optional and contains no answer text. Reject legacy tool-wrapped replies without parsing them as actions, with at most one text-format repair inside the existing round budget.
 

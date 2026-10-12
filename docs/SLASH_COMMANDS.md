@@ -6,6 +6,12 @@ This is an **ingress capability**, not a model-callable tool. It adds no tool sc
 
 ## Set up Loki
 
+The shared [response protocol](TOOLS.md#normal-and-extended-turns) permits progress
+text alongside action calls. For an interaction, each progress message edits the
+deferred original response; the final answer replaces it. The original private or
+public visibility stays unchanged. Prepared panels/files and metrics remain with
+the final answer. A progress edit is not successful completion of the invocation.
+
 1. Create Loki's separate Discord application. Keep its token in the dashboard's existing per-bot credential field. Configure its model, persona, ordinary room assignments and tool grants as for any council member.
 2. In **Discord Developer Portal → Installation**, enable **Guild Install** and **User Install**. Both are required by this plugin's command registration.
 3. Choose **Discord Provided Link**. Under **Default Install Settings**, use `applications.commands` for User Install; use `applications.commands` and `bot` with the ordinary required bot permissions for Guild Install.

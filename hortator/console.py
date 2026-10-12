@@ -201,6 +201,68 @@ COMPLETION_FIELDS = ("reasoning_tokens", "total_tokens", "tps")
 MEMORY_FIELDS = ("units_affected", "unit_total")
 
 
+def provider_failure_summary(data):
+    """Separate a received error from requested settings; never infer its cause."""
+    error = data.get("error", "")
+    field = data.get("field")
+    param_present = False
+    # Some proxies nest a JSON error inside message="data:{...}". Decode
+    # bounded wrappers for display only; the original event remains intact.
+    for _ in range(6):
+        if isinstance(error, dict):
+            if "param" in error:
+                param_present = True
+                field = error.get("param") or field
+            error = error.get("error", error.get("message", error))
+        elif isinstance(error, str):
+            candidate = re.sub(r"^(?:HTTP \d{3}:\s*|data:\s*)", "", error.strip())
+            if not candidate.startswith("{"):
+                break
+            try:
+                error = json.loads(candidate)
+            except ValueError, TypeError:
+                break
+        else:
+            break
+    values = {**data, "error": error, "requested_reasoning": data.get("reasoning")}
+    if param_present:
+        values["rejected_field"] = field or "not specified by upstream"
+    elif field:
+        values["rejected_field"] = field
+    keys = [
+        "purpose",
+        "http_status",
+        "error",
+        "rejected_field",
+        "model",
+        "error_origin",
+        "phase",
+        "timeout_kind",
+        "timeout_seconds",
+        "attempt",
+        "max_attempts",
+        "retry_in_seconds",
+        "requested_reasoning",
+    ]
+    if data.get("http_status") == 413 or data.get("observed_bytes") is not None:
+        keys += ["request_body_bytes", "observed_bytes", "limit_bytes", "upstream_body_limit_bytes"]
+        keys += [
+            key
+            for key in (
+                "inline_image_count",
+                "image_bytes",
+                "image_base64_bytes",
+                "inline_audio_count",
+                "audio_bytes",
+                "audio_base64_bytes",
+            )
+            if data.get(key)
+        ]
+        if data.get("body_limit_basis") not in (None, "unknown"):
+            keys.append("body_limit_basis")
+    return keys, values
+
+
 def is_web_event(event):
     return event.get("kind", "").startswith("web_search.") or event.get("data", {}).get("name") in {
         "web_fetch",
@@ -1121,9 +1183,13 @@ class OperationalConsole(logging.Handler):
         keys += list(COMPLETION_FIELDS)
         keys += list(MEMORY_FIELDS)
         keys += list(MESSAGE_FIELDS)
+        summary_data = data
+        if event["kind"] == "request.failed":
+            keys, summary_data = provider_failure_summary(data)
+            summary_data = safe_value(self.redact(summary_data))
         fields = []
         for key in keys:
-            value = data.get(key)
+            value = summary_data.get(key)
             if event["kind"] == "request.completed" and key in COMPLETION_FIELDS:
                 # Reported usage stays intact in the ledger. The display can use
                 # explicitly marked text estimates, never private reasoning text.

@@ -1059,6 +1059,31 @@ class Engine:
                     batch_error = "Tool round budget exhausted; write an ordinary text answer" + (
                         " or call council_silence alone" if silence_tools else ""
                     )
+                if result.content.strip() and not terminal and not batch_error:
+                    if wrapped_reply(result.content):
+                        # Keep the existing wrapper rejection; real calls still
+                        # run and receive results through the ordinary loop.
+                        self.store.emit(
+                            "request.progress_withheld",
+                            {"reason": "Tool-wrapped narration is not an ordinary progress message"},
+                            bot_id=bot["id"],
+                            turn_id=turn_id,
+                            request_id=result.request_id,
+                            level="warning",
+                        )
+                    else:
+                        await self.deliver(
+                            bot,
+                            profile,
+                            provider,
+                            context,
+                            result.content,
+                            reply_to,
+                            [],
+                            request_id=result.request_id,
+                            draft_deadline=document_deadline,
+                            progress=True,
+                        )
                 extras.append(result.message())
                 finished = False
                 if self.jobs:
@@ -1370,6 +1395,7 @@ class Engine:
         draft_deadline=None,
         routing=None,
         delivery_id=None,
+        progress=False,
     ):
         destination = routing["target_channel_id"] if routing else context.channel_id
 
@@ -1402,7 +1428,7 @@ class Engine:
             if request_id
             else None
         )
-        footer = render_footer(bot, profile, provider, request, redact=self.vault.redact)
+        footer = "" if progress else render_footer(bot, profile, provider, request, redact=self.vault.redact)
         if routing:
             marker = (
                 "-# "
@@ -1423,7 +1449,7 @@ class Engine:
                 dumps(regular_ids),
                 "pending",
                 time.time(),
-                dumps(routing or {}),
+                dumps(routing or ({"kind": "progress"} if progress else {})),
             ),
         )
         self.store.emit(
@@ -1436,6 +1462,7 @@ class Engine:
                 **({"voice_note_artifact_ids": list(voice_ids)} if voice_ids else {}),
                 "footer": footer,
                 "request_id": request_id,
+                **({"kind": "progress"} if progress else {}),
                 **({"routing": routing} if routing else {}),
             },
             bot_id=bot["id"],
@@ -1448,11 +1475,16 @@ class Engine:
                 "SELECT 1 FROM human_attention_claims WHERE bot_id=? AND turn_id=? LIMIT 1",
                 (bot["id"], context.turn_id),
             )
+            continuing = self.store.one(
+                "SELECT 1 FROM outbox WHERE turn_id=? AND bot_id=? AND status='sent' "
+                "AND json_extract(routing,'$.kind')='progress' LIMIT 1",
+                (context.turn_id, bot["id"]),
+            )
             # A personal cooldown must never hold the channel send lock. Another
             # bot may be responding to a human while this draft waits its cadence.
             wait = (
                 0
-                if priority or self.is_single_shot(bot) or bot.get("scheduled_wake")
+                if priority or continuing or self.is_single_shot(bot) or bot.get("scheduled_wake")
                 else self.store.runtime(bot["id"])["last_sent"] + bot["cooldown_seconds"] - time.time()
             )
             if wait > 0:
@@ -1497,7 +1529,7 @@ class Engine:
                     await self.registry.reasoning_viewer.prepare(
                         bot, context.turn_id, request_id, outbox_id, destination
                     )
-                    if not routing
+                    if not routing and not progress
                     else None
                 )
                 # Stop before dispatch, but never cancel an in-flight Discord send
@@ -1517,7 +1549,7 @@ class Engine:
                 self.store.emit(
                     "delivery.sending", {"outbox_id": outbox_id}, bot_id=bot["id"], turn_id=context.turn_id
                 )
-                panel = self.registry.panels.prepared(context) if not routing else None
+                panel = self.registry.panels.prepared(context) if not routing and not progress else None
                 if panel:
                     self.registry.panels.dispatch(panel, outbox_id)
                 discord_id = await self.transport.send(
@@ -1585,7 +1617,12 @@ class Engine:
                     )
                 self.store.emit(
                     "delivery.sent",
-                    {"outbox_id": outbox_id, "discord_id": discord_id, "content": content},
+                    {
+                        "outbox_id": outbox_id,
+                        "discord_id": discord_id,
+                        "content": content,
+                        **({"kind": "progress"} if progress else {}),
+                    },
                     bot_id=bot["id"],
                     turn_id=context.turn_id,
                 )

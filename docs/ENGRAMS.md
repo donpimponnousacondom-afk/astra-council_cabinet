@@ -145,6 +145,9 @@ Candidate state is tied to the input actually supplied, starting state revision,
 turn/request and delivery outcome. Only valid state with a confirmed normal answer
 delivery becomes committed state. Cancellation, stale revisions, revoked grants,
 failed sends and uncertain Discord delivery do not silently advance memory.
+Public progress messages accompanying tools do not commit state or count as
+delivered final replies for reminders. Their private suffix, if any, is stripped;
+the model must supply any state update with its final text-only answer.
 Restart recovery may promote an already confirmed candidate; it does not resend
 an uncertain answer. State and coverage move together on the SQLite owner thread.
 

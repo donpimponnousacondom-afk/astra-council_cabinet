@@ -232,7 +232,18 @@ class SlashEngine(Engine):
         return None
 
     async def deliver(
-        self, bot, profile, provider, context, content, reply_to, artifact_ids, *, request_id=None, **kwargs
+        self,
+        bot,
+        profile,
+        provider,
+        context,
+        content,
+        reply_to,
+        artifact_ids,
+        *,
+        request_id=None,
+        progress=False,
+        **kwargs,
     ):
         if not self.valid(bot, profile, provider) or not self.channel_allowed(bot, context.channel_id):
             raise ControlError("Interaction permission or configuration changed; answer withheld")
@@ -252,7 +263,7 @@ class SlashEngine(Engine):
             if request_id
             else None
         )
-        footer = render_footer(bot, profile, provider, request, redact=self.vault.redact)
+        footer = "" if progress else render_footer(bot, profile, provider, request, redact=self.vault.redact)
         text, attached = model_message(content, footer)
         outbox_id = uid("out_")
         self.store.execute(
@@ -271,6 +282,7 @@ class SlashEngine(Engine):
                         "kind": self.invocation["kind"],
                         "interaction_id": str(self.interaction.id),
                         "private": self.invocation["private"],
+                        **({"progress": True} if progress else {}),
                     }
                 ),
             ),
@@ -283,13 +295,18 @@ class SlashEngine(Engine):
                 "footer": footer,
                 "routing": self.invocation["kind"],
                 "channel_id": self.invocation["channel_id"],
+                **({"kind": "progress"} if progress else {}),
             },
             bot_id=bot["id"],
             turn_id=context.turn_id,
         )
-        panel = self.registry.panels.prepared(context)
-        reasoning = await self.registry.reasoning_viewer.prepare(
-            bot, context.turn_id, request_id, outbox_id, self.invocation["channel_id"]
+        panel = self.registry.panels.prepared(context) if not progress else None
+        reasoning = (
+            await self.registry.reasoning_viewer.prepare(
+                bot, context.turn_id, request_id, outbox_id, self.invocation["channel_id"]
+            )
+            if not progress
+            else None
         )
         files = []
         # Only delivery of the finished answer/files, inside the overall slash deadline.

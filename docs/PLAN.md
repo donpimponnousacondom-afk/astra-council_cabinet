@@ -1,5 +1,25 @@
 # Implementation and acceptance plan
 
+## Progress messages with action calls — owner decision (2026-10-12)
+
+Permit completed model responses containing ordinary text and real action calls
+to post progress first, execute the batch, then continue inference with results.
+The owner explicitly chose this over treating mixed content as a final answer;
+additional rounds are acceptable in exchange for earlier human feedback. Apply
+the shared protocol to eligible action tools, without a memory-only restriction.
+Text alone remains terminal and cannot imply or queue an absent tool call.
+Keep private reasoning, final-only Engrams, prepared files/panels, cancellation,
+delivery uncertainty and per-turn budgets intact. The new editable response
+protocol layer clarifies this without overwriting saved prompt edits.
+See [TOOLS.md](TOOLS.md#normal-and-extended-turns).
+
+The same patch includes the console-readability follow-up requested on
+2026-10-11: lead provider failures with the received error, label outgoing
+reasoning settings as requested, and retain irrelevant image/size facts in
+expanded evidence. The earlier text-only MiMo research HTTP 400 was attributed
+by the owner to their CPA parameter-forwarding change; this work does not
+translate parameters, identify an unreported rejected field or edit profiles.
+
 ## Simple filesystem — owner decisions (2026-10-10)
 
 The owner authorized a separate opt-in `filesystem` plugin, preserving Private
@@ -200,20 +220,6 @@ not authorization to change configuration, activate bots, remove the fallback,
 or run paid/live acceptance. See the dated history for original scope and rationale.
 
 ## Deferred operational follow-ups
-
-- Owner decision, 2026-10-11: improve provider-failure console readability with
-  the next substantive Council patch; do not implement or deploy a standalone
-  logging change now. Lead with the failed operation, HTTP status and upstream
-  explanation. Distinguish outgoing request settings from the provider's error;
-  when no rejected field is identified, say so rather than guessing. Keep zero
-  image/audio counters and unrelated size-limit metadata out of the concise
-  explanation, while preserving them in structured/expanded diagnostics.
-  Curie's text-only MiMo research HTTP 400 (`req_e32ee467fa1f4b10bede`) displayed
-  image counters beside a generic parameter error, misleading the owner into
-  suspecting image handling. The owner identified their CPA parameter-forwarding
-  patch as the cause; the saved Council request alone does not establish the
-  exact fields received or rejected downstream. This is a deferred presentation
-  fix, not authorization to translate parameters or change saved profiles.
 
 - Owner deferred the recurring Loki DM history-import warning on 2026-09-26
   (`discord.history_failed`, event `61308`, stage `validate_scope`, channel

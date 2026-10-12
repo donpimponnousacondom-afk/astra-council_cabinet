@@ -199,6 +199,7 @@ async def test_feedback_counts_written_reply_when_companion_is_cancelled(kernel)
 
 async def test_intermediate_tool_suffix_is_stripped_but_never_staged(kernel):
     bot, transport = enable(kernel)
+    transport.send.side_effect = ["888888888888888881", "888888888888888882"]
     bot.pop("revision")
     bot["enabled_plugins"].append("memory")
     kernel.store.put("bots", bot)
@@ -223,16 +224,63 @@ async def test_intermediate_tool_suffix_is_stripped_but_never_staged(kernel):
                 },
             )
         assert PRIVATE not in str(body)
+        assert transport.send.await_count == 1
+        assert not state(kernel)
+        assert not kernel.store.rows("SELECT * FROM engram_candidates")
+        assert not kernel.store.rows("SELECT * FROM engram_misses")
         return completion("Public final without an update")
 
     await install_client(kernel, handler)
     await run(kernel)
     assert len(calls) == 2
+    assert transport.send.await_count == 2
+    assert transport.send.await_args_list[0].args[2] == "Public answer"
+    assert PRIVATE not in str(transport.send.await_args_list)
     assert transport.send.await_args.args[2] == "Public final without an update"
     assert not state(kernel)
     assert not kernel.store.rows("SELECT * FROM engram_candidates")
     assert len(kernel.store.rows("SELECT * FROM engram_misses")) == 1
     assert kernel.registry.engrams.capture(bot, CHANNEL, "next")["missed_updates"]["count"] == 1
+
+
+async def test_final_engram_binds_only_final_outbox_after_progress(kernel):
+    bot, transport = enable(kernel)
+    bot.pop("revision")
+    bot["enabled_plugins"].append("memory")
+    kernel.store.put("bots", bot)
+    transport.send.side_effect = ["888888888888888881", "888888888888888882"]
+    count = 0
+
+    def handler(request):
+        nonlocal count
+        count += 1
+        body = json.loads(request.content)
+        if count == 1:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "content": "Reading my notes",
+                                "tool_calls": [tool("memory", {"operation": "read"})],
+                            },
+                            "finish_reason": "tool_calls",
+                        }
+                    ]
+                },
+            )
+        assert not state(kernel)
+        return completion(response(body))
+
+    await install_client(kernel, handler)
+    await run(kernel)
+    assert state(kernel)[0]["MEM"] == PRIVATE
+    row = kernel.store.one(
+        "SELECT o.content,o.routing,c.status FROM engram_candidates c JOIN outbox o ON o.id=c.outbox_id"
+    )
+    assert row == {"content": "Public answer", "routing": "{}", "status": "committed"}
+    assert len(kernel.store.rows("SELECT * FROM outbox")) == 2
 
 
 async def test_partial_provider_failure_keeps_suffix_out_of_model_evidence(kernel):
