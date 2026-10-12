@@ -3029,3 +3029,14 @@ Corrected rerun: `test_response_protocol_config`, `test_end_cycle_reverse`,
 with the same two existing Starlette/httpx deprecation warnings. Combined with
 the unaffected passes above, all 259 selected regressions have passing evidence;
 this is focused evidence, not a local full-suite claim.
+
+Independent Sol review of published head `12f55e9` found a delivery-observability
+edge case: confirmed written text followed by cancellation of a native voice
+companion kept the outbox receipt but skipped the reverse-order linkage and
+reported `text_only`. A focused real `Engine.deliver` probe reproduced this
+with sent/unknown outbox rows. Publication provenance now finalizes from the
+confirmed text receipt even when a later companion is cancelled; nothing is
+resent. The regression is tracked in `test_end_cycle_reverse`. The reverse,
+immutable-recovery and voice-note suites passed **55 tests in 18.58s**, with two
+existing deprecation warnings. This finding was disclosed to Luna before her
+final delta review and is not counted as an independent Luna discovery.

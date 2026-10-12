@@ -824,18 +824,38 @@ class Engine:
                     self.registry.engrams.record_miss(
                         engram, request_id, ordinary_delivery_id, final_engram["invalid"]
                     )
-                await self.deliver(
-                    bot,
-                    profile,
-                    provider,
-                    context,
-                    content,
-                    reply_to,
-                    artifact_ids,
-                    request_id=request_id,
-                    draft_deadline=document_deadline,
-                    delivery_id=ordinary_delivery_id,
-                )
+                try:
+                    await self.deliver(
+                        bot,
+                        profile,
+                        provider,
+                        context,
+                        content,
+                        reply_to,
+                        artifact_ids,
+                        request_id=request_id,
+                        draft_deadline=document_deadline,
+                        delivery_id=ordinary_delivery_id,
+                    )
+                finally:
+                    # Text can be confirmed before a following voice send is
+                    # cancelled. Preserve its finish provenance without replay.
+                    if self.store.one(
+                        "SELECT 1 FROM outbox WHERE id=? AND status='sent'", (ordinary_delivery_id,)
+                    ):
+                        cycle["reason"] = reason
+                        if preceding_end_request_id is not None:
+                            self.store.emit(
+                                "cycle.answer_published",
+                                {
+                                    "channel_id": channel_id,
+                                    "end_request_id": preceding_end_request_id,
+                                    "end_call_id": terminal_call_id,
+                                },
+                                bot_id=bot["id"],
+                                turn_id=turn_id,
+                                request_id=request_id,
+                            )
                 status, decision = "sent", "reply" if reply_to else "speak"
                 cycle["reason"] = reason
 
@@ -1151,17 +1171,6 @@ class Engine:
                         "end_cycle_then_text",
                         preceding_end_request_id=answer_pending["request_id"],
                         terminal_call_id=answer_pending["call_id"],
-                    )
-                    self.store.emit(
-                        "cycle.answer_published",
-                        {
-                            "channel_id": channel_id,
-                            "end_request_id": answer_pending["request_id"],
-                            "end_call_id": answer_pending["call_id"],
-                        },
-                        bot_id=bot["id"],
-                        turn_id=turn_id,
-                        request_id=result.request_id,
                     )
                     break
                 if cycle_response and finalizing:

@@ -137,3 +137,39 @@ async def test_reverse_engram_uses_first_answer_and_requires_delivery(kernel, fa
         }
         assert events(kernel, "cycle.answer_published")[0]["end_request_id"] != answer_request
         assert events(kernel, "delivery.queued")[0]["request_id"] == answer_request
+
+
+async def test_confirmed_first_answer_keeps_reverse_linkage_if_voice_companion_is_cancelled(kernel):
+    from hortator.plugins import ToolContext
+    from test_end_cycle import read_call, tool
+    from test_voice_notes import note
+
+    bot, transport = ready(
+        kernel, response_protocol="end_cycle", enabled_plugins=["memory"], cooldown_seconds=0
+    )
+    transport.send.side_effect = ["666666666666666666", asyncio.CancelledError()]
+    count = 0
+    artifact_id = None
+
+    def handler(request):
+        nonlocal count, artifact_id
+        count += 1
+        if count == 1:
+            turn_id = kernel.store.one("SELECT id FROM turns")["id"]
+            artifact_id = note(kernel, ToolContext(bot, "222222222222222222", turn_id))
+            return mixed("", read_call())
+        if count == 2:
+            return mixed("", tool("discord_attach", {"artifact_ids": [artifact_id]}, call_id="attach"), end())
+        assert count == 3 and not tool_names(json.loads(request.content))
+        return completion("Confirmed first answer")
+
+    await install_client(kernel, handler)
+    await run(kernel)
+    assert count == 3
+    assert [r["status"] for r in kernel.store.rows("SELECT status FROM outbox ORDER BY created_at")] == [
+        "sent",
+        "unknown",
+    ]
+    assert cycle(kernel)["published"] is True
+    assert cycle(kernel)["reason"] == "end_cycle_then_text"
+    assert len(events(kernel, "cycle.answer_published")) == 1
