@@ -114,24 +114,31 @@ that contain both ordinary text and genuine action `tool_calls`:
 | --- | --- | --- |
 | `narrate` (default) | Withheld from Discord, as before #103 | Execute the calls, read results, then produce the ordinary final answer |
 | `progress` (operator opt-in) | Best-effort progress before the batch, within the per-turn attempt cap | Execute the calls even if optional progress cannot be delivered; final answer remains separate |
-| `end_cycle` (operator opt-in) | Withheld; counts one failed response, eligible calls run once, and the original text is frozen | Finish with text + `end_cycle`, or confirm the saved draft with `end_cycle` alone |
+| `end_cycle` (operator opt-in) | Narration is withheld, counts one strike, and its actions run once; no answer draft is created | Finish from the results with text + `end_cycle`; real answer drafts remain immutable |
 
 **`end_cycle` mode.** The normal finish is ordinary assistant answer text plus
 `end_cycle {}` in the same response. The answer never goes inside tool arguments.
 `end_cycle {}` executes a terminal decision; it is **not** an empty-call usage
-query. After work, the runtime either publishes immediately, confirms an existing
-draft, or permits one first answer after an accepted finish call. Neither final
-phase returns to work.
+query. After work, the runtime publishes immediately, finalizes from completed
+tool results, confirms an existing answer draft, or permits one first answer
+after an accepted finish call. None of these final phases returns to work.
 
 - *Text + valid `end_cycle`*: publish through the ordinary final path (footer,
   Engram commit, prepared files/panels, reasoning button) and end the cycle.
 - *Tool-only actions*: execute and return results as usual; no strike. The normal
   work-round and task-time budgets remain in force.
-- *Failed publication with useful text*: count one strike, retain the original
-  text and its source request, and remove all action tools. Eligible actions
-  already performed are not replayed. Only `end_cycle` and, when allowed,
-  `council_silence` remain. The private notice tells the model the exact draft is
-  saved and asks it to call `end_cycle {}` without rewriting the answer.
+- *Narration with action calls, without `end_cycle`*: withhold the narration,
+  execute the actions once and count one strike. **Do not create an answer
+  draft.** Remove action tools; if strikes remain, the model receives the results
+  and can return final answer text plus `end_cycle {}`. It cannot perform new work
+  or replay the actions. A valid bare `end_cycle` also permits the bounded first-
+  answer path below because there is no frozen draft.
+- *Real answer with a missing or invalid finish*: a text-only reply missing
+  `end_cycle`, or answer text accompanying a recoverable failed `end_cycle`
+  batch, is retained with its source request. Count one strike and remove all
+  action tools. Eligible actions already performed are not replayed. Only
+  `end_cycle` and, when allowed, `council_silence` remain. The private notice says
+  the exact answer draft is saved and asks for `end_cycle {}` without rewriting.
 - *Draft confirmation*: a valid `end_cycle` publishes the frozen original.
   Additional answer text or an Engram in the confirming response cannot replace
   the saved source. A bad confirmation counts another strike; action calls are
@@ -140,7 +147,7 @@ phase returns to work.
 - *Strike limit*: the stored `narration_strikes` field now means the maximum
   failed protocol responses, including failed confirmations (1–5, default 2).
   Reaching it stops the cycle immediately. Thus 2 allows one failure followed
-  by one confirmation chance; 1 stops at the first failure. No extra attempt is
+  by one finalization chance; 1 stops at the first failure. No extra attempt is
   added beyond the configured failure limit. A valid finish before the first
   answer is a supported order, not a failed response.
 - *Finish before the first answer*: a valid `end_cycle {}` without ordinary
@@ -151,7 +158,8 @@ phase returns to work.
   The extra request must return ordinary answer text only: any tool call
   (including another `end_cycle`), empty text or incomplete provider output ends
   the cycle without another request. Private reasoning is never an answer
-  source. This path cannot regenerate or replace an existing draft, reopen
+  source. This path is also valid during finalization after narration when no
+  answer draft exists. It cannot regenerate or replace an existing draft, reopen
   action tools, replay writes or create a loop.
 - *Companions*: during normal work, `end_cycle` may accompany only
   `memory`/`global_memory` writes and `discord_attach`, executed once before
@@ -282,6 +290,14 @@ The optional `global_memory` tool mirrors channel memory's `read`, `write` (same
 
 The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
+
+- Later on 2026-10-13, the owner approved field-report §7 item 1: narration
+  alongside actions without `end_cycle` must not become a frozen answer. Run the
+  actions once, count the strike, remove action tools and allow a final answer
+  based on their results within the existing failure limit. Text-only answers
+  and recoverable failed finish batches retain immutable answer drafts. The
+  reverse-order finish remains valid when finalization has no answer draft.
+  No mode, grant or strike-limit behavior changes in this correction.
 
 - On 2026-10-13 the owner approved a bounded reverse-order finish: valid
   `end_cycle {}` with no draft allows exactly one tool-free request for the

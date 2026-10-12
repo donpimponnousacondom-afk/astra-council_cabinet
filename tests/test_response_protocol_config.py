@@ -111,7 +111,7 @@ async def test_mode_template_runtime_facts_and_inspection_match_all_contexts(ker
     profile = kernel.store.get("profiles", "balanced")
     messages, meta = await contexts.assemble(bot, profile, CHANNEL, [], "")
     selected = next(item for item in meta["prompt_layers"] if item["id"] == "response_protocol")
-    expected_template = "runtime-response-protocol-" + protocol + ("-v3" if protocol == "end_cycle" else "")
+    expected_template = "runtime-response-protocol-" + protocol + ("-v4" if protocol == "end_cycle" else "")
     assert selected["template_id"] == expected_template
     content = "\n".join(message["content"] for message in messages)
     assert f"Current response protocol: {protocol}." in content
@@ -229,7 +229,7 @@ async def test_new_default_does_not_overwrite_legacy_protocol_or_custom_guidance
     saved_guidance = kernel.store.put("prompts", {**guidance, "content": "OWNER TOOL GUIDANCE"})
     kernel.service.seed_prompt_templates()
     selected = kernel.engine.contexts.prompt(bot, "response_protocol")
-    assert selected["template_id"] == "runtime-response-protocol-end_cycle-v3"
+    assert selected["template_id"] == "runtime-response-protocol-end_cycle-v4"
     assert "never a usage query" in selected["content"]
     assert kernel.store.get("prompts", legacy["id"]) == saved
     assert kernel.store.get("prompts", guidance["id"]) == saved_guidance

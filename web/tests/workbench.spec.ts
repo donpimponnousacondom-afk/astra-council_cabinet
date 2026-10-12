@@ -678,13 +678,13 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   await draftHelp.focus();
   await draftHelp.press("Enter");
   await expect(
-    behavior.getByText("A failed response with useful answer text", {
+    behavior.getByText("A text-only answer missing end_cycle", {
       exact: false,
     }),
   ).toBeVisible();
   await draftHelp.press("Space");
   await expect(
-    behavior.getByText("A failed response with useful answer text", {
+    behavior.getByText("A text-only answer missing end_cycle", {
       exact: false,
     }),
   ).not.toBeVisible();
@@ -728,7 +728,7 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
     .click();
   const cycleInspection = dialog.locator("#inspect-response_protocol");
   await expect(cycleInspection).toContainText(
-    "Template text · runtime-response-protocol-end_cycle-v3",
+    "Template text · runtime-response-protocol-end_cycle-v4",
   );
   await expect(cycleInspection).toContainText(
     "1 failed responses end this cycle",

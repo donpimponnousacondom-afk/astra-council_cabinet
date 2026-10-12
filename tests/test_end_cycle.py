@@ -315,7 +315,7 @@ async def test_silence_still_works_during_draft_confirmation(kernel):
     assert cycle(kernel)["reason"] == "silence"
 
 
-async def test_narrated_write_is_saved_once_then_only_its_draft_can_be_confirmed(kernel):
+async def test_narrated_write_is_saved_once_then_final_answer_uses_the_receipt(kernel):
     _, transport = ready(kernel, response_protocol="end_cycle", enabled_plugins=["memory"], max_tool_rounds=6)
     seen = []
 
@@ -329,16 +329,16 @@ async def test_narrated_write_is_saved_once_then_only_its_draft_can_be_confirmed
         assert responses(body)[-1]["saved"] is True
         assert "Strike 1 of 2" in harness_notices(body)[-1]
         assert "Action tools are removed" in harness_notices(body)[-1]
-        return mixed("", end())
+        return mixed("The note is now saved.", end())
 
     await install_client(kernel, handler)
     await run(kernel)
     assert len(seen) == 2
     assert len(kernel.store.rows("SELECT * FROM memories")) == 1
-    assert transport.send.await_count == 1 and transport.send.await_args.args[2] == "Saved fact."
+    assert transport.send.await_count == 1 and transport.send.await_args.args[2] == "The note is now saved."
     done = cycle(kernel)
     assert done["strikes"] == 1 and done["actions_executed"] == 1 and done["finalization"]
-    assert done["reason"] == "draft_published"
+    assert done["reason"] == "end_cycle" and not done["draft_retained"]
 
 
 async def test_single_strike_is_a_hard_failure_limit(kernel):
@@ -372,9 +372,9 @@ async def test_actions_during_finalization_are_refused_and_cycle_ends_incomplete
     assert len(kernel.store.rows("SELECT * FROM memories")) == 1
     transport.send.assert_not_awaited()
     turn = kernel.store.one("SELECT status,error FROM turns")
-    assert turn["status"] == "failed" and "confirm the saved draft" in turn["error"]
+    assert turn["status"] == "failed" and "with your first answer" in turn["error"]
     refused = [item for item in events(kernel, "tool.failed") if item.get("call_id") == "w2"]
-    assert refused and "no action or replacement text was used" in refused[0]["error"]
+    assert refused and "no action was executed" in refused[0]["error"]
 
 
 async def test_tool_only_rounds_do_not_strike(kernel):

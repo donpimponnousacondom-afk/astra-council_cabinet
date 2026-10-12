@@ -35,7 +35,11 @@ async def test_saved_work_is_not_replayed_when_confirmation_hallucinates_a_write
         calls += 1
         body = json.loads(request.content)
         if calls == 1:
-            return mixed("Original answer", write_call(call_id="original"))
+            return mixed(
+                "Original answer",
+                write_call(call_id="original"),
+                tool("end_cycle", {"bad": True}, call_id="bad_end"),
+            )
         assert sorted(tool_names(body)) == ["council_silence", "end_cycle"]
         if calls == 2:
             return mixed(
@@ -114,7 +118,7 @@ async def test_caterpillar_empty_finish_saves_global_note_once_then_answers(kern
     assert transport.send.await_args.args[2] == "Saved the requested note"
 
 
-@pytest.mark.parametrize("source", ["text", "narrated_write", "invalid_end"])
+@pytest.mark.parametrize("source", ["text", "failed_end_write", "invalid_end"])
 async def test_confirmed_engram_comes_from_frozen_source_not_confirmation(kernel, source):
     bot, transport = enable(kernel)
     bot.pop("revision")
@@ -127,8 +131,8 @@ async def test_confirmed_engram_comes_from_frozen_source_not_confirmation(kernel
         bodies.append(body)
         if len(bodies) == 1:
             text = response(body)
-            if source == "narrated_write":
-                return mixed(text, write_call())
+            if source == "failed_end_write":
+                return mixed(text, write_call(), tool("end_cycle", {"bad": True}, call_id="bad_end"))
             if source == "invalid_end":
                 return mixed(text, tool("end_cycle", {"bad": True}, call_id="invalid"))
             return completion(text)

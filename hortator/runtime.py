@@ -739,8 +739,8 @@ class Engine:
             progress_limit = bot.get("max_progress_messages_per_turn", 1)
             progress_attempts = 0
             progress_notices = set()
-            # A failed publication freezes its existing answer. Recovery can
-            # only confirm that draft; it never resumes work or replaces text.
+            # Finalization closes work. Actual answer drafts are immutable;
+            # narration before action results is not an answer draft.
             strike_limit = bot.get("narration_strikes", 2)
             finalizing = False
             retained_draft = None
@@ -873,6 +873,11 @@ class Engine:
                 nonlocal retained_draft
                 if retained_draft is not None or not result.content.strip() or wrapped_reply(result.content):
                     return
+                if result.tool_calls and not any(
+                    call["function"]["name"] == "end_cycle" for call in result.tool_calls
+                ):
+                    # Pre-result narration is withheld, never a candidate answer.
+                    return
                 retained_draft = {
                     "content": result.content,
                     "parsed_engram": parsed,
@@ -893,7 +898,7 @@ class Engine:
                     request_id=result.request_id,
                 )
 
-            def cycle_failure(result, reason, *, unrecoverable=False):
+            def cycle_failure(result, reason, *, unrecoverable=False, allow_first_answer=False):
                 nonlocal strikes, finalizing, round_limit
                 strikes += 1
                 self.store.emit(
@@ -910,7 +915,8 @@ class Engine:
                     request_id=result.request_id,
                     level="warning",
                 )
-                if unrecoverable or retained_draft is None or strikes >= strike_limit:
+                can_finalize = retained_draft is not None or finalizing or allow_first_answer
+                if unrecoverable or not can_finalize or strikes >= strike_limit:
                     raise CycleIncomplete(
                         f"{reason}; no answer was published. "
                         + (
@@ -931,7 +937,7 @@ class Engine:
                             "channel_id": channel_id,
                             "strikes": strikes,
                             "strike_limit": strike_limit,
-                            "draft_request_id": retained_draft["request_id"],
+                            "draft_request_id": retained_draft["request_id"] if retained_draft else None,
                         },
                         bot_id=bot["id"],
                         turn_id=turn_id,
@@ -942,11 +948,17 @@ class Engine:
                         "role": "user",
                         "content": "Automatic harness notice (private, not sent to Discord): "
                         f"Your answer was NOT published. {reason}. Strike {strikes} of {strike_limit}. "
-                        "Your original answer is saved as a frozen draft. Do not regenerate, repeat or replace it. "
-                        "Call end_cycle with {} and no other calls to publish that saved answer unchanged. "
-                        "Action tools are removed; completed actions will not run again. "
+                        + (
+                            "Your original answer is saved as a frozen draft. Do not regenerate, repeat or replace it. "
+                            "Call end_cycle with {} and no other calls to publish that saved answer unchanged. "
+                            if retained_draft is not None
+                            else "Your tool narration was withheld; it is not an answer draft. "
+                            "Read the available tool results, then write your first final answer as ordinary "
+                            "assistant text together with end_cycle {}. Do not repeat the narration. "
+                        )
+                        + "Action tools are removed; completed actions will not run again. "
                         + ("You may instead choose council_silence alone. " if silence_tools else "")
-                        + f"{strike_limit - strikes} confirmation attempt(s) remain; another failed response "
+                        + f"{strike_limit - strikes} finalization attempt(s) remain; another failed response "
                         "uses another strike. At the limit this cycle stops without publishing.",
                     }
                 )
@@ -1184,8 +1196,9 @@ class Engine:
                     )
                     break
                 if cycle_response and finalizing:
-                    # The draft and its Engram belong to the failed SOURCE
-                    # response. Confirmation content cannot replace either.
+                    # Confirm an existing source draft unchanged. Without a
+                    # draft, a valid sole end_cycle follows normal publication
+                    # below, using this response's first answer and Engram.
                     calls = result.tool_calls
                     quiet = len(calls) == 1 and calls[0]["function"]["name"] == "council_silence"
                     if quiet:
@@ -1209,7 +1222,7 @@ class Engine:
                                 valid_confirmation = parse_arguments(calls[0]["function"]["arguments"]) == {}
                             except ValueError, TypeError:
                                 valid_confirmation = False
-                        if valid_confirmation:
+                        if valid_confirmation and retained_draft is not None:
                             source = retained_draft
                             await publish_final(
                                 source["content"],
@@ -1238,26 +1251,33 @@ class Engine:
                                 request_id=result.request_id,
                             )
                             break
-                        error = "Only end_cycle {} can confirm the saved draft; no action or replacement text was used"
-                        extras.append(result.message())
-                        for call in calls:
-                            value = {"ok": False, "executed": False, "error": error}
-                            self.store.emit(
-                                "tool.failed",
-                                {"name": call["function"]["name"], "call_id": call["id"], **value},
-                                bot_id=bot["id"],
-                                turn_id=turn_id,
-                                request_id=result.request_id,
-                                level="warning",
+                        if not valid_confirmation:
+                            freeze_draft(result, parsed_engram)
+                            error = (
+                                "Only end_cycle {} can confirm the saved draft; no action or replacement text was used"
+                                if retained_draft is not None
+                                else "Only end_cycle {} with your first answer (or council_silence if available) "
+                                "can finalize now; no action was executed"
                             )
-                            extras.append(
-                                {"role": "tool", "tool_call_id": call["id"], "content": dumps(value)}
+                            extras.append(result.message())
+                            for call in calls:
+                                value = {"ok": False, "executed": False, "error": error}
+                                self.store.emit(
+                                    "tool.failed",
+                                    {"name": call["function"]["name"], "call_id": call["id"], **value},
+                                    bot_id=bot["id"],
+                                    turn_id=turn_id,
+                                    request_id=result.request_id,
+                                    level="warning",
+                                )
+                                extras.append(
+                                    {"role": "tool", "tool_call_id": call["id"], "content": dumps(value)}
+                                )
+                            cycle_failure(
+                                result, error, unrecoverable=len({c["id"] for c in calls}) != len(calls)
                             )
-                        cycle_failure(
-                            result, error, unrecoverable=len({c["id"] for c in calls}) != len(calls)
-                        )
-                        round_index += 1
-                        continue
+                            round_index += 1
+                            continue
                 if cycle_response and not result.tool_calls:
                     freeze_draft(result, parsed_engram)
                     extras.append(result.message())
@@ -1438,7 +1458,7 @@ class Engine:
                 )
                 if cycle_reply_attempt:
                     if not ending:
-                        cycle_error = "Response included answer text without end_cycle"
+                        cycle_error = "Response included tool narration without end_cycle"
                     if cycle_error or batch_error:
                         freeze_draft(result, parsed_engram)
                 extras.append(result.message())
@@ -1758,6 +1778,7 @@ class Engine:
                         result,
                         "A companion action failed" if companion_failed else batch_error or cycle_error,
                         unrecoverable=companion_failed or bool(batch_error and companions),
+                        allow_first_answer=cycle_reply_attempt and not ending,
                     )
                     # Confirmation cannot hand off to a background acknowledgement
                     # or gain more work from task-extension bookkeeping.

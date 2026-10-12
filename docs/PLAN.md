@@ -28,6 +28,26 @@ by this PR protocol. See the
 [operating procedure](OPERATIONS.md#independent-pr-review-and-check-monitoring)
 and [standing agent instructions](../AGENTS.md).
 
+## Narration is not an answer draft — owner correction (2026-10-13)
+
+The owner approved item 1 of the external field report's §7 review of PR #112.
+A response containing narration plus action calls without `end_cycle` must not
+freeze that pre-result narration as the only publishable answer. Withhold the
+narration, run the actions once, count the strike and remove action tools. If
+the existing failure limit allows finalization, let the bot write its final
+answer from those results together with `end_cycle {}`. No action replay or
+new work is allowed. Engram state and answer provenance belong to that actual
+final answer, not the earlier narration.
+
+Real answer drafts remain immutable: retain text-only replies missing the
+finish call and answer text accompanying recoverable failed `end_cycle`
+batches. The existing reverse-order finish is also legal during no-draft
+finalization and permits only its single tool-free first answer. Numeric strike
+semantics stay unchanged: one stops after the first failure, while two allows
+one finalization chance. New v4 default guidance distinguishes these paths;
+owner edits and explicit older-template overrides remain preserved. No mode,
+grant, policy or other field-report item changes are part of this correction.
+
 ## Bounded first answer after end_cycle — owner decision (2026-10-13)
 
 The owner approved the reverse order when no answer has yet been produced:
