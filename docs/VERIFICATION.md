@@ -3040,3 +3040,11 @@ resent. The regression is tracked in `test_end_cycle_reverse`. The reverse,
 immutable-recovery and voice-note suites passed **55 tests in 18.58s**, with two
 existing deprecation warnings. This finding was disclosed to Luna before her
 final delta review and is not counted as an independent Luna discovery.
+
+Sol's subsequent fault injection on `bac3e74` found that a failure writing the
+new publication-link event could mask a concurrent voice-send cancellation.
+The publication boundary now preserves `CancelledError` and chains the diagnostic
+exception as its cause. The tracked test covers both normal linkage recording
+and rejected diagnostic writes, requiring the confirmed text to remain sent.
+The same reverse/recovery/voice suites passed **56 tests in 18.49s** with the two
+existing warnings. Luna was informed of this finding; it is also Sol-attributed.

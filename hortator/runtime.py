@@ -824,6 +824,7 @@ class Engine:
                     self.registry.engrams.record_miss(
                         engram, request_id, ordinary_delivery_id, final_engram["invalid"]
                     )
+                delivery_cancelled = None
                 try:
                     await self.deliver(
                         bot,
@@ -837,25 +838,34 @@ class Engine:
                         draft_deadline=document_deadline,
                         delivery_id=ordinary_delivery_id,
                     )
+                except asyncio.CancelledError as exc:
+                    delivery_cancelled = exc
+                    raise
                 finally:
-                    # Text can be confirmed before a following voice send is
-                    # cancelled. Preserve its finish provenance without replay.
-                    if self.store.one(
-                        "SELECT 1 FROM outbox WHERE id=? AND status='sent'", (ordinary_delivery_id,)
-                    ):
-                        cycle["reason"] = reason
-                        if preceding_end_request_id is not None:
-                            self.store.emit(
-                                "cycle.answer_published",
-                                {
-                                    "channel_id": channel_id,
-                                    "end_request_id": preceding_end_request_id,
-                                    "end_call_id": terminal_call_id,
-                                },
-                                bot_id=bot["id"],
-                                turn_id=turn_id,
-                                request_id=request_id,
-                            )
+                    try:
+                        # Text can be confirmed before a following voice send is
+                        # cancelled. Preserve its finish provenance without replay.
+                        if self.store.one(
+                            "SELECT 1 FROM outbox WHERE id=? AND status='sent'", (ordinary_delivery_id,)
+                        ):
+                            cycle["reason"] = reason
+                            if preceding_end_request_id is not None:
+                                self.store.emit(
+                                    "cycle.answer_published",
+                                    {
+                                        "channel_id": channel_id,
+                                        "end_request_id": preceding_end_request_id,
+                                        "end_call_id": terminal_call_id,
+                                    },
+                                    bot_id=bot["id"],
+                                    turn_id=turn_id,
+                                    request_id=request_id,
+                                )
+                    except Exception as exc:
+                        if delivery_cancelled is not None:
+                            # Diagnostic failure must not replace owner cancellation.
+                            raise delivery_cancelled from exc
+                        raise
                 status, decision = "sent", "reply" if reply_to else "speak"
                 cycle["reason"] = reason
 
