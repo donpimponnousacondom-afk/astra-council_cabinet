@@ -110,7 +110,7 @@ before that batch executes; uncertain sends are not automatically replayed.
 Confirmed progress bypasses only the personal cooldown for subsequent messages
 in that same turn; room gaps and subsequent-turn cooldowns remain. Progress does
 not acknowledge the input, commit Engrams, consume prepared attachments/panels or
-carry the final metrics/reasoning-viewer footer. Its text remains in the ordinary
+carry final metrics or the private reasoning-viewer button. Its text remains in the ordinary
 transcript and the assistant/tool exchange. Only a final answer or intentional
 silence completes the turn; cancellation after progress is still cancellation.
 Terminal silence, rejected batches and legacy tool-wrapped narration do not post
