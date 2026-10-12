@@ -43,6 +43,66 @@ def test_job_outcome_distinguishes_disposable_commands_from_runner_failures(extr
     assert console_module.job_outcome(data).startswith(expected)
 
 
+async def test_provider_failure_leads_with_received_error_not_empty_image_counters(kernel):
+    raw = "HTTP 400: " + json.dumps(
+        {
+            "error": {
+                "message": "data:"
+                + json.dumps(
+                    {
+                        "error": {
+                            "message": "Invalid request parameters",
+                            "param": "",
+                            "type": "BadRequestError",
+                        }
+                    }
+                ),
+                "type": "invalid_request_error",
+            }
+        }
+    )
+    data = {
+        "provider_id": "CPA_proxy",
+        "purpose": "research",
+        "http_status": 400,
+        "error": raw,
+        "reasoning": 'thinking.type:"adaptive"',
+        "model": "test-model",
+        "inline_image_count": 0,
+        "image_bytes": 0,
+        "image_base64_bytes": 0,
+        "request_body_bytes": 2587,
+        "body_limit_basis": "unknown",
+    }
+    with output() as console:
+        console.bind(kernel)
+        console.stream.seek(0)
+        console.stream.truncate()
+        event = kernel.store.emit("request.failed", data, level="error", bot_id="ada")
+        rendered = console.stream.getvalue()
+        assert "error=Invalid request parameters" in rendered
+        assert "rejected_field=not specified by upstream" in rendered
+        assert 'requested_reasoning=thinking.type:"adaptive"' in rendered
+        assert rendered.index("error=") < rendered.index("requested_reasoning=")
+        assert "image" not in rendered and "body_limit_basis" not in rendered
+        assert kernel.store.events(after=event["seq"] - 1)[0]["data"] == data
+        console.key("f")
+        assert '"inline_image_count": 0' in console.stream.getvalue()
+
+
+def test_provider_size_failure_retains_relevant_sizes_and_reported_field():
+    data = {
+        "http_status": 413,
+        "request_body_bytes": 52000000,
+        "image_bytes": 38000000,
+        "inline_image_count": 2,
+        "error": 'HTTP 413: {"error":{"message":"Too large","param":"messages"}}',
+    }
+    keys, values = console_module.provider_failure_summary(data)
+    assert "request_body_bytes" in keys and "image_bytes" in keys
+    assert values["rejected_field"] == "messages" and values["error"] == "Too large"
+
+
 async def test_real_ledger_events_have_time_scope_identity_and_no_http_poll_spam(kernel):
     with output() as console:
         console.bind(kernel)

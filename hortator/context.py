@@ -153,7 +153,15 @@ class ContextBuilder:
 
     def layers(self, bot, channel_id):
         layers = []
-        for key in ("identity", "tool_guidance", "image_guidance", "image_disabled", "director", "universal"):
+        for key in (
+            "identity",
+            "tool_guidance",
+            "response_protocol",
+            "image_guidance",
+            "image_disabled",
+            "director",
+            "universal",
+        ):
             if key == "image_disabled" and bot.get("allow_images", True):
                 continue
             if key == "director" and bot["role"] != "hortator":

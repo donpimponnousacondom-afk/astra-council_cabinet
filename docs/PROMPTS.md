@@ -89,6 +89,7 @@ survive compaction within their current generation turn. See [VISION](VISION.md)
 | --- | --- |
 | `identity` | Bot/Discord identity, addressing and ordinary assistant response instructions |
 | `tool_guidance` | Empty-call usage, repair, tool rounds and task prerequisites |
+| `response_protocol` | Optional public text alongside action calls; final text-only answers; overrides older saved narration wording |
 | `image_guidance`, `image_disabled` | General image guidance; additional guidance when image inputs are off |
 | `director` | Hortator-only instructions |
 | `universal`, `persona` | Existing global prompt and per-bot personality |

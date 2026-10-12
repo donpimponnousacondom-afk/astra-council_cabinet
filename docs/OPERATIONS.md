@@ -406,6 +406,20 @@ ownership, path validation, checksums and transfer limits are separate contracts
 
 ### Warning and error diagnosis
 
+Provider `request.failed` summaries lead with purpose, HTTP status and the
+received error, followed by model/transport details. Bounded JSON-in-JSON proxy
+wrappers are unpacked for display; an empty upstream `param` becomes
+`rejected_field=not specified by upstream`. Outgoing reasoning controls are
+labelled `requested_reasoning`, not presented as the failure cause or proof they
+were honored. Unrelated image/size metadata stays in expanded `f`/`P` evidence;
+HTTP 413 and local byte-bound failures retain relevant size measurements in the
+concise line. Original structured events and provider JSON remain unchanged.
+
+Completed text accompanying action calls is now posted as progress before the
+batch executes. It does not end the turn or acknowledge its input. Final text-only
+answers retain metrics, prepared files/panels and Engram handling; typing continues
+while work remains. See [the response protocol](TOOLS.md#normal-and-extended-turns).
+
 Folded warnings/errors allow up to 640 characters, prioritizing operation, channel and explanation before secondary metrics (ordinary INFO remains 320). `notice`/`note`, handler, phase, retry, site, exit and output-finish fields are visible when present. Different channels, operations and publication sites are not combined as one repeating incident. Use `f`, `T` or `P` for retained detail; console filtering and folding never change the event ledger.
 
 - **`Local total request deadline exceeded: 120 seconds`** means Hortator cancelled its own request timer, even if the provider was sending tokens. The number is the saved provider setting. `error_origin=local_deadline`, `timeout_kind=total`, `purpose`, `phase`, elapsed duration and request identity explain which attempt stopped. Change **Providers → Edit → Total request timeout (seconds)** for future requests if more time is intended. This setting applies to generation and compaction, independently of retained-summary tokens. No timeout settings are changed by the logging update, and this failure does not increment shared provider health or open its circuit.

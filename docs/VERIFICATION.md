@@ -4,6 +4,32 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Progress messages and provider-error display (2026-10-12)
+
+Base: `6fe871c`; focused checks ran with the implementation uncommitted.
+Read-only production evidence: Caterpillar's `req_258a13adda774c4cb092` at
+09:07 Madrid returned a text-only “Seared” with `finish_reason=stop`, zero calls,
+and `global_memory` available. Her later `req_657ea25558a94d46b54d` emitted the
+write, completed at 09:09:44. Loki's earlier write was executed before his final
+reply. No memory call was discarded in this incident. Another retained MiMo
+response contained both text and calls, confirming that the route can carry both;
+this does not establish why a model chose not to call a tool.
+
+Focused command: `uv run pytest -q tests/test_progress_messages.py
+tests/test_engram_integration.py tests/test_console.py tests/test_provider.py
+tests/test_prompt_layers.py`: **107 passed**, 2 dependency warnings, 31.67 s.
+Earlier draft checks had 3 new-test failures because successful memory writes
+return `saved:true`, not `ok:true`; assertions now use the actual receipt shape.
+Ruff lint/format and `git diff --check` passed. The final Engram-to-outbox regression
+and complete gate are recorded with subsequent evidence; this focused count is
+not a full-suite result. Tests use temporary SQLite and synthetic providers and
+Discord transports. Production requests were inspected only: no live calls,
+Discord test posts or configuration changes were used for diagnosis.
+
+Full checks, independent Luna/Sol reviews and deployment evidence belong in
+`audit/2026-10-12/progress-messages/`. No PR has been published and remote CI
+monitoring has not started.
+
 ## Simple filesystem implementation (2026-10-10)
 
 Commit: implementation based on `91e630e6a525ee40014615f6a2f62562abe484e8`;
