@@ -1521,8 +1521,10 @@ class Engine:
                             "ok": False,
                             "executed": False,
                             "published": False,
-                            "error": "A companion call failed, so your answer was NOT published. Fix or "
-                            "drop that call and finish again with your answer plus end_cycle.",
+                            "error": "A companion call failed, so your answer was NOT published. "
+                            "The next round is for finalization only: drop action calls and finish "
+                            "with your answer plus end_cycle. Explain any unfinished work; "
+                            "you cannot retry action tools in that round.",
                         }
                         if not finalizing:
                             finalize_after_batch = True

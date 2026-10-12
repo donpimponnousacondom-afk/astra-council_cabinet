@@ -138,7 +138,9 @@ round, including the final opportunity. The runtime enforces:
 - *Companions*: `end_cycle` may share a response only with `memory`/`global_memory`
   `write` calls and `discord_attach`. They run first; the text is published only
   if all succeed, otherwise the failures are returned and one finalization
-  attempt follows. Any read, search, fetch, shell or other action in that batch
+  attempt follows. That finalization attempt permits no action tools: finish
+  without retrying the failed companions and explain any unfinished work.
+  Any read, search, fetch, shell or other action in that batch
   rejects the whole batch without executing anything. `council_silence` cannot
   be combined with `end_cycle` but still works alone.
 - *Incomplete activation* (budget exhausted or finalization failed): the turn

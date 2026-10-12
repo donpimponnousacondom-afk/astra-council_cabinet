@@ -46,6 +46,23 @@ The mode is a per-bot setting beside `narrate` and `progress`; bots that are not
 opted in run their previous code paths unchanged, and `cycle.ended` events give
 the comparison data. This supersedes the deferral in the next section.
 
+The owner's subsequent dashboard feedback requested clearer help and correctly
+placed toggles. Keep response behavior in its own group under Capabilities,
+show only the selected mode's settings, and put longer explanations behind
+keyboard-accessible disclosures. Preserve values when switching modes. This is
+a presentation change, not a new protocol/default or automatic bot opt-in.
+
+The external auditor closed round 2 after accepting the evidence-based
+corrections and inspecting the PR #110 fixes. Their remaining wording correction
+is applied with the dashboard cleanup: failed companions cannot be retried in
+the terminal-only finalization round. The larger accepted engineering follow-ups
+remain separate work: off-loop filesystem scans/copies/commit work (F1), slash/
+panel mount facts (F3), storage-error classification (F4), provider console labels
+(P9), and stale seeded guidance. Disposable validation (S1), unsafe-entry recovery
+(F6), and audit §6 access/policy decisions still require the owner's decision
+before restrictions are changed. Closure evidence is retained in the ignored
+`audit/2026-10-12/fable-external-audit/CLOSURE.md` and its round-2 reply.
+
 ## Response protocols, first increment — owner decision (2026-10-12)
 
 Following the external audit, the owner authorized per-bot `response_protocol`
