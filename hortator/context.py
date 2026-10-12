@@ -139,10 +139,14 @@ class ContextBuilder:
             "global_prompt": settings["global_prompt"],
             "persona": bot["persona"],
             "timezone": settings["timezone"],
+            "response_protocol": bot.get("response_protocol", "narrate"),
+            "max_progress_messages_per_turn": bot.get("max_progress_messages_per_turn", 1),
         }
         return {**base, **(values or {})}
 
     def prompt(self, bot, key, values=None, *, variant="", raw=False):
+        if not variant and key == "response_protocol":
+            variant = bot.get("response_protocol", "narrate")
         if (
             not variant
             and bot.get("transcript_format") == "conversation"
@@ -220,6 +224,8 @@ class ContextBuilder:
             "round": round_index,
             "rounds_remaining": max(0, bot["max_tool_rounds"] - round_index),
             "allow_silence": bot.get("allow_silence", True),
+            "response_protocol": bot.get("response_protocol", "narrate"),
+            "max_progress_messages_per_turn": bot.get("max_progress_messages_per_turn", 1),
             "allow_images": bot.get("allow_images", True),
             "context_tokens": estimated,
             "context_window": profile["context_window"],

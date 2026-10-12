@@ -129,12 +129,21 @@ function botStatus(bot: RecordData, d: Dashboard): [string, string] {
   if (bot.runtime.error) return ["Attention", "red"];
   return ["Listening", "green"];
 }
-function RecordName({ item, edit }: { item: RecordData; edit: () => void }) {
+function RecordName({
+  item,
+  edit,
+  disabled = false,
+}: {
+  item: RecordData;
+  edit: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       className="record-name"
       aria-label={`Edit ${item.name}`}
       onClick={edit}
+      disabled={disabled}
       title={`${item.name}\n${item.id}`}
     >
       <strong>{item.name}</strong>
@@ -331,6 +340,10 @@ export default function App() {
     location.hash = next;
   };
   const edit: Edit = (kind, entity) => {
+    if (busy) {
+      notify("Wait for the current action to finish before opening an editor.");
+      return;
+    }
     if (!schemas[kind]?.properties) {
       notify(
         "Configuration schemas are not loaded. Refresh the dashboard and retry.",
@@ -880,7 +893,7 @@ function BotTable({
       render: (b) => (
         <div className="bot-identity">
           <Avatar bot={b} size="tiny" />
-          <RecordName item={b} edit={() => edit("bots", b)} />
+          <RecordName item={b} edit={() => edit("bots", b)} disabled={busy} />
           <span className="role-tag" title={b.role}>
             {b.role === "hortator" ? "H" : ""}
           </span>
@@ -1163,7 +1176,9 @@ function Catalog({
       label: "Name / ID",
       width: kind === "providers" ? "19%" : "20%",
       value: (e) => e.name,
-      render: (e) => <RecordName item={e} edit={() => edit(kind, e)} />,
+      render: (e) => (
+        <RecordName item={e} edit={() => edit(kind, e)} disabled={busy} />
+      ),
     },
   ];
   if (kind === "providers")

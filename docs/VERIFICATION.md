@@ -4,6 +4,87 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Response protocol controls, PR 1 (2026-10-12)
+
+Classification: synthetic provider/Discord fixtures, local SQLite integration,
+dashboard fixture checks and a read-only production-ledger query. No live model
+probe, Discord test post or bot opt-in was performed. Base:
+`c1b893ca46de1e584e996caa43cbdb574b13036f`; implementation checks ran uncommitted.
+
+The external-audit round-2 reply was delivered before implementation and is
+retained in ignored `audit/2026-10-12/fable-external-audit/round2/REPLY.md`, with
+supporting evidence alongside it. The owner then deferred the five `end_cycle`
+decisions and all audit §6 policy decisions. This change implements PR 1 only:
+per-bot mode/defaults, bounded best-effort progress, mode-aware editable guidance
+and passive ledger reporting. No terminal tool or policy change is included.
+
+Regression coverage exercises legacy narrate behavior, strict cap validation,
+saved prompt preservation, normal/slash/panel contexts, multiple narrated action
+batches, private notice placement, task extensions, unavailable send slots,
+definite/uncertain failures, optional-send timeouts, cancellation, superseding
+human input, revocation, deadlines, fragmented SSE and final-only Engrams.
+Reporting tests cover historical revisions, interrupted output, whitespace,
+bounded sampling, read-only WAL access and CLI execution without vault/runtime
+initialization. A focused browser fixture covers mode selection, cap zero and
+validation, prompt previews and preservation of other bot/plugin configuration.
+
+Focused backend command: `uv run --frozen pytest -q
+tests/test_progress_messages.py tests/test_progress_boundaries.py
+tests/test_engram_integration.py tests/test_response_protocol_config.py
+tests/test_response_protocol_report.py tests/test_prompt_layers.py`:
+**129 passed**, 2 existing dependency warnings, 32.01 s, exit 0.
+
+The focused browser fixture passed (1 test, 5.9 s), as did TypeScript/Vite,
+frontend formatting and Python lint/format. Its initial failure was the test
+matcher's unsupported treatment of a disabled HTML `option`; the corrected
+assertion reads the actual DOM `disabled` property. An existing intermediate
+Engram test also needed explicit progress opt-in after the default changed;
+its corrected case passed. Full-gate and independent published-PR evidence will
+be recorded on the PR after completion; focused results do not establish either.
+
+At `2026-10-12T18:41:47.755719Z`, the new read-only report inspected the previous
+24 hours: 127 completed generation requests, 70 text-only and 57 tool-only,
+zero mixed/interrupted/unreadable records, and no row-limit truncation. The two
+historical bot/model groups both had unknown mixed-output capability in this
+sample. This is retained-response evidence, not a test of provider capability or
+Discord delivery. The exact aggregate report is retained in the ignored audit
+folder; no response text or tool arguments are printed by the command.
+
+PR #109 review follow-up: Sol independently reproduced `aiohttp.ClientPayloadError`
+and `ServerDisconnectedError` escaping the optional progress boundary. The parent
+confirmed both failures before correction (2 failed), then included `ClientError`
+in that boundary while retaining cancellation/access/deadline checks. The full
+progress and boundary suites passed afterward: **41 passed**, 14.62 s. The
+original-head full local gate was already running; its source metadata must be
+read alongside this delta evidence and the corrected-head GitHub checks, rather
+than mislabelled as a full local run of the corrected head.
+
+Luna independently reproduced a second failure: uncertain progress advanced
+`last_sent`, but the final reply did not qualify for same-turn continuation and
+waited the full personal cooldown (about 600 seconds in the reproduction). The
+parent reproduced the wait before correction, then included same-turn `unknown`
+progress in the continuation check. No uncertain text is retried; room spacing
+and future-turn cadence remain unchanged. The two progress suites passed after
+both fixes: **42 passed**, 15.19 s. Each pushed head requires renewed published-PR
+review and current-head check evidence.
+
+The original full local gate completed backend **2,187 passed, 2 skipped** (opt-in
+package downloads), 2 dependency warnings, 618.98 s. Locked dependencies, lint,
+format, evidence-runner tests and frontend build passed. Browser results were
+**75 passed, 1 failed**: an existing SSE-table test saved the new value but opened
+an editor before the dashboard received its post-mutation refresh. The trace
+showed the API's false/revision-2 value while the editor retained true/revision-1.
+The gate exited 1; metadata and failure trace are archived under the ignored
+`round2/pr1-full-gate-evidence/` folder. This is not a complete passing gate.
+
+Sol implemented the narrow verification repair: disable record-title editing
+during table actions and guard alternate editor entry points until refresh
+finishes. A deterministic held-refresh regression failed before correction;
+afterward the SSE/Quick Open/existing pending-editor fixtures passed **3 tests**
+in 16.6 s, and TypeScript/Vite and formatting passed. Sol's role in this delta is
+implementation, not an independent review of his own repair; independent review
+and full-browser rerun evidence belong to the final published-head PR digest.
+
 ## GitHub PR workflow authorization (2026-10-12)
 
 Classification: owner decision, documentation and operator-helper checks; no bot

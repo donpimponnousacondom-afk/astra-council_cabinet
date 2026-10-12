@@ -42,6 +42,12 @@ Persistent warnings and failed saves must remain visible and attributable. Succe
 
 Each asynchronous save or credential completion belongs to the editor instance that started it. If the operator has switched to another record, an old completion must not close or replace the new editor. Dirty-state protection includes invalid raw JSON, pending credentials and private-note drafts, not just the last successfully parsed configuration object. Changing a note's channel or a credential's target must not silently carry unsaved content into a different destination.
 
+Record editing waits for an active table action and its post-mutation refresh to
+finish. Record-title buttons are disabled during that interval; alternate edit
+entry points report that the action is still pending. A committed API response
+alone does not mean the dashboard has received the saved revision. This prevents
+opening an editor with the pre-save value while the fresh record is still loading.
+
 New-record editors generate an editable ID suggestion with the existing kind
 prefix and eight hexadecimal characters using `crypto.getRandomValues`. They
 must also open over ordinary HTTP, where `crypto.randomUUID` may be unavailable.

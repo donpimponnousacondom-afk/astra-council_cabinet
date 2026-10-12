@@ -186,6 +186,16 @@ class Bot(Entity):
     cooldown_seconds: float = Field(default=60, ge=1, le=86400)
     evaluate_when_idle: bool = True
     allow_silence: bool = True
+    response_protocol: Literal["narrate", "progress", "end_cycle"] = "narrate"
+    max_progress_messages_per_turn: int = Field(default=1, ge=0, le=20, strict=True)
+
+    @field_validator("response_protocol")
+    @classmethod
+    def implemented_response_protocol(cls, value):
+        if value == "end_cycle":
+            raise ValueError("end_cycle is reserved and not implemented; select narrate or progress")
+        return value
+
     allow_images: bool = True
     memory_char_limit: int = Field(
         default=DEFAULT_MEMORY_CHAR_LIMIT, ge=1, le=MAX_MEMORY_CHAR_LIMIT, strict=True

@@ -28,6 +28,12 @@ function selectedTemplates(
   const override = draft.prompt_layer_overrides?.[layer.id];
   let ids = layer.templates.map((p) => p.id as string);
   if (override) ids = [override];
+  else if (layer.id === "response_protocol")
+    ids = [
+      draft.response_protocol === "progress"
+        ? "runtime-response-protocol-progress"
+        : "runtime-response-protocol-narrate",
+    ];
   else if (layer.id === "silence_policy")
     ids = [
       draft.allow_silence === false
@@ -63,6 +69,10 @@ function sourceValues(
   return {
     persona: draft.persona || "",
     global_prompt: dashboard.settings.global_prompt || "",
+    response_protocol: draft.response_protocol ?? "narrate",
+    max_progress_messages_per_turn: String(
+      draft.max_progress_messages_per_turn ?? 1,
+    ),
     ...(["runtime_facts", "dynamic_prompt"].includes(layer.id)
       ? { dynamic_prompt: draft.dynamic_prompt || "" }
       : {}),
@@ -143,6 +153,9 @@ function Inspection({
     persona: "Personality · current draft",
     dynamic_prompt: "Dynamic tail · current draft",
     global_prompt: "Shared council instructions · saved settings",
+    response_protocol: "Response protocol · current draft",
+    max_progress_messages_per_turn:
+      "Progress message attempts per turn · current draft",
   };
   return (
     <div
@@ -183,6 +196,14 @@ function Inspection({
           ),
         );
         const stored = dashboard.prompts.find((p) => p.id === template.id);
+        const content = String(template.content || "");
+        const preview =
+          layer.id === "response_protocol"
+            ? content.replace(placeholderPattern, (match, double, single) => {
+                const name = placeholderName(double, single);
+                return Object.hasOwn(sources, name) ? sources[name] : match;
+              })
+            : content;
         return (
           <section key={template.id}>
             <p className="muted small-text">
@@ -197,7 +218,7 @@ function Inspection({
             <Code
               expanded
               label={`Template text · ${template.id}`}
-              value={template.content || "(empty template)"}
+              value={preview || "(empty template)"}
             />
             {[...new Set(variables.values())]
               .filter((name) => Object.hasOwn(sources, name))

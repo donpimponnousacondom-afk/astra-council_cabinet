@@ -102,26 +102,63 @@ single generation. Existing text-only calls use the saved default. Credentials
 stay in the registry; other providers explicitly report unsupported discovery.
 See [TTS](TTS.md) for pagination, configuration and response handling.
 
-Models send their final answer as ordinary OpenAI assistant `content` (a string or ordered text parts). There is **no `council_speak` tool**. A completed response containing both ordinary text and genuine action `tool_calls` first posts the text as a progress message, then executes the calls and continues inference with their results. Tool-only responses remain valid; a text-only response ends the turn. This does not execute prose promises or manufacture a missing tool call. After reading results, the model answers normally or, when enabled, calls `council_silence`. Empty/reasoning-only completions remain failures. Length/content-filter stops withhold incomplete output and retain private provider evidence.
+Models send their final answer as ordinary OpenAI assistant `content` (a string
+or ordered text parts). There is **no `council_speak` or `end_cycle` tool**. A
+text-only response ends the turn; tool-only responses execute the batch and
+continue inference with results. Text describing an action never manufactures a
+missing tool call. The per-bot `response_protocol` controls completed responses
+that contain both ordinary text and genuine action `tool_calls`:
 
-Progress uses the same destination, reply targeting, outbox uncertainty, current
-grants and room send locks as the final answer. A send failure stops the turn
-before that batch executes; uncertain sends are not automatically replayed.
-Confirmed progress bypasses only the personal cooldown for subsequent messages
-in that same turn; room gaps and subsequent-turn cooldowns remain. Progress does
-not acknowledge the input, commit Engrams, consume prepared attachments/panels or
-carry final metrics or the private reasoning-viewer button. Its text remains in the ordinary
-transcript and the assistant/tool exchange. Only a final answer or intentional
-silence completes the turn; cancellation after progress is still cancellation.
-Terminal silence, rejected batches and legacy tool-wrapped narration do not post
-progress. Individual tool argument failures are returned for the next round to
-handle. Existing call/round limits still bound work and progress messages.
+| Mode | Text accompanying action calls | Tool work and final answer |
+| --- | --- | --- |
+| `narrate` (default) | Withheld from Discord, as before #103 | Execute the calls, read results, then produce the ordinary final answer |
+| `progress` (operator opt-in) | Best-effort progress before the batch, within the per-turn attempt cap | Execute the calls even if optional progress cannot be delivered; final answer remains separate |
+| `end_cycle` (reserved) | Not implemented; configuration saves reject this value | No terminal tool or finalization behavior is added |
 
-For slash/panel invocations, progress updates the existing interaction response;
-later progress/final text replaces it, preserving public/private visibility.
-The editable **Progress messages & final answers** prompt layer explains this
-protocol and supersedes older saved narration wording without rewriting personas
-or operator-edited templates. Engram suffixes remain private and final-only.
+Existing records without the setting use `narrate`; installing this change does
+not opt any bot into progress. The modern bot editor exposes the mode under
+**Capabilities**. `max_progress_messages_per_turn` is a strict integer **0–20**,
+default **1**, counting progress attempts across the whole turn, including task
+extensions. Failed, uncertain and unavailable attempts consume the cap. Zero
+withholds all progress text. The cap does not limit the ordinary final reply or
+add tool rounds; existing call/round/deadline limits still bound work.
+
+Withheld progress receives an automatic private user-message notice after the
+batch's tool results, at most once per reason per turn. The notice says whether
+text was withheld, delivery failed, or Discord acceptance is unknown; it does
+not claim the human saw an uncertain send. `request.progress_withheld` records
+reason, configured mode, attempts and limit. This feedback stays in bounded
+current-turn exchanges, not the public channel transcript. It does not retry
+progress or force extra inference beyond the existing turn budget.
+
+A progress send has a **five-second deadline** and skips an active personal
+cooldown, busy channel send lock or active room send gap instead of waiting for
+them. Ordinary transport failure or timeout does not prevent the associated
+tool batch. Owner cancellation, superseding input, changed configuration,
+channel scope and task deadlines still stop work through their existing paths.
+Uncertain sends are not automatically replayed. Confirmed or uncertain progress
+bypasses only the personal cooldown for subsequent messages in that same turn;
+room gaps and subsequent-turn cooldowns remain. An uncertain optional send must
+not impose a fresh full personal cooldown on its own final answer.
+
+Progress preserves destination, reply targeting and outbox uncertainty. It does
+not acknowledge input, commit Engrams, consume prepared attachments/panels, or
+carry final metrics or the private reasoning-viewer button. Confirmed progress
+text remains in the ordinary transcript and assistant/tool exchange. Only the
+final answer or intentional silence completes the turn; cancellation after
+progress is still cancellation. Terminal silence, rejected batches and legacy
+tool-wrapped narration do not post progress. Individual tool argument failures
+return for the next round to handle. Empty/reasoning-only completions remain
+failures; length/content-filter stops withhold incomplete output and retain
+private provider evidence.
+
+For slash/panel invocations, opted-in progress updates the interaction response;
+later progress/final text replaces it while preserving public/private visibility.
+The editable `response_protocol` prompt layer selects a mode-specific default;
+explicit prompt overrides and disabled layers do not change delivery controls.
+See [prompt selection](PROMPTS.md#response-protocol-guidance) and the
+[read-only observation report](OPERATIONS.md#observing-text-with-tool-calls).
+Engram suffixes remain private and final-only.
 
 The per-bot **Allow intentional silence** capability (`allow_silence`, default true) is the operator's control over that terminal decision. False omits its schema at all rounds and adds runtime guidance to finish with a text contribution. A stray disabled call, including `{}`, is refused rather than treated as a successful silent activation or executable discovery; it includes usage and all detectable argument errors. Repeated calls consume the existing round budget and eventually fail visibly, without executing other calls in the rejected batch or adding retries. Other granted actions and attachment preparation remain available. The same rule applies during extended document/workspace/web tasks. No saved persona/shared prompt is rewritten.
 
@@ -167,7 +204,14 @@ The optional `global_memory` tool mirrors channel memory's `read`, `write` (same
 The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
 
-- On 2026-10-12 the owner chose public progress text alongside real tool calls:
+- Later on 2026-10-12, after the external audit, the owner scoped the first
+  response-protocol change to a per-bot mode, bounded best-effort progress and
+  read-only observations. Existing bots default to pre-#103 `narrate`; the owner
+  will opt bots into `progress`. All five `end_cycle` design decisions remain
+  deferred; do not implement that terminal tool in this change. This supersedes
+  the unconditional rollout in the earlier same-day decision below.
+
+- Earlier on 2026-10-12 the owner chose public progress text alongside real tool calls:
   post the text, execute the calls, then continue with their results. Faster human
   feedback is the goal; additional model rounds are acceptable. This supersedes
   the earlier final-answer-only delivery of assistant content and applies to all

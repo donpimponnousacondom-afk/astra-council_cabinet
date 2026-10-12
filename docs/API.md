@@ -92,9 +92,41 @@ an already-open SSE response closes normally so EventSource can reconnect with i
 See [CONCURRENCY.md](CONCURRENCY.md#reporting-reads). Authentication and mutation
 contracts are unchanged. The frozen legacy frontend keeps its full-response API.
 
+### Response-shape ledger report
+
+The operator CLI `hortator response-protocol-report` reads the existing request
+ledger and emits aggregate JSON; it adds no HTTP endpoint or model tool. Use
+`--hours` (1–720, default 24), `--max-rows` (1–10,000, default 1,000), and optional
+`--until` (ISO 8601 with an explicit UTC offset). It selects the newest completed
+generation requests in `[since, until)` and reports `truncated` when older
+matching rows were omitted. Bot, provider, profile, model and available historical
+revision fields identify groups; current assignments are not joined.
+
+Each group counts `text_only`, `tool_only`, `text_and_tools` and `empty`, separates
+`length`/`content_filter` output from other finish reasons, and counts unreadable
+evidence. `mixed_output_evidence` is `observed`, `observed_interrupted_only`, or
+`unknown`. Unknown is not a finding of provider incompatibility; an observation
+is not a guarantee about later responses or proof of Discord delivery. The
+output contains no message bodies, tool arguments or reasoning. See the
+[command and interpretation](OPERATIONS.md#observing-text-with-tool-calls).
+
 ## Configuration and controls
 
 The configuration kinds are `providers`, `profiles`, `bots`, `prompts`, `rooms`, `plugins`, and `settings` (`global`). `id` is immutable. Optional `revision` guards concurrent edits. A patch merges top-level fields; nested JSON objects and lists are deliberately replaced, not magically combined.
+
+Bots expose `response_protocol` and `max_progress_messages_per_turn` through the
+existing configuration/control routes. Effective defaults for older records are
+`narrate` and `1`; reads expose them without opting bots into progress.
+`response_protocol` accepts `narrate` or `progress`. The schema also names
+`end_cycle` as reserved, but saves reject it until its implementation is approved;
+there is no corresponding model tool. The cap is a strict integer **0–20**:
+zero withholds all progress, and booleans, fractions and numeric strings are
+rejected. It counts attempted progress sends across one turn and its extensions;
+final-answer delivery is unchanged. For example, save
+`data: {"response_protocol": "progress", "max_progress_messages_per_turn": 1}`
+with `action: "save", kind: "bots", id: "<bot-id>"` and the current revision.
+Existing configuration edits retain their normal active-work cancellation and
+revision behavior. See [TOOLS.md](TOOLS.md#normal-and-extended-turns).
 
 `bots.allow_silence` is a boolean, default true (also exposed for older records without the field). False removes the engine's `council_silence` tool and rejects unexpected calls, while preserving ordinary replies, other plugin grants and all activation/usage limits. It is a per-bot built-in capability, not a plugin credential or provider/model parameter. Save through the usual owner control patch, for example `{"action":"save","kind":"bots","id":"dirac","data":{"allow_silence":false}}`, with the current revision when coordinating multiple editors. As with any bot edit, an affected active turn is cancelled.
 

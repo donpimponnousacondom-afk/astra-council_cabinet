@@ -493,10 +493,13 @@ were honored. Unrelated image/size metadata stays in expanded `f`/`P` evidence;
 HTTP 413 and local byte-bound failures retain relevant size measurements in the
 concise line. Original structured events and provider JSON remain unchanged.
 
-Completed text accompanying action calls is now posted as progress before the
-batch executes. It does not end the turn or acknowledge its input. Final text-only
-answers retain metrics, prepared files/panels and Engram handling; typing continues
-while work remains. See [the response protocol](TOOLS.md#normal-and-extended-turns).
+Completed text accompanying action calls is withheld by default (`narrate`).
+Opt one bot into `progress` under **Bots → Capabilities → Response protocol**;
+its separate attempt cap defaults to one, and zero withholds all progress.
+Best-effort progress precedes the batch without ending the turn or acknowledging
+input. Final text-only answers retain metrics, prepared files/panels and Engram
+handling; typing continues while work remains. See
+[the current response protocol](TOOLS.md#normal-and-extended-turns).
 
 Folded warnings/errors allow up to 640 characters, prioritizing operation, channel and explanation before secondary metrics (ordinary INFO remains 320). `notice`/`note`, handler, phase, retry, site, exit and output-finish fields are visible when present. Different channels, operations and publication sites are not combined as one repeating incident. Use `f`, `T` or `P` for retained detail; console filtering and folding never change the event ledger.
 
@@ -555,7 +558,7 @@ Priority does not bypass pause, scope, Hortator's exact-owner authorization, an 
 
 Prompts identify the model's own stable bot ID and verified Discord user ID. Each transcript message includes actual mention/reply targets and a viewer-specific audience: `you`, `other_participant`, `channel` or `unresolved_reply`. Known reply authors are resolved from the same-channel ledger even if the parent has been compacted out, with at most 600 characters of quoted preview; an uncached Discord reference gets a bounded same-channel lookup. Missing references remain explicitly unresolved. Human replies directed elsewhere stay visible as background, but do not independently trigger other bots; their regular autonomous evaluation and response to shared conversation remain available. Compaction and memory instructions retain speaker/recipient attribution. Existing mistaken private memories require operator review through the memory inspector; this fix does not rewrite them.
 
-Every active model turn starts Discord typing in that bot's actual channel/thread/owner DM, before context preparation. Typing renews every five seconds through compaction, provider queueing, generation, tool calls and delivery waits. It stops renewing when the turn sends its final answer, chooses silence, fails, is cancelled, or leaves its allowed channel scope. Each bot uses its own Discord identity. Presence requests have a five-second timeout and run separately from model work; failures produce at most one redacted `discord.typing_failed` warning per turn and do not fail the turn. Incomplete streamed fragments are withheld; completed progress messages may be posted while the turn continues. Typing means a turn is active, including waiting for a provider, and does not promise a reply. Discord's last pulse may remain visible for up to ten seconds after cancellation or silence; the API provides expiry rather than an explicit stop request. See [Discord's typing endpoint](https://docs.discord.com/developers/resources/channel#trigger-typing-indicator).
+Every active model turn starts Discord typing in that bot's actual channel/thread/owner DM, before context preparation. Typing renews every five seconds through compaction, provider queueing, generation, tool calls and delivery waits. It stops renewing when the turn sends its final answer, chooses silence, fails, is cancelled, or leaves its allowed channel scope. Each bot uses its own Discord identity. Presence requests have a five-second timeout and run separately from model work; failures produce at most one redacted `discord.typing_failed` warning per turn and do not fail the turn. Incomplete streamed fragments are withheld; opted-in, capped progress messages may be posted while the turn continues. Typing means a turn is active, including waiting for a provider, and does not promise a reply. Discord's last pulse may remain visible for up to ten seconds after cancellation or silence; the API provides expiry rather than an explicit stop request. See [Discord's typing endpoint](https://docs.discord.com/developers/resources/channel#trigger-typing-indicator).
 
 Incoming messages are deduplicated by Discord message ID, because several clients can observe the same message. Context checkpoints and last-seen cursors are scoped by bot and actual channel/thread ID. Messages arriving during generation remain pending for a later activation; claiming a context never consumes future input. An edit or deletion is recorded, and future context uses the current message state; recorded old requests are not rewritten.
 
@@ -1056,6 +1059,41 @@ Backups now include `workspaces/`, `jobs/` and `fetched_documents/`, with their 
 
 For an explicitly owner-authorized parallel linked worktree, keep dependency/build/test storage isolated and use an unused test port: `HORTATOR_TEST_PORT=18110 ./scripts/check.sh`. The browser server owns temporary `/tmp/hortator-e2e-*` data and refuses port 8000. Never point its fixture/server at production storage or reuse another session’s server.
 
+
+## Observing text with tool calls
+
+Use the existing installed launcher from a shell prompt to report retained
+responses without starting another runtime or sending provider/Discord probes:
+
+```bash
+/home/codexy/.local/bin/hortator response-protocol-report --hours 24 --max-rows 1000
+```
+
+The launcher selects the normal external data directory. For an explicit data
+location, use `hortator --data-dir /absolute/data-directory
+response-protocol-report`; the command opens the existing SQLite database
+read-only and does not initialize data or load the vault. `--until` accepts an
+ISO 8601 timestamp with an explicit offset, for example
+`--until 2026-10-12T12:00:00+02:00`, to reproduce a fixed historical window.
+`--hours` is 1–720 (default 24); `--max-rows` is 1–10,000 (default 1,000).
+
+The JSON report selects the newest completed generation requests whose start
+falls in `[since, until)`. It groups by recorded bot/provider/profile/model and
+available historical provider/profile revisions. These identify the captured
+request, not a newly looked-up bot model or an inferred proxy backend. It counts
+normalized visible text-only, tool-only, mixed text/tool and empty output;
+`length`/`content_filter` results are separate, and unreadable evidence is
+explicit. Other finish reasons are labelled non-interrupted, not guaranteed
+successful or delivered. No raw text, tool arguments or reasoning is printed.
+
+`mixed_output_evidence: observed` means at least one non-interrupted mixed
+response exists in the sample. `observed_interrupted_only` is weaker evidence;
+`unknown` means no such mixed response was observed, not that the model/provider
+cannot produce one. Progress settings, caps and failed sends do not control this
+measurement: it reads request responses, not delivery counts. `truncated: true`
+means older matches were omitted by the row cap; report window and sample bounds
+must accompany conclusions. This command does not approve `end_cycle`, enable a
+bot mode or establish live acceptance of progress delivery.
 
 ## Automated verification
 
