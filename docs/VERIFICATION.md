@@ -30,6 +30,23 @@ Full checks, independent Luna/Sol reviews and deployment evidence belong in
 `audit/2026-10-12/progress-messages/`. No PR has been published and remote CI
 monitoring has not started.
 
+The complete `HORTATOR_REQUIRE_SANDBOX=1 ./scripts/check.sh` gate passed at clean
+`dbc41293d7d3b96ae7f1a7a34725c4500553abd2`, exit 0, 776.743 seconds overall.
+Backend: **2107 passed, 2 skipped**, 2 dependency warnings, 613.24 seconds.
+The two skips are opt-in public package downloads; local sandbox tests were
+required. Locked dependencies, lint, formatting, four evidence-runner checks,
+frontend formatting/build and **75 Playwright tests** passed (browser command:
+152.796 seconds). Original result JSON, JUnit and full log are archived there.
+
+Independent initial reviews: Luna/max found one low-severity documentation
+ambiguity in the typing paragraph, now clarified to distinguish completed
+progress from incomplete stream fragments. GPT-6.1 Sol/high reported no actionable
+findings and ran 18 focused tests plus an isolated inline-reasoning-only/tool
+response probe. Both found no runtime regression. Their exact timings, checks
+and limits are in `reviews-initial.json`; usage/cost was not measured. The final
+documentation-only delta and rollout receive separate receipts; full checks do
+not constitute live model/Discord acceptance.
+
 ## Simple filesystem implementation (2026-10-10)
 
 Commit: implementation based on `91e630e6a525ee40014615f6a2f62562abe484e8`;
