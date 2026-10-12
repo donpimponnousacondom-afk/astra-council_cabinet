@@ -8,6 +8,15 @@ directory, automatically mounted in Bash, with an ON/OFF switch and visible usag
 
 The canonical project root is **`/home/codexy/codex/astra-council_cabinet`**. Inspect actual Git state and continue the user's active task branch. **Never push to main.** Begin with [AGENTS.md](AGENTS.md) for standing instructions and [operations](docs/OPERATIONS.md) for runtime/storage procedures. The [design](docs/PLAN.md) and [dated verification evidence](docs/VERIFICATION.md) record product decisions and checks.
 
+Under the owner's standing authorization, completed task changes are committed
+on the task branch, pushed and opened as a PR to main. Every open PR receives
+independent Luna/max and GPT-6.1 Sol/high reviews, current-head GitHub Actions
+monitoring and each reviewer's own PR comments. Local rollout may proceed after
+the PR opens and local checks pass while reviews and CI continue. The owner
+handles squash merging unless explicitly delegated. See the
+[PR workflow](docs/OPERATIONS.md#independent-pr-review-and-check-monitoring) and
+[2026-10-12 decision](docs/PLAN.md#github-pr-workflow--owner-decision-2026-10-12).
+
 An observable council of independent Discord applications. Each bot has its own Discord token, identity, personality, tool grants, cadence, credentials overrides, and channel-scoped memory. Reusable model profiles let you change the model without changing the bot.
 
 One Python process runs the Discord clients, scheduler, provider HTTP clients, FastAPI control service, and production React dashboard. Vite/Node is needed to build the UI or run its development server, not to run the production council.

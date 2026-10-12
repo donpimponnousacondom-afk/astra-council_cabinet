@@ -1,5 +1,30 @@
 # Implementation and acceptance plan
 
+## GitHub PR workflow — owner decision (2026-10-12)
+
+Completed task changes are automatically committed on their task branch, pushed
+and opened as a PR to main under standing owner authorization. Never commit,
+merge or push directly to main. The owner handles GitHub squash merging unless
+explicitly delegated. This supersedes earlier requirements for a fresh push/PR
+request and local-only review substitutes.
+
+Every open PR receives two independent reviewers: `gpt-6-luna` at `max` reasoning
+and `gpt-6.1-sol` at `high`. Latest verified newer successors in those model
+families are allowed; never use an older Sol. Both inspect the actual published
+PR, watch GitHub Actions and checks for its current head, and post their own PR
+comments. Preserve independent initial findings and record the reviewed SHA,
+verification limits and measured evidence. Older dated local-review records
+remain historical evidence, not proof of this workflow.
+
+The parent can assign CI repairs and confirmed finding fixes to available
+reviewers without routine owner questions, coordinating edits in the shared
+checkout. Local development rollout may proceed after the PR opens and local
+checks pass while CI and reviews continue; readiness still requires the actual
+current-head results. General sub-agent delegation is welcomed and unrestricted
+by this PR protocol. See the
+[operating procedure](OPERATIONS.md#independent-pr-review-and-check-monitoring)
+and [standing agent instructions](../AGENTS.md).
+
 ## Progress messages with action calls — owner decision (2026-10-12)
 
 Permit completed model responses containing ordinary text and real action calls
@@ -152,8 +177,9 @@ current checkout or running configuration.
   remove repeated prompt-JSON decoding from statistics/calibration, load full
   dashboard evidence on demand, and move reporting reads to a bounded worker.
   Retain one runtime and the existing model context/configuration semantics.
-  Follow the independent Luna review/CI/merge/restart workflow; broader process
-  separation remains a measured follow-up, not part of this change. See
+  Follow the current [PR workflow](OPERATIONS.md#independent-pr-review-and-check-monitoring);
+  broader process separation remains a measured follow-up, not part of this
+  change. See
   [reporting ownership](CONCURRENCY.md#reporting-reads) and
   [summary API](API.md#reporting-summaries).
 
