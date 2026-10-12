@@ -4,6 +4,56 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Immutable end_cycle recovery and strict failure budget (2026-10-12, after #111)
+
+The owner rejected answer regeneration and repeated invalid finish loops. The
+runtime now freezes the first usable failed answer with its original request,
+parsed Engram and context coverage. Confirmation exposes terminal tools only;
+`end_cycle {}` publishes that exact draft and ignores replacement prose/state.
+The configured strike limit is a hard count of failed protocol responses: two
+permits one failure and one confirmation chance, one stops on the first failure.
+An empty finish without a draft stops immediately. Independently valid permitted
+writes complete once even when that finish has no answer; a failed companion
+stops without publishing a potentially false success claim. No recovery replays
+actions or asks for regenerated text.
+
+The retired draft toggle is removed by an audited startup migration. The new
+versioned protocol prompt leaves owner overrides intact. Only exact unedited
+previous common defaults receive corrected terminal-tool/publication wording.
+The `end_cycle {}` help now describes execution, not a usage query. Updated UI
+help exposes the failure limit and immutable confirmation behavior.
+
+Pre-commit local checks on base `66bae65` plus these edits:
+
+- End-cycle, boundary, recovery, configuration and tool-feedback suites:
+  **188 passed**, two existing dependency warnings, 46.04 s.
+- Existing browser response-controls fixture: **1 passed**, 11.6 s; confirms
+  save/reopen, bounds, inactive controls and unrelated bot/plugin preservation.
+- Ruff lint/format, frontend formatting, TypeScript and isolated Vite build:
+  passed. T3 collaborative preview inspected the isolated fixture, changed the
+  mode and opened the new draft help; the retired checkbox is absent.
+
+The regressions use synthetic provider and Discord transports. They reproduce
+empty finish + global-memory write, immutable answer/Engram confirmation,
+hallucinated repeated actions, strike limits, incomplete output, delivery
+failure/uncertainty, cancellation and revoked access. Source/confirmation request
+provenance and mismatched draft hashes are checked. This is not a claim that a
+live model can produce text and tool calls together; no live provider/Discord
+probe or production setting change was made. Full GitHub checks and independent
+published-PR reviews must settle on the final head before merge.
+
+CI follow-up, 2026-10-13 Madrid: run `38313629141` on `0889b31` reported
+**2 failed, 2,253 passed, 31 skipped** (604.81 s). Both failures were the same
+stale identity-prompt phrase assertion in `test_plain_content_is_the_final_answer_without_a_reply_tool`,
+one for string content and one for ordered text parts. The mock provider raised
+before returning either fixture response. A focused local reproduction failed
+both cases. The test now checks the current ordinary-content/protocol guidance
+outside the mock handler and retains the exact once-only delivery assertions;
+the full reply-protocol file then passed **15 tests** (4.85 s), with Ruff clean.
+This is a corrected test-contract regression, not a claim of a green full suite.
+The browser suite separately passed **76 tests** (2.7 min) on runtime tree
+`0d74f89`; `0889b31` changed only the API reference. No live rollout occurred.
+
 ## Reply behavior controls and audit closure wording (2026-10-12, after #110)
 
 The owner's screenshot showed the new checkboxes/descriptions running together:
@@ -2950,3 +3000,51 @@ The expanded focused run, adding `tests/test_console.py` and `tests/test_reasoni
   not reported, so no measured price is claimed.
 - Private evidence: `audit/2026-10-08/tts-voices/`. Sources and operational limits
   are in [TTS](TTS.md). No database migration or dependency change is involved.
+
+## 2026-10-13 — bounded finish-first path (PR #112)
+
+The owner accepted valid bare `end_cycle {}` followed by exactly one tool-free
+request for the first public answer when no draft exists. Existing drafts stay
+immutable. This is a supported ordering, not a strike; even strike limit 1 or
+an exhausted work-round budget permits that single answer request. Any tool
+calls, empty/wrapped text or incomplete output in it stop without another
+request. Allowed companion writes/attachments execute once; a failed companion
+stops before the answer request. Engram provenance validates the preceding
+finish and the actual answer request separately; delivery/footers use the latter.
+No bot modes, grants or provider settings were changed.
+
+Local synthetic evidence: the initial reverse-path/core regression run passed
+69 tests. The broader run passed 256 tests and failed three stale assertions
+expecting prompt v2 rather than the new v3 (ordinary/slash/panel context cases);
+those assertions were updated without dropping the context checks. The affected
+suites were rerun after that correction (result below). Existing immutable-draft
+and once-only write tests remain in place. The response-controls browser test
+passed (1 test, 12.0 seconds), and TypeScript/Vite build, frontend formatting,
+Ruff and diff checks passed. No live provider or Discord experiment was performed.
+The already-open PR requires fresh Luna/Sol reviews and CI for the pushed head;
+previous-head checks do not establish readiness for this extension.
+
+Corrected rerun: `test_response_protocol_config`, `test_end_cycle_reverse`,
+`test_end_cycle_boundaries` and `test_end_cycle` passed **123 tests in 37.81s**,
+with the same two existing Starlette/httpx deprecation warnings. Combined with
+the unaffected passes above, all 259 selected regressions have passing evidence;
+this is focused evidence, not a local full-suite claim.
+
+Independent Sol review of published head `12f55e9` found a delivery-observability
+edge case: confirmed written text followed by cancellation of a native voice
+companion kept the outbox receipt but skipped the reverse-order linkage and
+reported `text_only`. A focused real `Engine.deliver` probe reproduced this
+with sent/unknown outbox rows. Publication provenance now finalizes from the
+confirmed text receipt even when a later companion is cancelled; nothing is
+resent. The regression is tracked in `test_end_cycle_reverse`. The reverse,
+immutable-recovery and voice-note suites passed **55 tests in 18.58s**, with two
+existing deprecation warnings. This finding was disclosed to Luna before her
+final delta review and is not counted as an independent Luna discovery.
+
+Sol's subsequent fault injection on `bac3e74` found that a failure writing the
+new publication-link event could mask a concurrent voice-send cancellation.
+The publication boundary now preserves `CancelledError` and chains the diagnostic
+exception as its cause. The tracked test covers both normal linkage recording
+and rejected diagnostic writes, requiring the confirmed text to remain sent.
+The same reverse/recovery/voice suites passed **56 tests in 18.49s** with the two
+existing warnings. Luna was informed of this finding; it is also Sol-attributed.

@@ -118,9 +118,14 @@ Bots expose `response_protocol` and `max_progress_messages_per_turn` through the
 existing configuration/control routes. Effective defaults for older records are
 `narrate` and `1`; reads expose them without opting bots into progress.
 `response_protocol` accepts `narrate`, `progress` or `end_cycle`. The
-end_cycle mode adds `narration_strikes` (strict integer **1–5**, default 2),
-`publish_retained_draft` (default true) and `notify_incomplete_cycle` (default
-false); older records expose those defaults. The cap is a strict integer **0–20**:
+end_cycle mode adds `narration_strikes` (strict integer **1–5**, default 2) and
+`notify_incomplete_cycle` (default false); older records expose those defaults.
+The strike count is the maximum failed protocol responses, including failed
+draft confirmations. Two permits one failure and one confirmation chance; one
+stops on the first failure. Draft retention is mandatory: the retired
+`publish_retained_draft` field is removed at startup with an audit event, and
+updates that still submit it are rejected with a reload/update message. The
+progress cap is a strict integer **0–20**:
 zero withholds all progress, and booleans, fractions and numeric strings are
 rejected. It counts attempted progress sends across one turn and its extensions;
 final-answer delivery is unchanged. For example, save

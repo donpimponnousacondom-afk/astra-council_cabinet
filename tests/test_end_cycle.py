@@ -122,7 +122,7 @@ async def test_text_only_is_retained_then_bare_end_cycle_publishes_it(kernel):
         assistant = [m for m in body["messages"] if m["role"] == "assistant"][-1]
         assert assistant["content"] == "Draft answer without the tool." and "tool_calls" not in assistant
         notice = harness_notices(body)[-1]
-        assert "NOT published" in notice and "Call end_cycle with {} now" in notice
+        assert "NOT published" in notice and "Call end_cycle with {}" in notice
         return mixed("", end())
 
     await install_client(kernel, handler)
@@ -137,41 +137,43 @@ async def test_text_only_is_retained_then_bare_end_cycle_publishes_it(kernel):
     assert done["rounds"] == 2
 
 
-async def test_retained_draft_is_replaced_by_new_text_with_end_cycle(kernel):
+async def test_confirmation_cannot_replace_the_frozen_answer(kernel):
     _, transport = ready(kernel, response_protocol="end_cycle")
     count = 0
 
     def handler(request):
         nonlocal count
         count += 1
-        return completion("First draft") if count == 1 else mixed("Corrected answer", end())
+        return completion("First draft") if count == 1 else mixed("Replacement must be ignored", end())
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert transport.send.await_args.args[2] == "Corrected answer"
-    assert cycle(kernel)["reason"] == "end_cycle"
+    assert count == 2
+    assert transport.send.await_args.args[2] == "First draft"
+    assert cycle(kernel)["reason"] == "draft_published"
+    assert events(kernel, "tool.completed")[-1]["ignored_confirmation_characters"] > 0
 
 
-async def test_disabled_retained_draft_rejects_bare_end_cycle_and_ends_incomplete(kernel):
-    _, transport = ready(kernel, response_protocol="end_cycle", publish_retained_draft=False)
+@pytest.mark.parametrize("limit", [1, 2, 3, 5])
+async def test_strikes_bound_all_failed_confirmations(kernel, limit):
+    _, transport = ready(kernel, response_protocol="end_cycle", narration_strikes=limit)
     count = 0
 
     def handler(request):
         nonlocal count
         count += 1
-        if count == 1:
-            return completion("Draft that needs the tool")
-        assert "a bare end_cycle will not publish" in harness_notices(json.loads(request.content))[-1]
-        return mixed("", end())
+        body = json.loads(request.content)
+        if count > 1:
+            assert sorted(tool_names(body)) == ["council_silence", "end_cycle"]
+            assert "Do not regenerate, repeat or replace" in harness_notices(body)[-1]
+        return completion("Original" if count == 1 else "Must not replace the original")
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert count == 2
+    assert count == limit
     transport.send.assert_not_awaited()
-    turn = kernel.store.one("SELECT status,error FROM turns")
-    assert turn["status"] == "failed" and "without end_cycle" in turn["error"]
-    rejected = events(kernel, "tool.failed")
-    assert rejected and "requires your answer as ordinary assistant text" in rejected[-1]["error"]
+    assert cycle(kernel)["strikes"] == limit
+    assert len(events(kernel, "cycle.draft_retained")) == 1
     assert cycle(kernel)["reason"] == "incomplete"
 
 
@@ -189,26 +191,33 @@ async def test_text_again_during_finalization_ends_without_answer(kernel):
     assert count == 2
     transport.send.assert_not_awaited()
     turn = kernel.store.one("SELECT status,error FROM turns")
-    assert turn["status"] == "failed" and "Finalization attempt returned text" in turn["error"]
+    assert turn["status"] == "failed" and "Only end_cycle {} can confirm" in turn["error"]
     assert cycle(kernel)["published"] is False
 
 
-async def test_end_cycle_without_text_or_draft_is_rejected_then_retried(kernel):
-    _, transport = ready(kernel, response_protocol="end_cycle")
+@pytest.mark.parametrize("write", [False, True])
+async def test_empty_finish_preserves_allowed_write_once_without_regeneration(kernel, write):
+    _, transport = ready(kernel, response_protocol="end_cycle", enabled_plugins=["memory"])
     count = 0
 
     def handler(request):
         nonlocal count
         count += 1
-        if count == 1:
+        assert count <= 2, "The observed empty-finish loop must never recur"
+        if count == 2:
+            assert tool_names(json.loads(request.content)) == []
             return mixed("", end())
-        last = responses(json.loads(request.content))[-1]
-        assert not last["ok"] and "requires your answer" in last["error"]
-        return mixed("Now with text.", end())
+        return mixed("", *([write_call()] if write else []), end())
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert count == 2 and transport.send.await_args.args[2] == "Now with text."
+    assert count == 2
+    assert len(kernel.store.rows("SELECT * FROM memories")) == int(write)
+    transport.send.assert_not_awaited()
+    assert cycle(kernel)["strikes"] == 1 and cycle(kernel)["reason"] == "incomplete"
+    assert cycle(kernel)["actions_executed"] == int(write)
+    assert cycle(kernel)["draft_retained"] is False
+    assert "No answer draft exists" in kernel.store.one("SELECT error FROM turns")["error"]
 
 
 async def test_end_cycle_rejects_arguments(kernel):
@@ -227,7 +236,7 @@ async def test_end_cycle_rejects_arguments(kernel):
     await install_client(kernel, handler)
     await run(kernel)
     assert transport.send.await_count == 1
-    assert transport.send.await_args.args[2] == "Answer outside the tool."
+    assert transport.send.await_args.args[2] == "Answer inside the tool?"
 
 
 async def test_write_companion_runs_before_publication(kernel):
@@ -246,31 +255,27 @@ async def test_write_companion_runs_before_publication(kernel):
     assert done["actions_executed"] == 1 and done["reason"] == "end_cycle"
 
 
-async def test_failed_companion_withholds_text_and_allows_one_finalization(kernel):
+async def test_failed_companion_stops_without_rewriting_or_repeating_successes(kernel):
     _, transport = ready(kernel, response_protocol="end_cycle", enabled_plugins=["memory"])
     count = 0
 
     def handler(request):
         nonlocal count
         count += 1
-        body = json.loads(request.content)
-        if count == 1:
-            return mixed("Saved.", write_call(value=42), end())
-        results = responses(body)
-        assert not results[0]["ok"] and not results[1]["ok"]
-        assert "NOT published" in results[1]["error"]
-        assert "drop action calls" in results[1]["error"]
-        assert "cannot retry action tools" in results[1]["error"]
-        assert sorted(tool_names(body)) == ["council_silence", "end_cycle"]
-        return mixed("The write failed; nothing was saved.", end())
+        assert count == 1
+        return mixed(
+            "Both saved.", write_call(call_id="good"), write_call(call_id="bad", key="other", value=42), end()
+        )
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert count == 2
-    assert not kernel.store.rows("SELECT * FROM memories")
-    assert transport.send.await_count == 1
-    assert transport.send.await_args.args[2] == "The write failed; nothing was saved."
-    assert cycle(kernel)["finalization"] is True
+    assert count == 1
+    assert kernel.store.rows("SELECT key,value FROM memories") == [{"key": "topic", "value": "Saved fact"}]
+    transport.send.assert_not_awaited()
+    assert cycle(kernel)["actions_executed"] == 1
+    assert cycle(kernel)["reason"] == "incomplete" and cycle(kernel)["draft_retained"]
+    failed = events(kernel, "tool.failed")
+    assert any(e.get("call_id") == "bad" for e in failed)
 
 
 async def test_read_companion_rejects_the_whole_batch(kernel):
@@ -290,29 +295,27 @@ async def test_read_companion_rejects_the_whole_batch(kernel):
     await install_client(kernel, handler)
     await run(kernel)
     assert not kernel.store.rows("SELECT * FROM memories")
-    assert count >= 2 and transport.send.await_count == 0
+    assert count == 1 and transport.send.await_count == 0
 
 
-async def test_silence_cannot_be_combined_but_still_works_alone(kernel):
+async def test_silence_still_works_during_draft_confirmation(kernel):
     _, transport = ready(kernel, response_protocol="end_cycle")
     count = 0
 
     def handler(request):
         nonlocal count
         count += 1
-        if count == 1:
-            return mixed("", end(), tool("council_silence", {"label": "Listening"}, call_id="quiet"))
-        assert "cannot be combined" in responses(json.loads(request.content))[-1]["error"]
-        return completion(silence=True)
+        return completion("Draft") if count == 1 else completion(silence=True)
 
     await install_client(kernel, handler)
     await run(kernel)
+    assert count == 2
     transport.send.assert_not_awaited()
     assert kernel.store.one("SELECT status,decision FROM turns") == {"status": "silent", "decision": "listen"}
     assert cycle(kernel)["reason"] == "silence"
 
 
-async def test_narrated_actions_strike_twice_then_only_end_cycle_remains(kernel):
+async def test_narrated_write_is_saved_once_then_only_its_draft_can_be_confirmed(kernel):
     _, transport = ready(kernel, response_protocol="end_cycle", enabled_plugins=["memory"], max_tool_rounds=6)
     seen = []
 
@@ -320,56 +323,39 @@ async def test_narrated_actions_strike_twice_then_only_end_cycle_remains(kernel)
         body = json.loads(request.content)
         seen.append(body)
         if len(seen) == 1:
-            return mixed("I will save this now!", write_call(call_id="w1"))
-        if len(seen) == 2:
-            notice = harness_notices(body)[-1]
-            assert "strike 1 of 2" in notice and "memory" in tool_names(body)
-            assert responses(body)[-1]["saved"] is True
-            return mixed("Let me also save that, hold on!", write_call(call_id="w2", key="other"))
-        if len(seen) == 3:
-            notice = harness_notices(body)[-1]
-            assert "strike 2 of 2" in notice and "only end_cycle" in notice
-            assert sorted(tool_names(body)) == ["council_silence", "end_cycle"]
-            return mixed("Both notes are saved.", end())
-        raise AssertionError("no further rounds expected")
+            return mixed("Saved fact.", write_call())
+        assert len(seen) == 2
+        assert sorted(tool_names(body)) == ["council_silence", "end_cycle"]
+        assert responses(body)[-1]["saved"] is True
+        assert "Strike 1 of 2" in harness_notices(body)[-1]
+        assert "Action tools are removed" in harness_notices(body)[-1]
+        return mixed("", end())
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert len(seen) == 3
-    assert len(kernel.store.rows("SELECT * FROM memories")) == 2
-    assert transport.send.await_count == 1 and transport.send.await_args.args[2] == "Both notes are saved."
-    withheld = events(kernel, "request.progress_withheld")
-    assert [item["reason"] for item in withheld] == ["end_cycle_strike", "end_cycle_finalizing"]
-    assert withheld[-1]["strikes"] == 2
-    assert events(kernel, "cycle.finalizing")[0]["strikes"] == 2
+    assert len(seen) == 2
+    assert len(kernel.store.rows("SELECT * FROM memories")) == 1
+    assert transport.send.await_count == 1 and transport.send.await_args.args[2] == "Saved fact."
     done = cycle(kernel)
-    assert done["strikes"] == 2 and done["actions_executed"] == 2 and done["finalization"] is True
+    assert done["strikes"] == 1 and done["actions_executed"] == 1 and done["finalization"]
+    assert done["reason"] == "draft_published"
 
 
-async def test_single_strike_setting_finalizes_immediately(kernel):
+async def test_single_strike_is_a_hard_failure_limit(kernel):
     _, transport = ready(
         kernel, response_protocol="end_cycle", enabled_plugins=["memory"], narration_strikes=1
     )
-    count = 0
-
-    def handler(request):
-        nonlocal count
-        count += 1
-        body = json.loads(request.content)
-        if count == 1:
-            return mixed("Saving!", write_call())
-        assert "strike 1 of 1" in harness_notices(body)[-1]
-        assert sorted(tool_names(body)) == ["council_silence", "end_cycle"]
-        return mixed("Saved.", end())
-
-    await install_client(kernel, handler)
+    await install_client(kernel, lambda _: mixed("Saving!", write_call()))
     await run(kernel)
-    assert count == 2 and transport.send.await_count == 1
+    assert kernel.store.one("SELECT count(*) AS n FROM requests")["n"] == 1
+    assert len(kernel.store.rows("SELECT * FROM memories")) == 1
+    assert cycle(kernel)["strikes"] == 1 and cycle(kernel)["reason"] == "incomplete"
+    transport.send.assert_not_awaited()
 
 
 async def test_actions_during_finalization_are_refused_and_cycle_ends_incomplete(kernel):
     _, transport = ready(
-        kernel, response_protocol="end_cycle", enabled_plugins=["memory"], narration_strikes=1
+        kernel, response_protocol="end_cycle", enabled_plugins=["memory"], narration_strikes=2
     )
     count = 0
 
@@ -386,9 +372,9 @@ async def test_actions_during_finalization_are_refused_and_cycle_ends_incomplete
     assert len(kernel.store.rows("SELECT * FROM memories")) == 1
     transport.send.assert_not_awaited()
     turn = kernel.store.one("SELECT status,error FROM turns")
-    assert turn["status"] == "failed" and "without end_cycle" in turn["error"]
+    assert turn["status"] == "failed" and "confirm the saved draft" in turn["error"]
     refused = [item for item in events(kernel, "tool.failed") if item.get("call_id") == "w2"]
-    assert refused and "finish with your answer plus end_cycle" in refused[0]["error"]
+    assert refused and "no action or replacement text was used" in refused[0]["error"]
 
 
 async def test_tool_only_rounds_do_not_strike(kernel):

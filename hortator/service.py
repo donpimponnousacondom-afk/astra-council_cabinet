@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
 from urllib.parse import urlencode
 
@@ -23,6 +24,35 @@ class Service:
 
     def version(self):
         return self.vault.redact(self._version)
+
+    def migrate_response_protocol(self):
+        """Retire only the draft switch before any bot turns can start."""
+        legacy = [bot for bot in self.store.list("bots") if "publish_retained_draft" in bot]
+        if not legacy:
+            return
+        # Configuration and its audit receipt must survive or roll back together.
+        self.store.execute("BEGIN IMMEDIATE")
+        try:
+            for bot in legacy:
+                old_value = bot.pop("publish_retained_draft")
+                bot.pop("revision", None)
+                saved = self.store.put("bots", bot)
+                self.store.emit(
+                    "config.migrated",
+                    {
+                        "resource": "bots",
+                        "id": saved["id"],
+                        "field": "publish_retained_draft",
+                        "previous_value": old_value,
+                        "revision": saved["revision"],
+                        "reason": "end_cycle retains the original draft for confirmation; regeneration is disabled",
+                    },
+                    bot_id=saved["id"],
+                )
+            self.store.execute("COMMIT")
+        except BaseException:
+            self.store.execute("ROLLBACK")
+            raise
 
     def seed(self):
         if self.store.get("settings", "global"):
@@ -99,12 +129,31 @@ class Service:
         )
 
     def seed_prompt_templates(self):
-        from .prompt_templates import DEFAULT_PROMPTS
+        from .prompt_templates import (
+            DEFAULT_PROMPTS,
+            PREVIOUS_DEFAULT_CONTENT_SHA256,
+            PREVIOUS_DRAFT_ONLY_CONTENT_SHA256,
+        )
 
         for prompt in DEFAULT_PROMPTS:
-            if not self.store.get("prompts", prompt["id"]):
+            existing = self.store.get("prompts", prompt["id"])
+            if not existing:
                 value = {k: v for k, v in prompt.items() if k != "condition"}
                 self.store.put("prompts", SCHEMAS["prompts"].model_validate(value).model_dump())
+            elif hashlib.sha256(existing["content"].encode()).hexdigest() in (
+                PREVIOUS_DEFAULT_CONTENT_SHA256.get(prompt["id"]),
+                PREVIOUS_DRAFT_ONLY_CONTENT_SHA256.get(prompt["id"]),
+            ):
+                existing.pop("revision", None)
+                self.store.put("prompts", {**existing, "content": prompt["content"]})
+                self.store.emit(
+                    "config.migrated",
+                    {
+                        "resource": "prompts",
+                        "id": prompt["id"],
+                        "reason": "updated unedited tool/publication guidance",
+                    },
+                )
 
     def seed_plugins(self):
         for name, spec in self.registry.specs.items():
@@ -154,7 +203,6 @@ class Service:
                 "response_protocol",
                 "max_progress_messages_per_turn",
                 "narration_strikes",
-                "publish_retained_draft",
                 "notify_incomplete_cycle",
             ):
                 value.setdefault(field, SCHEMAS["bots"].model_fields[field].default)
@@ -404,6 +452,11 @@ class Service:
                 raise ControlError("Configuration changed in another session. Reload before saving.", 409)
             if "id" in data and data["id"] != entity_id:
                 raise ControlError("Identifiers cannot be changed; clone instead")
+            if kind == "bots" and "publish_retained_draft" in data:
+                raise ControlError(
+                    "publish_retained_draft is retired: draft retention is mandatory in end_cycle. "
+                    "Reload the dashboard and save again without this field."
+                )
             raw = {**(old or {}), **data, "id": entity_id}
             raw.pop("revision", None)
             try:

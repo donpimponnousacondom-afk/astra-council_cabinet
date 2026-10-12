@@ -1,11 +1,14 @@
 """Response protocol defaults, end_cycle settings and editable mode-aware guidance."""
 
+import hashlib
+import json
+
 import pytest
 from pydantic import ValidationError
 
 from conftest import configured
 from hortator.models import Bot, ControlError
-from hortator.prompt_templates import catalog
+from hortator.prompt_templates import DEFAULT_PROMPTS, PREVIOUS_DEFAULT_CONTENT_SHA256, catalog
 from hortator.slash_commands import SlashContexts
 
 CHANNEL = "222222222222222222"
@@ -17,7 +20,7 @@ def test_response_protocol_defaults_and_end_cycle_settings():
     assert bot.response_protocol == "narrate"
     assert bot.max_progress_messages_per_turn == 1
     assert bot.narration_strikes == 2
-    assert bot.publish_retained_draft is True
+    assert "publish_retained_draft" not in bot.model_dump()
     assert bot.notify_incomplete_cycle is False
     assert Bot.model_json_schema()["properties"]["response_protocol"]["enum"] == [
         "narrate",
@@ -64,12 +67,11 @@ async def test_end_cycle_settings_save_and_unknown_protocol_is_rejected(kernel, 
         {
             "response_protocol": "end_cycle",
             "narration_strikes": 1,
-            "publish_retained_draft": False,
             "notify_incomplete_cycle": True,
         },
     )
     assert updated["response_protocol"] == "end_cycle" and updated["narration_strikes"] == 1
-    assert updated["publish_retained_draft"] is False and updated["notify_incomplete_cycle"] is True
+    assert "publish_retained_draft" not in updated and updated["notify_incomplete_cycle"] is True
     updated = await kernel.service.save(
         owner, "bots", old["id"], {"response_protocol": "progress", "max_progress_messages_per_turn": 0}
     )
@@ -82,7 +84,6 @@ async def test_legacy_public_defaults_do_not_mutate_saved_bot(kernel):
         "response_protocol",
         "max_progress_messages_per_turn",
         "narration_strikes",
-        "publish_retained_draft",
         "notify_incomplete_cycle",
     ):
         legacy.pop(field, None)
@@ -91,7 +92,7 @@ async def test_legacy_public_defaults_do_not_mutate_saved_bot(kernel):
     assert public["response_protocol"] == "narrate"
     assert public["max_progress_messages_per_turn"] == 1
     assert public["narration_strikes"] == 2
-    assert public["publish_retained_draft"] is True
+    assert "publish_retained_draft" not in public
     assert public["notify_incomplete_cycle"] is False
     assert kernel.store.get("bots", saved["id"]) == saved
 
@@ -110,14 +111,16 @@ async def test_mode_template_runtime_facts_and_inspection_match_all_contexts(ker
     profile = kernel.store.get("profiles", "balanced")
     messages, meta = await contexts.assemble(bot, profile, CHANNEL, [], "")
     selected = next(item for item in meta["prompt_layers"] if item["id"] == "response_protocol")
-    assert selected["template_id"] == "runtime-response-protocol-" + protocol
+    expected_template = "runtime-response-protocol-" + protocol + ("-v3" if protocol == "end_cycle" else "")
+    assert selected["template_id"] == expected_template
     content = "\n".join(message["content"] for message in messages)
     assert f"Current response protocol: {protocol}." in content
     assert '"response_protocol":"' + protocol + '"' in content
     assert '"max_progress_messages_per_turn":2' in content
     assert '"narration_strikes":3' in content
     if protocol == "end_cycle":
-        assert "After 3 strikes" in content and "currently True" in content
+        assert "3 failed responses end this cycle" in content
+        assert "do not repeat, regenerate or replace the answer" in content
     assert "{max_progress_messages_per_turn}" not in content
     if protocol == "progress":
         assert "At most 2 progress messages" in content
@@ -148,7 +151,7 @@ async def test_existing_bot_and_stored_generic_prompt_default_to_new_narrate_gui
     assert next(item for item in layers if item["id"] == "identity")["content"] == "OWNER_IDENTITY_EDIT"
 
 
-@pytest.mark.parametrize("protocol", ["narrate", "progress"])
+@pytest.mark.parametrize("protocol", ["narrate", "progress", "end_cycle"])
 async def test_explicit_protocol_override_and_disabled_layer_are_preserved(kernel, owner, protocol):
     bot = configured(kernel, response_protocol=protocol, max_progress_messages_per_turn=3)
     custom = await kernel.service.save(
@@ -178,3 +181,110 @@ async def test_explicit_protocol_override_and_disabled_layer_are_preserved(kerne
     )
     assert "response_protocol" not in {item["id"] for item in kernel.engine.contexts.layers(bot, CHANNEL)}
     assert bot["response_protocol"] == protocol and bot["max_progress_messages_per_turn"] == 3
+
+
+@pytest.mark.parametrize("old_value", [True, False])
+@pytest.mark.parametrize("protocol", ["narrate", "progress", "end_cycle"])
+async def test_draft_switch_migration_changes_only_retired_field_once(kernel, owner, old_value, protocol):
+    old = configured(kernel, response_protocol=protocol, publish_retained_draft=old_value)
+    untouched = kernel.store.get("bots", "hortator")
+    kernel.service.migrate_response_protocol()
+    migrated = kernel.store.get("bots", old["id"])
+    expected = {key: value for key, value in old.items() if key != "publish_retained_draft"}
+    expected["revision"] += 1
+    assert migrated == expected
+    assert kernel.store.get("bots", "hortator") == untouched
+    events = kernel.store.rows(
+        "SELECT data FROM events WHERE kind='config.migrated' AND bot_id=?", (old["id"],)
+    )
+    assert len(events) == 1
+    assert json.loads(events[0]["data"])["previous_value"] is old_value
+    kernel.service.migrate_response_protocol()
+    assert kernel.store.get("bots", old["id"]) == migrated
+    assert (
+        len(kernel.store.rows("SELECT 1 FROM events WHERE kind='config.migrated' AND bot_id=?", (old["id"],)))
+        == 1
+    )
+    # Partial saves after migration must validate, including bots outside end_cycle.
+    saved = await kernel.service.save(owner, "bots", old["id"], {"name": "Still configurable"})
+    assert saved["response_protocol"] == protocol
+    assert "publish_retained_draft" not in saved
+
+
+@pytest.mark.parametrize("value", [True, False])
+async def test_retired_draft_switch_is_rejected_explicitly(kernel, owner, value):
+    old = configured(kernel)
+    with pytest.raises(ControlError, match="draft retention is mandatory"):
+        await kernel.service.save(owner, "bots", old["id"], {"publish_retained_draft": value})
+    assert kernel.store.get("bots", old["id"]) == old
+    with pytest.raises(ValidationError, match="publish_retained_draft"):
+        Bot.model_validate({**BOT, "publish_retained_draft": value})
+
+
+async def test_new_default_does_not_overwrite_legacy_protocol_or_custom_guidance(kernel):
+    bot = configured(kernel, response_protocol="end_cycle")
+    legacy = kernel.store.get("prompts", "runtime-response-protocol-end_cycle")
+    saved = kernel.store.put("prompts", {**legacy, "content": "OWNER LEGACY TEXT"})
+    guidance = kernel.store.get("prompts", "runtime-tool-guidance")
+    saved_guidance = kernel.store.put("prompts", {**guidance, "content": "OWNER TOOL GUIDANCE"})
+    kernel.service.seed_prompt_templates()
+    selected = kernel.engine.contexts.prompt(bot, "response_protocol")
+    assert selected["template_id"] == "runtime-response-protocol-end_cycle-v3"
+    assert "never a usage query" in selected["content"]
+    assert kernel.store.get("prompts", legacy["id"]) == saved
+    assert kernel.store.get("prompts", guidance["id"]) == saved_guidance
+    overridden = {**bot, "prompt_layer_overrides": {"response_protocol": legacy["id"]}}
+    assert kernel.engine.contexts.prompt(overridden, "response_protocol")["content"] == "OWNER LEGACY TEXT"
+
+
+async def test_exact_previous_seed_guidance_is_upgraded_once(kernel):
+    replacements = {
+        "runtime-identity": (
+            "Write your answer as ordinary assistant content and follow the current response protocol to publish it.",
+            "To answer, write your contribution directly as ordinary assistant content. The runtime posts it to Discord.",
+        ),
+        "runtime-tool-guidance": (
+            "Tool discovery and repair: call an available action tool with {} to receive its usage. end_cycle is NOT a discovery tool: {} closes tool work, then publishes the current or saved answer; if no answer exists, it permits exactly one tool-free first-answer request. Action-tool usage includes",
+            "Tool discovery and repair: call any available tool with {} to receive its usage,",
+        ),
+    }
+    for prompt_id, (new, old) in replacements.items():
+        current = kernel.store.get("prompts", prompt_id)
+        previous = current["content"].replace(new, old)
+        if prompt_id == "runtime-tool-guidance":
+            previous = previous.replace(
+                "Read the remaining budget and finish\naccording to the current response protocol (or use the silence tool only when available).",
+                "Read the remaining budget and finish\nwith an ordinary assistant text answer (or the silence tool only when available).",
+            )
+        assert hashlib.sha256(previous.encode()).hexdigest() == PREVIOUS_DEFAULT_CONTENT_SHA256[prompt_id]
+        before = kernel.store.put("prompts", {**current, "content": previous})
+        kernel.service.seed_prompt_templates()
+        after = kernel.store.get("prompts", prompt_id)
+        assert after["content"] == next(p["content"] for p in DEFAULT_PROMPTS if p["id"] == prompt_id)
+        assert after["revision"] == before["revision"] + 1
+        kernel.service.seed_prompt_templates()
+        assert kernel.store.get("prompts", prompt_id) == after
+
+
+async def test_draft_switch_migrates_during_kernel_construction(tmp_path):
+    from hortator.app import Kernel
+
+    original = Kernel(tmp_path / "restart")
+    async with original.lifetime():
+        bot = original.store.get("bots", "ada")
+        before = original.store.put("bots", {**bot, "publish_retained_draft": False})
+    restarted = Kernel(tmp_path / "restart")
+    async with restarted.lifetime():
+        expected = {key: value for key, value in before.items() if key != "publish_retained_draft"}
+        expected["revision"] += 1
+        assert restarted.store.get("bots", "ada") == expected
+        assert (
+            len(restarted.store.rows("SELECT 1 FROM events WHERE kind='config.migrated' AND bot_id='ada'"))
+            == 1
+        )
+
+
+async def test_retired_prompt_placeholder_is_mandatory_constant(kernel):
+    bot = configured(kernel, publish_retained_draft=False)
+    values = kernel.engine.contexts.prompt_values(bot)
+    assert values["publish_retained_draft"] is True

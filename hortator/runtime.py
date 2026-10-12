@@ -739,28 +739,37 @@ class Engine:
             progress_limit = bot.get("max_progress_messages_per_turn", 1)
             progress_attempts = 0
             progress_notices = set()
-            # end_cycle mode: strikes count narrated action batches, finalization
-            # leaves only terminal tools for one attempt, and a text-only response
-            # is retained privately for that single attempt.
+            # A failed publication freezes its existing answer. Recovery can
+            # only confirm that draft; it never resumes work or replaces text.
             strike_limit = bot.get("narration_strikes", 2)
             finalizing = False
-            finalize_after_batch = False
             retained_draft = None
+            answer_pending = None
 
             async def publish_final(
-                content, final_engram, request_id, finish_reason, reason, *, terminal_call_id=None
+                content,
+                final_engram,
+                request_id,
+                finish_reason,
+                reason,
+                *,
+                terminal_call_id=None,
+                confirmation_request_id=None,
+                preceding_end_request_id=None,
+                source_meta=None,
             ):
                 nonlocal engram_candidate, ordinary_delivery_id, status, decision
+                publication_meta = source_meta if source_meta is not None else meta
                 complete_final = finish_reason == "stop" or (
                     terminal_call_id is not None and finish_reason == "tool_calls"
                 )
                 if final_engram and final_engram.get("state") is not None and complete_final:
                     # Coverage describes only the actual represented
                     # transcript/summary, never the room's current tail.
-                    represented = set(meta["message_sequences"])
+                    represented = set(publication_meta["message_sequences"])
                     full_rows = all(row["seq"] in represented for row in rows)
                     stored_context = self.store.context(bot["id"], channel_id)
-                    summary_included = not summary or meta["summary"] == summary
+                    summary_included = not summary or publication_meta["summary"] == summary
                     if full_rows and summary_included:
                         covered = max(
                             engram["covered_through"],
@@ -775,6 +784,8 @@ class Engine:
                             summary_checkpoint=stored_context["checkpoint"],
                             summary_hash=hashlib.sha256(stored_context["summary"].encode()).hexdigest(),
                             terminal_call_id=terminal_call_id,
+                            confirmation_request_id=confirmation_request_id,
+                            preceding_end_request_id=preceding_end_request_id,
                         )
                     else:
                         self.store.emit(
@@ -813,20 +824,132 @@ class Engine:
                     self.registry.engrams.record_miss(
                         engram, request_id, ordinary_delivery_id, final_engram["invalid"]
                     )
-                await self.deliver(
-                    bot,
-                    profile,
-                    provider,
-                    context,
-                    content,
-                    reply_to,
-                    artifact_ids,
-                    request_id=request_id,
-                    draft_deadline=document_deadline,
-                    delivery_id=ordinary_delivery_id,
-                )
+                delivery_cancelled = None
+                try:
+                    await self.deliver(
+                        bot,
+                        profile,
+                        provider,
+                        context,
+                        content,
+                        reply_to,
+                        artifact_ids,
+                        request_id=request_id,
+                        draft_deadline=document_deadline,
+                        delivery_id=ordinary_delivery_id,
+                    )
+                except asyncio.CancelledError as exc:
+                    delivery_cancelled = exc
+                    raise
+                finally:
+                    try:
+                        # Text can be confirmed before a following voice send is
+                        # cancelled. Preserve its finish provenance without replay.
+                        if self.store.one(
+                            "SELECT 1 FROM outbox WHERE id=? AND status='sent'", (ordinary_delivery_id,)
+                        ):
+                            cycle["reason"] = reason
+                            if preceding_end_request_id is not None:
+                                self.store.emit(
+                                    "cycle.answer_published",
+                                    {
+                                        "channel_id": channel_id,
+                                        "end_request_id": preceding_end_request_id,
+                                        "end_call_id": terminal_call_id,
+                                    },
+                                    bot_id=bot["id"],
+                                    turn_id=turn_id,
+                                    request_id=request_id,
+                                )
+                    except Exception as exc:
+                        if delivery_cancelled is not None:
+                            # Diagnostic failure must not replace owner cancellation.
+                            raise delivery_cancelled from exc
+                        raise
                 status, decision = "sent", "reply" if reply_to else "speak"
                 cycle["reason"] = reason
+
+            def freeze_draft(result, parsed):
+                nonlocal retained_draft
+                if retained_draft is not None or not result.content.strip() or wrapped_reply(result.content):
+                    return
+                retained_draft = {
+                    "content": result.content,
+                    "parsed_engram": parsed,
+                    "request_id": result.request_id,
+                    "finish_reason": result.finish_reason,
+                    "meta": meta,
+                }
+                cycle["draft_retained"] = True
+                self.store.emit(
+                    "cycle.draft_retained",
+                    {
+                        "channel_id": channel_id,
+                        "characters": len(result.content),
+                        "content_sha256": hashlib.sha256(result.content.encode()).hexdigest(),
+                    },
+                    bot_id=bot["id"],
+                    turn_id=turn_id,
+                    request_id=result.request_id,
+                )
+
+            def cycle_failure(result, reason, *, unrecoverable=False):
+                nonlocal strikes, finalizing, round_limit
+                strikes += 1
+                self.store.emit(
+                    "cycle.protocol_failed",
+                    {
+                        "channel_id": channel_id,
+                        "reason": reason,
+                        "strikes": strikes,
+                        "strike_limit": strike_limit,
+                        "draft_request_id": retained_draft["request_id"] if retained_draft else None,
+                    },
+                    bot_id=bot["id"],
+                    turn_id=turn_id,
+                    request_id=result.request_id,
+                    level="warning",
+                )
+                if unrecoverable or retained_draft is None or strikes >= strike_limit:
+                    raise CycleIncomplete(
+                        f"{reason}; no answer was published. "
+                        + (
+                            "No answer draft exists; no regeneration requested. "
+                            if retained_draft is None
+                            else ""
+                        )
+                        + f"Protocol strikes: {strikes}/{strike_limit}."
+                    )
+                if not finalizing:
+                    finalizing = True
+                    cycle["finalization"] = True
+                    # The strike budget is independent of task extensions.
+                    round_limit = round_index + strike_limit - strikes
+                    self.store.emit(
+                        "cycle.finalizing",
+                        {
+                            "channel_id": channel_id,
+                            "strikes": strikes,
+                            "strike_limit": strike_limit,
+                            "draft_request_id": retained_draft["request_id"],
+                        },
+                        bot_id=bot["id"],
+                        turn_id=turn_id,
+                        level="warning",
+                    )
+                extras.append(
+                    {
+                        "role": "user",
+                        "content": "Automatic harness notice (private, not sent to Discord): "
+                        f"Your answer was NOT published. {reason}. Strike {strikes} of {strike_limit}. "
+                        "Your original answer is saved as a frozen draft. Do not regenerate, repeat or replace it. "
+                        "Call end_cycle with {} and no other calls to publish that saved answer unchanged. "
+                        "Action tools are removed; completed actions will not run again. "
+                        + ("You may instead choose council_silence alone. " if silence_tools else "")
+                        + f"{strike_limit - strikes} confirmation attempt(s) remain; another failed response "
+                        "uses another strike. At the limit this cycle stops without publishing.",
+                    }
+                )
 
             async def budgeted(awaitable):
                 try:
@@ -854,6 +977,10 @@ class Engine:
                 available_tools, can_attach = self.plan_round_tools(
                     context, terminal_tools, round_index, round_limit, handoff=background_handoff
                 )
+                if finalizing:
+                    available_tools, can_attach = terminal_tools, False
+                if answer_pending is not None:
+                    available_tools, can_attach = [], False
                 budget_bot = {**bot, "max_tool_rounds": round_limit, "max_calls_per_round": calls_limit}
                 if background_handoff:
                     budget_bot["background_handoff"] = self.jobs.handoff(context)
@@ -1003,7 +1130,11 @@ class Engine:
                     original_content = result.content
                     result.content = self.registry.engrams.sanitize(engram, original_content)
                     parsed_engram = await self.registry.engrams.parse(
-                        engram, original_content, final=not result.tool_calls or ending
+                        engram,
+                        original_content,
+                        final=not result.tool_calls
+                        or ending
+                        or (cycle_mode and bool(result.content.strip())),
                     )
                 if result.finish_reason in ("length", "content_filter"):
                     cap_name = (
@@ -1026,6 +1157,113 @@ class Engine:
                         level="warning",
                     )
                     raise ControlError(message)
+                cycle_response = cycle_mode and not background_handoff
+                cycle_error = None
+                if cycle_response and answer_pending is not None:
+                    # end_cycle already closed all action capability. This is
+                    # the first public answer, never a rewrite of a saved draft.
+                    if (
+                        result.tool_calls
+                        or not result.content.strip()
+                        or wrapped_reply(result.content)
+                        or result.finish_reason != "stop"
+                    ):
+                        cycle_failure(
+                            result,
+                            "The one tool-free answer request did not return a complete plain-text answer",
+                            unrecoverable=True,
+                        )
+                    await publish_final(
+                        result.content,
+                        parsed_engram,
+                        result.request_id,
+                        result.finish_reason,
+                        "end_cycle_then_text",
+                        preceding_end_request_id=answer_pending["request_id"],
+                        terminal_call_id=answer_pending["call_id"],
+                    )
+                    break
+                if cycle_response and finalizing:
+                    # The draft and its Engram belong to the failed SOURCE
+                    # response. Confirmation content cannot replace either.
+                    calls = result.tool_calls
+                    quiet = len(calls) == 1 and calls[0]["function"]["name"] == "council_silence"
+                    if quiet:
+                        try:
+                            quiet = (
+                                bool(silence_tools)
+                                and feedback(
+                                    "council_silence",
+                                    parse_arguments(calls[0]["function"]["arguments"]),
+                                    SILENCE["function"]["parameters"],
+                                    SILENCE["function"]["description"],
+                                )
+                                is None
+                            )
+                        except ValueError, TypeError:
+                            quiet = False
+                    if not quiet:
+                        valid_confirmation = len(calls) == 1 and calls[0]["function"]["name"] == "end_cycle"
+                        if valid_confirmation:
+                            try:
+                                valid_confirmation = parse_arguments(calls[0]["function"]["arguments"]) == {}
+                            except ValueError, TypeError:
+                                valid_confirmation = False
+                        if valid_confirmation:
+                            source = retained_draft
+                            await publish_final(
+                                source["content"],
+                                source["parsed_engram"],
+                                source["request_id"],
+                                source["finish_reason"],
+                                "draft_published",
+                                terminal_call_id=calls[0]["id"],
+                                confirmation_request_id=result.request_id,
+                                source_meta=source["meta"],
+                            )
+                            self.store.emit(
+                                "tool.completed",
+                                {
+                                    "name": "end_cycle",
+                                    "call_id": calls[0]["id"],
+                                    "ok": True,
+                                    "executed": True,
+                                    "published": True,
+                                    "draft": True,
+                                    "draft_request_id": source["request_id"],
+                                    "ignored_confirmation_characters": len(result.content),
+                                },
+                                bot_id=bot["id"],
+                                turn_id=turn_id,
+                                request_id=result.request_id,
+                            )
+                            break
+                        error = "Only end_cycle {} can confirm the saved draft; no action or replacement text was used"
+                        extras.append(result.message())
+                        for call in calls:
+                            value = {"ok": False, "executed": False, "error": error}
+                            self.store.emit(
+                                "tool.failed",
+                                {"name": call["function"]["name"], "call_id": call["id"], **value},
+                                bot_id=bot["id"],
+                                turn_id=turn_id,
+                                request_id=result.request_id,
+                                level="warning",
+                            )
+                            extras.append(
+                                {"role": "tool", "tool_call_id": call["id"], "content": dumps(value)}
+                            )
+                        cycle_failure(
+                            result, error, unrecoverable=len({c["id"] for c in calls}) != len(calls)
+                        )
+                        round_index += 1
+                        continue
+                if cycle_response and not result.tool_calls:
+                    freeze_draft(result, parsed_engram)
+                    extras.append(result.message())
+                    cycle_failure(result, "Response omitted end_cycle")
+                    round_index += 1
+                    continue
                 if not result.tool_calls:
                     if parsed_engram is not None and parsed_engram.get("state") is None:
                         self.store.emit(
@@ -1068,49 +1306,6 @@ class Engine:
                         round_index += 1
                         continue
                     if result.content:
-                        if cycle_mode and not background_handoff:
-                            if finalizing:
-                                raise CycleIncomplete(
-                                    "Finalization attempt returned text without end_cycle; nothing was posted"
-                                )
-                            retained_draft = {
-                                "content": result.content,
-                                "parsed_engram": parsed_engram,
-                                "request_id": result.request_id,
-                                "finish_reason": result.finish_reason,
-                            }
-                            cycle["draft_retained"] = True
-                            cycle["finalization"] = True
-                            finalizing = True
-                            round_limit = round_index + 1
-                            self.store.emit(
-                                "cycle.draft_retained",
-                                {"channel_id": channel_id, "characters": len(result.content)},
-                                bot_id=bot["id"],
-                                turn_id=turn_id,
-                                request_id=result.request_id,
-                                level="warning",
-                            )
-                            extras.append(result.message())
-                            extras.append(
-                                {
-                                    "role": "user",
-                                    "content": "Automatic harness notice (private, not sent to Discord): "
-                                    "Your text was NOT published because this response did not call "
-                                    "end_cycle. It is retained for ONE round only. "
-                                    + (
-                                        "Call end_cycle with {} now to publish it exactly as written, or "
-                                        "send corrected text together with end_cycle. "
-                                        if bot.get("publish_retained_draft", True)
-                                        else "Resend your answer together with end_cycle now; a bare "
-                                        "end_cycle will not publish the retained text. "
-                                    )
-                                    + "Any other response discards it and this activation ends without "
-                                    "an answer.",
-                                }
-                            )
-                            round_index += 1
-                            continue
                         await publish_final(
                             result.content,
                             parsed_engram,
@@ -1166,12 +1361,6 @@ class Engine:
                     )
                 elif ending and wrapped_reply(result.content):
                     batch_error = "Tool-wrapped text cannot be published; write ordinary assistant text together with end_cycle. No actions were executed"
-                elif (
-                    ending
-                    and not result.content.strip()
-                    and not (retained_draft and bot.get("publish_retained_draft", True))
-                ):
-                    batch_error = "end_cycle requires your answer as ordinary assistant text in the same response; nothing was published or executed"
                 elif terminal and not ending and len(names) != 1:
                     batch_error = "A silence decision (or obsolete reply call) must be the only tool call; no partial actions were executed"
                 elif len(names) > calls_limit:
@@ -1187,29 +1376,8 @@ class Engine:
                         + (" or call council_silence alone" if silence_tools else "")
                     )
                 progress_notice = None
-                if result.content.strip() and not terminal and not batch_error:
-                    if cycle_mode:
-                        strikes += 1
-                        if strikes >= strike_limit and not finalizing:
-                            finalize_after_batch = True
-                            progress_notice = (
-                                "end_cycle_finalizing",
-                                "Your text was NOT posted: in end_cycle mode text is published only together "
-                                f"with the end_cycle tool. This was strike {strikes} of {strike_limit}. The "
-                                "tool calls in this batch still run. In the next round only end_cycle (and "
-                                "council_silence when enabled) is available: read the results and finish with "
-                                "your answer plus end_cycle, or this activation ends without an answer.",
-                            )
-                        else:
-                            progress_notice = (
-                                "end_cycle_strike",
-                                "Your text was NOT posted: in end_cycle mode text is published only together "
-                                f"with the end_cycle tool. This was strike {strikes} of {strike_limit}; at "
-                                f"{strike_limit} strikes only end_cycle remains for one final attempt. The "
-                                "tool calls still run: continue your work silently, then finish with your "
-                                "answer plus end_cycle.",
-                            )
-                    elif response_protocol == "narrate":
+                if result.content.strip() and not terminal and not batch_error and not cycle_response:
+                    if response_protocol == "narrate":
                         progress_notice = (
                             "narrate",
                             "Your text accompanying tool calls was not posted to Discord. This bot uses "
@@ -1263,6 +1431,16 @@ class Engine:
                             progress_notice = None
                         else:
                             progress_notices.add(reason)
+                cycle_reply_attempt = (
+                    cycle_response
+                    and (ending or bool(result.content.strip()))
+                    and "council_silence" not in names
+                )
+                if cycle_reply_attempt:
+                    if not ending:
+                        cycle_error = "Response included answer text without end_cycle"
+                    if cycle_error or batch_error:
+                        freeze_draft(result, parsed_engram)
                 extras.append(result.message())
                 finished = False
                 ending_call = None
@@ -1299,7 +1477,8 @@ class Engine:
                                 "in ordinary assistant text",
                                 "usage": usage(name, parameters, description),
                             }
-                        companion_failed = True
+                        cycle_error = "end_cycle arguments were invalid; call it with {}"
+                        freeze_draft(result, parsed_engram)
                         result_value = self.registry.evidence.record(context, name, call["id"], result_value)
                         self.store.emit(
                             "tool.failed",
@@ -1510,36 +1689,55 @@ class Engine:
                             if result_value.get("usage_only") or result_value.get("ok")
                             else "warning",
                         )
-                    if ending and (result_value.get("ok") is False or result_value.get("usage_only")):
+                    if (
+                        cycle_reply_attempt
+                        and name != "end_cycle"
+                        and (result_value.get("ok") is False or result_value.get("usage_only"))
+                    ):
                         companion_failed = True
                     extras.append(
                         {"role": "tool", "tool_call_id": call["id"], "content": dumps(result_value)}
                     )
                 if ending_call is not None:
-                    if companion_failed:
+                    if companion_failed or cycle_error:
                         ending_value = {
                             "ok": False,
                             "executed": False,
                             "published": False,
-                            "error": "A companion call failed, so your answer was NOT published. "
-                            "The next round is for finalization only: drop action calls and finish "
-                            "with your answer plus end_cycle. Explain any unfinished work; "
-                            "you cannot retry action tools in that round.",
+                            "error": "No answer was published. "
+                            + (
+                                "A companion action failed; completed actions are preserved and will not be repeated."
+                                if companion_failed
+                                else cycle_error
+                            ),
                         }
-                        if not finalizing:
-                            finalize_after_batch = True
-                    else:
-                        use_draft = not result.content.strip()
-                        source = retained_draft if use_draft else None
-                        await publish_final(
-                            source["content"] if use_draft else result.content,
-                            source["parsed_engram"] if use_draft else parsed_engram,
-                            source["request_id"] if use_draft else result.request_id,
-                            source["finish_reason"] if use_draft else result.finish_reason,
-                            "draft_published" if use_draft else "end_cycle",
-                            terminal_call_id=None if use_draft else ending_call["id"],
+                    elif not result.content.strip():
+                        answer_pending = {"request_id": result.request_id, "call_id": ending_call["id"]}
+                        cycle["finalization"] = True
+                        round_limit = round_index + 1
+                        ending_value = {
+                            "ok": True,
+                            "executed": True,
+                            "published": False,
+                            "answer_pending": True,
+                        }
+                        self.store.emit(
+                            "cycle.answer_pending",
+                            {"channel_id": channel_id, "end_call_id": ending_call["id"]},
+                            bot_id=bot["id"],
+                            turn_id=turn_id,
+                            request_id=result.request_id,
                         )
-                        ending_value = {"ok": True, "executed": True, "published": True, "draft": use_draft}
+                    else:
+                        await publish_final(
+                            result.content,
+                            parsed_engram,
+                            result.request_id,
+                            result.finish_reason,
+                            "end_cycle",
+                            terminal_call_id=ending_call["id"],
+                        )
+                        ending_value = {"ok": True, "executed": True, "published": True, "draft": False}
                         finished = True
                     ending_value = self.registry.evidence.record(
                         context, "end_cycle", ending_call["id"], ending_value
@@ -1554,18 +1752,34 @@ class Engine:
                     extras.append(
                         {"role": "tool", "tool_call_id": ending_call["id"], "content": dumps(ending_value)}
                     )
-                if finalize_after_batch and not finalizing:
-                    finalizing = True
-                    finalize_after_batch = False
-                    cycle["finalization"] = True
-                    round_limit = round_index + 1
-                    self.store.emit(
-                        "cycle.finalizing",
-                        {"channel_id": channel_id, "strikes": strikes, "strike_limit": strike_limit},
-                        bot_id=bot["id"],
-                        turn_id=turn_id,
-                        level="warning",
+                if cycle_response and not finished and (cycle_error or batch_error or companion_failed):
+                    freeze_draft(result, parsed_engram)
+                    cycle_failure(
+                        result,
+                        "A companion action failed" if companion_failed else batch_error or cycle_error,
+                        unrecoverable=companion_failed or bool(batch_error and companions),
                     )
+                    # Confirmation cannot hand off to a background acknowledgement
+                    # or gain more work from task-extension bookkeeping.
+                    if self.jobs:
+                        self.jobs.release_batch(turn_id)
+                    round_index += 1
+                    continue
+                if answer_pending is not None:
+                    extras.append(
+                        {
+                            "role": "user",
+                            "content": "Automatic harness notice (private, not sent to Discord): "
+                            "end_cycle was accepted. No public answer draft exists. Tool work is closed. "
+                            "Write your first public answer now as ordinary assistant text, using the results "
+                            "already available. Do not call any tools or promise further work. This is your "
+                            "only answer request; empty output or tool calls end the cycle without an answer.",
+                        }
+                    )
+                    if self.jobs:
+                        self.jobs.release_batch(turn_id)
+                    round_index += 1
+                    continue
                 if progress_notice:
                     # Complete the assistant/tool group before adding private
                     # feedback. It travels only in this turn's bounded exchanges.
@@ -1746,7 +1960,7 @@ class Engine:
             return
         text = (
             f"-# {bot['name']} stopped without an answer after {rounds} model round"
-            f"{'' if rounds == 1 else 's'}; the activation ended without end_cycle."
+            f"{'' if rounds == 1 else 's'}; the response cycle did not complete."
         )
         try:
             async with asyncio.timeout(PROGRESS_SEND_TIMEOUT):

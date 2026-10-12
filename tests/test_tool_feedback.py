@@ -355,3 +355,16 @@ async def test_council_inspector_required_target_is_in_conditional_usage(kernel,
     assert result["usage"]["example"]["id"]
     assert_full_usage(result, spec.parameters)
     handler.assert_not_awaited()
+
+
+def test_end_cycle_empty_arguments_are_execution_not_discovery():
+    from hortator.plugins import END_CYCLE
+
+    definition = END_CYCLE["function"]
+    details = usage("end_cycle", definition["parameters"], definition["description"])
+    assert details["example"] == {}
+    assert "not a usage query" in details["calling_convention"]
+    assert feedback("end_cycle", {}, definition["parameters"], definition["description"]) is None
+    malformed = feedback("end_cycle", {"message": "wrong place"}, definition["parameters"])
+    assert malformed["ok"] is False and malformed["executed"] is False
+    assert "not a usage query" in malformed["usage"]["calling_convention"]

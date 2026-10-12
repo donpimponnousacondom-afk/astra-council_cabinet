@@ -76,8 +76,8 @@ export function ResponseProtocolSettings({
       {mode === "end_cycle" && (
         <div className="reply-mode-settings">
           <Field
-            label="Narration strikes before finalization"
-            hint="1–5; default 2. At the limit, allow one final answer attempt."
+            label="Failed responses allowed"
+            hint="1–5; default 2. Two allows one failure, then one confirmation chance."
           >
             <input
               type="number"
@@ -99,38 +99,28 @@ export function ResponseProtocolSettings({
             />
           </Field>
           <Help label="What counts as a strike?">
-            Text alongside action tools without end_cycle is withheld, the tools
-            run, and one strike is counted. At the limit, the bot gets one more
-            round to finish its answer or choose silence if allowed. No action
-            tools can run in that final round. Tool-only responses do not count
-            as strikes; ordinary tool budgets still apply.
+            A response that cannot finalize correctly counts one strike. At the
+            limit the cycle stops; no extra attempt is added. With a limit of 1,
+            the first failure stops the cycle. Tool-only action responses do not
+            count as strikes; ordinary tool budgets still apply. A valid
+            end_cycle before any answer exists is also allowed and is not a
+            strike, even with a limit of 1.
           </Help>
-          <div className="reply-option">
-            <label>
-              <input
-                type="checkbox"
-                aria-label="Publish the previous draft"
-                checked={draft.publish_retained_draft !== false}
-                onChange={(event) =>
-                  set("publish_retained_draft", event.target.checked)
-                }
-              />
-              <span>
-                <strong>Publish the previous draft</strong>
-                <small>
-                  Use the withheld draft if the bot finishes without repeating
-                  its text.
-                </small>
-              </span>
-            </label>
-            <Help label="About the previous draft">
-              Default on. A text-only response is kept privately for one final
-              round. If the next response calls end_cycle without text, that
-              draft can be published. Turn this off to require the bot to repeat
-              its answer alongside end_cycle. New text with end_cycle replaces
-              the draft.
-            </Help>
-          </div>
+          <Help label="How saved-draft confirmation works">
+            A failed response with useful answer text is kept unchanged. Action
+            tools are removed; the bot can only confirm the original draft with
+            end_cycle, or choose silence if allowed. It must not regenerate the
+            answer. New text cannot replace the draft. If a finishing companion
+            fails, completed actions stay saved and the cycle stops incomplete.
+          </Help>
+          <Help label="When the finish call comes first">
+            With no answer or saved draft, a valid end_cycle permits one request
+            for the first public answer. That request has no tools and accepts
+            text only. Empty text, a tool call or incomplete output stops the
+            cycle without retry. Permitted companion writes run once before this
+            request; a failed companion stops it. Existing drafts are never
+            regenerated.
+          </Help>
           <div className="reply-option">
             <label>
               <input

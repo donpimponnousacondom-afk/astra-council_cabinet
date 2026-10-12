@@ -87,7 +87,7 @@ The following inventory was audited against the frozen application and existing 
 | Identity | Display name, stable ID, role, identity color, room grants and activation setting |
 | Model and rhythm | Selected model profile, activation interval, personal send cooldown, evaluate-with-no-new-messages toggle, hourly activation limit and optional daily cost stop |
 | Prompts | Personality, ordered shared prompt assignments, dynamic tail and inherited global prompt preview |
-| Capabilities | Plugin grants, global-off indicators, intentional-silence toggle, response protocol (narrate/progress/end_cycle) with its progress cap or strike/draft/notice settings, ordinary tool rounds/calls, per-bot non-secret plugin JSON and key overrides only for plugins that use keys |
+| Capabilities | Plugin grants, global-off indicators, intentional-silence toggle, response protocol (narrate/progress/end_cycle) with its progress cap or failed-response/notice settings, ordinary tool rounds/calls, per-bot non-secret plugin JSON and key overrides only for plugins that use keys |
 | Extended work | Document task rounds/calls/time, permitted local preview URL override, file/reading task budget and active tool-context budget; no extra budget renewal implied |
 | Footer | Per-bot enablement, role defaults, bounded literal template, supported placeholders, validation and preview; no executable template expressions |
 | Discord | Application ID, separate write-only verified Bot token, reconnect, gateway/scheduling evidence, invite URL/copy, setup blockers and per-bot provider-key override |
@@ -96,9 +96,15 @@ The following inventory was audited against the frozen application and existing 
 Final reply only (`narrate`), Progress updates (`progress`), or Explicit finish
 (`end_cycle`), with a short description of the selected mode. Show only that
 mode's controls; switching modes retains the other mode's saved/draft values.
-End-cycle options occupy separate aligned checkbox rows: **Publish the previous
-draft** and **Notify when no answer is sent**. Longer explanations use keyboard-
-accessible disclosures beside the relevant setting, without toggling its value.
+End-cycle mode shows **Failed responses allowed** and the separate checkbox
+**Notify when no answer is sent**. The strike count is a failure ceiling, not
+extra work rounds: two allows one failure and one confirmation chance, while
+one stops on the first failure. A valid finish call before any answer exists
+is legal even at a limit of one: it permits a single tool-free first answer.
+The **When the finish call comes first** disclosure explains its hard stop and
+companion behavior. Saved-draft confirmation is mandatory and has no toggle.
+Longer explanations use keyboard-accessible disclosures beside the
+relevant setting, without toggling its value.
 Keep ordinary tool budgets outside this group; protocol behavior and defaults
 remain defined in [TOOLS](TOOLS.md#normal-and-extended-turns).
 

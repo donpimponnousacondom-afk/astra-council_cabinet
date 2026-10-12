@@ -572,7 +572,7 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
     false,
   );
   await expect(
-    dialog.getByLabel("Narration strikes before finalization", { exact: true }),
+    dialog.getByLabel("Failed responses allowed", { exact: true }),
   ).toHaveCount(0);
   await expect(limit).toHaveCount(0);
   const inspectProtocol = async (variant: string, cap = 1) => {
@@ -654,7 +654,7 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
 
   await open();
   await protocol.selectOption("end_cycle");
-  const strikes = dialog.getByLabel("Narration strikes before finalization", {
+  const strikes = dialog.getByLabel("Failed responses allowed", {
     exact: true,
   });
   await expect(strikes).toBeEnabled();
@@ -664,38 +664,35 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
     name: "Reply behavior",
     exact: true,
   });
-  const draftToggle = behavior.getByRole("checkbox", {
-    name: "Publish the previous draft",
-    exact: true,
-  });
+  await expect(
+    behavior.getByRole("checkbox", { name: "Publish the previous draft" }),
+  ).toHaveCount(0);
   const noticeToggle = behavior.getByRole("checkbox", {
     name: "Notify when no answer is sent",
     exact: true,
   });
-  await expect(draftToggle).toBeChecked();
   await expect(noticeToggle).not.toBeChecked();
   const draftHelp = behavior
     .locator("summary")
-    .filter({ hasText: "About the previous draft" });
+    .filter({ hasText: "How saved-draft confirmation works" });
   await draftHelp.focus();
   await draftHelp.press("Enter");
   await expect(
-    behavior.getByText("Default on. A text-only response", { exact: false }),
+    behavior.getByText("A failed response with useful answer text", {
+      exact: false,
+    }),
   ).toBeVisible();
-  await expect(draftToggle).toBeChecked();
   await draftHelp.press("Space");
   await expect(
-    behavior.getByText("Default on. A text-only response", { exact: false }),
+    behavior.getByText("A failed response with useful answer text", {
+      exact: false,
+    }),
   ).not.toBeVisible();
   for (const width of [1440, 1024]) {
     await page.setViewportSize({ width, height: 1000 });
     await behavior.scrollIntoViewIfNeeded();
-    const draftBox = await draftToggle.boundingBox();
     const noticeBox = await noticeToggle.boundingBox();
-    expect(draftBox).not.toBeNull();
     expect(noticeBox).not.toBeNull();
-    expect(noticeBox!.y).toBeGreaterThan(draftBox!.y + draftBox!.height + 20);
-    expect(Math.abs(draftBox!.x - noticeBox!.x)).toBeLessThan(1);
     expect(
       await behavior.evaluate(
         (element) => element.scrollWidth <= element.clientWidth,
@@ -720,9 +717,6 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   }
   await strikes.fill("1");
   await dialog
-    .getByLabel("Publish the previous draft", { exact: true })
-    .uncheck();
-  await dialog
     .getByLabel("Notify when no answer is sent", {
       exact: true,
     })
@@ -734,15 +728,19 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
     .click();
   const cycleInspection = dialog.locator("#inspect-response_protocol");
   await expect(cycleInspection).toContainText(
-    "Template text · runtime-response-protocol-end_cycle",
+    "Template text · runtime-response-protocol-end_cycle-v3",
   );
-  await expect(cycleInspection).toContainText("After 1 strikes");
-  await expect(cycleInspection).toContainText("currently False");
+  await expect(cycleInspection).toContainText(
+    "1 failed responses end this cycle",
+  );
+  await expect(cycleInspection).toContainText(
+    "do not repeat, regenerate or replace the answer",
+  );
   await save();
   const enabled = await record(page, "bots", id);
   expect(enabled.response_protocol).toBe("end_cycle");
   expect(enabled.narration_strikes).toBe(1);
-  expect(enabled.publish_retained_draft).toBe(false);
+  expect(enabled).not.toHaveProperty("publish_retained_draft");
   expect(enabled.notify_incomplete_cycle).toBe(true);
   expect(enabled.max_progress_messages_per_turn).toBe(20);
   expect(enabled.plugin_config).toEqual(before.plugin_config);
@@ -756,7 +754,7 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   const restored = await record(page, "bots", id);
   expect(restored.response_protocol).toBe("narrate");
   expect(restored.narration_strikes).toBe(1);
-  expect(restored.publish_retained_draft).toBe(false);
+  expect(restored).not.toHaveProperty("publish_retained_draft");
   expect(restored.notify_incomplete_cycle).toBe(true);
 });
 

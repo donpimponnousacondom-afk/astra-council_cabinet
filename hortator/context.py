@@ -142,13 +142,17 @@ class ContextBuilder:
             "response_protocol": bot.get("response_protocol", "narrate"),
             "max_progress_messages_per_turn": bot.get("max_progress_messages_per_turn", 1),
             "narration_strikes": bot.get("narration_strikes", 2),
-            "publish_retained_draft": bot.get("publish_retained_draft", True),
+            # Legacy custom templates may reference this retired setting. Draft
+            # retention is mandatory now; never read the old per-bot value.
+            "publish_retained_draft": True,
         }
         return {**base, **(values or {})}
 
     def prompt(self, bot, key, values=None, *, variant="", raw=False):
         if not variant and key == "response_protocol":
             variant = bot.get("response_protocol", "narrate")
+            if variant == "end_cycle":
+                variant = "end_cycle-v3"
         if (
             not variant
             and bot.get("transcript_format") == "conversation"
@@ -229,7 +233,6 @@ class ContextBuilder:
             "response_protocol": bot.get("response_protocol", "narrate"),
             "max_progress_messages_per_turn": bot.get("max_progress_messages_per_turn", 1),
             "narration_strikes": bot.get("narration_strikes", 2),
-            "publish_retained_draft": bot.get("publish_retained_draft", True),
             "allow_images": bot.get("allow_images", True),
             "context_tokens": estimated,
             "context_window": profile["context_window"],
