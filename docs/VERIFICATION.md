@@ -4,6 +4,18 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Curie shell failures and disposable outcome reporting (2026-10-10)
+
+Commit: changes based on `fb13a506d9cf7f36a39b001b7721c63abc393883`; dirty during verification.
+The owner selected `feat/next_feature`, preserving the two unpublished disposable-shell commits. Subsequent rounds continue to start from updated main after the prior PR is merged.
+
+Read-only inspection of Curie's retained jobs found that the cited job passed `-y` as a literal package spec; its corrected retry then failed during extraction with `Resource temporarily unavailable`. A fresh isolated Node install reproduced that second failure. Reducing download concurrency allowed Node installation and execution with the original sandbox limits. Sol independently found that the pinned micromamba ignores the metadata-thread environment variable; Luna missed this setting-consumption gap. The correction supplies a bundled read-only RC file explicitly and tests the effective values while an ambient workspace RC file asks for nine workers. Other inspected failures included missing optional commands and errors in model-written scripts; these are not claimed fixed. `workspace_committed: false` is expected for disposable jobs, and their ordinary nonzero exits now carry an explicit command-exit label.
+
+Backend scope: `HORTATOR_REQUIRE_SANDBOX=1 HORTATOR_TEST_PACKAGE_NETWORK=1 uv run --frozen pytest -q tests/test_shell_pkg.py tests/test_shell_runner.py tests/test_shell_disposable.py tests/test_console.py`.
+Backend result: **69 passed**, no skips, exit 0, 86.94 seconds. This includes actual public Python/zstd/Node downloads, Node execution under the default process limit, both confirmation-flag positions, repeated installation, real namespace cleanup and stored event assertions. Wrapper-only tests substitute the package-manager executable; console fixtures do not call Discord/providers. After the review correction, `HORTATOR_REQUIRE_SANDBOX=1 HORTATOR_TEST_PACKAGE_NETWORK=1 uv run --frozen pytest -q tests/test_shell_pkg.py tests/test_shell_runner.py -k 'pkg or package_thread or node_package or public_https'` passed **12 tests**, 24 deselected, no skips, exit 0, 19.85 seconds. This repeats the live package installs and adds effective configuration/ambient-config isolation checks.
+Static checks: repository-wide Ruff lint/format, Bash syntax and `git diff --check` passed. Frontend format passed. Browser/full-backend suites were not rerun for this targeted backend fix. Final committed dashboard build, independent reviews and runtime checks are recorded in the ignored audit directory when completed.
+Evidence: `audit/2026-10-10/curie-shell/` contains the baseline/serial/individual-setting reproduction evidence and focused test logs. No live bot command was replayed; no grant, sandbox limit, backup, provider or Discord configuration changed. No PR is published; remote CI monitoring has not started.
+
 ## Independent disposable shell (2026-10-09)
 
 Commit: draft based on `cdccd265cf0513577f97911358d5732b1bd82eb4`; dirty during initial verification.

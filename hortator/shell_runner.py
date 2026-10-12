@@ -209,6 +209,7 @@ class ShellRunner:
         fields = (
             "job_id",
             "task",
+            "storage",
             "status",
             "elapsed_seconds",
             "exit_code",
@@ -511,6 +512,7 @@ class ShellRunner:
             mounts[f"/etc/{name}"] = assets / name
         mounts["/bin/pip"] = assets / "pip"
         mounts["/bin/pkg"] = assets / "pkg"
+        mounts["/runner/mambarc"] = assets / "mambarc"
         available += ["pip", "pip3", "pip3.14", "pkg"]
         python = Path(sys.executable).resolve()
         mounts["/runtime/python/bin/python3.14"] = python
@@ -732,7 +734,9 @@ class ShellRunner:
             "PIP_CACHE_DIR": "/packages/cache/pip",
             "PIP_DISABLE_PIP_VERSION_CHECK": "1",
             "MAMBA_ROOT_PREFIX": "/packages/mamba",
-            "MAMBA_DOWNLOAD_THREADS": "2",
+            # Metadata parsing uses the explicit /runner/mambarc supplied by pkg;
+            # micromamba 2.9.0 does not read an environment variable for that knob.
+            "MAMBA_DOWNLOAD_THREADS": "1",
             "MAMBA_EXTRACT_THREADS": "1",
             "MAMBA_REPODATA_USE_ZST": "true",
             "GIT_EXEC_PATH": "/usr/lib/git-core",

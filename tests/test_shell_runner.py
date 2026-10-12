@@ -636,3 +636,35 @@ async def test_real_public_https_and_native_package_install(sandbox):
     )
     assert result["status"] == "succeeded" and result["workspace_committed"], result
     assert "Zstandard" in result["stdout"]["text"]
+
+
+@pytest.mark.skipif(
+    os.environ.get("HORTATOR_TEST_PACKAGE_NETWORK") != "1", reason="Opt-in public package download"
+)
+async def test_real_node_package_install_fits_default_process_budget(sandbox):
+    runner, _, context = sandbox
+    result = await runner.run(
+        context,
+        command="set -eu; pkg install -y nodejs; node -e 'console.log(\"node-install-ok\")'; pkg install nodejs --yes",
+    )
+    assert result["status"] == "succeeded", result
+    assert "node-install-ok" in (runner.root / result["job_id"] / "stdout.log").read_text()
+    assert result["storage"] == "disposable" and not result["workspace_committed"]
+
+
+async def test_real_package_thread_settings_ignore_ambient_rc(sandbox):
+    runner, _, context = sandbox
+    result = await runner.run(
+        context,
+        command=(
+            "set -eu; printf 'repodata_shards_threads: 9\\ndownload_threads: 9\\n' > ~/.mambarc; "
+            "test ! -w /runner/mambarc; "
+            "micromamba config list repodata_shards_threads download_threads "
+            "--rc-file /runner/mambarc --sources"
+        ),
+    )
+    assert result["status"] == "succeeded", result
+    assert result["stdout"]["text"].splitlines() == [
+        "repodata_shards_threads: 1  # '/runner/mambarc'",
+        "download_threads: 1  # 'MAMBA_DOWNLOAD_THREADS'",
+    ]

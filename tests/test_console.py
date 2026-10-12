@@ -27,6 +27,22 @@ def access(target="/api/status", status=200):
     )
 
 
+@pytest.mark.parametrize(
+    "extra,expected",
+    [
+        ({"storage": "disposable"}, "command_exit (nonzero exit; disposable files discarded)"),
+        ({"workspace_committed": True}, "command_exit (nonzero exit; valid workspace changes saved)"),
+        ({"storage": "disposable", "error": "Invalid tree"}, "runner_or_validation_failure"),
+        ({"storage": "workspace"}, "failure_unclassified"),
+        ({}, "failure_unclassified"),
+        ({"storage": "disposable", "exit_code": None}, "failure_unclassified"),
+    ],
+)
+def test_job_outcome_distinguishes_disposable_commands_from_runner_failures(extra, expected):
+    data = {"status": "failed", "exit_code": 1, "workspace_committed": False, **extra}
+    assert console_module.job_outcome(data).startswith(expected)
+
+
 async def test_real_ledger_events_have_time_scope_identity_and_no_http_poll_spam(kernel):
     with output() as console:
         console.bind(kernel)
