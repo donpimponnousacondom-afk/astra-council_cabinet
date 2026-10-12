@@ -92,6 +92,16 @@ The following inventory was audited against the frozen application and existing 
 | Footer | Per-bot enablement, role defaults, bounded literal template, supported placeholders, validation and preview; no executable template expressions |
 | Discord | Application ID, separate write-only verified Bot token, reconnect, gateway/scheduling evidence, invite URL/copy, setup blockers and per-bot provider-key override |
 
+**Reply behavior** is a distinct group within Capabilities. The selector shows
+Final reply only (`narrate`), Progress updates (`progress`), or Explicit finish
+(`end_cycle`), with a short description of the selected mode. Show only that
+mode's controls; switching modes retains the other mode's saved/draft values.
+End-cycle options occupy separate aligned checkbox rows: **Publish the previous
+draft** and **Notify when no answer is sent**. Longer explanations use keyboard-
+accessible disclosures beside the relevant setting, without toggling its value.
+Keep ordinary tool budgets outside this group; protocol behavior and defaults
+remain defined in [TOOLS](TOOLS.md#normal-and-extended-turns).
+
 Hortator control-channel/thread/owner-DM restrictions and the separate granted `discord_send` capability must remain clear. A mention in another room does not silently grant intake scope. Token verification may discover the application ID; an invalid token must not be saved as a verified identity.
 
 ### Providers

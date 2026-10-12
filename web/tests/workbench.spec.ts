@@ -523,7 +523,7 @@ test("provider headers round-trip and a mocked upstream 401 through API 502 keep
 
 test("response protocol controls preserve zero, bounds and unrelated bot configuration", async ({
   page,
-}) => {
+}, testInfo) => {
   const csrf = (await (await page.request.get("/api/auth/session")).json())
     .csrf;
   const id = "wb-response-protocol-fixture";
@@ -573,9 +573,8 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   );
   await expect(
     dialog.getByLabel("Narration strikes before finalization", { exact: true }),
-  ).toBeDisabled();
-  await expect(limit).toBeDisabled();
-  await expect(limit).toHaveValue("1");
+  ).toHaveCount(0);
+  await expect(limit).toHaveCount(0);
   const inspectProtocol = async (variant: string, cap = 1) => {
     await dialog.getByRole("button", { name: "Prompts", exact: true }).click();
     await dialog
@@ -609,6 +608,7 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   await inspectProtocol("narrate");
   await protocol.selectOption("progress");
   await expect(limit).toBeEnabled();
+  await expect(limit).toHaveValue("1");
   await inspectProtocol("progress");
   await expect(limit).toHaveAttribute("min", "0");
   await expect(limit).toHaveAttribute("max", "20");
@@ -645,7 +645,7 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   await expect(limit).toHaveValue("0");
   await limit.fill("20");
   await protocol.selectOption("narrate");
-  await expect(limit).toBeDisabled();
+  await expect(limit).toHaveCount(0);
   await save();
   const disabled = await record(page, "bots", id);
   expect(disabled.response_protocol).toBe("narrate");
@@ -659,6 +659,53 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   });
   await expect(strikes).toBeEnabled();
   await expect(strikes).toHaveValue("2");
+  await expect(limit).toHaveCount(0);
+  const behavior = dialog.getByRole("group", {
+    name: "Reply behavior",
+    exact: true,
+  });
+  const draftToggle = behavior.getByRole("checkbox", {
+    name: "Publish the previous draft",
+    exact: true,
+  });
+  const noticeToggle = behavior.getByRole("checkbox", {
+    name: "Notify when no answer is sent",
+    exact: true,
+  });
+  await expect(draftToggle).toBeChecked();
+  await expect(noticeToggle).not.toBeChecked();
+  const draftHelp = behavior
+    .locator("summary")
+    .filter({ hasText: "About the previous draft" });
+  await draftHelp.focus();
+  await draftHelp.press("Enter");
+  await expect(
+    behavior.getByText("Default on. A text-only response", { exact: false }),
+  ).toBeVisible();
+  await expect(draftToggle).toBeChecked();
+  await draftHelp.press("Space");
+  await expect(
+    behavior.getByText("Default on. A text-only response", { exact: false }),
+  ).not.toBeVisible();
+  for (const width of [1440, 1024]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await behavior.scrollIntoViewIfNeeded();
+    const draftBox = await draftToggle.boundingBox();
+    const noticeBox = await noticeToggle.boundingBox();
+    expect(draftBox).not.toBeNull();
+    expect(noticeBox).not.toBeNull();
+    expect(noticeBox!.y).toBeGreaterThan(draftBox!.y + draftBox!.height + 20);
+    expect(Math.abs(draftBox!.x - noticeBox!.x)).toBeLessThan(1);
+    expect(
+      await behavior.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true);
+    await behavior.screenshot({
+      path: testInfo.outputPath(`reply-behavior-${width}.png`),
+    });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
   for (const invalid of ["0", "6", "1.5", ""]) {
     await strikes.fill(invalid);
     await dialog
@@ -673,10 +720,10 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   }
   await strikes.fill("1");
   await dialog
-    .getByLabel("Publish retained draft with a bare end_cycle", { exact: true })
+    .getByLabel("Publish the previous draft", { exact: true })
     .uncheck();
   await dialog
-    .getByLabel("Post a notice when a cycle ends without an answer", {
+    .getByLabel("Notify when no answer is sent", {
       exact: true,
     })
     .check();
@@ -704,7 +751,7 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   await expect(protocol).toHaveValue("end_cycle");
   await expect(strikes).toHaveValue("1");
   await protocol.selectOption("narrate");
-  await expect(strikes).toBeDisabled();
+  await expect(strikes).toHaveCount(0);
   await save();
   const restored = await record(page, "bots", id);
   expect(restored.response_protocol).toBe("narrate");

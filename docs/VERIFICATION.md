@@ -4,6 +4,35 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Reply behavior controls and audit closure wording (2026-10-12, after #110)
+
+The owner's screenshot showed the new checkboxes/descriptions running together:
+the active workbench had no `.checks` styling. Response controls now have their
+own Reply behavior fieldset, only the selected mode's controls, aligned checkbox
+rows, short descriptions and native keyboard-accessible help disclosures. Mode
+changes preserve inactive values. No protocol defaults, bot configuration,
+grants, backend validation or frozen legacy UI changes are included.
+
+The external auditor's `CLOSURE.md` was read. Their five PR #110 defect findings
+were already corrected before that merge; their remaining companion-error wording
+is corrected here to say the finalization round cannot retry actions. Accepted
+larger follow-ups and owner-reserved policy decisions remain separate in PLAN.
+
+Pre-commit checks from clean base `9cde715` with this task's edits: **46 passed**
+across end_cycle and boundary suites, two existing dependency warnings, 17.64 s.
+The extended existing browser fixture passed **1 test** (12.0 s total), checking
+mode-specific visibility, zero/bounds, save/reopen, inactive-value preservation,
+unchanged other bot/plugin state, keyboard help without changing the checkbox,
+and separated/aligned nonoverflowing controls at 1440- and 1024-pixel widths.
+Screenshots were inspected. The collaborative preview returned unavailable on
+both status and open; the repository's isolated Playwright fixture supplied the
+browser evidence. TypeScript/Vite and changed Python lint/format checks passed.
+The test build lived in `/tmp/hortator-reply-controls-build`; the running dashboard
+was not overwritten with uncommitted assets. No live provider/Discord sends or
+production bot configuration edits were made. Final-head CI, broader browser
+checks and independent PR reviews belong to the published PR digest. Logs and
+screenshots are retained under ignored `audit/2026-10-12/reply-controls/`.
+
 ## end_cycle response protocol (2026-10-12, later)
 
 ```text

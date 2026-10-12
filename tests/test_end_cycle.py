@@ -259,6 +259,8 @@ async def test_failed_companion_withholds_text_and_allows_one_finalization(kerne
         results = responses(body)
         assert not results[0]["ok"] and not results[1]["ok"]
         assert "NOT published" in results[1]["error"]
+        assert "drop action calls" in results[1]["error"]
+        assert "cannot retry action tools" in results[1]["error"]
         assert sorted(tool_names(body)) == ["council_silence", "end_cycle"]
         return mixed("The write failed; nothing was saved.", end())
 
