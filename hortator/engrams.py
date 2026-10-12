@@ -488,6 +488,7 @@ class Engrams:
         summary_checkpoint=None,
         summary_hash=None,
         terminal_call_id=None,
+        confirmation_request_id=None,
     ):
         """Stage only a final parsed answer whose coverage the engine verified.
 
@@ -517,7 +518,49 @@ class Engrams:
             raise ControlError("Engram candidate must belong to the current completed generation")
         response = json.loads(request["response"] or "{}")
         terminal = False
-        if terminal_call_id is not None and snapshot.get("response_protocol") == "end_cycle":
+        if confirmation_request_id is not None:
+            confirmation = self.store.one(
+                "SELECT * FROM requests WHERE id=? AND turn_id=? AND bot_id=?",
+                (confirmation_request_id, snapshot["turn_id"], snapshot["bot_id"]),
+            )
+            retained = self.store.one(
+                "SELECT request_id,data FROM events WHERE turn_id=? AND bot_id=? "
+                "AND kind='cycle.draft_retained' ORDER BY seq DESC LIMIT 1",
+                (snapshot["turn_id"], snapshot["bot_id"]),
+            )
+            if (
+                snapshot.get("response_protocol") != "end_cycle"
+                or not confirmation
+                or confirmation["id"] == request_id
+                or confirmation["status"] != "completed"
+                or confirmation["purpose"] != "generation"
+                or confirmation["started_at"] < request["ended_at"]
+                or not retained
+                or retained["request_id"] != request_id
+                or response.get("finish_reason") not in ("stop", "tool_calls")
+            ):
+                raise ControlError(
+                    "Engram draft confirmation must reference the retained source in this cycle"
+                )
+            source_content = sanitize_response(response.get("content", ""), snapshot["nonce"])
+            digest = hashlib.sha256(source_content.encode()).hexdigest()
+            if json.loads(retained["data"]).get("content_sha256") != digest:
+                raise ControlError("Engram retained draft differs from its source response")
+            confirmed = json.loads(confirmation["response"] or "{}")
+            calls = confirmed.get("tool_calls", [])
+            try:
+                terminal = (
+                    confirmed.get("finish_reason") in ("stop", "tool_calls")
+                    and len(calls) == 1
+                    and calls[0].get("id") == terminal_call_id
+                    and calls[0].get("function", {}).get("name") == "end_cycle"
+                    and parse_arguments(calls[0]["function"]["arguments"]) == {}
+                )
+            except KeyError, TypeError, ValueError:
+                terminal = False
+            if not terminal:
+                raise ControlError("Engram draft requires a valid end_cycle-only confirmation")
+        elif terminal_call_id is not None and snapshot.get("response_protocol") == "end_cycle":
             endings = [
                 call
                 for call in response.get("tool_calls", [])

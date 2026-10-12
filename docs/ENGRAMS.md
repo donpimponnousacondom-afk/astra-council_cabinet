@@ -149,11 +149,17 @@ Public progress messages accompanying tools do not commit state or count as
 delivered final replies for reminders. Their private suffix, if any, is stripped;
 the model must supply any state update with its final answer. In opt-in
 `end_cycle` mode this is the ordinary text accompanying a validated `end_cycle`
-call, after any permitted companions succeed. A retained text-only draft may
-also carry state; publishing that exact draft uses its original request evidence.
+call, after any permitted companions succeed. A failed publication with usable
+answer text freezes that answer and its parsed Engram together. A later valid
+`end_cycle {}` confirms this exact draft; it cannot replace the answer or its
+Engram. Staging verifies both completed requests, the recorded draft hash and the
+confirmation call. State and context coverage come from the original request,
+including when its answer accompanied successful actions or an invalid finish.
+The confirmation request supplies only permission to publish. A failed companion
+or a response with no usable public answer cannot enter this confirmation path.
 Both `stop` and `tool_calls` complete terminal boundaries are supported, while
-intermediate tools, rejected terminal batches, failed companions and partial
-provider output cannot commit state. The same confirmed-delivery and miss-counting
+intermediate tools, unrecovered rejected terminal batches, failed companions and
+partial provider output cannot commit state. The same confirmed-delivery and miss-counting
 rules apply; an `end_cycle` call never goes inside the private state block.
 Restart recovery may promote an already confirmed candidate; it does not resend
 an uncertain answer. State and coverage move together on the SQLite owner thread.

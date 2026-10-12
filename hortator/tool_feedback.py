@@ -88,7 +88,12 @@ def usage(name, parameters, description="", arguments=None):
     return {
         "tool": name,
         "description": description,
-        "calling_convention": "JSON object with named fields; field order does not matter. {} returns usage only.",
+        "calling_convention": "JSON object with named fields; field order does not matter. "
+        + (
+            "{} confirms publication and ends the cycle; it is not a usage query."
+            if name == "end_cycle"
+            else "{} returns usage only."
+        ),
         "parameters": parameters,
         "example": example_arguments(parameters, arguments),
         "example_note": "Replace example values with the real identifiers/content for this task; all schema constraints still apply.",
@@ -121,7 +126,7 @@ def errors_for(parameters, arguments):
 
 def feedback(name, arguments, parameters, description=""):
     details = usage(name, parameters, description, arguments)
-    if arguments == {}:
+    if arguments == {} and name != "end_cycle":
         return {"ok": True, "usage_only": True, "executed": False, "usage": details}
     errors = errors_for(parameters, arguments)
     if errors:

@@ -45,15 +45,20 @@ it. The current delivery contract and limits are in
 
 The `response_protocol` layer automatically selects
 `runtime-response-protocol-narrate`, `runtime-response-protocol-progress` or
-`runtime-response-protocol-end_cycle`. The end_cycle template renders the bot's
-`narration_strikes` and `publish_retained_draft` settings.
-These new identifiers seed once, without replacing the saved legacy
-`runtime-response-protocol` record or custom prompt edits. An explicit bot
-placement override still selects that saved record; a disabled layer stays
-omitted. Older identity/legacy prompts may contain contradictory narration
-wording; the selected new default explicitly states the current mode. Operators
-using their own override should review its wording against that bot's actual
-mode. Changing saved custom prompts is a separate operator action.
+`runtime-response-protocol-end_cycle-v2`. The versioned end-cycle default renders
+`narration_strikes` as the maximum failed responses. It requires the original
+answer to be confirmed, never regenerated; no-answer and failed-companion
+cycles stop incomplete. `end_cycle {}` is explicitly an executing decision,
+not tool discovery.
+
+The new identifier seeds once without replacing saved legacy protocol records.
+Explicit bot overrides and disabled layers remain authoritative for prompt text;
+runtime gates still apply. Unedited shipped identity/tool-guidance text is
+upgraded only on an exact previous-content fingerprint; custom edits are
+preserved. Operators using overrides should compare their wording with the
+current protocol. The removed `publish_retained_draft` setting remains only as
+a deprecated custom-template placeholder with the constant value `True`, to
+avoid unresolved placeholders in saved owner text. It cannot disable retention.
 
 The modern inspector follows the unsaved mode and shows the resolved cap in the
 response-protocol text. `{{RESPONSE_PROTOCOL}}` and

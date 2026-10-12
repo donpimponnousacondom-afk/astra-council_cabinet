@@ -4,6 +4,44 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Immutable end_cycle recovery and strict failure budget (2026-10-12, after #111)
+
+The owner rejected answer regeneration and repeated invalid finish loops. The
+runtime now freezes the first usable failed answer with its original request,
+parsed Engram and context coverage. Confirmation exposes terminal tools only;
+`end_cycle {}` publishes that exact draft and ignores replacement prose/state.
+The configured strike limit is a hard count of failed protocol responses: two
+permits one failure and one confirmation chance, one stops on the first failure.
+An empty finish without a draft stops immediately. Independently valid permitted
+writes complete once even when that finish has no answer; a failed companion
+stops without publishing a potentially false success claim. No recovery replays
+actions or asks for regenerated text.
+
+The retired draft toggle is removed by an audited startup migration. The new
+versioned protocol prompt leaves owner overrides intact. Only exact unedited
+previous common defaults receive corrected terminal-tool/publication wording.
+The `end_cycle {}` help now describes execution, not a usage query. Updated UI
+help exposes the failure limit and immutable confirmation behavior.
+
+Pre-commit local checks on base `66bae65` plus these edits:
+
+- End-cycle, boundary, recovery, configuration and tool-feedback suites:
+  **188 passed**, two existing dependency warnings, 46.04 s.
+- Existing browser response-controls fixture: **1 passed**, 11.6 s; confirms
+  save/reopen, bounds, inactive controls and unrelated bot/plugin preservation.
+- Ruff lint/format, frontend formatting, TypeScript and isolated Vite build:
+  passed. T3 collaborative preview inspected the isolated fixture, changed the
+  mode and opened the new draft help; the retired checkbox is absent.
+
+The regressions use synthetic provider and Discord transports. They reproduce
+empty finish + global-memory write, immutable answer/Engram confirmation,
+hallucinated repeated actions, strike limits, incomplete output, delivery
+failure/uncertainty, cancellation and revoked access. Source/confirmation request
+provenance and mismatched draft hashes are checked. This is not a claim that a
+live model can produce text and tool calls together; no live provider/Discord
+probe or production setting change was made. Full GitHub checks and independent
+published-PR reviews must settle on the final head before merge.
+
 ## Reply behavior controls and audit closure wording (2026-10-12, after #110)
 
 The owner's screenshot showed the new checkboxes/descriptions running together:

@@ -28,6 +28,35 @@ by this PR protocol. See the
 [operating procedure](OPERATIONS.md#independent-pr-review-and-check-monitoring)
 and [standing agent instructions](../AGENTS.md).
 
+## Immutable end_cycle recovery — owner correction (2026-10-12, late)
+
+Live failures exposed that the earlier implementation discarded valid work and
+asked models to regenerate or repeat malformed finishes. The owner rejected
+that recovery model. A failed response with usable text is frozen as the
+original draft. Action schemas are removed; the model can only confirm it with
+`end_cycle {}` or choose silence if permitted. New prose cannot replace it.
+The existing strike setting bounds failed responses themselves, including
+confirmations: default two means one failure and one confirmation chance, and
+one means stop at the first failure. No extra repair attempt is added at the
+limit. Tool-only work keeps its normal budget and does not count as a strike.
+
+No answer text means there is no draft to recover: preserve successfully
+executed permitted writes and stop incomplete without asking for a new answer.
+A finishing companion failure likewise stops without publishing a potentially
+false success message, preserving completed writes and their receipts. Never
+replay the entire batch. Engrams, footers and delivery evidence must remain
+bound to the original draft source; confirmation is separate evidence, not a
+replacement source. Normal cancellation/access and uncertain-delivery rules
+continue to apply.
+
+Retire the optional retained-draft switch with an explicit isolated migration;
+preserve all bot modes, enabled states, grants and numeric strike values. A
+versioned default protocol prompt reaches existing installations, while saved
+custom overrides remain untouched. Update unedited shipped general guidance
+only by exact prior-content match, including the exception that `end_cycle {}`
+is an action rather than help discovery. This correction supersedes the
+replaceable-draft and extra-finalization behavior in the dated decision below.
+
 ## end_cycle response protocol — owner decision (2026-10-12, later)
 
 After the first increment merged (#109) the owner resolved the five deferred

@@ -42,8 +42,10 @@ async def test_attachment_action_count_tracks_successful_preparation(kernel, pre
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert transport.send.await_count == 1
-    assert len(transport.send.await_args.args[4]) == (1 if preparation == "success" else 0)
+    assert len(requests) == 2
+    assert transport.send.await_count == (1 if preparation == "success" else 0)
+    if preparation == "success":
+        assert len(transport.send.await_args.args[4]) == 1
     assert cycle(kernel)["actions_executed"] == (2 if preparation == "success" else 1)
 
 
@@ -123,7 +125,7 @@ async def test_terminal_only_round_rejects_write_companions(kernel, cause):
         kernel,
         response_protocol="end_cycle",
         enabled_plugins=["memory"],
-        narration_strikes=1,
+        narration_strikes=2,
         max_tool_rounds=1,
     )
     requests = []

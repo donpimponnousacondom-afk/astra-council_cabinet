@@ -105,11 +105,14 @@ END_CYCLE = {
     "function": {
         "name": "end_cycle",
         "description": (
-            "Publish the ordinary assistant text of THIS response to Discord and end this activation. "
+            "Publish the ordinary assistant text of this response and end this activation. "
             "Call it with {} exactly; it takes no arguments and the answer never goes inside it. "
-            "Text without this call is not posted. It may be combined only with memory/global_memory "
-            "writes and discord_attach, which run first; any other tool in the same response rejects "
-            "the whole batch. To say nothing, use council_silence instead."
+            "This is an executing terminal decision, NOT a usage/help query. If the harness has saved "
+            "a draft, call this tool alone to publish that exact draft: do not repeat or rewrite it; "
+            "new accompanying text cannot replace it. During normal work it may accompany only "
+            "memory/global_memory writes and discord_attach, which run once before publication. "
+            "Without answer text or a saved draft the cycle stops incomplete. "
+            "To say nothing, use council_silence instead."
         ),
         "parameters": schema({}),
     },

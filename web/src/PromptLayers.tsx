@@ -33,7 +33,7 @@ function selectedTemplates(
       draft.response_protocol === "progress"
         ? "runtime-response-protocol-progress"
         : draft.response_protocol === "end_cycle"
-          ? "runtime-response-protocol-end_cycle"
+          ? "runtime-response-protocol-end_cycle-v2"
           : "runtime-response-protocol-narrate",
     ];
   else if (layer.id === "silence_policy")
@@ -76,8 +76,7 @@ function sourceValues(
       draft.max_progress_messages_per_turn ?? 1,
     ),
     narration_strikes: String(draft.narration_strikes ?? 2),
-    publish_retained_draft:
-      draft.publish_retained_draft === false ? "False" : "True",
+    publish_retained_draft: "True",
     ...(["runtime_facts", "dynamic_prompt"].includes(layer.id)
       ? { dynamic_prompt: draft.dynamic_prompt || "" }
       : {}),
@@ -161,8 +160,8 @@ function Inspection({
     response_protocol: "Response protocol · current draft",
     max_progress_messages_per_turn:
       "Progress message attempts per turn · current draft",
-    narration_strikes: "Narration strikes before finalization · current draft",
-    publish_retained_draft: "Publish retained draft · current draft",
+    narration_strikes: "Failed responses allowed · current draft",
+    publish_retained_draft: "Mandatory draft retention · deprecated constant",
   };
   return (
     <div

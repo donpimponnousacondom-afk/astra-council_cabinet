@@ -14,7 +14,7 @@ workspace prerequisite below applies to explicitly named Private tasks.
 
 ## Discovery without side effects
 
-Calling an available tool with `{}` returns `usage_only: true`, `executed: false`, the complete parameter schema, named-field convention and a concrete example. It does not invoke the handler, resolve its credential or perform its action. Authorization still applies: discovery cannot expose a disabled or ungranted tool. Empty calls consume the ordinary round/call budget so discovery cannot create an unbounded loop.
+Calling an available tool with `{}` returns `usage_only: true`, `executed: false`, the complete parameter schema, named-field convention and a concrete example. The explicit exception is `end_cycle`: `{}` executes confirmation and ends the cycle; it never requests help. Discovery does not invoke the handler, resolve its credential or perform its action. Authorization still applies: discovery cannot expose a disabled or ungranted tool. Empty calls consume the ordinary round/call budget so discovery cannot create an unbounded loop.
 
 The model receives this instruction in its shared runtime prompt and each advertised tool explicitly permits the empty help call. A plugin supplies its real action schema to the registry; the common wrapper adds discovery. Do not make each plugin implement a conflicting help convention.
 
@@ -114,35 +114,51 @@ that contain both ordinary text and genuine action `tool_calls`:
 | --- | --- | --- |
 | `narrate` (default) | Withheld from Discord, as before #103 | Execute the calls, read results, then produce the ordinary final answer |
 | `progress` (operator opt-in) | Best-effort progress before the batch, within the per-turn attempt cap | Execute the calls even if optional progress cannot be delivered; final answer remains separate |
-| `end_cycle` (operator opt-in) | Withheld; counts one narration strike, the calls still run | Text is published only when the same response calls `end_cycle` |
+| `end_cycle` (operator opt-in) | Withheld; counts one failed response, eligible calls run once, and the original text is frozen | Finish with text + `end_cycle`, or confirm the saved draft with `end_cycle` alone |
 
-**`end_cycle` mode.** Discord receives the model's text only when the same
-response also calls `end_cycle` with `{}` (no arguments; arguments are rejected
-with usage). The schema lists `end_cycle` next to `council_silence` at every
-round, including the final opportunity. The runtime enforces:
+**`end_cycle` mode.** The normal finish is ordinary assistant answer text plus
+`end_cycle {}` in the same response. The answer never goes inside tool arguments.
+`end_cycle {}` executes a terminal decision; it is **not** an empty-call usage
+query. The runtime has a work phase and, after recoverable failure, a draft
+confirmation phase. Confirmation never returns to work.
 
-- *Text + `end_cycle`*: publish through the ordinary final path (footer, Engram
-  commit, prepared files/panels, reasoning button) and end the activation.
-- *Tool-only*: execute and continue, as in the other modes; no strike.
-- *Text + action tools, no `end_cycle`*: withhold the text, execute the calls,
-  return a private strike notice. At `narration_strikes` strikes (1–5, default 2)
-  the activation enters **finalization**: one more round with only the terminal
-  tools; action calls there are refused with the usual batch error.
-- *Text only, no calls*: withhold it and retain it privately for exactly one
-  finalization round with a warning. A bare `end_cycle` then publishes the
-  retained draft when `publish_retained_draft` is on (default); new text with
-  `end_cycle` replaces it. Any other response ends the activation without an
-  answer. With the setting off, a bare `end_cycle` is rejected instead.
-- *`end_cycle` without text and without a retained draft*: rejected; the model
-  may retry within its round budget.
-- *Companions*: `end_cycle` may share a response only with `memory`/`global_memory`
-  `write` calls and `discord_attach`. They run first; the text is published only
-  if all succeed, otherwise the failures are returned and one finalization
-  attempt follows. That finalization attempt permits no action tools: finish
-  without retrying the failed companions and explain any unfinished work.
-  Any read, search, fetch, shell or other action in that batch
-  rejects the whole batch without executing anything. `council_silence` cannot
-  be combined with `end_cycle` but still works alone.
+- *Text + valid `end_cycle`*: publish through the ordinary final path (footer,
+  Engram commit, prepared files/panels, reasoning button) and end the cycle.
+- *Tool-only actions*: execute and return results as usual; no strike. The normal
+  work-round and task-time budgets remain in force.
+- *Failed publication with useful text*: count one strike, retain the original
+  text and its source request, and remove all action tools. Eligible actions
+  already performed are not replayed. Only `end_cycle` and, when allowed,
+  `council_silence` remain. The private notice tells the model the exact draft is
+  saved and asks it to call `end_cycle {}` without rewriting the answer.
+- *Draft confirmation*: a valid `end_cycle` publishes the frozen original.
+  Additional answer text or an Engram in the confirming response cannot replace
+  the saved source. A bad confirmation counts another strike; action calls are
+  refused, and successful prior actions remain completed. There is no automatic
+  regeneration, batch replay, or fresh work budget.
+- *Strike limit*: the stored `narration_strikes` field now means the maximum
+  failed protocol responses, including failed confirmations (1–5, default 2).
+  Reaching it stops the cycle immediately. Thus 2 allows one failure followed
+  by one confirmation chance; 1 stops at the first failure. No extra attempt is
+  added beyond the configured failure limit.
+- *No answer to retain*: `end_cycle` without ordinary answer text or an existing
+  draft stops incomplete. Independently valid permitted writes may already have
+  completed once; their actual receipts are retained. The harness does not ask
+  for a newly generated answer and does not pretend that a draft exists.
+- *Companions*: during normal work, `end_cycle` may accompany only
+  `memory`/`global_memory` writes and `discord_attach`, executed once before
+  publication. A failed companion stops the cycle without publishing a possibly
+  false success claim. Successful companions stay committed, with evidence;
+  failed ones are not queued for replay. Reads/search/fetch/shell are not finish
+  companions. During draft confirmation, no action companions are allowed.
+  `council_silence` remains a separate terminal choice and cannot share a batch
+  with `end_cycle`.
+- *Draft configuration*: retention is mandatory. The obsolete
+  `publish_retained_draft` switch is removed at startup with a `config.migrated`
+  event recording its previous value. No response mode, grant, activation state
+  or strike limit is changed. API clients submitting the retired field get an
+  explicit reload/update error. Existing custom prompt references to that name
+  render the deprecated constant `True`; it is no longer a bot setting.
 - *Incomplete activation* (budget exhausted or finalization failed): the turn
   fails with a `CycleIncomplete` error. When `notify_incomplete_cycle` is on
   (default off) the bot posts one subtext line (`-# <name> stopped without an
@@ -255,6 +271,14 @@ The optional `global_memory` tool mirrors channel memory's `read`, `write` (same
 The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
 
+- Late on 2026-10-12, after observing repeated empty finishes and discarded
+  memory writes, the owner rejected regeneration-based recovery. The original
+  failed response must be preserved and confirmed with `end_cycle`, with action
+  schemas removed and failures bounded by the configured strike count. This
+  supersedes the earlier replaceable-draft switch and extra-final-attempt
+  behavior described below. Missing drafts and failed companions stop incomplete
+  with truthful receipts; no answer or tool batch is regenerated automatically.
+
 - Later still on 2026-10-12 the owner decided the five deferred `end_cycle`
   questions and asked the external auditor to implement the mode locally for
   the agent to publish: strikes default to two (configurable 1–5, one for the
@@ -285,6 +309,6 @@ Existing decision dates and qualifications below remain authoritative.
 
 - Model-facing `council_inspect` uses a compact bot roster/status separate from dashboard configuration responses. List stable IDs before looking up entities; never infer bot identity from human, room, model or provider names. Saved conversation state is an explicit `context` request, not part of the bot roster/configuration tool. Preserve complete redacted inspection results before paging, with native `resource: "read_result"` on the inspector itself; no workspace grant is required. Rereads retain bot/channel/turn and transitive grant checks. Never restore the old 50,000-character destructive truncation or rewrite bot memories to hide it. See TOOLS for the inspection contract.
 
-- Preserve the shared empty-argument usage and complete argument-error contract in [docs/TOOLS.md](TOOLS.md) for every tool/plugin, including terminal tools. Do not replace it with first-error validation or unbounded repair retries.
+- Preserve the shared empty-argument usage and complete argument-error contract in [docs/TOOLS.md](TOOLS.md) for every tool/plugin, including terminal tools, with the documented `end_cycle {}` execution exception. Do not replace it with first-error validation or unbounded repair retries.
 
 - Private memory uses per-bot `memory_char_limit` (integer 1–128,000, default 48,000) in the modern Capabilities editor and shared API schema. Zero/negative/unlimited sentinels are forbidden: disable the memory plugin to stop both tools and automatic note injection, retaining notes for owner inspection/re-enabling. Keep the 8,000-character per-note bound. Allow a temporary 5% aggregate overshoot; return actual usage and consolidation guidance in tool descriptions/results and each new prompt. While over budget, accept only shrinking writes or deletes until back within budget. Preserve scoped ownership, replacement accounting and identical owner/tool enforcement; never silently truncate or rewrite notes. See docs/OPERATIONS.md and docs/TOOLS.md.
