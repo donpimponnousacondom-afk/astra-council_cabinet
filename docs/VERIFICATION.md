@@ -68,6 +68,23 @@ and future-turn cadence remain unchanged. The two progress suites passed after
 both fixes: **42 passed**, 15.19 s. Each pushed head requires renewed published-PR
 review and current-head check evidence.
 
+The original full local gate completed backend **2,187 passed, 2 skipped** (opt-in
+package downloads), 2 dependency warnings, 618.98 s. Locked dependencies, lint,
+format, evidence-runner tests and frontend build passed. Browser results were
+**75 passed, 1 failed**: an existing SSE-table test saved the new value but opened
+an editor before the dashboard received its post-mutation refresh. The trace
+showed the API's false/revision-2 value while the editor retained true/revision-1.
+The gate exited 1; metadata and failure trace are archived under the ignored
+`round2/pr1-full-gate-evidence/` folder. This is not a complete passing gate.
+
+Sol implemented the narrow verification repair: disable record-title editing
+during table actions and guard alternate editor entry points until refresh
+finishes. A deterministic held-refresh regression failed before correction;
+afterward the SSE/Quick Open/existing pending-editor fixtures passed **3 tests**
+in 16.6 s, and TypeScript/Vite and formatting passed. Sol's role in this delta is
+implementation, not an independent review of his own repair; independent review
+and full-browser rerun evidence belong to the final published-head PR digest.
+
 ## GitHub PR workflow authorization (2026-10-12)
 
 Classification: owner decision, documentation and operator-helper checks; no bot

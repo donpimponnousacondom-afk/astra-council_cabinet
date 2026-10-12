@@ -333,10 +333,64 @@ test("model table changes SSE immediately while preserving native vendor and com
     exact: true,
   });
   await expect(toggle).toBeChecked();
-  await toggle.uncheck();
-  await expect
-    .poll(async () => (await record(page, "profiles", "wb-sse-fixture")).stream)
-    .toBe(false);
+  const editProfile = page.getByRole("button", {
+    name: "Edit Workbench SSE fixture",
+    exact: true,
+  });
+  let releaseRefresh!: () => void;
+  const refreshGate = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  let markRefreshReached!: () => void;
+  const refreshReached = new Promise<void>((resolve) => {
+    markRefreshReached = resolve;
+  });
+  let mutationCommitted = false;
+  await page.route("**/api/control", async (route) => {
+    const body = route.request().postDataJSON();
+    if (
+      body.action !== "save" ||
+      body.kind !== "profiles" ||
+      body.id !== "wb-sse-fixture"
+    )
+      return route.continue();
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    mutationCommitted = true;
+    await route.fulfill({ response });
+  });
+  await page.route("**/api/status", async (route) => {
+    const hold = mutationCommitted;
+    const response = await route.fetch();
+    if (hold) {
+      markRefreshReached();
+      await refreshGate;
+    }
+    await route.fulfill({ response });
+  });
+  try {
+    await toggle.uncheck();
+    await refreshReached;
+    expect((await record(page, "profiles", "wb-sse-fixture")).stream).toBe(
+      false,
+    );
+    await expect(toggle).toBeDisabled();
+    await expect(editProfile).toBeDisabled();
+    // Quick open shares the edit boundary: it must not snapshot the stale row
+    // while the mutation is committed but its dashboard refresh is still held.
+    await page.keyboard.press("Control+k");
+    await page.getByLabel("Go to page or record").fill("wb-sse-fixture");
+    await page.keyboard.press("Enter");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("status")).toContainText(
+      "Wait for the current action to finish",
+    );
+  } finally {
+    releaseRefresh();
+  }
+  await expect(toggle).toBeEnabled();
+  await expect(toggle).not.toBeChecked();
+  await expect(editProfile).toBeEnabled();
   const after = await record(page, "profiles", "wb-sse-fixture");
   expect(after.revision).toBe(before.revision + 1);
   expect(after.request_json).toEqual(parameters);
