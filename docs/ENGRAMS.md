@@ -147,7 +147,14 @@ delivery becomes committed state. Cancellation, stale revisions, revoked grants,
 failed sends and uncertain Discord delivery do not silently advance memory.
 Public progress messages accompanying tools do not commit state or count as
 delivered final replies for reminders. Their private suffix, if any, is stripped;
-the model must supply any state update with its final text-only answer.
+the model must supply any state update with its final answer. In opt-in
+`end_cycle` mode this is the ordinary text accompanying a validated `end_cycle`
+call, after any permitted companions succeed. A retained text-only draft may
+also carry state; publishing that exact draft uses its original request evidence.
+Both `stop` and `tool_calls` complete terminal boundaries are supported, while
+intermediate tools, rejected terminal batches, failed companions and partial
+provider output cannot commit state. The same confirmed-delivery and miss-counting
+rules apply; an `end_cycle` call never goes inside the private state block.
 Restart recovery may promote an already confirmed candidate; it does not resend
 an uncertain answer. State and coverage move together on the SQLite owner thread.
 

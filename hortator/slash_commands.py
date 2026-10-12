@@ -215,6 +215,7 @@ class SlashEngine(Engine):
     def __init__(self, manager, interaction, invocation):
         main = manager.service.engine
         super().__init__(main.store, main.vault, main.pool, main.registry)
+        self.incomplete_streaks = main.incomplete_streaks
         self.manager, self.interaction, self.invocation = manager, interaction, invocation
         self.contexts = SlashContexts(
             self.store, self.pool, invocation, main.registry.global_memory, main.registry.application_emojis
@@ -247,8 +248,8 @@ class SlashEngine(Engine):
         delivery_id=None,
         **kwargs,
     ):
-        # A harness notice edits the interaction response like progress text.
-        progress = progress or notice
+        optional = progress or notice
+        kind = "harness_notice" if notice else "progress" if progress else None
         if not self.valid(bot, profile, provider) or not self.channel_allowed(bot, context.channel_id):
             raise ControlError("Interaction permission or configuration changed; answer withheld")
         content = self.vault.redact(strip_reasoning(content))
@@ -267,7 +268,7 @@ class SlashEngine(Engine):
             if request_id
             else None
         )
-        footer = "" if progress else render_footer(bot, profile, provider, request, redact=self.vault.redact)
+        footer = "" if optional else render_footer(bot, profile, provider, request, redact=self.vault.redact)
         text, attached = model_message(content, footer)
         outbox_id = delivery_id or uid("out_")
         self.store.execute(
@@ -283,7 +284,8 @@ class SlashEngine(Engine):
                 time.time(),
                 dumps(
                     {
-                        "kind": self.invocation["kind"],
+                        "kind": "harness_notice" if notice else self.invocation["kind"],
+                        **({"invocation_kind": self.invocation["kind"]} if notice else {}),
                         "interaction_id": str(self.interaction.id),
                         "private": self.invocation["private"],
                         **({"progress": True} if progress else {}),
@@ -299,17 +301,17 @@ class SlashEngine(Engine):
                 "footer": footer,
                 "routing": self.invocation["kind"],
                 "channel_id": self.invocation["channel_id"],
-                **({"kind": "progress"} if progress else {}),
+                **({"kind": kind} if kind else {}),
             },
             bot_id=bot["id"],
             turn_id=context.turn_id,
         )
-        panel = self.registry.panels.prepared(context) if not progress else None
+        panel = self.registry.panels.prepared(context) if not optional else None
         reasoning = (
             await self.registry.reasoning_viewer.prepare(
                 bot, context.turn_id, request_id, outbox_id, self.invocation["channel_id"]
             )
-            if not progress
+            if not optional
             else None
         )
         files = []
@@ -357,7 +359,7 @@ class SlashEngine(Engine):
                     "outbox_id": outbox_id,
                     "discord_id": str(sent.id),
                     "routing": self.invocation["kind"],
-                    **({"kind": "progress"} if progress else {}),
+                    **({"kind": kind} if kind else {}),
                 },
                 bot_id=bot["id"],
                 turn_id=context.turn_id,
@@ -1126,6 +1128,15 @@ class DiscordSlash:
         self.finish(invocation["interaction_id"], turn["status"], error or turn["error"])
         uncertain = self.store.one("SELECT 1 FROM outbox WHERE turn_id=? AND status='unknown'", (turn_id,))
         if uncertain:
+            return
+        if self.store.one(
+            "SELECT 1 FROM outbox WHERE turn_id=? AND status='sent' "
+            "AND json_extract(routing,'$.kind')='harness_notice'",
+            (turn_id,),
+        ):
+            # The optional cycle notice already resolved this interaction.
+            # When notices are off/suppressed, the normal failure receipt below
+            # still clears Discord's deferred acknowledgement.
             return
         if turn["status"] == "silent":
             await self.notice(

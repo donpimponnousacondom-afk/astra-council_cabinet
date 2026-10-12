@@ -43,10 +43,57 @@ narrate/progress behaviour, and `cycle.ended` for every protocol.
 `tests/test_response_protocol_config.py` now asserts the implemented value,
 strict strike bounds, public defaults and the end_cycle prompt variant.
 
-Known gaps for the PR review: no Engram-suffix test on the `end_cycle` path (it
+Initial handoff gaps, addressed in PR #110 follow-up below: no Engram-suffix test on the `end_cycle` path (it
 reuses the shared final-publication helper that the existing Engram tests
 cover); no slash-command `end_cycle` test; the incomplete-cycle streak is
 in-memory and resets on restart by design.
+
+### PR #110 review corrections
+
+The project agent published the implementer's clean `ec10a6d` snapshot and opened
+PR #110, then started independent Luna/max and GPT-6.1 Sol/high GitHub-PR reviews.
+Sol and the parent independently reproduced terminal Engram state being skipped
+for `finish_reason=tool_calls`; Sol also reproduced `stop` plus a terminal call
+being rejected by Engram staging. The engine now explicitly identifies its
+validated terminal call after successful companions. Engram staging checks that
+call against the stored response and retains its ordinary delivery/coverage
+checks. Mode-specific wire guidance permits this final boundary; retained drafts
+keep their original request identity. No intermediate or failed answer gains
+memory acceptance.
+
+Sol reproduced companion writes bypassing the terminal-only finalization schema,
+and missing `cycle.ended` events on context-preparation failure. Luna independently
+identified the latter before learning of Sol's finding. Companions are now rejected
+at finalization/action-budget boundaries, and cycle evidence exists before context
+preparation. Rounds count attempted model generations including the final reply.
+Sol also reproduced per-invocation slash streak resets and a second edit overwriting
+the notice. Slash/panel runners now share the bot/channel streak; an already-sent
+cycle notice is the single receipt, while existing failure acknowledgements remain
+when optional notices are off/suppressed. Cancellation remains cancellation.
+
+Luna independently found the dashboard preview selecting narrate for end_cycle.
+A browser regression failed with that wrong preview before correction, then passed
+with the actual end_cycle template and draft strike/retained settings. It also
+checks numeric validation, persistence/reopening, mode reversal, and unchanged
+other bot/plugin settings. Initial syntax concerns from running an older host
+Python were retracted: the project requires Python 3.14 and the published syntax
+is valid there; no syntax workaround was applied.
+
+Corrected focused backend checks: **239 passed**, 2 existing dependency warnings,
+62.25 s, across end_cycle and boundary, Engram unit/integration, progress/boundary,
+slash and protocol-configuration suites. The expanded browser fixture passed
+**1 test** (11.7 s total). Python lint/format, frontend format and TypeScript/Vite
+passed. All provider/Discord interactions are fixtures. New end_cycle paths cover
+Engram success and misses, retained-source identity, filtering, failed/uncertain
+sends, cancellation, companion failures, terminal budgets, preparation failures,
+slash receipts/streak reset, and revocation before notices.
+
+The standard full local gate started clean on `ec10a6d` while these corrections
+were subsequently made. Its source-before/source-after metadata and result belong
+to that run, not a claim of a full corrected-head run. Final published-head CI,
+delta reviews and browser evidence are recorded in PR #110's digest; focused
+passes alone do not establish complete readiness. Detailed reproduction/logs are
+retained in ignored `audit/2026-10-12/end-cycle-pr/` in the canonical repository.
 
 ## Response protocol controls, PR 1 (2026-10-12)
 

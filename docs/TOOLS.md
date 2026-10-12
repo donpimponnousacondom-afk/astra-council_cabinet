@@ -148,12 +148,18 @@ round, including the final opportunity. The runtime enforces:
   footer/panels; after three consecutive incomplete activations in a channel
   the notices pause until that bot publishes or chooses silence there again.
   Streaks are in-memory and reset on restart.
+  Slash/panel invocations share the bot/channel streak with ordinary turns and
+  keep the invocation's public/private visibility. A sent cycle notice resolves
+  the interaction once. If it is off or suppressed, the existing interaction
+  failure receipt still clears Discord's deferred acknowledgement.
 - Background-job acknowledgements (tool list empty) publish text-only as before.
 
 Every turn, in every mode, ends with a `cycle.ended` ledger event carrying the
-protocol, status, reason (`end_cycle`, `draft_published`, `text_only`, `silence`,
+protocol, status, reason (`end_cycle`, `draft_published`, `text_only`, `silence`, `compacted`,
 `incomplete`, `cancelled`, `failed`), rounds, strikes, executed action count,
-whether text was published, and whether a draft or finalization occurred. This
+whether text was published, and whether a draft or finalization occurred. Rounds
+count attempted model generations, including the final answer; preparation
+failures have zero and still emit the event. This
 is the evidence for comparing narration behaviour across bots and modes.
 
 Existing records without the setting use `narrate`; installing this change does

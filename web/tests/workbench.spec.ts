@@ -651,6 +651,66 @@ test("response protocol controls preserve zero, bounds and unrelated bot configu
   expect(disabled.response_protocol).toBe("narrate");
   expect(disabled.max_progress_messages_per_turn).toBe(20);
   expect(disabled.plugin_config).toEqual(before.plugin_config);
+
+  await open();
+  await protocol.selectOption("end_cycle");
+  const strikes = dialog.getByLabel("Narration strikes before finalization", {
+    exact: true,
+  });
+  await expect(strikes).toBeEnabled();
+  await expect(strikes).toHaveValue("2");
+  for (const invalid of ["0", "6", "1.5", ""]) {
+    await strikes.fill(invalid);
+    await dialog
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    expect(
+      await strikes.evaluate((input: HTMLInputElement) =>
+        input.checkValidity(),
+      ),
+    ).toBe(false);
+    expect((await record(page, "bots", id)).revision).toBe(disabled.revision);
+  }
+  await strikes.fill("1");
+  await dialog
+    .getByLabel("Publish retained draft with a bare end_cycle", { exact: true })
+    .uncheck();
+  await dialog
+    .getByLabel("Post a notice when a cycle ends without an answer", {
+      exact: true,
+    })
+    .check();
+  await dialog.getByRole("button", { name: "Prompts", exact: true }).click();
+  await dialog
+    .locator('[data-layer="response_protocol"]')
+    .getByRole("button")
+    .click();
+  const cycleInspection = dialog.locator("#inspect-response_protocol");
+  await expect(cycleInspection).toContainText(
+    "Template text · runtime-response-protocol-end_cycle",
+  );
+  await expect(cycleInspection).toContainText("After 1 strikes");
+  await expect(cycleInspection).toContainText("currently False");
+  await save();
+  const enabled = await record(page, "bots", id);
+  expect(enabled.response_protocol).toBe("end_cycle");
+  expect(enabled.narration_strikes).toBe(1);
+  expect(enabled.publish_retained_draft).toBe(false);
+  expect(enabled.notify_incomplete_cycle).toBe(true);
+  expect(enabled.max_progress_messages_per_turn).toBe(20);
+  expect(enabled.plugin_config).toEqual(before.plugin_config);
+  expect(await record(page, "bots", "hortator")).toEqual(otherBot);
+  await open();
+  await expect(protocol).toHaveValue("end_cycle");
+  await expect(strikes).toHaveValue("1");
+  await protocol.selectOption("narrate");
+  await expect(strikes).toBeDisabled();
+  await save();
+  const restored = await record(page, "bots", id);
+  expect(restored.response_protocol).toBe("narrate");
+  expect(restored.narration_strikes).toBe(1);
+  expect(restored.publish_retained_draft).toBe(false);
+  expect(restored.notify_incomplete_cycle).toBe(true);
 });
 
 test("bot memory budget, silence and footer controls persist in a docked editor without changing other behavior", async ({

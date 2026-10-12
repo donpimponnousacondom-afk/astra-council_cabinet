@@ -134,7 +134,7 @@ async def test_text_only_is_retained_then_bare_end_cycle_publishes_it(kernel):
     assert events(kernel, "cycle.draft_retained")[0]["characters"] == len("Draft answer without the tool.")
     done = cycle(kernel)
     assert done["reason"] == "draft_published" and done["draft_retained"] and done["finalization"]
-    assert done["rounds"] == 1
+    assert done["rounds"] == 2
 
 
 async def test_retained_draft_is_replaced_by_new_text_with_end_cycle(kernel):
@@ -432,7 +432,7 @@ async def test_incomplete_cycle_notice_is_public_subtext_and_pauses_after_streak
     assert len(turns) == 5 and all(row["status"] == "failed" for row in turns)
     assert len(posted) == 3
     content, reply_to, footer = posted[0]
-    assert content.startswith("-# Ada stopped without an answer after 1 tool round")
+    assert content.startswith("-# Ada stopped without an answer after 2 model rounds")
     assert reply_to is None and footer == ""
     notices = kernel.store.rows(
         "SELECT status FROM outbox WHERE json_extract(routing,'$.kind')='harness_notice'"
@@ -505,4 +505,4 @@ async def test_cycle_ended_is_recorded_for_every_protocol(kernel, protocol):
     await run(kernel)
     done = cycle(kernel)
     assert done["response_protocol"] == protocol and done["published"] is True
-    assert done["channel_id"] == CHANNEL and done["rounds"] == 0
+    assert done["channel_id"] == CHANNEL and done["rounds"] == 1

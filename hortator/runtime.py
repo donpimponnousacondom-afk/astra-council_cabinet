@@ -685,8 +685,9 @@ class Engine:
         ordinary_delivery_id = None
         response_protocol = bot.get("response_protocol", "narrate")
         cycle_mode = response_protocol == "end_cycle"
-        cycle = None
+        cycle = {"reason": None, "actions": 0, "draft_retained": False, "finalization": False}
         round_index = 0
+        generation_rounds = 0
         strikes = 0
         reply_to = None
         context = ToolContext(bot, channel_id, turn_id, owner_verified=bot["role"] == "hortator")
@@ -709,6 +710,7 @@ class Engine:
             )
             if compact_only:
                 status, decision = "completed", "compacted"
+                cycle["reason"] = "compacted"
                 return
             engram = original_meta.get("_engram_snapshot")
             activation = self.claim_attention(bot, channel_id, turn_id, through=through) or bot.get(
@@ -744,11 +746,15 @@ class Engine:
             finalizing = False
             finalize_after_batch = False
             retained_draft = None
-            cycle = {"reason": None, "actions": 0, "draft_retained": False, "finalization": False}
 
-            async def publish_final(content, final_engram, request_id, finish_reason, reason):
+            async def publish_final(
+                content, final_engram, request_id, finish_reason, reason, *, terminal_call_id=None
+            ):
                 nonlocal engram_candidate, ordinary_delivery_id, status, decision
-                if final_engram and final_engram.get("state") is not None and finish_reason == "stop":
+                complete_final = finish_reason == "stop" or (
+                    terminal_call_id is not None and finish_reason == "tool_calls"
+                )
+                if final_engram and final_engram.get("state") is not None and complete_final:
                     # Coverage describes only the actual represented
                     # transcript/summary, never the room's current tail.
                     represented = set(meta["message_sequences"])
@@ -768,6 +774,7 @@ class Engine:
                             covered_through=covered,
                             summary_checkpoint=stored_context["checkpoint"],
                             summary_hash=hashlib.sha256(stored_context["summary"].encode()).hexdigest(),
+                            terminal_call_id=terminal_call_id,
                         )
                     else:
                         self.store.emit(
@@ -801,7 +808,7 @@ class Engine:
                     engram is not None
                     and final_engram is not None
                     and final_engram.get("invalid")
-                    and finish_reason == "stop"
+                    and complete_final
                 ):
                     self.registry.engrams.record_miss(
                         engram, request_id, ordinary_delivery_id, final_engram["invalid"]
@@ -976,6 +983,7 @@ class Engine:
                     "UPDATE contexts SET estimated_tokens=? WHERE bot_id=? AND channel_id=?",
                     (meta["estimated_tokens"], bot["id"], channel_id),
                 )
+                generation_rounds += 1
                 result = await budgeted(
                     self.pool.complete(
                         bot=bot,
@@ -1145,6 +1153,11 @@ class Engine:
                     batch_error = "end_cycle must appear exactly once; no actions were executed"
                 elif ending and "council_silence" in names:
                     batch_error = "end_cycle and council_silence cannot be combined; no actions were executed"
+                elif ending and companions and (finalizing or round_index >= round_limit):
+                    batch_error = (
+                        "Only terminal tools are available in this finalization round; "
+                        "end_cycle companions are not allowed. No actions were executed"
+                    )
                 elif ending and not all(self.terminal_compatible(call, can_attach) for call in companions):
                     batch_error = (
                         "end_cycle may be combined only with memory/global_memory writes and discord_attach. "
@@ -1521,6 +1534,7 @@ class Engine:
                             source["request_id"] if use_draft else result.request_id,
                             source["finish_reason"] if use_draft else result.finish_reason,
                             "draft_published" if use_draft else "end_cycle",
+                            terminal_call_id=None if use_draft else ending_call["id"],
                         )
                         ending_value = {"ok": True, "executed": True, "published": True, "draft": use_draft}
                         finished = True
@@ -1629,10 +1643,17 @@ class Engine:
             )
             if isinstance(exc, CycleIncomplete):
                 cycle["reason"] = "incomplete"
-                await self.notify_incomplete_cycle(bot, profile, provider, context, reply_to, round_index)
+                try:
+                    await self.notify_incomplete_cycle(
+                        bot, profile, provider, context, reply_to, generation_rounds
+                    )
+                except asyncio.CancelledError:
+                    status, error = "cancelled", "Stopped during incomplete-cycle notice delivery"
+                    cycle["reason"] = "cancelled"
+                    raise
         finally:
             if status in ("sent", "silent"):
-                self.incomplete_streaks.pop((bot["id"], channel_id), None)
+                self.incomplete_streaks.pop(self.cycle_scope(bot, channel_id), None)
             if cycle is not None:
                 self.store.emit(
                     "cycle.ended",
@@ -1645,7 +1666,7 @@ class Engine:
                         or {"sent": "text_only", "silent": "silence", "cancelled": "cancelled"}.get(
                             status, "failed"
                         ),
-                        "rounds": round_index,
+                        "rounds": generation_rounds,
                         "strikes": strikes,
                         "actions_executed": cycle["actions"],
                         "published": status == "sent",
@@ -1694,9 +1715,13 @@ class Engine:
             return False
         return isinstance(args, dict) and args.get("operation") == "write"
 
+    @staticmethod
+    def cycle_scope(bot, channel_id):
+        return bot["id"], (bot.get("invocation") or {}).get("channel_id", channel_id)
+
     async def notify_incomplete_cycle(self, bot, profile, provider, context, reply_to, rounds):
         """One short public notice per incomplete cycle, paused after a streak."""
-        key = (bot["id"], context.channel_id)
+        key = self.cycle_scope(bot, context.channel_id)
         self.incomplete_streaks[key] += 1
         streak = self.incomplete_streaks[key]
         if not bot.get("notify_incomplete_cycle", False):
@@ -1717,7 +1742,7 @@ class Engine:
         ):
             return
         text = (
-            f"-# {bot['name']} stopped without an answer after {rounds} tool round"
+            f"-# {bot['name']} stopped without an answer after {rounds} model round"
             f"{'' if rounds == 1 else 's'}; the activation ended without end_cycle."
         )
         try:
