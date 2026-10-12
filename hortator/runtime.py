@@ -1711,9 +1711,13 @@ class Engine:
                         )
                     if (
                         cycle_reply_attempt
+                        and ending
                         and name != "end_cycle"
                         and (result_value.get("ok") is False or result_value.get("usage_only"))
                     ):
+                        # A failed finish companion invalidates its answer.
+                        # Narration has no answer yet; finalization can report
+                        # ordinary action errors/help without replaying work.
                         companion_failed = True
                     extras.append(
                         {"role": "tool", "tool_call_id": call["id"], "content": dumps(result_value)}

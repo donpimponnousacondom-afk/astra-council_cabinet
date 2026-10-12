@@ -3078,3 +3078,12 @@ The additional response-configuration, tool-feedback, ordinary-reply and Engram
 integration suites passed **163 tests in 38.30s**, with the same two dependency
 warnings. Total selected local evidence: **269 passed**; this is focused evidence,
 not a local full-suite claim. Logs are in the ignored dated narration audit folder.
+
+Luna's independent review of open PR #113 at `02e0342` found that ordinary
+failed/help action receipts during narration still triggered the finish-companion
+hard stop. The parent reproduced three cases (invalid arguments, usage-only help,
+and a partial-success batch): each stopped before the first final answer. The
+classification now applies only to actual `end_cycle` batches. Narration can
+report those receipts in its bounded final answer without retrying actions; real
+finish-companion failures remain terminal. All three regressions pass in 1.14s.
+The finding was disclosed to Sol after both initial reviews and is Luna-attributed.

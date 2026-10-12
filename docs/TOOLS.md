@@ -133,6 +133,9 @@ after an accepted finish call. None of these final phases returns to work.
   and can return final answer text plus `end_cycle {}`. It cannot perform new work
   or replay the actions. A valid bare `end_cycle` also permits the bounded first-
   answer path below because there is no frozen draft.
+  Error and usage-only receipts also reach finalization, so its first answer can
+  report what failed or remained undone. This does not retry those actions or
+  relax the stop on a failed companion inside an actual `end_cycle` batch.
 - *Real answer with a missing or invalid finish*: a text-only reply missing
   `end_cycle`, or answer text accompanying a recoverable failed `end_cycle`
   batch, is retained with its source request. Count one strike and remove all

@@ -5,7 +5,7 @@ import json
 import pytest
 
 from support.provider import install_client
-from support.runtime_feedback import ready, responses
+from support.runtime_feedback import ready, responses, tool
 from test_end_cycle import cycle, end, events, mixed, read_call, run, tool_names, write_call
 
 
@@ -39,6 +39,51 @@ async def test_narration_is_withheld_then_final_answer_uses_tool_result(kernel, 
     assert not events(kernel, "cycle.draft_retained")
     answer_request = kernel.store.one("SELECT id FROM requests ORDER BY started_at DESC LIMIT 1")["id"]
     assert events(kernel, "delivery.queued")[0]["request_id"] == answer_request
+
+
+@pytest.mark.parametrize("outcome", ["invalid", "usage", "partial"])
+async def test_narration_can_report_failed_or_help_results_without_replaying(kernel, outcome):
+    _, transport = ready(kernel, response_protocol="end_cycle", enabled_plugins=["memory"])
+    count = 0
+
+    def handler(request):
+        nonlocal count
+        count += 1
+        if count == 1:
+            bad = write_call(call_id="bad", key="bad", value=42)
+            calls = (
+                [tool("memory", {}, call_id="help")]
+                if outcome == "usage"
+                else [write_call(call_id="good"), bad]
+                if outcome == "partial"
+                else [bad]
+            )
+            return mixed("I will save that.", *calls)
+        assert count == 2
+        body = json.loads(request.content)
+        assert sorted(tool_names(body)) == ["council_silence", "end_cycle"]
+        receipts = responses(body)
+        if outcome == "usage":
+            assert receipts[-1]["usage_only"]
+            answer = "I only requested tool instructions; nothing was saved."
+        else:
+            assert receipts[-1]["ok"] is False
+            if outcome == "partial":
+                assert receipts[0]["saved"] is True
+            answer = (
+                "One note was saved, but the other failed." if outcome == "partial" else "The write failed."
+            )
+        return mixed(answer, end())
+
+    await install_client(kernel, handler)
+    await run(kernel)
+    assert count == 2 and transport.send.await_count == 1
+    assert transport.send.await_args.args[2] != "I will save that."
+    expected = [{"key": "topic", "value": "Saved fact"}] if outcome == "partial" else []
+    assert kernel.store.rows("SELECT key,value FROM memories") == expected
+    assert cycle(kernel)["strikes"] == 1 and cycle(kernel)["reason"] == "end_cycle"
+    assert cycle(kernel)["actions_executed"] == (1 if outcome == "partial" else 0)
+    assert not events(kernel, "cycle.draft_retained")
 
 
 async def test_narration_engram_is_discarded_and_final_answer_supplies_state(kernel):
