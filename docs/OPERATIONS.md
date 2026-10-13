@@ -868,7 +868,15 @@ The operator-selected DreamHost destination uses the following non-secret global
 
 `identity` names the encrypted vault key; it is not a path or private key value. Remote account, host, roots, public URL and automation are global operator settings. The only permitted per-bot document override is `local_base_url`. The public URL must use HTTPS when remote delivery is enabled. Public and publisher-state roots must be absolute, separate directories, neither containing the other. `web_root` must already exist and be the actual domain document root. The publisher never changes the existing domain-root index or adopts an unmanaged bot/site folder.
 
-The local host needs OpenSSH, Git and Linux memory-file support. The remote account needs passwordless SSH with the verified pin, Python 3 and Git; cron is used for the optional periodic audit. On DreamHost the generated static-serving rules use Apache rewrite/header support and symlink traversal. Server setup must verify the HTTPS site and response headers after an actual test delivery; local readiness reports are configuration checks, not proof of remote login, TLS or browser behavior. Remote enablement can be configured through the fields above or the existing authenticated plugin-save API; no private key is sent through a model tool or placed in plugin JSON.
+The local host needs OpenSSH, Git and Linux memory-file support. The remote account needs passwordless SSH with the verified pin, Python 3 and Git; cron is used for the optional periodic audit. Remote web-server configuration belongs to the operator, including symlink serving, headers and browser permissions. The receiver does not install or validate `.htaccess`. Server setup must verify the HTTPS site and response headers after an actual test delivery; local readiness reports are configuration checks, not proof of remote login, TLS or browser behavior. Remote enablement can be configured through the fields above or the existing authenticated plugin-save API; no private key is sent through a model tool or placed in plugin JSON.
+
+For human-only Bash login banners, place `[[ $- == *i* ]] || return` immediately
+before the banner commands in the remote `.bashrc`, after any environment setup
+needed by non-interactive commands. This skips the remainder of that file for
+non-interactive SSH. The application does not edit shell startup files. On an
+SSH failure, a valid receiver error on stdout takes priority over stderr banner
+text; other failures include the exit code and bounded, labelled stdout/stderr.
+Existing credential redaction still applies.
 
 ### Save, snapshot, transfer and acknowledge
 
@@ -886,20 +894,20 @@ The worker also retains the remote current revision and timestamp from verified 
 
 ### Remote filesystem and namespace ownership
 
-Public sites have the fixed form `<web_root>/<stable-bot-id>/<site-slug>/`. Each site requires an explicit create in the local tool. The bot-root path returns 404 and never lists sites or serves a bot-level index. A site's default page may link separate relative HTML/CSS/JS/SVG/media assets. The receiver reserves each namespace with ownership metadata, refuses unmanaged/colliding paths, and never lets one bot—including Hortator—write another bot's folder. Retired bot IDs stay reserved. Public source copies create independent owned files; they do not transfer ownership.
+Public sites have the fixed form `<web_root>/<stable-bot-id>/<site-slug>/`. Each site requires an explicit create in the local tool. The publisher does not generate a bot-root index; remote directory serving is controlled by the operator's web-server configuration. A site's default page may link separate relative HTML/CSS/JS/SVG/media assets. The receiver reserves each namespace with ownership metadata, refuses unmanaged/colliding paths, and never lets one bot—including Hortator—write another bot's folder. Retired bot IDs stay reserved. Public source copies create independent owned files; they do not transfer ownership.
 
 The remote layout is:
 
 | Path | Purpose and access |
 | --- | --- |
-| `<web_root>/<bot-id>/.htaccess` | Receiver-managed static rules; bot root and hidden files blocked, no listings or server-side script execution |
+| `<web_root>/<bot-id>/.htaccess` | Optional operator-owned rules; never created, inspected, rewritten or removed by the receiver |
 | `<web_root>/<bot-id>/<slug>` | Atomic symlink selecting that site's complete immutable release |
 | `<state_root>/releases/` | Retained public static bytes; traversable directories 0755 and asset files 0644 so Apache can serve them |
 | `<state_root>/metadata/` | Private 0700 ownership, job/receipt, pending-operation and audit metadata |
 | `<state_root>/history/` | Private 0700 Git repository on branch `snapshots`, containing publication and drift evidence |
 | `<state_root>/receiver-<source-hash>.py` | Versioned trusted application receiver; not model-generated code |
 
-The state root and release ancestors are traversable for static serving; metadata, Git history and receiver files retain owner-only access and are outside the web root. Previous releases remain retained. The receiver refuses a deployment that drops existing site paths; file restoration creates another revision while preserving other assets. There is no model delete, rename or ownership-transfer operation. Static suffix checks also reject compound executable names such as `report.php.html`. Local preview and remote serving both use sandboxed browser content without same-origin privileges; scripts and public-asset CORS support ordinary modular sites, while administrative APIs, credentials and server-side execution remain outside their authority.
+The state root and release ancestors are traversable for static serving; metadata, Git history and receiver files retain owner-only access and are outside the web root. Previous releases remain retained. The receiver refuses a deployment that drops existing site paths; file restoration creates another revision while preserving other assets. There is no model delete, rename or ownership-transfer operation. Static suffix checks also reject compound executable names such as `report.php.html`. Local preview retains its sandboxed browser policy without same-origin privileges. Remote serving uses the operator's hosting policy; the receiver neither generates headers nor reconciles `.htaccess` changes. Missing, edited or renamed namespace rules do not block publishing, status or audit. Existing rules are left in place, and new namespaces get no generated rules.
 
 ### Periodic remote audit and recovery
 

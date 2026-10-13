@@ -262,8 +262,29 @@ class SSHDelivery:
                     group.create_task(process.wait(), name="publishing-process")
                 out, err = output.result(), errors.result()
             if process.returncode:
-                detail = self.vault.redact((err or out).decode(errors="replace"))[:2000]
-                raise ControlError("Remote publishing failed: " + detail)
+                # The receiver reports refusals as JSON on stdout. A remote
+                # shell banner on stderr must not hide that actual error.
+                try:
+                    receipt = json.loads(out)
+                except ValueError, UnicodeDecodeError:
+                    receipt = None
+                if (
+                    isinstance(receipt, dict)
+                    and receipt.get("version") == 1
+                    and receipt.get("delivered") is False
+                    and isinstance(receipt.get("error"), str)
+                    and receipt["error"].strip()
+                ):
+                    detail = "receiver: " + self.vault.redact(receipt["error"])[:1800]
+                else:
+                    streams = []
+                    for label, value in (("stdout", out), ("stderr", err)):
+                        if value.strip():
+                            streams.append(
+                                f"{label}: " + self.vault.redact(value.decode(errors="replace"))[:850]
+                            )
+                    detail = "; ".join(streams) or "no diagnostic output"
+                raise ControlError(f"Remote publishing failed (exit {process.returncode}): {detail}")
             return out
         finally:
             try:

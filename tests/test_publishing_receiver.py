@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from hortator.publishing_receiver import HTACCESS, Receiver, ReceiverError, canonical, validate_envelope
+from hortator.publishing_receiver import Receiver, ReceiverError, canonical, validate_envelope
 
 
 def envelope(*, bot="dirac", slug="cat-report", revision=1, job=None, files=None):
@@ -95,10 +95,7 @@ def test_complete_release_is_atomic_static_and_snapshotted_before_it_is_visible(
         ).hexdigest()
     )
     assert public(receiver).is_symlink()
-    assert (receiver.web / "dirac" / ".htaccess").read_text() == HTACCESS
-    assert "Options -Indexes -ExecCGI -Includes" in HTACCESS
-    assert "RewriteRule ^$ - [R=404,L]" in HTACCESS
-    assert "SetHandler default-handler" in HTACCESS
+    assert not (receiver.web / "dirac" / ".htaccess").exists()
     assert (receiver.web / "index.html").read_text() == "existing unrelated domain page"
     assert (receiver.web / ".dh-diag").is_symlink()
     assert not (receiver.web / ".htaccess").exists()
@@ -326,7 +323,7 @@ def test_crash_after_atomic_link_swap_can_finish_receipt_without_duplicate_snaps
     assert git(receiver, "rev-list", "--count", "HEAD") == "2"
 
 
-@pytest.mark.parametrize("failure_point", ["mkdir", "marker", "serving-rules"])
+@pytest.mark.parametrize("failure_point", ["mkdir", "marker"])
 def test_interrupted_namespace_registration_recovers_only_with_proven_ownership(
     receiver, monkeypatch, failure_point
 ):
@@ -341,9 +338,7 @@ def test_interrupted_namespace_registration_recovers_only_with_proven_ownership(
         return original_mkdir(path, *args, **kwargs)
 
     def fail_write(path, *args, **kwargs):
-        target = (
-            receiver.web / "dirac" / (".hortator-owner.json" if failure_point == "marker" else ".htaccess")
-        )
+        target = receiver.web / "dirac" / ".hortator-owner.json"
         if failure_point != "mkdir" and path == target:
             raise OSError("synthetic registration failure")
         return original_write(path, *args, **kwargs)
@@ -362,6 +357,41 @@ def test_interrupted_namespace_registration_recovers_only_with_proven_ownership(
     else:
         assert receiver.deploy(envelope())["delivery_current"]
         assert git(receiver, "rev-list", "--count", "HEAD") == "1"
+
+
+@pytest.mark.parametrize("operator_change", ["edited", "removed", "renamed", "symlink"])
+def test_publishing_status_and_audit_leave_remote_hosting_rules_alone(receiver, tmp_path, operator_change):
+    receiver.deploy(envelope())
+    root_rules = receiver.web / ".htaccess"
+    root_rules.write_text("Operator domain rules\n")
+    bot_rules = receiver.web / "dirac" / ".htaccess"
+    bot_rules.write_text("Former managed rules\n")
+    renamed = bot_rules.with_name("htaccess2")
+    outside = tmp_path / "operator-rules"
+    if operator_change == "edited":
+        bot_rules.write_text("Operator pointer-lock rules\n")
+    elif operator_change == "removed":
+        bot_rules.unlink()
+    elif operator_change == "renamed":
+        bot_rules.rename(renamed)
+    else:
+        bot_rules.unlink()
+        outside.write_text("Operator linked rules\n")
+        bot_rules.symlink_to(outside)
+
+    receipt = receiver.deploy(envelope(revision=2))
+    assert receipt["delivered"] and receipt["delivery_current"]
+    assert receiver.status({"version": 1, "bot_id": "dirac", "slug": "cat-report"})["current_revision"] == 2
+    assert receiver.audit()["drift_count"] == 0
+    assert root_rules.read_text() == "Operator domain rules\n"
+    if operator_change == "edited":
+        assert bot_rules.read_text() == "Operator pointer-lock rules\n"
+    elif operator_change == "symlink":
+        assert bot_rules.is_symlink() and outside.read_text() == "Operator linked rules\n"
+    else:
+        assert not os.path.lexists(bot_rules)
+        if operator_change == "renamed":
+            assert renamed.read_text() == "Former managed rules\n"
 
 
 def test_deleted_established_namespace_cannot_be_silently_recreated(receiver):

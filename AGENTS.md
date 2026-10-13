@@ -123,6 +123,9 @@ including superseded behavior, and must not be treated as current configuration.
 - Speech generation and authenticated voice discovery: [TTS.md](docs/TTS.md).
 - Profile pricing and usage provenance: [PRICING.md](docs/PRICING.md).
 - Document ownership, publication and SSH identity: [DOCUMENTS.md](docs/DOCUMENTS.md).
+- Remote hosting policy is operator-owned: never manage or reconcile remote
+  `.htaccess` files. See the 2026-10-13 owner decision in DOCUMENTS; it supersedes
+  earlier generated remote serving rules without changing site ownership or SSH trust.
 - Scoped agentic tools and task budgets: [AGENTIC_TOOLS.md](docs/AGENTIC_TOOLS.md).
 - Shell sandbox, limits and archival: [SHELL_RUNNER.md](docs/SHELL_RUNNER.md).
 - Single per-bot filesystem and mount toggle: [FILESYSTEM.md](docs/FILESYSTEM.md).

@@ -449,3 +449,19 @@ and saved defaults. Decode Mistral JSON/base64 speech alongside existing binary
 audio; expose bounded upstream error details through existing redaction. This is
 provider-specific, with no new dashboard controls or voice-list promises for
 other services. The current contract is [TTS](TTS.md).
+
+## Operator-owned remote hosting — 2026-10-13
+
+The owner changed and renamed remote `.htaccess` files while enabling browser
+features and explicitly directed the publisher never to sync those files again.
+Remote domain/bot-namespace rules are now outside receiver management: no
+creation, comparison, restoration or deletion, and no delivery/status/audit
+refusal because rules are absent or edited. Existing files stay untouched and
+new namespaces get no generated rules. Local preview behavior, model document
+paths, ownership/receipts and SSH host verification retain their existing
+contracts. [DOCUMENTS](DOCUMENTS.md) owns the current feature policy.
+
+SSH failure diagnostics must report structured receiver errors from stdout even
+when a login banner exists on stderr. Include the exit code; use bounded,
+labelled stream diagnostics when there is no receiver error. The operator can
+make Bash banners interactive-only; the application does not edit `.bashrc`.
