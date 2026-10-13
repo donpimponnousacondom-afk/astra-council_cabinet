@@ -25,6 +25,14 @@ old-job refusals for filesystem, workspace, legacy and disposable storage.
 Foreign-bot/channel refusals continue to hide storage details. No ownership,
 imported-original, end-cycle or scheduling behavior is changed here.
 
+Publication follow-up: the parent found and reproduced an additional archived-job
+test matching the old generic refusal string (one failure, one pass before
+stopping). Its assertions now distinguish foreign scope from another response
+cycle while retaining archived-record rejection. The full archival file passed
+9 tests in 0.29 s; Ruff lint/format including scripts passed. This was a
+parent-discovered test-contract mismatch after the reviewers' initial digests;
+the corrected head requires both delta reviews and fresh CI.
+
 ## Immutable end_cycle recovery and strict failure budget (2026-10-12, after #111)
 
 The owner rejected answer regeneration and repeated invalid finish loops. The

@@ -81,9 +81,11 @@ def test_archive_retention_restart_lookup_and_scopes(runner):
     restarted = ShellRunner(runner.root, runner.workspaces)
     assert restarted.status(context(1), first)["archived"]
     assert restarted.read(context(1), first)["text"] == "original output"
-    for wrong in (context(1, bot="loki"), context(1, channel="elsewhere"), context(2)):
-        with pytest.raises(ControlError, match="another bot, channel, or turn"):
+    for wrong in (context(1, bot="loki"), context(1, channel="elsewhere")):
+        with pytest.raises(ControlError, match="another bot or channel"):
             restarted.status(wrong, first)
+    with pytest.raises(ControlError, match="another response cycle"):
+        restarted.status(context(2), first)
     metadata = restarted._load(first)
     metadata["started_at"] -= 8 * 86400
     restarted._save(metadata)
