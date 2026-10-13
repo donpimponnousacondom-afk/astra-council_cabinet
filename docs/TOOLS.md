@@ -82,6 +82,13 @@ the contents of results that older code already discarded.
 
 For parseable JSON, validation collects all detectable schema errors: missing required fields, wrong types, unknown fields, bounds and conditional operation requirements. The response contains all error paths/rules/messages and full usage with an example for the requested valid operation. Named JSON fields have **no positional order**. Strings are not silently converted into numbers, and a malformed call never partially invokes the handler.
 
+Fields forbidden by an operation's conditional schema are reported at their
+actual path with rule `forbidden`, naming the operation and instructing removal.
+For example, a memory `read` with `length` reports `$.length` rather than the
+validator's opaque “False schema” message. The complete usage still explains
+that `length` belongs to `read_result`. This only improves feedback: invalid
+arguments are neither silently discarded nor translated into another call.
+
 Malformed JSON returns its syntax error and full usage together. Duplicate keys and non-JSON numbers such as NaN/Infinity are rejected. Field validation cannot reliably examine an unparseable document; the response explains that limitation. Handler failures also include usage, but an external failure cannot imply that no side effect occurred. Credentials are redacted before feedback reaches the model or ledger.
 
 Attachment preparation collects schema, reply-target and artifact-reference problems together. The terminal `council_silence` call must be alone in its batch; mixed terminal/plugin batches or batches exceeding the call limit execute nothing and return repair information. Duplicate call IDs fail the turn because results cannot be associated unambiguously. Providers and plugins can still reject semantically invalid values or fail externally; this design gives the model complete available feedback, not a guarantee that its next attempt succeeds.

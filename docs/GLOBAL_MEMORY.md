@@ -28,7 +28,9 @@ The tool takes a JSON object with named fields; argument order is irrelevant. No
 | `length` | Integer, 1–18,000 | Optional for `read_result`, default 6,000 characters. |
 
 Paging fields belong only to `read_result`, which does not accept note keys or
-values. The owner API retains read/write/delete, as described below.
+values. Ordinary `read` needs no `length`; supplying paging fields to it is a
+validation error, not a truncated read. Field help and error paths identify this
+distinction. The owner API retains read/write/delete, as described below.
 
 ```json
 {}

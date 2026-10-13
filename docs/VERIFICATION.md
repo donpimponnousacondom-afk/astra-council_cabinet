@@ -4,6 +4,35 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Actionable tool argument feedback and shell scope help (2026-10-13)
+
+Commit: base `b8d17a08dcd82b1ca5df2e74339a1d4fbc316579` plus task changes;
+dirty at start/end: true/true. Backend scope: focused `test_tool_feedback.py`,
+`test_memory_pagination.py`, `test_filesystem.py`, `test_shell_runner.py`.
+Initial result: 142 passed, 2 failed, 2 skipped in 97.87 s. Both failures were
+new tests incorrectly comparing advertised descriptions (which append shared
+usage guidance) with the unwrapped help description. Corrected those assertions;
+the two-case rerun passed in 0.81 s. Ruff lint and format checks passed.
+Frontend/build/browser tests: not run locally for this backend/help-only change;
+the published PR's required full backend/frontend check remains the merge gate.
+
+Classification: mocked tool integration plus real local sandbox tests. No live
+provider or Discord calls, bot setting changes or memory edits. The skipped
+shell checks are the existing opt-in package-download tests. Regressions cover
+both memory stores, nested false-property paths, simultaneous validation errors,
+unchanged saved notes, filesystem shell advertisement/help/validation, and
+old-job refusals for filesystem, workspace, legacy and disposable storage.
+Foreign-bot/channel refusals continue to hide storage details. No ownership,
+imported-original, end-cycle or scheduling behavior is changed here.
+
+Publication follow-up: the parent found and reproduced an additional archived-job
+test matching the old generic refusal string (one failure, one pass before
+stopping). Its assertions now distinguish foreign scope from another response
+cycle while retaining archived-record rejection. The full archival file passed
+9 tests in 0.29 s; Ruff lint/format including scripts passed. This was a
+parent-discovered test-contract mismatch after the reviewers' initial digests;
+the corrected head requires both delta reviews and fresh CI.
+
 ## Immutable end_cycle recovery and strict failure budget (2026-10-12, after #111)
 
 The owner rejected answer regeneration and repeated invalid finish loops. The
