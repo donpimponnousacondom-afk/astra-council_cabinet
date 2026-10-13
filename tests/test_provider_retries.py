@@ -256,3 +256,65 @@ async def test_slash_deadline_cancels_retry_wait(kernel, monkeypatch):
     assert kernel.store.rows("SELECT seq FROM events WHERE kind='request.retry_cancelled'")
     assert kernel.store.one("SELECT status FROM turns")["status"] == "failed"
     assert kernel.pool.active["openrouter"] == 0
+
+
+async def test_before_attempt_checks_after_slot_queue_without_provider_failure(kernel):
+    from hortator.runtime import TurnSuperseded
+
+    bot = configured(kernel)
+    provider = kernel.store.get("providers", "openrouter")
+    provider["max_concurrency"] = 1
+    kernel.store.put("providers", provider)
+    entered = asyncio.Event()
+    checked = []
+    superseded = False
+
+    def boundary():
+        checked.append(True)
+        if superseded:
+            raise TurnSuperseded("new input")
+
+    async def queued_call():
+        entered.set()
+        with pytest.raises(TurnSuperseded):
+            await kernel.pool.complete(**call_args(kernel, bot), before_attempt=boundary)
+
+    await install_client(kernel, lambda _: pytest.fail("Superseded queued request reached HTTP"))
+    async with asyncio.TaskGroup() as group:
+        async with kernel.pool.slot(provider):
+            group.create_task(queued_call())
+            await entered.wait()
+            assert not checked
+            superseded = True
+    assert checked == [True]
+    assert not kernel.store.rows("SELECT * FROM requests")
+    assert not kernel.store.rows("SELECT * FROM events WHERE kind='provider.failure'")
+    assert kernel.pool.active["openrouter"] == 0
+
+
+async def test_before_attempt_stops_retry_without_counting_a_new_provider_failure(kernel):
+    from hortator.runtime import TurnSuperseded
+
+    bot = configured(kernel)
+    policy(kernel)
+    superseded = False
+    calls = 0
+
+    def boundary():
+        if superseded:
+            raise TurnSuperseded("new input")
+
+    def handler(request):
+        nonlocal calls, superseded
+        calls += 1
+        superseded = True
+        return httpx.Response(503, json={"error": "transient fixture"})
+
+    await install_client(kernel, handler)
+    with pytest.raises(TurnSuperseded):
+        await kernel.pool.complete(**call_args(kernel, bot), before_attempt=boundary)
+    assert calls == 1
+    assert len(kernel.store.rows("SELECT * FROM requests")) == 1
+    assert len(kernel.store.rows("SELECT * FROM events WHERE kind='request.retry_scheduled'")) == 1
+    assert not kernel.store.rows("SELECT * FROM events WHERE kind='provider.failure'")
+    assert kernel.pool.active["openrouter"] == 0

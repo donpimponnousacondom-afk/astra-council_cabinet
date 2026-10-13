@@ -481,3 +481,13 @@ SSH failure diagnostics must report structured receiver errors from stdout even
 when a login banner exists on stderr. Include the exit code; use bounded,
 labelled stream diagnostics when there is no receiver error. The operator can
 make Bash banners interactive-only; the application does not edit `.bashrc`.
+
+## 2026-10-13 — ordinary-cycle supersession and outcome continuity
+
+Owner authorized the diagnosed fixes while keeping end_cycle experiments parked.
+After the argument/help repair, ordinary narrate/progress work yields to eligible
+newer directed input at safe boundaries. Already-started work settles; accepted
+research jobs remain independently owned. A metadata-only journal carries truthful
+completed/refused/uncertain action receipts to the next ordinary cycle. No action
+replay, model/grant changes or actual memory cleanup is included. The current
+contract is [TOOLS](TOOLS.md#supersession-and-interrupted-action-receipts).

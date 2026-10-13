@@ -101,6 +101,52 @@ Schemas may supply complete top-level `examples`. Shared usage selects a schema-
 
 Shell execution with `task` requires an existing persistent workspace: first call **workspace** with `{"operation":"start","task":"your-task"}`, wait for success, then reuse its task in `shell.run`. The shell tool has no start operation and never creates a workspace implicitly. Missing-task errors name this exact prerequisite. Omit `task` for a disposable command requiring only shell; files vanish when the call ends and job logs remain. See [shell storage modes](SHELL_RUNNER.md#disposable-commands-and-persistent-tasks). Existing budget and isolation checks still apply.
 
+## Supersession and interrupted action receipts
+
+For ordinary `narrate` and `progress` cycles, newer directed input that qualifies
+under the existing attention rules stops further work at the next safe boundary:
+before a new model round, after obtaining a provider slot and before each retry,
+after inference returns a tool batch, and before each unstarted call. An in-flight
+provider attempt or tool is allowed to settle. A same-human follow-up in the same
+conversation can supersede that human's unsent answer; another human/conversation
+waits under the existing rules. Final answer delivery retains its existing
+suppression and in-flight-send behavior. Slash/panel invocations and `end_cycle`
+retain their existing behavior.
+
+`turn.superseded` records the boundary, replacement message IDs and remaining
+unstarted call count. The operator's full turn/request detail retains the private
+notice and `context.action_receipts` source IDs for inspection. This is
+cancellation, not a provider fault. Accepted
+background jobs retain their independent ownership and are released once by the
+existing finalizer; supersession neither cancels nor resubmits them.
+
+Cancellation is not rollback. Before an ordinary tool dispatch, a synchronous
+journal records small outcome metadata; a returned result updates it. The next
+ordinary cycle in that bot/channel may receive a private summary of settled
+cancelled, failed or interrupted work. Memory `saved`/`deleted` outcomes require
+matching confirmation. `returned` means only a tool returned without an explicit
+failure; `refused` means explicit no execution; `error` and `unknown` do not prove
+whether side effects occurred. A crash between dispatch and confirmation remains
+unknown. The summary never replays an action or makes old job/result IDs readable.
+
+No note values, shell commands/output, URLs, provider reasoning or old answers are
+copied into this journal. Known-credential redaction and current tool grants apply.
+The notice is bounded to 12,000 characters, 32 source cycles and 32 detailed entries
+per source cycle, with omission metadata. It must also fit the actual request's
+token budget. Selection rechecks grants each round; unchanged pending entries remain stable through follow-ups;
+it is not transcript, compaction input or an Engram update. Recovery reasoning
+remains separately masked in request evidence.
+
+Only entries actually included in the final request are acknowledged after a
+confirmed final reply or intentional silence; optional progress does not count.
+Entries omitted for capacity or grants remain pending. A successful current cycle
+discards its own pending journal. Startup recovery preserves interrupted records;
+clean slate and context-selective restore clear only the selected bot/channel.
+Full database snapshots include the journal. Pending metadata can accumulate
+until acknowledged, just like the full ledger; the bounded notice is not an
+exhaustive history API or an exactly-once execution guarantee. Optional journal
+failures are logged and never replace the original action/cancellation outcome.
+
 ## Normal and extended turns
 
 The existing `tts` plugin supports `{"operation":"voices"}` for authenticated

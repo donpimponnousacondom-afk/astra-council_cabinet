@@ -36,6 +36,7 @@ async def reset(service, actor, bot_id, data):
                 service.registry.reset_wakes(bot_id, channel_id)
                 service.registry.engrams.reset(bot_id, channel_id)
                 store.execute(f"DELETE FROM response_recovery_pending WHERE {clause}", args)
+                store.execute(f"DELETE FROM turn_action_receipts WHERE {clause}", args)
                 if not channel_id:
                     store.execute("DELETE FROM context_resets WHERE bot_id=?", (bot_id,))
                 store.execute(
