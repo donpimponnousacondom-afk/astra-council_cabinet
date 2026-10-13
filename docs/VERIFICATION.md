@@ -3132,3 +3132,64 @@ malformed JSON, stderr-only failures and empty diagnostics. The three publishing
 suites passed **75 tests in 12.15s**. These use real local Git/receiver execution
 and substituted SSH; they do not prove production delivery or live Apache policy.
 Remote PR reviews/CI and live delivery verification follow publication.
+
+## 2026-10-13 — ordinary supersession and interrupted action receipts
+
+The preceding actionable-feedback change landed as PR #115, squash
+`54205104caa2549bbdfd4fef8a7cf009938e44a7`, after Luna/max and GPT-6.1-Sol/high
+reviews and full current-head CI (2,312 passed, 31 skipped). The shared runtime
+was refreshed to that merged snapshot before this separate task branch began.
+
+This change stops stale ordinary work at safe boundaries and carries bounded
+metadata for interrupted actions; see the current TOOLS contract. No bot/model
+settings, grants, stored notes, end_cycle semantics or background-worker ownership
+were changed. Development tests use temporary SQLite and mocked providers/Discord.
+No live-model acceptance is claimed.
+
+Local checks:
+
+- Initial receipt/provider/reset/snapshot run: 72 passed, one test-fixture failure.
+  The restore fixture inserted receipts without their source turns, and the
+  snapshot integrity check correctly refused broken foreign keys. Added genuine
+  source-turn fixtures; no production integrity check was relaxed.
+- Expanded run: `uv run pytest -q tests/test_supersession.py
+  tests/test_snapshots.py::test_selective_context_restore_clears_only_matching_engrams
+  tests/test_addressing.py tests/test_progress_boundaries.py
+  tests/test_response_recovery.py tests/test_end_cycle.py
+  tests/test_background_handoff.py` — **130 passed**, 2 dependency deprecation
+  warnings, 44.43 seconds. Covers in-flight action settlement, no pending sibling
+  execution, operator interruption, repeated supersession, stable metadata,
+  grant revocation, real token-budget omission without acknowledgement, and one
+  accepted independent research job/completion without duplicate execution.
+- Receipt unit cases cover repeated provider call IDs, matching memory proof,
+  refusal/error/unknown outcomes, startup recovery, scope/cutoff/grant isolation,
+  bounded partial acknowledgement and diagnostic failure. Provider cases verify
+  the stop callback after slot acquisition and before retry without inventing a
+  provider failure. Clean slate and selective restore clear only their scope.
+- An integration check also traces source receipt IDs into the existing full
+  operator turn/request inspection path, rather than only testing a journal row.
+- Ruff lint and formatting pass. A preparation review caught interaction with
+  private response recovery: the receipt notice must precede that recovery note,
+  because existing public evidence masking owns the final message slot. The
+  combined runtime test verifies private reasoning does not leak to public request
+  evidence, messages or events.
+
+Full current-head CI and Luna/Sol reviews will be recorded on the published PR.
+They are not implied by these local focused results. Outstanding publication debt
+is the current task until its commit is pushed and its PR exists.
+
+
+PR #116 review follow-up: Luna independently demonstrated that new input during
+idle provider retry backoff waited until the timer expired. The first version
+promised a check before the next retry, not immediate wake-up, but configured
+backoff can reach 3,600 seconds, so the parent accepted the responsiveness fix.
+A new directed message now stops idle retry waiting at bounded 250 ms checks;
+current work retains the full configured delay and active HTTP/tools settle.
+The regression uses a 60-second delay and requires cancellation within 3 seconds
+without another HTTP attempt or an invented provider failure.
+
+Follow-up local validation: supersession/provider files **27 passed in 8.68s**;
+then the non-shortened-backoff regression plus end-cycle compatibility file
+**28 passed in 10.56s**. Only ordinary cycles supply the new owner callback;
+end-cycle/slash callers retain the original provider wait behavior. Ruff lint and
+formatting pass. Full fresh-head CI and both delta reviews remain PR gates.

@@ -153,10 +153,20 @@ def test_selective_context_restore_clears_only_matching_engrams(snapshot_data):
                 "VALUES(?,?,?,?,?,'staged','{}','{}',0,0,'',0,0,1)",
                 (f"candidate{index}", bot, channel, f"turn{index}", f"request{index}"),
             )
+            db.execute(
+                "INSERT INTO turns(id,bot_id,channel_id,profile_id,provider_id,model,started_at,ended_at,status,trigger,revision) "
+                "VALUES(?,?,?,'profile','provider','model',1,2,'cancelled','human_mention',1)",
+                (f"receipt-turn-{index}", bot, channel),
+            )
+            db.execute(
+                "INSERT INTO turn_action_receipts VALUES(?,?,?,?,?)",
+                (f"receipt-turn-{index}", bot, channel, '{"receipts":[],"omitted_count":0}', 1),
+            )
     manager.restore(manifest["id"], fingerprint, scope="bot", bot_id="ada", channel_id="channel-a")
     with sqlite3.connect(directory / "council.sqlite3") as db:
         assert db.execute("SELECT count(*) FROM engram_states").fetchone()[0] == 3
         assert db.execute("SELECT count(*) FROM engram_candidates").fetchone()[0] == 3
+        assert db.execute("SELECT count(*) FROM turn_action_receipts").fetchone()[0] == 3
     receipt = manager.restore(
         manifest["id"],
         fingerprint,
@@ -167,7 +177,7 @@ def test_selective_context_restore_clears_only_matching_engrams(snapshot_data):
     )
     assert "engram" in receipt["context_warning"]
     with sqlite3.connect(directory / "council.sqlite3") as db:
-        for table in ("engram_states", "engram_candidates"):
+        for table in ("engram_states", "engram_candidates", "turn_action_receipts"):
             assert db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 2
             assert not db.execute(
                 f"SELECT 1 FROM {table} WHERE bot_id='ada' AND channel_id='channel-a'"

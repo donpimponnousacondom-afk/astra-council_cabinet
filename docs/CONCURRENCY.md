@@ -21,6 +21,16 @@ The application group deliberately isolates independent workloads after recordin
 
 Bare `create_task` retains an exception, which propagates when awaited/retrieved. The problem is abandoning the handle or ignoring collected errors. Do not introduce bare task creation, unobserved futures, or discarded `gather(return_exceptions=True)` results. Tests enforce this source rule and exercise child failures, sibling cleanup, cancellation, bot isolation and shutdown ordering. [Python TaskGroup semantics](https://docs.python.org/3.14/library/asyncio-task.html#task-groups).
 
+## Yielding to newer directed input
+
+Ordinary `narrate`/`progress` cycles stop at safe work boundaries when existing
+attention rules identify superseding human input. Current provider attempts and
+tools settle; pending rounds, retries and sibling calls do not start. Accepted
+background work keeps its existing owner and gate release. Completed actions are
+not rolled back. The next ordinary cycle can receive bounded private outcome
+metadata, with current grants and token admission, instead of inferring that a
+cancelled answer means nothing ran. See [receipt semantics and lifecycle](TOOLS.md#supersession-and-interrupted-action-receipts).
+
 ## Responsive preparation
 
 TaskGroup cannot prevent synchronous code from blocking every coroutine. Context tokenization and tool working-set estimation operate on detached values in worker threads. The writer SQLite connection, vault access, grant checks and viewer attribution stay on the event-loop thread. Reporting uses separately owned read connections as described below. Transcript assembly yields between bounded chunks. Context preparation admits two simultaneous tokenization operations; operator bot/provider concurrency and budgets remain separate.

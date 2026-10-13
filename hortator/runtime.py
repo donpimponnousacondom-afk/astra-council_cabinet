@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from aiohttp import ClientError
 
+from .action_receipts import ActionReceipts
 from .answer_validation import wrapped_reply
 from .concurrency import cancel_and_wait, join_tasks, task_group, error_text
 from .context import ContextBuilder
@@ -63,6 +64,7 @@ class Engine:
     def __init__(self, store, vault, pool, registry, transport=None, *, reporting=None):
         self.store, self.vault, self.pool, self.registry = store, vault, pool, registry
         self.reporting = reporting
+        self.action_receipts = ActionReceipts(store, vault.redact)
         self.contexts = ContextBuilder(
             store,
             pool,
@@ -307,6 +309,27 @@ class Engine:
             if not claimed
             or (row["author_id"] == claimed["author_id"] and row["channel_id"] == claimed["channel_id"])
         ]
+
+    def stop_superseded_work(self, bot, channel_id, turn_id, boundary, *, remaining_calls=0):
+        """Yield at safe boundaries; never interrupt an already-started action."""
+        if bot.get("invocation") or bot.get("response_protocol", "narrate") == "end_cycle":
+            return
+        pending = self.superseding_attention(bot, channel_id, turn_id)
+        if not pending:
+            return
+        self.store.emit(
+            "turn.superseded",
+            {
+                "channel_id": channel_id,
+                "boundary": boundary,
+                "replacement_message_ids": [row["discord_id"] for row in pending],
+                "unstarted_calls": remaining_calls,
+                "reason": "New directed input is waiting; completed actions are retained, no further work starts",
+            },
+            bot_id=bot["id"],
+            turn_id=turn_id,
+        )
+        raise TurnSuperseded("New directed human input is waiting; stop before starting more work")
 
     def budget_error(self, bot):
         now = time.time()
@@ -685,6 +708,9 @@ class Engine:
         ordinary_delivery_id = None
         response_protocol = bot.get("response_protocol", "narrate")
         cycle_mode = response_protocol == "end_cycle"
+        record_actions = not cycle_mode and not bot.get("invocation")
+        receipt_offer = None
+        receipts_in_last_request = None
         cycle = {"reason": None, "actions": 0, "draft_retained": False, "finalization": False}
         round_index = 0
         generation_rounds = 0
@@ -978,10 +1004,14 @@ class Engine:
                     raise
 
             while round_index <= round_limit:
+                self.stop_superseded_work(bot, channel_id, turn_id, "round")
                 if not self.valid(bot, profile, provider) or not self.channel_allowed(
                     bot, context.channel_id
                 ):
                     raise asyncio.CancelledError()
+                if record_actions:
+                    # Pending entries are stable, but tool grants can change between rounds.
+                    receipt_offer = self.action_receipts.offer(context, self.registry.allowed)
                 if document_deadline is not None and asyncio.get_running_loop().time() >= document_deadline:
                     raise ControlError(
                         "Extended task time budget exhausted; saved local files remain available"
@@ -1118,6 +1148,23 @@ class Engine:
                             }
                         else:
                             recovery = None
+                receipts_in_last_request = None
+                if receipt_offer:
+                    # Response-recovery evidence masking owns the final message slot.
+                    candidate = (
+                        messages[:-1] + [receipt_offer.message] + messages[-1:]
+                        if recovery
+                        else messages + [receipt_offer.message]
+                    )
+                    estimated = await self.contexts.estimate_async(candidate, available_tools)
+                    if (
+                        estimated * original_meta["calibration_factor"] + profile["response_tokens"]
+                        < profile["context_window"]
+                    ):
+                        messages = candidate
+                        meta["estimated_tokens"] = estimated
+                        meta["action_receipts"] = [list(key) for key in receipt_offer.receipt_ids]
+                        receipts_in_last_request = receipt_offer
                 self.store.execute(
                     "UPDATE contexts SET estimated_tokens=? WHERE bot_id=? AND channel_id=?",
                     (meta["estimated_tokens"], bot["id"], channel_id),
@@ -1132,8 +1179,19 @@ class Engine:
                         turn_id=turn_id,
                         context=meta,
                         recovery=recovery,
+                        before_attempt=(
+                            lambda: self.stop_superseded_work(
+                                bot, channel_id, turn_id, "provider_queue_or_retry"
+                            )
+                        )
+                        if record_actions
+                        else None,
                     )
                 )
+                if result.tool_calls:
+                    self.stop_superseded_work(
+                        bot, channel_id, turn_id, "tool_batch", remaining_calls=len(result.tool_calls)
+                    )
                 parsed_engram = None
                 ending = cycle_mode and any(
                     call["function"]["name"] == "end_cycle" for call in result.tool_calls
@@ -1467,7 +1525,10 @@ class Engine:
                 companion_failed = False
                 if self.jobs:
                     self.jobs.begin_batch(turn_id)
-                for call in result.tool_calls:
+                for call_index, call in enumerate(result.tool_calls):
+                    self.stop_superseded_work(
+                        bot, channel_id, turn_id, "tool", remaining_calls=len(result.tool_calls) - call_index
+                    )
                     name = call["function"]["name"]
                     definition = (
                         SILENCE
@@ -1633,9 +1694,18 @@ class Engine:
                                     finished = True
                                     break
                     else:
+                        receipt_id = (
+                            self.action_receipts.start(
+                                context, name, call["id"], call["function"]["arguments"]
+                            )
+                            if record_actions
+                            else None
+                        )
                         result_value = await budgeted(
                             self.registry.call_raw(name, call["function"]["arguments"], context, call["id"])
                         )
+                        if receipt_id:
+                            self.action_receipts.finish(context, receipt_id, result_value)
                         if (
                             isinstance(result_value, dict)
                             and result_value.get("ok") is not False
@@ -1940,6 +2010,10 @@ class Engine:
                 error=error,
                 retry_delay=retry_delay,
             )
+            if record_actions:
+                self.action_receipts.discard_completed(context, status)
+                if status in ("sent", "silent") and receipts_in_last_request:
+                    self.action_receipts.acknowledge(context, receipts_in_last_request)
             if engram_candidate is not None and status == "sent":
                 self.registry.engrams.finalize(engram_candidate)
 

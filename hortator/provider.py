@@ -435,6 +435,7 @@ class ProviderPool:
         purpose="generation",
         use_bot_key=True,
         recovery=None,
+        before_attempt=None,
     ):
         provider = self.store.get("providers", profile["provider_id"])
         if not provider:
@@ -447,6 +448,10 @@ class ProviderPool:
         # No model tool executes until a whole attempt has completed successfully.
         async with self.slot(provider):
             for attempt in range(1, retries + 2):
+                # The owning engine may stop stale work after queue/backoff.
+                # Keep this outside _attempt's provider-error translation.
+                if before_attempt is not None:
+                    before_attempt()
                 current = self.store.get("providers", provider["id"])
                 if not current or not current["enabled"]:
                     raise ProviderError("Provider disabled while waiting to retry", provider_fault=False)
@@ -502,7 +507,19 @@ class ProviderPool:
                         level="warning",
                     )
                     try:
-                        await asyncio.sleep(delay)
+                        if before_attempt is None:
+                            await asyncio.sleep(delay)
+                        else:
+                            # No request is active during backoff. Let the owner
+                            # yield stale work promptly without shortening the
+                            # configured retry delay when its work stays current.
+                            until = asyncio.get_running_loop().time() + delay
+                            while True:
+                                before_attempt()
+                                remaining = until - asyncio.get_running_loop().time()
+                                if remaining <= 0:
+                                    break
+                                await asyncio.sleep(min(remaining, 0.25))
                     except asyncio.CancelledError:
                         self.store.emit(
                             "request.retry_cancelled",
