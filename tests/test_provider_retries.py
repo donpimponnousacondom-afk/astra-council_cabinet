@@ -318,3 +318,20 @@ async def test_before_attempt_stops_retry_without_counting_a_new_provider_failur
     assert len(kernel.store.rows("SELECT * FROM events WHERE kind='request.retry_scheduled'")) == 1
     assert not kernel.store.rows("SELECT * FROM events WHERE kind='provider.failure'")
     assert kernel.pool.active["openrouter"] == 0
+
+
+async def test_retry_boundary_checks_preserve_delay_for_current_work(kernel):
+    bot = configured(kernel)
+    policy(kernel, delay=0.04)
+    starts = []
+
+    def handler(request):
+        starts.append(asyncio.get_running_loop().time())
+        if len(starts) == 1:
+            return httpx.Response(503, json={"error": "transient fixture"})
+        return completion("Recovered")
+
+    await install_client(kernel, handler)
+    result = await kernel.pool.complete(**call_args(kernel, bot), before_attempt=lambda: None)
+    assert result.content == "Recovered" and len(starts) == 2
+    assert starts[1] - starts[0] >= 0.04

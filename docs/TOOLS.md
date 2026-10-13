@@ -106,12 +106,16 @@ Shell execution with `task` requires an existing persistent workspace: first cal
 For ordinary `narrate` and `progress` cycles, newer directed input that qualifies
 under the existing attention rules stops further work at the next safe boundary:
 before a new model round, after obtaining a provider slot and before each retry,
-after inference returns a tool batch, and before each unstarted call. An in-flight
+after inference returns a tool batch, and before each unstarted call. Idle provider
+retry backoff checks for supersession at most every 250 ms; current work still
+honors the configured retry delay. An in-flight
 provider attempt or tool is allowed to settle. A same-human follow-up in the same
 conversation can supersede that human's unsent answer; another human/conversation
 waits under the existing rules. Final answer delivery retains its existing
 suppression and in-flight-send behavior. Slash/panel invocations and `end_cycle`
-retain their existing behavior.
+retain their existing behavior. Already-started compaction finishes its reusable
+history preparation and checkpoint before ordinary generation yields; new input
+does not invalidate that older history. Explicit operator cancellation is unchanged.
 
 `turn.superseded` records the boundary, replacement message IDs and remaining
 unstarted call count. The operator's full turn/request detail retains the private

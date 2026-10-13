@@ -507,7 +507,19 @@ class ProviderPool:
                         level="warning",
                     )
                     try:
-                        await asyncio.sleep(delay)
+                        if before_attempt is None:
+                            await asyncio.sleep(delay)
+                        else:
+                            # No request is active during backoff. Let the owner
+                            # yield stale work promptly without shortening the
+                            # configured retry delay when its work stays current.
+                            until = asyncio.get_running_loop().time() + delay
+                            while True:
+                                before_attempt()
+                                remaining = until - asyncio.get_running_loop().time()
+                                if remaining <= 0:
+                                    break
+                                await asyncio.sleep(min(remaining, 0.25))
                     except asyncio.CancelledError:
                         self.store.emit(
                             "request.retry_cancelled",

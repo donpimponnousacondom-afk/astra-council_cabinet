@@ -3177,3 +3177,19 @@ Local checks:
 Full current-head CI and Luna/Sol reviews will be recorded on the published PR.
 They are not implied by these local focused results. Outstanding publication debt
 is the current task until its commit is pushed and its PR exists.
+
+
+PR #116 review follow-up: Luna independently demonstrated that new input during
+idle provider retry backoff waited until the timer expired. The first version
+promised a check before the next retry, not immediate wake-up, but configured
+backoff can reach 3,600 seconds, so the parent accepted the responsiveness fix.
+A new directed message now stops idle retry waiting at bounded 250 ms checks;
+current work retains the full configured delay and active HTTP/tools settle.
+The regression uses a 60-second delay and requires cancellation within 3 seconds
+without another HTTP attempt or an invented provider failure.
+
+Follow-up local validation: supersession/provider files **27 passed in 8.68s**;
+then the non-shortened-backoff regression plus end-cycle compatibility file
+**28 passed in 10.56s**. Only ordinary cycles supply the new owner callback;
+end-cycle/slash callers retain the original provider wait behavior. Ruff lint and
+formatting pass. Full fresh-head CI and both delta reviews remain PR gates.

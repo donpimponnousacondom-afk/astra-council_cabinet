@@ -1179,9 +1179,13 @@ class Engine:
                         turn_id=turn_id,
                         context=meta,
                         recovery=recovery,
-                        before_attempt=lambda: self.stop_superseded_work(
-                            bot, channel_id, turn_id, "provider_attempt"
-                        ),
+                        before_attempt=(
+                            lambda: self.stop_superseded_work(
+                                bot, channel_id, turn_id, "provider_queue_or_retry"
+                            )
+                        )
+                        if record_actions
+                        else None,
                     )
                 )
                 if result.tool_calls:

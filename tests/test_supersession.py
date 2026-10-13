@@ -505,3 +505,28 @@ async def test_supersession_releases_one_accepted_background_job_without_running
     await kernel.engine.tick()
     assert len(requests) == 3 and executions == [jobs[0]["id"]]
     assert turn_states(kernel) == ["cancelled", "sent", "sent"]
+
+
+async def test_superseding_input_stops_idle_retry_wait_without_waiting_for_backoff(kernel):
+    bot, transport = setup(kernel)
+    provider = kernel.store.get("providers", "openrouter")
+    kernel.store.put("providers", {**provider, "retry_count": 3, "retry_delay_seconds": 60})
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(503, json={"error": "transient fixture"})
+
+    await install_client(kernel, handler)
+    await kernel.engine.tick()
+    async with asyncio.timeout(3):
+        while not kernel.store.one("SELECT 1 FROM events WHERE kind='request.retry_scheduled'"):
+            await asyncio.sleep(0.001)
+        directed(kernel, bot, SECOND, "Answer this new question instead.")
+        await settle(kernel)
+    assert len(calls) == 1 and turn_states(kernel) == ["cancelled"]
+    assert kernel.pool.active["openrouter"] == 0
+    assert not kernel.store.one("SELECT 1 FROM events WHERE kind='provider.failure'")
+    event = kernel.store.one("SELECT data FROM events WHERE kind='turn.superseded'")
+    assert json.loads(event["data"])["boundary"] == "provider_queue_or_retry"
+    transport.send.assert_not_awaited()
