@@ -103,6 +103,13 @@ Local published files are available without dashboard authentication at `/sites/
 
 Local published HTML retains the restrictive CSP sandbox without same-origin privileges. It cannot acquire dashboard cookies or call the administrative API. Its static assets/scripts are confined to the published site's path. Draft downloads remain authenticated attachments. In manual mode, later writes do not change the public snapshot until another publication.
 
+Remote hosting rules belong to the operator. The receiver never creates,
+compares, restores or removes domain/bot-namespace `.htaccess` files. Missing,
+edited or renamed rules do not block delivery, status or audit. Existing files
+remain as the operator left them; new namespaces receive no generated rules.
+Remote headers, pointer-lock permissions and directory serving behavior come
+from the web host's configuration, independently of the local preview's CSP.
+
 Every actual remote delivery uses the recorded immutable manifest. It creates a private Git snapshot for traceability before transferring the site, and records delivery only after transport verification. The Git history is application data outside the source checkout, not a source-code submodule. Bots cannot modify its metadata or delete historical revisions. Intermediate saves remain in SQLite and immutable blobs even when a newer queued revision supersedes an older upload that has never been attempted. In-progress or previously attempted jobs remain intact so an interrupted delivery can recover its receipt with the same job identity before later revisions proceed. A repeated `publish` never resets an already delivered entry or discards its traceability fields. See [OPERATIONS.md](OPERATIONS.md) for server configuration, verified host trust, remote snapshots and backup procedures.
 
 Tool status distinguishes these facts:
@@ -178,6 +185,14 @@ Historical stored text is not rewritten or guessed back into existence.
 
 The date marks relocation of standing instructions, not a new product decision.
 Existing decision dates and qualifications below remain authoritative.
+
+- On 2026-10-13 the owner removed publisher management of remote `.htaccess`
+  after changing and renaming those files to enable the site's browser features.
+  Do not sync, recreate, compare or repair them; allow ordinary publication when
+  they are absent or different. Remote hosting policy belongs to the owner and
+  their host. This supersedes the earlier generated remote serving rules. Site
+  ownership, immutable content/receipts, SSH host verification, model file-path
+  contracts and local-preview behavior are unchanged.
 
 - Any enabled, granted bot may start its bounded extended document task, autonomously or on request from any permitted participant. One extension per turn, no self-renewal. `document_site.create` requires a new slug; `start`/`edit` only resume an existing site and must never create one implicitly. Every site lives beneath its stable bot ID and a nonempty site slug; the bot root has no page. Hortator has no cross-bot editing privilege. Retired bot namespaces and all old file revisions remain retained; no model deletion or ownership transfer. Paged reads, bounded exact edits and file restoration must preserve other current assets. Public-site imports may copy only published source revisions into an explicitly created owned destination.
 

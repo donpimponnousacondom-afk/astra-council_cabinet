@@ -3087,3 +3087,19 @@ classification now applies only to actual `end_cycle` batches. Narration can
 report those receipts in its bounded final answer without retrying actions; real
 finish-companion failures remain terminal. All three regressions pass in 1.14s.
 The finding was disclosed to Sol after both initial reviews and is Luna-attributed.
+
+## 2026-10-13 — operator-owned remote hosting and publishing diagnostics
+
+The receiver no longer creates or validates remote `.htaccess` files, following
+the owner's explicit decision after renaming the managed file. Tests verify
+fresh namespaces have no generated rules; edited, removed, renamed and symlinked
+operator rules permit delivery/status/audit and remain untouched. Existing
+namespace ownership and interrupted-registration recovery checks still run.
+
+The earlier isolated SSH reproduction proved that a stderr login banner hid the
+receiver's structured refusal on stdout. New transport tests retain that refusal
+and exit code, redact known credentials, and check bounded stdout/stderr fallback,
+malformed JSON, stderr-only failures and empty diagnostics. The three publishing
+suites passed **75 tests in 12.15s**. These use real local Git/receiver execution
+and substituted SSH; they do not prove production delivery or live Apache policy.
+Remote PR reviews/CI and live delivery verification follow publication.

@@ -466,6 +466,57 @@ def fake_ssh(tmp_path, monkeypatch, program):
     monkeypatch.setenv("PATH", str(binaries) + os.pathsep + os.environ["PATH"])
 
 
+async def test_ssh_receiver_error_survives_stderr_login_banner(
+    publication_integration, tmp_path, monkeypatch
+):
+    rig = publication_integration
+    fake_ssh(
+        tmp_path,
+        monkeypatch,
+        """import json,sys
+sys.stdin.buffer.read()
+print(json.dumps({'version':1,'delivered':False,'error':'Receiver refused synthetic-private-key-outside-snapshots'}))
+sys.stderr.write('=== INIT ~/.bashrc ===\\nlogin banner\\n' * 100)
+raise SystemExit(1)
+""",
+    )
+    remote = rig.kernel.store.get("plugins", "document_site")["config"]["remote"]
+    transport = SSHDelivery(rig.kernel.directory, rig.kernel.vault, remote)
+    with pytest.raises(ControlError) as exc:
+        await transport.ssh(["receiver.py", "deploy"], b"{}", timeout=5)
+    error = str(exc.value)
+    assert "exit 1" in error and "receiver: Receiver refused [REDACTED]" in error
+    assert "login banner" not in error and "synthetic-private-key" not in error
+    assert len(error) < 2000
+
+
+@pytest.mark.parametrize(
+    ("stdout", "stderr", "expected"),
+    [
+        ("Receiver traceback", "login banner" * 1000, ["stdout: Receiver traceback", "stderr: login banner"]),
+        ("", "Permission denied", ["stderr: Permission denied"]),
+        ('{"invalid JSON', "SSH failure", ['stdout: {"invalid JSON', "stderr: SSH failure"]),
+        ("", "", ["no diagnostic output"]),
+    ],
+)
+async def test_ssh_failure_reports_exit_and_bounded_streams(
+    publication_integration, tmp_path, monkeypatch, stdout, stderr, expected
+):
+    rig = publication_integration
+    fake_ssh(
+        tmp_path,
+        monkeypatch,
+        f"import sys\nsys.stdin.buffer.read()\nsys.stdout.write({stdout!r})\nsys.stderr.write({stderr!r})\nraise SystemExit(23)\n",
+    )
+    remote = rig.kernel.store.get("plugins", "document_site")["config"]["remote"]
+    transport = SSHDelivery(rig.kernel.directory, rig.kernel.vault, remote)
+    with pytest.raises(ControlError) as exc:
+        await transport.ssh(["receiver.py", "deploy"], b"{}", timeout=5)
+    assert "exit 23" in str(exc.value)
+    assert all(part in str(exc.value) for part in expected)
+    assert len(str(exc.value)) < 2000
+
+
 @pytest.mark.parametrize("stream", [1, 2])
 async def test_ssh_bounds_each_stream_and_terminates_a_flooding_child(
     publication_integration,
