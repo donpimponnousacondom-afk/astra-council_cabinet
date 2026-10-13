@@ -37,13 +37,24 @@ def with_result_reader(parameters):
     operation["enum"].append("read_result")
     operation["description"] += " read_result pages a saved tool reply using its returned result_id."
     result["properties"].update(
-        result_id={"type": "string", "minLength": 1, "maxLength": 100},
+        result_id={
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "read_result only: use the returned saved-reply ID, not a note key.",
+        },
         offset={
             "type": "integer",
             "minimum": 0,
-            "description": "Unicode character offset; use the returned next arguments.",
+            "description": "read_result only: Unicode character offset; use the returned next arguments. Omit for read/write/delete.",
         },
-        length={"type": "integer", "minimum": 1, "maximum": 18000, "default": 6000},
+        length={
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 18000,
+            "default": 6000,
+            "description": "read_result only: number of Unicode characters in a saved-reply page. Omit for read/write/delete; ordinary read returns the note without a length argument.",
+        },
     )
     result.setdefault("allOf", []).append(
         {

@@ -277,9 +277,18 @@ class ShellRunner:
     def _owned(self, context, job_id):
         value = self._load(job_id)
         bot, channel, turn = _identity(context)
-        if value["bot_id"] != bot or value["channel_id"] != channel or value["turn_id"] != turn:
+        if value["bot_id"] != bot or value["channel_id"] != channel:
+            raise ControlError("Job belongs to another bot or channel; it cannot be accessed here")
+        if value["turn_id"] != turn:
+            storage = value.get("storage", "workspace")
+            recovery = {
+                "filesystem": "Reopen saved files through filesystem when mounted; old job output remains inaccessible.",
+                "workspace": "Reopen saved files through their workspace task when enabled; old job output remains inaccessible.",
+                "disposable": "Disposable files were not retained; old job output remains inaccessible.",
+            }.get(storage, "Old job output cannot be read in this cycle.")
             raise ControlError(
-                "Job belongs to another bot, channel, or turn; reopen persistent files via workspace"
+                "Job belongs to another response cycle; job IDs only work in the cycle that created them. "
+                + recovery
             )
         return value
 

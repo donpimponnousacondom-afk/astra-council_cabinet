@@ -22,6 +22,20 @@ Each such call starts in an empty `/workspace`. Heredocs, scripts, HTTP POST and
 
 Job metadata, stdout/stderr and tool-result evidence **remain inspectable** under the usual scope and retention; disposable storage is not an unlogged execution mode. Results identify `storage: "disposable"`, `task: null`, `workspace_id: null` and `workspace_committed: false`. Starting a shell command does not extend the turn budget.
 
+Model job IDs and saved-result IDs are restricted to the bot, channel and
+response cycle that created them. A later cycle cannot reread those logs even
+when saved files still exist. Reopen persistent files through Simple filesystem
+when mounted, or their original Private workspace task when enabled; disposable
+files do not survive. Same-bot/channel old-job errors name the storage mode;
+foreign-bot/channel errors do not expose that metadata. Operator inspection and
+retention are unchanged.
+
+`shell.read(job_id, stream, offset, limit)` counts **bytes** and accepts `limit`
+from 1 to 8,000. `shell.read_result(result_id, offset, length)` counts **Unicode
+characters** and accepts `length` from 1 to 18,000. These are separate operations:
+passing `length` to `read` is rejected. Both shell descriptions, including the
+Simple filesystem variant, expose these signatures and scope before execution.
+
 An explicit `task` selects persistent storage (`storage: "workspace"`). It requires the current workspace grant and a previously started task in this bot/channel. A missing task fails; it never silently falls back or creates a workspace. Subsequent run/status/read/cancel and saved-result reads for that job retain the workspace dependency. Disposable job access needs only shell. Pre-existing jobs and evidence pages retain their original workspace requirement, including pages read through another tool. Evidence schema grant version 0 preserves that historical implicit dependency; version 1 records explicit dependencies and propagates them through pages. No stored transcript or operator prompt is rewritten.
 
 For persistent files:

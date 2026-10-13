@@ -4,6 +4,27 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Actionable tool argument feedback and shell scope help (2026-10-13)
+
+Commit: base `b8d17a08dcd82b1ca5df2e74339a1d4fbc316579` plus task changes;
+dirty at start/end: true/true. Backend scope: focused `test_tool_feedback.py`,
+`test_memory_pagination.py`, `test_filesystem.py`, `test_shell_runner.py`.
+Initial result: 142 passed, 2 failed, 2 skipped in 97.87 s. Both failures were
+new tests incorrectly comparing advertised descriptions (which append shared
+usage guidance) with the unwrapped help description. Corrected those assertions;
+the two-case rerun passed in 0.81 s. Ruff lint and format checks passed.
+Frontend/build/browser tests: not run locally for this backend/help-only change;
+the published PR's required full backend/frontend check remains the merge gate.
+
+Classification: mocked tool integration plus real local sandbox tests. No live
+provider or Discord calls, bot setting changes or memory edits. The skipped
+shell checks are the existing opt-in package-download tests. Regressions cover
+both memory stores, nested false-property paths, simultaneous validation errors,
+unchanged saved notes, filesystem shell advertisement/help/validation, and
+old-job refusals for filesystem, workspace, legacy and disposable storage.
+Foreign-bot/channel refusals continue to hide storage details. No ownership,
+imported-original, end-cycle or scheduling behavior is changed here.
+
 ## Immutable end_cycle recovery and strict failure budget (2026-10-12, after #111)
 
 The owner rejected answer regeneration and repeated invalid finish loops. The

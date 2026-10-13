@@ -4,7 +4,35 @@ import copy
 import json
 import math
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError, validators
+
+
+def _properties_with_field_errors(validator, properties, instance, schema):
+    """Keep false-property refusals, but retain the field path jsonschema drops."""
+    if not validator.is_type(instance, "object"):
+        return
+    for name, subschema in properties.items():
+        if name not in instance:
+            continue
+        if subschema is False:
+            selector = next((key for key in ("operation", "resource") if key in instance), None)
+            context = f" for {selector} {instance[selector]!r}" if selector else " here"
+            yield ValidationError(
+                f"Field {name!r} is not accepted{context}. Remove it; see the operation's usage below.",
+                validator="forbidden",
+                validator_value=False,
+                path=[name],
+                schema_path=[name],
+                schema=False,
+                instance=instance[name],
+            )
+        else:
+            yield from validator.descend(instance[name], subschema, path=name, schema_path=name)
+
+
+# Only error presentation changes. Boolean false still rejects the same fields;
+# all other keywords retain Draft 2020-12 validation without argument coercion.
+_FeedbackValidator = validators.extend(Draft202012Validator, {"properties": _properties_with_field_errors})
 
 
 def with_usage(parameters):
@@ -110,7 +138,7 @@ def errors_for(parameters, arguments):
             yield error
 
     errors = []
-    for error in Draft202012Validator(full_schema(parameters)).iter_errors(arguments):
+    for error in _FeedbackValidator(full_schema(parameters)).iter_errors(arguments):
         for item in leaves(error):
             errors.append(
                 {

@@ -10,6 +10,7 @@ from hortator.documents import OPERATIONS, PARAMETERS as DOCUMENT_PARAMETERS
 from hortator.models import ControlError
 from hortator.plugins import PluginSpec, ToolContext, schema
 from hortator.tool_feedback import feedback, full_schema, parse_arguments, usage, with_usage
+from support.agentic_runtime import grant
 
 
 FOUR_FIELDS = schema(
@@ -22,6 +23,50 @@ FOUR_FIELDS = schema(
     ("title", "body", "weight", "count"),
 )
 VALID = {"title": "Summary", "body": "Document", "weight": 0.5, "count": 2}
+
+
+@pytest.mark.parametrize("name", ["memory", "global_memory"])
+async def test_memory_read_reports_forbidden_paging_fields_and_preserves_saved_note(kernel, name):
+    context = grant(kernel, name)
+    await kernel.registry.call(
+        name, {"operation": "write", "key": "topic", "value": "saved"}, context, "save"
+    )
+    arguments = {"operation": "read", "key": "topic", "length": 18000, "offset": 0}
+    result = await kernel.registry.call(name, arguments, context, "bad-read")
+    assert result["executed"] is False
+    assert {error["path"] for error in result["errors"]} == {"$.length", "$.offset"}
+    assert all(error["rule"] == "forbidden" for error in result["errors"])
+    assert all("operation 'read'" in error["message"] for error in result["errors"])
+    assert "False schema" not in json.dumps(result["errors"])
+    assert result["usage"]["example"] == {"operation": "read"}
+    properties = result["usage"]["parameters"]["properties"]
+    assert all(
+        "read_result only" in properties[field]["description"] for field in ("result_id", "offset", "length")
+    )
+    repaired = {"operation": "read", "key": "topic"}
+    read = await kernel.registry.call(name, repaired, context, "fixed-read")
+    assert read["notes"][0]["value"] == "saved"
+    assert arguments["length"] == 18000  # No silent argument editing.
+
+
+def test_forbidden_field_feedback_preserves_nested_paths_and_other_errors():
+    parameters = {
+        "type": "object",
+        "properties": {
+            "entries": {
+                "type": "array",
+                "items": {"type": "object", "properties": {"blocked": False, "count": {"type": "integer"}}},
+            }
+        },
+    }
+    arguments = {"entries": [{"blocked": "value", "count": "2"}]}
+    result = feedback("nested", arguments, parameters)
+    assert {(e["path"], e["rule"]) for e in result["errors"]} == {
+        ("$.entries[0].blocked", "forbidden"),
+        ("$.entries[0].count", "type"),
+    }
+    assert not Draft202012Validator(parameters).is_valid(arguments)
+    assert feedback("nested", {"entries": [{"count": 2}]}, parameters) is None
 
 
 async def test_missing_memory_operation_returns_write_example_without_mutating_notes(kernel):

@@ -67,6 +67,30 @@ async def test_discovery_single_directory_schema_and_complete_errors(kernel):
     assert not validator.is_valid({"operation": "run", "command": "pwd", "task": "invented"})
 
 
+@pytest.mark.parametrize("private_tasks", [False, True])
+async def test_shell_help_and_invalid_read_identify_operation_fields_without_starting_job(
+    kernel, private_tasks
+):
+    context = grant(kernel, "filesystem", "shell", *(["workspace"] if private_tasks else []))
+    spec = next(t["function"] for t in kernel.registry.schemas(context) if t["function"]["name"] == "shell")
+    help_result = await kernel.registry.call("shell", {}, context, "help")
+    assert spec["description"].startswith(help_result["usage"]["description"])
+    assert "read(job_id,stream,offset,limit)" in spec["description"]
+    assert "response cycle" in spec["description"]
+    assert "Original imported files are protected" in spec["description"]
+    args = {"operation": "read", "job_id": "job_" + "a" * 32, "length": 4000}
+    bad = await kernel.registry.call("shell", args, context, "bad-read")
+    assert bad["executed"] is False
+    assert bad["errors"][0]["path"] == "$.length"
+    assert "operation 'read'" in bad["errors"][0]["message"]
+    assert "For read, use limit instead" in bad["usage"]["parameters"]["properties"]["length"]["description"]
+    assert bad["usage"]["example"]["operation"] == "read"
+    validator = Draft202012Validator(spec["parameters"])
+    assert not validator.is_valid(args)
+    assert validator.is_valid({"operation": "read", "job_id": args["job_id"], "limit": 4000})
+    assert not kernel.registry.agentic.runner.active
+
+
 async def test_files_shared_across_channels_rename_and_reconstruction_but_not_bots(kernel):
     context = grant(kernel, "filesystem")
     assert (await call(kernel, context, "write", path="notes/USAGE.md", content="saved"))["bytes"] == 5

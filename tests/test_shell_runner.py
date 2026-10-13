@@ -41,6 +41,36 @@ async def read_file(workspace, context, path, task="default"):
     return await workspace.call({"operation": "read", "task": task, "path": path}, context)
 
 
+@pytest.mark.parametrize("storage", ["filesystem", "workspace", "disposable", None])
+async def test_old_job_scope_refusal_points_to_its_storage_without_exposing_foreign_metadata(
+    kernel, monkeypatch, storage
+):
+    runner = kernel.registry.agentic.runner
+    job = {"bot_id": "ada", "channel_id": "channel", "turn_id": "original"}
+    if storage is not None:
+        job["storage"] = storage
+    monkeypatch.setattr(runner, "_load", lambda _: job)
+    original = ToolContext({"id": "ada"}, "channel", "original")
+    assert runner.status(original, "test")["turn_id"] == "original"
+    later = ToolContext(original.bot, original.channel_id, "later")
+    expected = "Disposable files" if storage == "disposable" else (storage or "workspace")
+    for operation in (runner.status, runner.read):
+        with pytest.raises(ControlError, match="another response cycle") as error:
+            operation(later, "test")
+        assert expected in str(error.value)
+        if storage == "filesystem":
+            assert "workspace" not in str(error.value)
+    with pytest.raises(ControlError, match="another response cycle"):
+        await runner.cancel(later, "test")
+    for foreign in (
+        ToolContext({"id": "other"}, "channel", "later"),
+        ToolContext(original.bot, "other", "later"),
+    ):
+        with pytest.raises(ControlError, match="another bot or channel") as error:
+            runner.status(foreign, "test")
+        assert "filesystem" not in str(error.value) and "workspace" not in str(error.value)
+
+
 async def test_real_pipeline_scripts_cwd_and_nonzero_exit_persist(sandbox):
     runner, workspace, context = sandbox
     first = await runner.run(

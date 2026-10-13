@@ -1,5 +1,21 @@
 # Implementation and acceptance plan
 
+## Stabilize progress-mode tool use — owner decision (2026-10-13)
+
+Keep `end_cycle` experiments parked until the owner has stable models for a
+controlled test. The current fixes target ordinary progress/narrate behavior;
+they do not change saved bot modes, grants, model parameters or memory contents.
+The owner authorized actionable argument errors and operation-specific help,
+followed by a separate supersession change that stops starting stale work at
+safe boundaries and preserves truthful receipts for completed actions.
+
+The feedback change preserves validation and job ownership. Memory paging fields
+are explicitly `read_result`-only; shell help distinguishes byte-based `read`
+from character-based saved-result paging and explains cycle-scoped job IDs.
+The supersession/receipt work is a separate follow-up, not implemented by the
+feedback change. Model explanations are diagnostic leads; ledger receipts,
+effective configuration and provider-reported identity are the evaluation evidence.
+
 ## GitHub PR workflow — owner decision (2026-10-12)
 
 Completed task changes are automatically committed on their task branch, pushed
