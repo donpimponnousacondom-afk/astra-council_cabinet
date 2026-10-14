@@ -1,6 +1,31 @@
 # Verification record
 
-## 2026-10-14 — Preserve cacheable history across memory writes
+## 2026-10-14 — Revert PR #119 at the owner's request
+
+The owner rejected moving channel/global memory after the growing conversation.
+The complete revert restores application, tests and dashboard source to PR #118
+(`a71885c6a9d7c08e8f8b4995e2c0dd537d3e2ea8`). Only this verification history and the
+new PLAN decision differ from that baseline. No runtime storage/configuration
+mutation or replacement caching design is part of the change.
+
+The original PR passed its implementation checks, but those checks did not assess
+cache reuse for unchanged memory after conversation growth. Natural Curie traffic
+showed 25,744 cached / 47,757 input tokens (53.9%), with a 57,476-character global
+memory block after the transcript. Earlier captured requests at comparable total
+sizes included 47,888 / 50,399 (95.0%) and 35,840 / 39,864 (89.9%). These are observed
+provider reports, not a controlled savings benchmark or proof of upstream eviction.
+The rollback follows the owner's explicit decision; subsequent design is deferred.
+
+Local rollback checks: **96 passed, two existing dependency deprecation warnings,
+28.67 s**, covering channel/global memory budgets, prompt layers, provider
+diagnostics and research cycles. Ruff lint/format, frontend Prettier and
+TypeScript passed. A tracked-tree comparison against PR #118 found differences
+only in PLAN and this verification record; application, tests, dashboard and
+dependency files match the earlier baseline exactly. These are local/mocked
+checks, not a claim of restored live cache hit rates. Full current-head CI and
+independent Luna/Sol review remain publication gates.
+
+## 2026-10-14 — PR #119 verification (historical; implementation reverted)
 
 Local focused verification: **261 passed, 2 existing deprecation warnings in
 71.84 seconds** across prompt assembly/cache stability, both memory stores and

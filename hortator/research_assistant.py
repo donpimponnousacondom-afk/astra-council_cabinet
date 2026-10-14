@@ -243,29 +243,20 @@ class ResearchAssistant:
             )
         except ControlError as exc:
             cycle_text = f" New research dispatch unavailable: {exc}."
-        configured_text = (
-            f" Current output ceiling: {config['max_output_tokens']} tokens; "
-            f"total deadline: {config['timeout_seconds']} seconds; "
-            f"native search: up to {config['max_keyword']} queries per search round, "
-            f"up to {config['limit']} results per query (not guaranteed coverage); "
-        )
-        capacity_text = (
-            f"outstanding researchers: {capacity['outstanding_jobs']}/{capacity['max_parallel_jobs']}; "
-            f"available slots: {capacity['available_slots']}; "
-        )
-        notification_text = f"default completion notification: {config['notify_on_completion']}."
         return replace(
             self.registry.specs[ID],
             parameters=schema,
-            description=DESCRIPTION + cycle_text + configured_text + capacity_text + notification_text,
-            schema_description=DESCRIPTION
-            + configured_text
-            + notification_text
+            description=DESCRIPTION
+            + cycle_text
             + (
-                " Current task batch allowance and available researcher slots are in runtime facts; "
-                "call with {} for refreshed usage and capacity."
+                f" Current output ceiling: {config['max_output_tokens']} tokens; "
+                f"total deadline: {config['timeout_seconds']} seconds; "
+                f"native search: up to {config['max_keyword']} queries per search round, "
+                f"up to {config['limit']} results per query (not guaranteed coverage); "
+                f"outstanding researchers: {capacity['outstanding_jobs']}/{capacity['max_parallel_jobs']}; "
+                f"available slots: {capacity['available_slots']}; "
+                f"default completion notification: {config['notify_on_completion']}."
             ),
-            prompt_status=(cycle_text + " " + capacity_text.rstrip("; ") + ".").strip(),
         )
 
     async def call(self, args, context, config, key):

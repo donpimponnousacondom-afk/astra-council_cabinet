@@ -138,13 +138,7 @@ class GlobalMemory:
         )
 
     def spec_for(self, context):
-        return replace(
-            self.spec,
-            description=DESCRIPTION + describe_budget(self.budget_for(context.bot)),
-            schema_description=DESCRIPTION
-            + "Current usage, limits and consolidation warnings are in the global-memory budget prompt; "
-            "call {} for current usage and complete tool help.",
-        )
+        return replace(self.spec, description=DESCRIPTION + describe_budget(self.budget_for(context.bot)))
 
     def prompt_layers(self, bot):
         if not self.enabled(bot):
