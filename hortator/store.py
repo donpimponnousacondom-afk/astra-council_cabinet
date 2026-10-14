@@ -105,6 +105,10 @@ class Store:
         CREATE TABLE IF NOT EXISTS memories (
           bot_id TEXT NOT NULL, channel_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
           updated_at REAL NOT NULL, PRIMARY KEY(bot_id,channel_id,key));
+        CREATE TABLE IF NOT EXISTS memory_snapshots (
+          bot_id TEXT NOT NULL, channel_id TEXT NOT NULL, epoch_id TEXT NOT NULL,
+          format_version INTEGER NOT NULL, basis_hash TEXT NOT NULL, created_at REAL NOT NULL,
+          notes_json TEXT NOT NULL, layers_json TEXT NOT NULL, PRIMARY KEY(bot_id,channel_id));
         CREATE TABLE IF NOT EXISTS bot_runtime (
           bot_id TEXT PRIMARY KEY, next_at REAL NOT NULL DEFAULT 0, last_sent REAL NOT NULL DEFAULT 0,
           gateway_status TEXT NOT NULL DEFAULT 'offline', error TEXT, heartbeat_ms REAL);

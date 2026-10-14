@@ -186,7 +186,7 @@ async def test_note_and_counter_injection_both_obey_current_and_captured_scope(k
     surviving = "memory" if plugin == "global_memory" else "global_memory"
     assert {surviving, surviving + "_budget"} <= keys
     content = "\n".join(message["content"] for message in messages)
-    assert ("channel note" if plugin == "memory" else "global note") not in content
+    assert ('"value":"channel note"' if plugin == "memory" else '"value":"global note"') not in content
 
 
 @pytest.mark.parametrize("kind", ["slash", "panel"])

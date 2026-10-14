@@ -740,6 +740,7 @@ class Engine:
                 cycle["reason"] = "compacted"
                 return
             engram = original_meta.get("_engram_snapshot")
+            memory_snapshot = original_meta.get("_memory_snapshot")
             activation = self.claim_attention(bot, channel_id, turn_id, through=through) or bot.get(
                 "activation"
             )
@@ -1052,6 +1053,7 @@ class Engine:
                     image_plan=original_meta["image_plan"],
                     engram=engram,
                     audio_plan=original_meta.get("audio_plan"),
+                    memory_snapshot=memory_snapshot,
                 )
                 headroom = (
                     int(
@@ -1083,6 +1085,7 @@ class Engine:
                     image_plan=original_meta["image_plan"],
                     engram=engram,
                     audio_plan=original_meta.get("audio_plan"),
+                    memory_snapshot=memory_snapshot,
                 )
                 meta.update(
                     checkpoint=original_meta["checkpoint"],

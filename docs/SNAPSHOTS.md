@@ -37,6 +37,13 @@ The default catalog location is a sibling of the live directory: `/home/codexy/.
 
 **Include conversation summary/checkpoints** is also explicit and off by default. It restores that bot's context rows, including summary and checkpoint state. It does **not** delete newer shared Discord transcript rows: those can re-enter subsequent context. Use a full snapshot and/or a new experiment channel when an exact prior transcript state is required. Both the snapshot and current database must identify the same Discord message/channel at every nonzero checkpoint and last-seen sequence. Missing or divergent anchors reject the context restore, preventing a newer snapshot checkpoint from suppressing input after an older full restore. Immutable trajectory evidence is not rewritten during a selective restore.
 
+Durable prompt-memory snapshots follow the database during a full restore. A
+selective restore with conversation checkpoints clears only that scope's prompt
+memory snapshots alongside provisional compaction/Engram state. Notes-only
+restores retain the prompt snapshot: complete replacement/deletion deltas reflect
+the restored canonical notes on the next request, including global changes in
+other conversations. This derived cache does not change the selected restore scope.
+
 ## Compatibility and external effects
 
 A snapshot records its format version, package/source identity, complete source commit, SQLite schema fingerprint and API configuration-schema fingerprint. Restoration requires the **same clean source commit and matching schemas**. Unknown or dirty builds can be captured for emergency inspection, but are marked incompatible with automated restoration. There is no implicit database migration, code checkout, source reset or `force incompatible restore` switch. Return to the matching release to restore that release's state. Branch names and friendly snapshot names are labels, not compatibility guarantees.

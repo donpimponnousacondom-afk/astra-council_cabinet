@@ -21,7 +21,7 @@ exact request sent to a provider.
 The compact list follows assembly placement, not the alphabetical library order:
 shared generated instructions → selected additional shared prompts in their saved
 order → personality and memory → invocation guidance and conversation input →
-accumulated assistant/tool exchanges and any repair → live memory budgets → dynamic tail and wake-up
+accumulated assistant/tool exchanges and any repair → saved memory changes → live memory budgets → dynamic tail and wake-up
 context. Compaction layers appear separately in their own request order. Adjacent
 text of the same role may be combined into one provider message. Inspection does
 not change this existing runtime order.
@@ -133,8 +133,9 @@ survive compaction within their current generation turn. See [VISION](VISION.md)
 | `director` | Hortator-only instructions |
 | `universal`, `persona` | Existing global prompt and per-bot personality |
 | `silence_policy` | Allowed/disabled variant according to the bot's actual silence capability |
-| `memory` | Channel notes before conversation, only with the memory grant |
-| `global_memory` | Bot-private cross-channel notes before conversation, only with that grant |
+| `memory` | Pinned channel-note rendering before conversation, only with the memory grant and notes in the snapshot |
+| `global_memory` | Pinned bot-private cross-channel note rendering before conversation, only with that grant and notes in the snapshot |
+| `memory_delta`, `global_memory_delta` | Complete saved changes since the corresponding snapshot, after conversation/tool exchanges and before current budgets; required when the granted note wrapper is enabled, nonempty and contains `{{NOTES}}`, including an empty snapshot or change list |
 | `memory_budget`, `global_memory_budget` | Current quota guidance after conversation/tool exchanges, only with the respective grant |
 | `summary`, `transcript` | Retained conversation summary and current transcript input |
 | `runtime_facts`, `dynamic_prompt` | Clock, round/capability/activation facts and the existing per-bot tail |
@@ -145,6 +146,47 @@ survive compaction within their current generation turn. See [VISION](VISION.md)
 Researcher cycle/capacity status is refreshed in late runtime facts for tools actually advertised in that request. Tool schemas retain configured limits but omit live usage counters. This does not change finalization or handoff tool-list restrictions.
 
 Budget guidance has normal/over-budget variants. An explicit override replaces either variant; include the usage placeholders if the custom template should still report them. Conditional layers remain conditional even with an override. Turning off guidance never bypasses the corresponding backend restriction. Turning off note injection does not erase notes or revoke the memory tool.
+
+### Pinned notes and saved changes
+
+The runtime keeps a durable snapshot of channel and global notes for each bot and
+conversation. It renders the selected note wrappers once for that snapshot and
+keeps their roles and text before history throughout the epoch. Existing note
+templates and operator edits are preserved. Any usage counters embedded in those
+wrappers are historical snapshot values; the later budget layers and tool `{}`
+help supply current allowance and usage.
+
+Writes and deletes still persist immediately. The editable `memory_delta` and
+`global_memory_delta` placements carry the complete net changes after conversation
+and tool exchanges, followed by channel/global budgets and runtime facts. Both
+default to `system` and use `{{MEMORY_DELTA}}` (or `{memory_delta}`). Each JSON
+entry either replaces the entire note object at its key, including metadata, or
+marks that key absent. Unchanged snapshot keys remain present. These entries are
+saved recollections, not tool requests or new instructions. For example:
+
+```json
+[
+  {"operation":"replace","note":{"key":"owner-preference","value":"Prefers concise replies","source_channel_id":"room-a","updated_at":"2026-10-14T10:00:00+02:00"}},
+  {"operation":"delete","key":"old-topic"}
+]
+```
+
+Channel replacements contain the full injected key/value record; global
+replacements retain their existing source/date fields. Guidance is emitted even when the change list
+is `[]` or the initial snapshot has no notes. When the corresponding note grant
+and enabled, nonempty wrapper containing `{{NOTES}}` apply, the delta template
+must be enabled, nonempty and contain `{{MEMORY_DELTA}}`. Otherwise generation
+fails before inference, including with an initially empty store. A disabled or
+empty note wrapper, or one that omits `{{NOTES}}`, gets no delta layer and no
+hidden replacement wrapper; its existing literal output behavior is preserved.
+
+Successful compaction, a context reset or a relevant note-configuration change
+starts a fresh snapshot. Restart, elapsed idle time and delta size do not rotate
+it. Ordinary context fitting accounts for the complete snapshot and deltas; it
+does not truncate notes or hide changes to fit. If existing compaction cannot
+make room, including when no eligible history remains or Engram history reduction
+leaves none, preparation can fail explicitly. The synthetic slash/panel
+conversation keys retain their existing memory scopes.
 
 ## Literal data placeholders
 
@@ -162,6 +204,7 @@ Common generated-template fields: `{{BOT_NAME}}`, `{{BOT_ID}}`, `{{DISCORD_USER_
 - Universal/persona: `{{GLOBAL_PROMPT}}`, `{{PERSONA}}`.
 - Response controls: `{{RESPONSE_PROTOCOL}}`, `{{MAX_PROGRESS_MESSAGES_PER_TURN}}`; also included in runtime facts.
 - Notes: `{{NOTES}}`; budget guidance: `{{USED_CHARS}}`, `{{LIMIT_CHARS}}`, `{{REMAINING_CHARS}}`, `{{NOTE_LIMIT_CHARS}}`, `{{HARD_LIMIT_CHARS}}`, `{{OVER_BUDGET_CHARS}}`.
+- Saved note changes: `{{MEMORY_DELTA}}` in both `memory_delta` and `global_memory_delta`; a complete JSON list of replacement/deletion entries, including `[]` when unchanged. Existing `{memory_delta}` spelling also works.
 - Summary wrappers: `{{SUMMARY}}`. Compaction instructions additionally use `{{SUMMARY_TOKENS}}` (retained visible text, not combined reasoning/output).
 - Conversation: `{{TRANSCRIPT}}` for all selected attributed records, `{{LATEST_MESSAGE}}` for the last attributed record, or `{{LATEST_CONTENT}}` for its text only. `{{IMAGE_OMISSIONS}}` carries selected-input omissions. A text-only wrapper intentionally removes author/recipient metadata; choose the attributed record when that matters.
 - Runtime tail: `{{RUNTIME_FACTS}}` for the complete fact object; or individual `{{MODEL}}`, `{{NOW}}`, `{{CHANNEL_ID}}`, `{{ROUND}}`, `{{ROUNDS_REMAINING}}`, `{{CONTEXT_TOKENS}}`, `{{CONTEXT_WINDOW}}`, `{{SECONDS_SINCE_LAST_MESSAGE}}`. Existing `{{DYNAMIC_PROMPT}}` is the rendered per-bot tail.
@@ -213,9 +256,13 @@ only on an eligible first generation round and kept out of compaction inputs.
 
 The action blocks new work for the target while cancelling/joining its active turn, then atomically clears the selected retained summaries/token estimates/compaction counters, advances the observed-message checkpoint and stores a sequence plus original-message-time cutoff. All senders' earlier messages are excluded. History backfilled later, edits, reconnects and process restarts cannot revive them. Replies keep recipient identity but omit pre-cutoff quoted previews. A pending slash acknowledgement from before an all-channel cutoff cannot start old work after the reset; newly invoked slash requests remain fresh.
 
-Private channel notes and global notes **survive** and remain injected according to their grants/layer settings. Prompts, configuration, credentials, shared Discord history, old request/tool evidence and files also survive. Explicitly fetched history or newly quoted old text can reintroduce information, just as a person could repeat it in a new message. The cutoff governs automatic conversation intake; it is not a ban on fetching public pages or previously saved files. Already delivered messages and uncertain in-flight sends cannot be recalled by this action.
+Private channel notes and global notes **survive** and remain injected according to their grants/layer settings. The reset clears the affected prompt snapshots so the next preparation pins the surviving current notes. Prompts, configuration, credentials, shared Discord history, old request/tool evidence and files also survive. Explicitly fetched history or newly quoted old text can reintroduce information, just as a person could repeat it in a new message. The cutoff governs automatic conversation intake; it is not a ban on fetching public pages or previously saved files. Already delivered messages and uncertain in-flight sends cannot be recalled by this action.
 
 `context_resets` stores boundaries in the external SQLite database; `*` means the bot's all-channel default and an explicit channel row overrides that default. The owner API generates the cutoff itself; it accepts no arbitrary historical/future timestamp. The action emits `context.reset` with bot, scope, cutoff and consequence. Status includes each bot's boundaries. Full snapshots include them; selective context restore restores the matching effective boundary along with checkpoints. Notes-only recovery does not alter them. Existing snapshot version/schema compatibility checks still apply.
+
+Full application snapshots also preserve and restore the durable prompt snapshots.
+A selective context restore clears affected prompt snapshots for fresh preparation;
+a notes-only restore appears as saved deltas against the existing snapshots.
 
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
 
