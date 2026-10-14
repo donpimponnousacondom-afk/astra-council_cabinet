@@ -446,10 +446,12 @@ INSPECTION_STAGES = {
         "director",
         "universal",
     ),
-    "bot": ("persona", "silence_policy", "memory_budget", "memory", "global_memory_budget", "global_memory"),
+    "bot": ("persona", "silence_policy", "memory", "global_memory"),
     "input": ("slash_invocation", "panel_invocation", "summary", "transcript"),
     "exchanges": ("reply_repair",),
     "tail": (
+        "memory_budget",
+        "global_memory_budget",
         "runtime_facts",
         "dynamic_prompt",
         "scheduled_alarm",

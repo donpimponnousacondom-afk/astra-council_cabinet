@@ -1,5 +1,28 @@
 # Verification record
 
+## 2026-10-14 — stable schema descriptions and late memory counters
+
+This first strategy PR moves only live channel/global budget guidance and
+research task/capacity status after conversation/tool exchanges. Current notes
+remain before history. Snapshot/delta epochs are the next scoped PR; this change
+does not claim that memory writes already preserve the history prefix.
+
+Local checks: **81 passed, two existing dependency deprecation warnings, 24.02s**
+(memory budgets/global integration, prompt layers, provider diagnostics and
+stable-schema cases); **79 passed in 15.80s** (runtime research status, slash
+commands and response-protocol configuration); **18 passed in 5.47s** (counter
+ordering, roles, scope/grants and both conversation-growth/budget-change prefix
+regressions). The helper's broader schema/research/plugin run separately passed
+129 cases, overlapping the 81-test run. Ruff lint/format, changed frontend
+Prettier and TypeScript pass.
+
+The runtime capture verifies refreshed researcher status and its removal from a
+tool-free final round. Existing `{}`/error help and backend quotas remain live;
+no tool-list or bot configuration changes are included. These are local/mocked
+checks, not provider cache-hit or dollar-savings measurements. Full current-head
+CI and independent Luna/Sol reviews remain PR gates. Publication debt: this task
+until its commit is pushed and its PR exists.
+
 ## 2026-10-14 — Revert PR #119 at the owner's request
 
 The owner rejected moving channel/global memory after the growing conversation.

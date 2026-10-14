@@ -21,11 +21,16 @@ The model receives this instruction in its shared runtime prompt and each advert
 ## Private memory allowance and repair
 
 The built-in `memory` tool receives the bot's `memory_char_limit` (1–128,000,
-default 48,000) per channel. Tool descriptions and refreshed prompt guidance show
-actual used/remaining characters. `read`, `write` and `delete` results contain a
+default 48,000) per channel. Empty-call help, error usage and refreshed prompt
+guidance show actual used/remaining characters. The advertised tool description
+stays stable as usage changes and points to that current guidance. `read`,
+`write` and `delete` results contain a
 `budget` object with `limit_chars`, `used_chars`, `remaining_chars`, `grace_chars`,
 `hard_limit_chars`, `over_budget_chars`, `must_consolidate` and `note_limit_chars`.
-Empty-call and argument-error usage includes the same current guidance.
+The fresh `memory_budget` prompt layer follows the conversation and current tool
+exchanges. The actual channel notes remain before history and reflect saved
+changes on the next prompt. Global memory follows the same separation with its
+own notes, budget and grants.
 
 `read` optionally accepts a `key` to select exactly one note; unmatched keys
 return an empty notes list without changing aggregate budget accounting. Both

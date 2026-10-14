@@ -16,7 +16,7 @@ const stages = [
   ["bot", "2 · Personality & memory"],
   ["input", "3 · Conversation input"],
   ["exchanges", "4 · Assistant / tool exchanges & repairs"],
-  ["tail", "5 · Dynamic tail & wake-up context"],
+  ["tail", "5 · Budgets, dynamic tail & wake-up context"],
   ["compaction", "Separate request · Compaction"],
 ];
 

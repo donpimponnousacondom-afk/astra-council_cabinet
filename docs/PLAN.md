@@ -1,5 +1,21 @@
 # Implementation and acceptance plan
 
+## 2026-10-14 — cache-stable memory epochs (owner scope)
+
+The owner accepts strategy items 1 and 2: move changing usage counters to the
+late prompt, keep advertised tool descriptions stable, and retain a durable
+memory snapshot before conversation with complete keyed changes at the tail.
+Successful compaction or context reset is the normal snapshot rebuild boundary;
+no guessed idle TTL or arbitrary delta-size rotation. Size pressure uses existing
+compaction. Canonical writes/deletes persist immediately. Template/grant changes
+must remain effective and scoped; snapshots never expand access.
+
+Implementation is split into sequential PRs. The first moves counters/status
+only and preserves early live notes. The second implements durable snapshots,
+net edits/deletions, and compaction/reset integration. Stable tool lists across
+finalization (strategy item 3) remain deferred. No provider settings, bot grants,
+Engram behavior, cache TTL assumptions or cost guarantees are part of this work.
+
 ## Restore the pre-#119 prompt order — owner decision (2026-10-14)
 
 The owner rejected PR #119's memory-after-conversation arrangement and requested
