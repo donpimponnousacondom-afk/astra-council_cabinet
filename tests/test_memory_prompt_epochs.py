@@ -353,29 +353,106 @@ async def test_repeated_assembly_is_read_only_with_and_without_a_persisted_pin(k
     assert snapshot == detached
 
 
-async def test_new_vault_secret_redacts_preexisting_global_pin_and_its_complete_delta(kernel):
+@pytest.mark.parametrize(
+    "secret", ["late-known-fixture-credential-0123456789", 'late-known-"quoted"-credential\\line\nend']
+)
+async def test_new_vault_secret_redacts_preexisting_global_pin_without_a_spurious_delta(kernel, secret):
     bot = setup(kernel)
-    secret = "late-known-fixture-credential-0123456789"
     await change(kernel, bot, "global_memory", "topic", "Old saved reference: " + secret)
     memory = kernel.engine.contexts.memory_prompt
     snapshot = memory.prepare(bot, CHANNEL)
     before, initial = await assemble(kernel, bot, snapshot=snapshot)
-    assert secret in json.dumps(before)
-    assert secret in layer(initial, "global_memory")["content"]
+    assert secret in json.loads(layer(initial, "global_memory")["content"].rsplit("\n", 1)[-1])[0]["value"]
 
     kernel.vault.put("plugin/test/api_key", secret)
     after, current = await assemble(kernel, bot, snapshot=snapshot)
     assert secret not in json.dumps(after)
     assert secret not in json.dumps(current["prompt_layers"])
-    assert "[REDACTED]" in layer(current, "global_memory")["content"]
+    assert (
+        json.loads(layer(current, "global_memory")["content"].rsplit("\n", 1)[-1])[0]["value"]
+        == "Old saved reference: [REDACTED]"
+    )
     changes = delta(current, "global_memory")
-    assert len(changes) == 1 and changes[0]["operation"] == "replace"
-    assert changes[0]["note"]["key"] == "topic"
-    assert changes[0]["note"]["value"] == "Old saved reference: [REDACTED]"
+    assert changes == []
     assert current["memory_snapshot"]["epoch_id"] == snapshot["epoch_id"]
     assert memory.epochs.load(bot["id"], CHANNEL) == snapshot
     # Current projection redacts without rewriting private historical storage.
     assert secret in kernel.registry.global_memory.notes(bot["id"])[0]["value"]
+
+
+@pytest.mark.parametrize("operation", ["unchanged", "replace", "delete"])
+@pytest.mark.parametrize(
+    "secret", ["late-known-key-credential-0123456789", 'late-known-"key"-credential-0123456789']
+)
+async def test_new_vault_secret_in_pinned_key_projects_one_unambiguous_change(kernel, operation, secret):
+    bot = setup(kernel)
+    key = "reference-" + secret
+    await change(kernel, bot, "global_memory", key, "original")
+    memory = kernel.engine.contexts.memory_prompt
+    snapshot = memory.prepare(bot, CHANNEL)
+    kernel.vault.put("plugin/test/api_key", secret)
+    if operation != "unchanged":
+        await change(kernel, bot, "global_memory", key, "changed", delete=operation == "delete")
+    messages, meta = await assemble(kernel, bot, snapshot=snapshot)
+    assert all(json.dumps(secret)[1:-1] not in message["content"] for message in messages)
+    pinned = json.loads(layer(meta, "global_memory")["content"].rsplit("\n", 1)[-1])
+    assert pinned[0]["key"] == "reference-[REDACTED]"
+    changes = delta(meta, "global_memory")
+    keys = meta["memory_snapshot"]["delta_keys"]["global_memory"]
+    if operation == "unchanged":
+        assert changes == [] and keys == []
+    elif operation == "delete":
+        assert changes == [{"operation": "delete", "key": "reference-[REDACTED]"}]
+        assert keys == ["reference-[REDACTED]"]
+    else:
+        assert len(changes) == 1 and changes[0]["operation"] == "replace"
+        assert changes[0]["note"]["key"] == "reference-[REDACTED]"
+        assert changes[0]["note"]["value"] == "changed"
+        assert keys == ["reference-[REDACTED]"]
+    assert memory.epochs.load(bot["id"], CHANNEL) == snapshot
+
+
+async def test_vault_projection_preserves_custom_wrapper_role_and_frozen_embedded_counter(kernel):
+    bot = setup(kernel)
+    template(kernel, "global_memory", "PINNED {used_chars}\n{notes}\nREPEAT\n{{NOTES}}", "user")
+    secret = 'late-"escaped"-secret\\with\nnewline'
+    await change(kernel, bot, "global_memory", "topic", secret)
+    memory = kernel.engine.contexts.memory_prompt
+    snapshot = memory.prepare(bot, CHANNEL)
+    _, before = await assemble(kernel, bot, snapshot=snapshot)
+    kernel.vault.put("plugin/test/api_key", secret)
+    await change(kernel, bot, "global_memory", "another", "change the live budget")
+    _, after = await assemble(kernel, bot, snapshot=snapshot)
+    initial, current = layer(before, "global_memory"), layer(after, "global_memory")
+    assert current["role"] == initial["role"] == "user"
+    assert current["content"].splitlines()[0] == initial["content"].splitlines()[0]
+    assert current["content"].count('"value":"[REDACTED]"') == 2
+    assert json.dumps(secret)[1:-1] not in current["content"]
+    assert delta(after, "global_memory")[0]["note"]["key"] == "another"
+    assert memory.epochs.load(bot["id"], CHANNEL) == snapshot
+
+
+@pytest.mark.parametrize("already_pinned", [False, True])
+async def test_colliding_redacted_keys_never_silently_discard_notes_or_replace_saved_pin(
+    kernel, already_pinned
+):
+    bot = setup(kernel)
+    secrets = ("collision-credential-first", "collision-credential-second")
+    for index, secret in enumerate(secrets):
+        await change(kernel, bot, "global_memory", "reference-" + secret, f"saved value {index}")
+    memory = kernel.engine.contexts.memory_prompt
+    snapshot = memory.prepare(bot, CHANNEL) if already_pinned else None
+    for index, secret in enumerate(secrets):
+        kernel.vault.put(f"plugin/test/api_key_{index}", secret)
+    for action in (lambda: memory.prepare(bot, CHANNEL), lambda: memory.capture(bot, CHANNEL)):
+        with pytest.raises(ControlError, match="keys are ambiguous") as error:
+            action()
+        assert all(secret not in str(error.value) for secret in secrets)
+    with pytest.raises(ControlError, match="keys are ambiguous"):
+        await assemble(kernel, bot, snapshot=snapshot)
+    assert memory.epochs.load(bot["id"], CHANNEL) == snapshot
+    assert len(kernel.registry.global_memory.notes(bot["id"])) == 2
+    assert kernel.store.one("SELECT count(*) AS total FROM requests")["total"] == 0
 
 
 @pytest.mark.parametrize("kind", ["slash", "panel"])

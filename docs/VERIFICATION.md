@@ -37,11 +37,22 @@ the summary and pin together. Initial fixture failures matched generic prose
 instead of exact serialized note values; assertions were corrected without
 weakening grant checks.
 
+Independent published-PR review found a real projection defect: a newly
+vault-known credential in a saved key leaked through the deletion delta, and a
+credential requiring JSON escaping survived string redaction of the old wrapper.
+Parent regression probes confirmed both. The correction redacts complete saved
+records before comparing keys and substitutes their exact serialized representations
+in the frozen wrapper. It preserves custom roles, repeated placeholders and embedded
+historical counters without rewriting saved pins. A parent-raised key-collision
+case was independently reproduced by Sol; duplicate projected keys now fail locally
+instead of silently losing one note. Final focused suite: **82 passed in 20.65s**;
+Ruff lint and format passed. These probes use fake credentials only.
+
 These are local implementation checks, not live cache-hit or cost measurements.
 No provider/bot settings, saved note content, live context resets or tool-list
 restrictions were changed. Full current-head CI and independent Luna/Sol review
-remain PR gates. Publication debt: this task until its commit is pushed and its
-PR exists.
+remain PR gates. Publication debt: 0 unpublished commits after the corrective push to PR #122;
+review and current-head CI remain separate gates.
 
 ## 2026-10-14 — stable schema descriptions and late memory counters
 

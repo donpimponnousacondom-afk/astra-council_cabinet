@@ -15,6 +15,18 @@ class MemoryPrompt:
         self.store = builder.store
         self.epochs = MemoryEpochs(self.store)
 
+    @staticmethod
+    def keyed_records(records):
+        keyed = {note["key"]: note for note in records}
+        if len(keyed) != len(records):
+            raise ControlError(
+                "Global-memory note keys are ambiguous after existing vault redaction; "
+                "resolve the key collision in the dashboard and reset the affected conversation's context "
+                "before retrying. "
+                "Canonical notes and saved snapshots were retained; no provider request was sent"
+            )
+        return keyed
+
     def capture(self, bot, channel_id, layers=None):
         """Detach current scoped data/rendering; never create or rotate a pin."""
         layers = self.builder.layers(bot, channel_id) if layers is None else layers
@@ -56,7 +68,7 @@ class MemoryPrompt:
                 if scope == "memory"
                 else self.builder.global_memory.vault.redact(self.builder.global_memory.notes(bot["id"]))
             )
-            notes[scope] = {note["key"]: note for note in records}
+            notes[scope] = self.keyed_records(records)
         basis = digest(
             {
                 "version": FORMAT_VERSION,
@@ -96,6 +108,31 @@ class MemoryPrompt:
             )
         return snapshot
 
+    def redact_snapshot(self, snapshot):
+        """Project saved global records through today's existing vault boundary."""
+        if "global_memory" not in snapshot["notes"]:
+            return snapshot
+        projected = deepcopy(snapshot)
+        vault = self.builder.global_memory.vault
+        records = list(snapshot["notes"]["global_memory"].values())
+        redacted = vault.redact(records)
+        projected["notes"]["global_memory"] = self.keyed_records(redacted)
+        timezone = council_timezone(self.store)
+        for layer in projected["layers"]:
+            if layer["id"] != "global_memory":
+                continue
+            # Redact structured values before JSON serialization: a newly known
+            # secret containing quotes/backslashes cannot match its rendered form.
+            # Substitute only saved note records, keeping custom wrappers and
+            # their historical counters frozen. Every {notes} occurrence is covered.
+            for old, new in zip(records, redacted, strict=True):
+                if old != new:
+                    layer["content"] = layer["content"].replace(
+                        dumps(present_times(old, timezone)), dumps(present_times(new, timezone))
+                    )
+            layer.update(vault.redact(layer))
+        return projected
+
     def project(self, bot, channel_id, layers, snapshot=None):
         """Read-only assembly. Refresh deltas; never rewrite the pinned prefix."""
         candidate = self.capture(bot, channel_id, layers)
@@ -107,10 +144,9 @@ class MemoryPrompt:
         # during a captured turn. Its next preparation will persist the new pin.
         if not compatible:
             snapshot = candidate
-        changes = self.epochs.net_changes(snapshot, candidate["notes"])
-        pinned = {layer["id"]: deepcopy(layer) for layer in snapshot["layers"]}
-        if "global_memory" in pinned:
-            pinned["global_memory"] = self.builder.global_memory.vault.redact(pinned["global_memory"])
+        projected = self.redact_snapshot(snapshot)
+        changes = self.epochs.net_changes(projected, candidate["notes"])
+        pinned = {layer["id"]: deepcopy(layer) for layer in projected["layers"]}
         live = {layer["id"]: layer for layer in layers}
         memory_ids = {*SCOPES, *(scope + "_budget" for scope in SCOPES)}
         boundary = next(

@@ -123,6 +123,14 @@ snapshot; restart, idle time and delta size do not. Complete deltas are included
 in ordinary context fitting without truncation. Existing compaction may fail if
 there is no eligible history to reduce, including under Engram history reduction.
 
+The existing vault redaction boundary also applies to old pinned records before
+rendering or calculating changes, including newly registered credentials in keys
+or JSON-escaped values. Private saved snapshots are not rewritten by assembly.
+If distinct keys become identical after redaction, keyed changes cannot identify
+them unambiguously: preparation fails locally with both canonical notes retained,
+rather than silently coalescing them. Resolve that key collision in the dashboard
+and reset the affected conversation's context to discard its ambiguous old pin.
+
 The editable delta template is required whenever this grant and an enabled,
 nonempty global-note wrapper containing `{{NOTES}}` apply, even when the snapshot
 or changes are empty. It must retain `{{MEMORY_DELTA}}` (or `{memory_delta}`);
