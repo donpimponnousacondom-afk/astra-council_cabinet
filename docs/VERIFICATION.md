@@ -28,6 +28,17 @@ Full GitHub CI, Luna/Sol published-PR reviews and rollout remain separate gates;
 follow their PR evidence. The preceding read-only CSV correlation and derived
 request metadata remain under ignored `audit/2026-10-14/curie-cache/`.
 
+PR #119 follow-up: Luna found a stale placement table in PROMPTS; it now agrees
+with the new memory-tail contract. CI at `543bc26` ran **2,399 passed, 31 skipped,
+1 failed**: the provider-diagnostics replay test assumed the assistant was always
+the third message from the end. Moving memory after tool exchanges invalidated
+that position. The test now finds the unique assistant tool call and checks its
+exact call, reasoning and immediately following matching tool receipt; all
+privacy/redaction checks remain. Diagnostics plus the cache/status regressions
+then passed **29 tests in 8.91 s**, with two existing deprecation warnings.
+The failed CI run is not a passing gate; fresh-head CI and both delta reviews
+remain required. No application change was needed for this fixture correction.
+
 Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate older
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
