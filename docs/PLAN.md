@@ -502,3 +502,13 @@ and final context-budget gates. Expose saved/resumed progress to the operator.
 Do not reset or interrupt Sun's ongoing compaction for this change. Initial-history
 controls, renamed retention settings and provider tuning remain separate proposals.
 Current behavior lives in [OPERATIONS](OPERATIONS.md#resumable-compaction-chunks).
+
+## Engram character-only budget — owner decision, 2026-10-14
+
+Remove the separate Engram token ceiling and its model-facing budget guidance.
+Keep the existing character limit as the single configurable MEM + FACTS size
+budget: a ceiling, not a target to fill. Preserve stored memory, coverage, grants
+and all unrelated settings. Retire saved token-limit fields with an auditable
+startup migration; upgrade only the unedited shipped prompt and preserve custom
+text. Token counts remain diagnostic. See [Engram](ENGRAMS.md) for the current
+contract; this does not alter provider output limits or context/compaction budgets.

@@ -308,7 +308,7 @@ DEFAULT_PROMPTS = [
         "name": "Engram memory instructions",
         "runtime_layer": "engram_instructions",
         "role": "system",
-        "content": "Maintain a concise factual memory for this conversation. When useful information changes, supply a complete replacement MEM and FACTS in your final answer using the private suffix protocol below. If nothing useful has changed, you may retain the existing memory without a replacement. MEM records the current situation, open work, commitments and relevant preferences; FACTS records durable facts with clear attribution, useful dates and uncertainty. Refer to people by name and user ID; never store temporary P labels, which are reassigned in each request. Apply corrections and remove obsolete material. Preserve information needed beyond the recent conversation without copying the transcript. Record confirmed tool outcomes, not imagined actions or an undelivered answer as an accomplished action. Do not record private reasoning or chain-of-thought. The combined state must fit {state_char_limit} characters and {state_token_limit} locally counted tokens. The recent-message target is {recent_messages}; history reduction is {reduce_history}. Update only with the final ordinary answer, not intermediate tool calls. Your visible answer remains normal conversational text; the suffix is stored privately by the harness.",
+        "content": "Maintain a concise factual memory for this conversation. When useful information changes, supply a complete replacement MEM and FACTS in your final answer using the private suffix protocol below. If nothing useful has changed, you may retain the existing memory without a replacement. MEM records the current situation, open work, commitments and relevant preferences; FACTS records durable facts with clear attribution, useful dates and uncertainty. Refer to people by name and user ID; never store temporary P labels, which are reassigned in each request. Apply corrections and remove obsolete material. Preserve information needed beyond the recent conversation without copying the transcript. Record confirmed tool outcomes, not imagined actions or an undelivered answer as an accomplished action. Do not record private reasoning or chain-of-thought. The combined MEM and FACTS text must fit within {state_char_limit} Unicode characters, including spaces and newlines. This is a ceiling, not a target to fill. The recent-message target is {recent_messages}; history reduction is {reduce_history}. Update only with the final ordinary answer, not intermediate tool calls. Your visible answer remains normal conversational text; the suffix is stored privately by the harness.",
         "condition": "Engram plugin enabled for an ordinary conversation",
     },
     {
@@ -325,8 +325,13 @@ LAYER_KEYS = tuple(dict.fromkeys(item["runtime_layer"] for item in DEFAULT_PROMP
 DEFAULT_IDS = frozenset(item["id"] for item in DEFAULT_PROMPTS)
 # Previous shipped text only; edited records never match these upgrade fingerprints.
 PREVIOUS_DEFAULT_CONTENT_SHA256 = {
+    "runtime-engram-instructions": "ee40aefc21422f2ad8e3998a7b08f57345cb1f0c7dd4497c13f82b9f8f1e64ac",
     "runtime-identity": "7e98aced7d130b27c0c99727ec4e10dced15c4514b0e73fce9bee1f962881b4a",
     "runtime-tool-guidance": "7054b6dfad6b865c43d4c6f3ceb121fefc72648d77b1f2a1cd16535f6af6edae",
+}
+# Original shipped Engram wording can still be stored on older installations.
+PREVIOUS_ENGRAM_CONTENT_SHA256 = {
+    "runtime-engram-instructions": "3733967ff25f1dc6918f18590b931b957d8d3d81c9c2635f2cafe38988e01396",
 }
 # Previous PR #112 draft-only default, before the reverse-order finish decision.
 PREVIOUS_DRAFT_ONLY_CONTENT_SHA256 = {
@@ -338,7 +343,6 @@ PLACEHOLDERS = {
     "state_revision",
     "covered_through",
     "state_char_limit",
-    "state_token_limit",
     "recent_messages",
     "reduce_history",
     "background_job",

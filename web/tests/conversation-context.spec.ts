@@ -159,7 +159,7 @@ test("engram configuration stays opt-in and per-bot overrides inherit cleanly", 
     exact: true,
   });
   await expect(chars).toHaveValue("8000");
-  await expect(tokens).toHaveValue("2048");
+  await expect(tokens).toHaveCount(0);
   await expect(recent).toHaveValue("12");
   await expect(
     dialog.getByLabel("Reduce history after acknowledged engrams", {
@@ -170,7 +170,6 @@ test("engram configuration stays opt-in and per-bot overrides inherit cleanly", 
   for (const [input, invalid] of [
     [chars, ""],
     [chars, "128001"],
-    [tokens, "32001"],
     [recent, "0"],
   ] as const) {
     const original = await input.inputValue();
@@ -187,7 +186,6 @@ test("engram configuration stays opt-in and per-bot overrides inherit cleanly", 
     await input.fill(original);
   }
   await chars.fill("9000");
-  await tokens.fill("2300");
   await recent.fill("16");
   await dialog
     .getByRole("button", { name: "Save changes", exact: true })
@@ -197,9 +195,9 @@ test("engram configuration stays opt-in and per-bot overrides inherit cleanly", 
     await page.request.get("/api/config/plugins/engram")
   ).json();
   expect(savedGlobal.enabled).toBe(false);
+  expect(savedGlobal.config).not.toHaveProperty("state_token_limit");
   expect(savedGlobal.config).toMatchObject({
     state_char_limit: 9000,
-    state_token_limit: 2300,
     recent_messages: 16,
     reduce_history: false,
   });
@@ -221,14 +219,13 @@ test("engram configuration stays opt-in and per-bot overrides inherit cleanly", 
   await openCapabilities();
   await expect(chars).toHaveValue("");
   await expect(chars).toHaveAttribute("placeholder", "Inherit 9000");
-  await expect(tokens).toHaveAttribute("placeholder", "Inherit 2300");
+  await expect(tokens).toHaveCount(0);
   await expect(recent).toHaveAttribute("placeholder", "Inherit 16");
   const reduction = dialog.getByLabel("History reduction for this bot", {
     exact: true,
   });
   await expect(reduction).toHaveValue("");
   await chars.fill("6000");
-  await tokens.fill("1000");
   await recent.fill("12");
   await reduction.selectOption("true");
   await dialog.getByRole("button", { name: "Identity", exact: true }).click();
@@ -248,7 +245,6 @@ test("engram configuration stays opt-in and per-bot overrides inherit cleanly", 
     ...overrides,
     engram: {
       state_char_limit: 6000,
-      state_token_limit: 1000,
       recent_messages: 12,
       reduce_history: true,
     },
@@ -262,7 +258,6 @@ test("engram configuration stays opt-in and per-bot overrides inherit cleanly", 
     expect(saved[key]).toEqual(before[key]);
   await openCapabilities();
   await chars.fill("");
-  await tokens.fill("");
   await recent.fill("");
   await reduction.selectOption("");
   await dialog

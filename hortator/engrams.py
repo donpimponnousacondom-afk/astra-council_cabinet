@@ -25,11 +25,10 @@ from .tool_feedback import parse_arguments
 PLUGIN_ID = "engram"
 DEFAULTS = {
     "state_char_limit": 8000,
-    "state_token_limit": 2048,
     "recent_messages": 12,
     "reduce_history": False,
 }
-LIMITS = {"state_char_limit": 128000, "state_token_limit": 32000, "recent_messages": 1000}
+LIMITS = {"state_char_limit": 128000, "recent_messages": 1000}
 DESCRIPTION = (
     "Experimental private factual conversation state. Ordinary conversations only; "
     "slash and panel invocations are unchanged. Complete final answers may replace "
@@ -53,7 +52,7 @@ _MISS_REASONS = {
     "invalid_state_fields": "MEM and FACTS must be the only fields, both JSON strings",
     "invalid_state_unicode": "the private state contained invalid Unicode",
     "state_char_limit": "the private state exceeded its character limit",
-    "state_token_limit": "the private state exceeded its token limit",
+    "state_token_limit": "a previous update exceeded the former token limit, which is now removed",
 }
 
 
@@ -64,6 +63,11 @@ def summary_hash(summary):
 def validate_config(config):
     if not isinstance(config, dict):
         raise ControlError("Engram settings must be a JSON object")
+    if "state_token_limit" in config:
+        raise ControlError(
+            "Engram state_token_limit is retired; use state_char_limit. "
+            "Reload the dashboard and save again without the token limit."
+        )
     unknown = set(config) - set(DEFAULTS)
     if unknown:
         raise ControlError("Unknown engram settings: " + ", ".join(sorted(unknown)))
@@ -185,8 +189,6 @@ def parse_response(text, nonce, config, *, final=True):
         return {**empty, "invalid": "state_char_limit"}
     encoding = tiktoken.get_encoding("cl100k_base")
     tokens = sum(len(encoding.encode(value, disallowed_special=())) for value in state.values())
-    if tokens > config["state_token_limit"]:
-        return {**empty, "invalid": "state_token_limit"}
     return {
         "content": visible,
         "state": state,
@@ -252,13 +254,15 @@ class Engrams:
 
     def config(self, bot):
         plugin = self.store.get("plugins", PLUGIN_ID) or {}
-        return validate_config(
-            {
-                **DEFAULTS,
-                **plugin.get("config", {}),
-                **bot.get("plugin_config", {}).get(PLUGIN_ID, {}),
-            }
-        )
+        config = {
+            **DEFAULTS,
+            **plugin.get("config", {}),
+            **bot.get("plugin_config", {}).get(PLUGIN_ID, {}),
+        }
+        # Old snapshots may supply this field before startup migration runs.
+        # It no longer has any effect, even on that compatibility path.
+        config.pop("state_token_limit", None)
+        return validate_config(config)
 
     def enabled(self, bot):
         plugin = self.store.get("plugins", PLUGIN_ID) or {}
@@ -410,6 +414,8 @@ class Engrams:
     def prompt_values(self, snapshot):
         return {
             **snapshot["config"],
+            # Preserve owner-written templates using the retired placeholder.
+            "state_token_limit": "unlimited",
             "engram_state": dumps(snapshot["state"]),
             "state_revision": snapshot["revision"],
             "covered_through": snapshot["covered_through"],
@@ -448,8 +454,9 @@ class Engrams:
             )
             + "Any public joke, sign-off, or footer you write goes BEFORE the private block, "
             "never after END. "
-            f"The combined string values must fit {config['state_char_limit']} Unicode characters and "
-            f"{config['state_token_limit']} cl100k_base tokens. Budget output for both answer and state. "
+            f"The combined MEM and FACTS string values must fit within {config['state_char_limit']} "
+            "Unicode characters, including spaces and newlines. This is a ceiling, not a target; "
+            "keep only useful memory and leave room for your public answer. "
             "An absent, invalid or over-budget block preserves previous state and history."
         )
 

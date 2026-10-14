@@ -25,6 +25,41 @@ class Service:
     def version(self):
         return self.vault.redact(self._version)
 
+    def migrate_engram_token_limit(self):
+        """Remove the retired ceiling without changing memory or other budgets."""
+        plugin = self.store.get("plugins", "engram")
+        targets = []
+        if plugin and "state_token_limit" in plugin.get("config", {}):
+            targets.append(("plugins", plugin, plugin["config"], "config.state_token_limit"))
+        for bot in self.store.list("bots"):
+            config = bot.get("plugin_config", {}).get("engram", {})
+            if "state_token_limit" in config:
+                targets.append(("bots", bot, config, "plugin_config.engram.state_token_limit"))
+        if not targets:
+            return
+        self.store.execute("BEGIN IMMEDIATE")
+        try:
+            for kind, entity, config, field in targets:
+                old_value = config.pop("state_token_limit")
+                entity.pop("revision", None)
+                saved = self.store.put(kind, entity)
+                self.store.emit(
+                    "config.migrated",
+                    {
+                        "resource": kind,
+                        "id": saved["id"],
+                        "field": field,
+                        "previous_value": old_value,
+                        "revision": saved["revision"],
+                        "reason": "Engram memory uses its character limit only; the token ceiling is retired",
+                    },
+                    bot_id=saved["id"] if kind == "bots" else None,
+                )
+            self.store.execute("COMMIT")
+        except BaseException:
+            self.store.execute("ROLLBACK")
+            raise
+
     def migrate_response_protocol(self):
         """Retire only the draft switch before any bot turns can start."""
         legacy = [bot for bot in self.store.list("bots") if "publish_retained_draft" in bot]
@@ -133,6 +168,7 @@ class Service:
             DEFAULT_PROMPTS,
             PREVIOUS_DEFAULT_CONTENT_SHA256,
             PREVIOUS_DRAFT_ONLY_CONTENT_SHA256,
+            PREVIOUS_ENGRAM_CONTENT_SHA256,
         )
 
         for prompt in DEFAULT_PROMPTS:
@@ -143,6 +179,7 @@ class Service:
             elif hashlib.sha256(existing["content"].encode()).hexdigest() in (
                 PREVIOUS_DEFAULT_CONTENT_SHA256.get(prompt["id"]),
                 PREVIOUS_DRAFT_ONLY_CONTENT_SHA256.get(prompt["id"]),
+                PREVIOUS_ENGRAM_CONTENT_SHA256.get(prompt["id"]),
             ):
                 existing.pop("revision", None)
                 self.store.put("prompts", {**existing, "content": prompt["content"]})
@@ -151,7 +188,7 @@ class Service:
                     {
                         "resource": "prompts",
                         "id": prompt["id"],
-                        "reason": "updated unedited tool/publication guidance",
+                        "reason": "updated unedited runtime guidance",
                     },
                 )
 

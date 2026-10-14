@@ -14,9 +14,25 @@ Plugin configuration supplies defaults, with optional per-bot overrides:
 | Setting | Default | Allowed range / meaning |
 | --- | --- | --- |
 | State character limit | 8,000 | 1–128,000, combined MEM and FACTS |
-| State token limit | 2,048 | 1–32,000, local cl100k_base accounting |
 | Recent messages | 12 | 1–1,000 acknowledged messages, plus all uncovered input |
 | Reduce history | false | Explicit opt-in to replacing covered history with state |
+
+The character limit is the only Engram memory-size ceiling. Count the decoded
+MEM and FACTS string values together, including spaces and newlines; JSON keys,
+escaping and the public answer do not count toward it. The prompt describes a
+maximum, not a target to fill. Over-limit replacements are rejected intact;
+previous memory and uncovered history remain available. There is no automatic
+retry or truncation. Local `state_tokens` counts remain inspection diagnostics,
+not an acceptance limit; provider output and overall context limits still apply.
+
+On upgrade, the retired `state_token_limit` field is removed from saved global
+Engram configuration and per-bot overrides, with an audit receipt. Character
+budgets, other settings, memory and coverage are preserved. Older API clients
+that submit the field must remove it; it is no longer advertised or accepted.
+The unedited built-in prompt is upgraded by exact fingerprints of both shipped versions. Custom
+prompts remain unchanged; their legacy `{state_token_limit}` placeholder resolves
+to `unlimited`, but is no longer offered in the prompt catalog. Old missed-update
+feedback labels a token rejection as a former limit that has now been removed.
 
 Start with history reduction off, on an empty-context experimental bot. The bot
 receives its state and writes updates, but ordinary transcript/compaction behavior
@@ -245,3 +261,12 @@ weights or implement that architecture.
 ### Pending human requests and history reduction (2026-10-06)
 
 Coverage records which messages were observed while forming Engram state; it does not mean every human in that context was answered. Reduction preserves all messages beyond the bot’s handled cursor, including queued humans’ original questions, even if a previous turn’s Engram state covers them. The ordinary recent-message tail still applies to covered, handled messages. See [human priority](OPERATIONS.md) for the per-human queue.
+
+### Character-only memory budget (2026-10-14)
+
+The owner retired Engram's token ceiling and token-budget instructions. Models
+share these prompts but cannot reliably count a chosen tokenizer's tokens while
+writing. Keep the existing character budget as the sole state-size setting,
+without converting it to words or changing saved capacities. Token measurement
+may remain diagnostic. This does not change provider completion allowances,
+context planning, compaction, grants, or the owner's customized prompt text.
