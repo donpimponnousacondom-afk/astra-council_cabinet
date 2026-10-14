@@ -77,6 +77,8 @@ function sourceValues(
     ),
     narration_strikes: String(draft.narration_strikes ?? 2),
     publish_retained_draft: "True",
+    // Compatibility for owner-written templates with the retired placeholder.
+    state_token_limit: "unlimited",
     ...(["runtime_facts", "dynamic_prompt"].includes(layer.id)
       ? { dynamic_prompt: draft.dynamic_prompt || "" }
       : {}),

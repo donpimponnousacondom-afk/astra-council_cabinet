@@ -2,7 +2,6 @@ import { Field, Notice, Switch } from "./components";
 
 type EngramConfiguration = {
   state_char_limit?: number | null;
-  state_token_limit?: number | null;
   recent_messages?: number | null;
   reduce_history?: boolean;
   [key: string]: unknown;
@@ -14,14 +13,7 @@ const limits = [
     label: "Engram memory limit (characters)",
     fallback: 8000,
     max: 128000,
-    hint: "Combined retained MEM and FACTS text; 1–128,000 characters.",
-  },
-  {
-    key: "state_token_limit",
-    label: "Engram memory limit (tokens)",
-    fallback: 2048,
-    max: 32000,
-    hint: "Combined retained MEM and FACTS text, measured with cl100k_base; 1–32,000 tokens. Independent of the provider output cap.",
+    hint: "Combined retained MEM and FACTS text, including spaces and newlines; 1–128,000 characters. A ceiling, not a target to fill.",
   },
   {
     key: "recent_messages",

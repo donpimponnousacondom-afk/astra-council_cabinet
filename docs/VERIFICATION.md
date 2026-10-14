@@ -4,6 +4,35 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Engram character-only memory budget (2026-10-14)
+
+Base: `fa9d4b126fe04a2b99dbf753d18a1379def108c4`; task branch
+`feat/engram-character-budget`. Remove the token acceptance ceiling, configuration
+control and generated/default budget instructions; retain character limits,
+diagnostic token measurements, saved state and delivery/coverage semantics.
+Startup strips only retired Engram fields with atomic audit receipts. Both known
+unedited shipped instruction versions upgrade; custom prompts are preserved and
+the legacy token placeholder resolves to `unlimited`.
+
+Local verification: existing Engram/integration/response-protocol/prompt-layer
+suites passed **155 tests**, two dependency warnings, 34.28 s. The focused
+character-budget module initially passed 18 cases in 3.85 s; coverage includes
+Unicode/token-dense state, confirmed delivery, migration preservation/rollback,
+restart/idempotence, retired API fields, prompt upgrades and legacy feedback.
+A further case covers the original shipped instruction version found still in
+use during a read-only fingerprint check. The final 19-case module plus the
+response-protocol configuration suite passed **65 tests in 12.59 s**.
+Ruff lint/format, changed frontend Prettier, TypeScript and an isolated Vite build
+passed. The existing Engram configuration Playwright test, updated for the removed
+control, passed **1 test in 6.0 s** against isolated storage and port 18000.
+
+Classification: synthetic provider/delivery evidence and isolated SQLite/browser
+checks. No live model or Discord calls and no production configuration writes.
+The dashboard build went to `/tmp/hortator-engram-character-ui`, not live
+`web/dist`. The owner explicitly reserved the restart while a long task runs:
+publication, reviews and merge may proceed, but deployment waits for their go-ahead.
+Required GitHub checks and independent PR reviews remain separate gates.
+
 ## Resumable compaction chunks (2026-10-14)
 
 Base: `3f0d4be65ac59eb8ede3d0c2942359e76ac697ef`; task branch

@@ -194,10 +194,8 @@ def test_state_quotas_count_only_values_and_intermediate_response_never_updates(
         parse_response(wire(value), NONCE, {**DEFAULTS, "state_char_limit": 3})["invalid"]
         == "state_char_limit"
     )
-    assert (
-        parse_response(wire(value), NONCE, {**DEFAULTS, "state_token_limit": 1})["invalid"]
-        == "state_token_limit"
-    )
+    # Token counts remain diagnostic; only the character budget can reject size.
+    assert parsed["state_tokens"] > 4
     assert parse_response(wire(), NONCE, DEFAULTS, final=False)["state"] is None
     assert parse_response(wire(), NONCE, DEFAULTS, final=False)["content"] == "Public answer."
     assert parse_response("Tool preamble", NONCE, DEFAULTS, final=False)["invalid"] is None
