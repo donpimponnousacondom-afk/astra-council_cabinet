@@ -94,8 +94,15 @@ upper ceiling. Active jobs and pending completion notifications share this
 allowance across the bot's channels. Completed results whose follow-up has been
 read, claimed or revoked no longer occupy a slot. Status/list/start responses
 include current capacity and available slots; the tool description also states
-the current allowance. Model-facing lists include all outstanding jobs in their
-admitted channel plus up to 30 recent settled jobs.
+the current allowance when returning usage or validation help. Advertised tool
+schemas keep configured output, deadline, search and notification settings, with
+the configured output ceiling still enforced by the argument schema. Live task
+batch counts, dispatch errors and outstanding/available researcher slots appear
+in the late runtime facts, refreshed for each tool-capable model round. Calling
+with `{}` also returns current usage and capacity. Admissions and completions
+therefore do not rewrite the tool schema or invalidate an otherwise reusable
+prompt prefix. Model-facing lists include all outstanding jobs in their admitted
+channel plus up to 30 recent settled jobs.
 
 Each `start` creates exactly one researcher and consumes one tool call. For
 example, eight independent assignments require eight starts, an allowance of at

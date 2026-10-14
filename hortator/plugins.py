@@ -299,6 +299,9 @@ class PluginSpec:
     installed_description: bool = False
     wake_source: WakeSource | None = None
     owner_dm: bool = False
+    # Separate stable advertised instructions from live usage/error help.
+    schema_description: str | None = None
+    prompt_status: str | None = None
 
 
 class Registry:
@@ -754,11 +757,18 @@ class Registry:
             self.specs["memory"],
             description=MEMORY_DESCRIPTION
             + describe_budget(budget_for(self.store, context.bot, context.channel_id)),
+            schema_description=MEMORY_DESCRIPTION
+            + "Current usage, limits and consolidation warnings are in the channel-memory budget prompt; "
+            "call {} for current usage and complete tool help.",
         )
 
     def schemas(self, context):
         result = [
-            function(name, spec.description, spec.parameters)
+            function(
+                name,
+                spec.description if spec.schema_description is None else spec.schema_description,
+                spec.parameters,
+            )
             for name in self.specs
             if self.allowed(name, context) and self.specs[name].model_tool
             for spec in (self.spec_for(name, context),)
@@ -768,6 +778,17 @@ class Registry:
         if result and not any(t["function"]["name"] in RESULT_READERS for t in result):
             spec = self.spec_for(SHARED_RESULT_READER, context)
             result.append(function(spec.id, spec.description, spec.parameters))
+        return result
+
+    def prompt_status(self, context, tools):
+        """Fresh status for advertised tools, carried after history, never in schemas."""
+        result = {}
+        for tool in tools:
+            name = tool["function"]["name"]
+            if name in self.specs and self.allowed(name, context):
+                spec = self.spec_for(name, context)
+                if spec.model_tool and spec.prompt_status:
+                    result[name] = spec.prompt_status
         return result
 
     async def read_saved_result(self, args, context, config, key):

@@ -731,6 +731,7 @@ class Engine:
             silence_tools = [SILENCE] if bot.get("allow_silence", True) else []
             terminal_tools = silence_tools + ([END_CYCLE] if cycle_mode else [])
             tools = terminal_tools + self.registry.schemas(context)
+            bot = {**bot, "tool_status": self.registry.prompt_status(context, tools)}
             rows, summary, through, original_meta = await self.contexts.prepare(
                 bot, profile, channel_id, turn_id, tools, force=compact_only
             )
@@ -1024,6 +1025,7 @@ class Engine:
                 if answer_pending is not None:
                     available_tools, can_attach = [], False
                 budget_bot = {**bot, "max_tool_rounds": round_limit, "max_calls_per_round": calls_limit}
+                budget_bot["tool_status"] = self.registry.prompt_status(context, available_tools)
                 if background_handoff:
                     budget_bot["background_handoff"] = self.jobs.handoff(context)
                 if task_extension_used:
