@@ -51,3 +51,9 @@ class CompactionProgress:
                 time.time(),
             ),
         )
+
+    def source_revision(self):
+        row = self.store.one(
+            "SELECT revision FROM context_source_revisions WHERE channel_id=?", (self.scope[1],)
+        )
+        return row["revision"] if row else 0

@@ -184,9 +184,10 @@ class ContextBuilder:
             }
         )
 
-    async def compaction_source_unchanged(self, bot, channel_id, rows, expected):
+    async def validated_compaction_source_revision(self, bot, channel_id, rows, expected):
         # Re-read selected records (including reply previews) before promotion.
         # New messages beyond this operation's snapshot remain for the next turn.
+        revision = CompactionProgress(self.store, bot["id"], channel_id).source_revision()
         source = []
         for offset in range(0, len(rows), 64):
             selected = {row["seq"] for row in rows[offset : offset + 64]}
@@ -203,7 +204,7 @@ class ContextBuilder:
             await asyncio.sleep(0)
         async with self.token_slots:
             hashes = await asyncio.to_thread(prefix_hashes, source)
-        return bool(hashes and len(hashes) == len(rows) and hashes[-1] == expected)
+        return revision if hashes and len(hashes) == len(rows) and hashes[-1] == expected else None
 
     def layers(self, bot, channel_id):
         layers = []
@@ -1044,8 +1045,10 @@ class ContextBuilder:
                     raise ControlError(
                         "Compacted context still exceeds the model budget; previous context is retained"
                     )
-                unchanged = await self.compaction_source_unchanged(bot, channel_id, old_rows, hashes[-1])
-                if not unchanged or basis != self.compaction_basis(
+                checked_revision = await self.validated_compaction_source_revision(
+                    bot, channel_id, old_rows, hashes[-1]
+                )
+                if checked_revision is None or basis != self.compaction_basis(
                     bot, channel_id, self.store.context(bot["id"], channel_id)
                 ):
                     raise ControlError(
@@ -1056,6 +1059,11 @@ class ContextBuilder:
                 # atomically. Failed/cancelled attempts keep every validated chunk.
                 self.store.execute("BEGIN IMMEDIATE")
                 try:
+                    if progress.source_revision() != checked_revision:
+                        raise ControlError(
+                            "Conversation changed during final compaction validation; "
+                            "previous context retained and saved chunks will be revalidated on retry"
+                        )
                     self.store.execute(
                         "UPDATE contexts SET summary=?,checkpoint=?,compactions=compactions+1,estimated_tokens=?,updated_at=? WHERE bot_id=? AND channel_id=?",
                         (summary, checkpoint, meta["estimated_tokens"], time.time(), bot["id"], channel_id),

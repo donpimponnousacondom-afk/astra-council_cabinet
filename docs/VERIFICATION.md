@@ -25,6 +25,15 @@ were changed. The current Sun activation remains on the existing runtime; no
 reset/restart was used to apply this work while it was running. Required published
 PR reviews and full CI are separate from these local checks.
 
+PR #117 review correction: Sol independently reproduced an edit occurring after
+the final source reread but before promotion. Added a persisted channel mutation
+revision, checked inside the promotion transaction; ordinary append-only arrivals
+remain valid. Five deterministic concurrent edit/deletion/reply-arrival/append
+cases passed in 1.80 s. The implementation's existing resume/responsiveness/snapshot
+subset passed 45 tests in 15.45 s with the same two dependency warnings. New race
+tests initially matched the wrong error wording; corrected assertions, no weakened
+state checks. Reviewer delta assessments and full CI must target the corrected head.
+
 ## Actionable tool argument feedback and shell scope help (2026-10-13)
 
 Commit: base `b8d17a08dcd82b1ca5df2e74339a1d4fbc316579` plus task changes;

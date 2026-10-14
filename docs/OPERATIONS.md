@@ -688,7 +688,10 @@ summary limit discard provisional progress and reprocess the selected history;
 source messages and diagnostic records are not deleted. Model, reasoning and
 output-cap changes can reuse a valid summary. New messages remain in the remaining
 work/recent tail. The completed operation also rechecks source records before
-promoting the summary. Promotion and removal of provisional progress are atomic.
+promoting the summary. A persisted channel source revision guards the asynchronous
+recheck against edits/deletions and newly resolved reply references; ordinary new
+messages do not advance that revision. The final revision check, promotion and
+removal of provisional progress share one transaction.
 
 Clean-slate resets and selective context restores clear progress only in their
 selected bot/channel scope. Full database snapshots include it. This does not
