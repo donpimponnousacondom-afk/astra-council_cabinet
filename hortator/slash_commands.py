@@ -200,12 +200,23 @@ class SlashContexts(ContextBuilder):
         ]
         self.store.context(bot["id"], channel_id)
         image_plan = select_images([], 0, profile, allow_images=bot.get("allow_images", True))
-        _, meta = await self.assemble(bot, profile, channel_id, rows, "", tools=tools, image_plan=image_plan)
+        memory_snapshot = self.memory_prompt.prepare(bot, channel_id)
+        _, meta = await self.assemble(
+            bot,
+            profile,
+            channel_id,
+            rows,
+            "",
+            tools=tools,
+            image_plan=image_plan,
+            memory_snapshot=memory_snapshot,
+        )
         meta.update(checkpoint=0, calibration_factor=1)
         if meta["estimated_tokens"] + profile["response_tokens"] >= profile["context_window"]:
             raise ControlError(
                 "Interaction input and granted notes/tools exceed the model context budget; shorten the prompt or notes"
             )
+        meta["_memory_snapshot"] = memory_snapshot
         return rows, "", 0, meta
 
 

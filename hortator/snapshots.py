@@ -604,7 +604,7 @@ class Snapshots:
                 # Selective restore rewinds conversation checkpoints against the
                 # live transcript. Its existing rolling state can describe a
                 # later history, so invalidate only this restored scope. Full
-                # restores include the complete engram tables with the database.
+                # restores include complete engram and memory snapshot tables.
                 current_tables = {
                     row[0] for row in target.execute("SELECT name FROM sqlite_master WHERE type='table'")
                 }
@@ -618,6 +618,7 @@ class Snapshots:
                     "response_recovery_pending",
                     "turn_action_receipts",
                     "compaction_progress",
+                    "memory_snapshots",
                 ):
                     if table in current_tables:
                         target.execute(f"DELETE FROM {table} WHERE {clause}", args)

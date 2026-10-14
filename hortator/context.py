@@ -13,6 +13,7 @@ from .concurrency import error_text
 from .compaction_progress import CompactionProgress, digest, prefix_hashes
 from .models import ControlError, OWNER_ID
 from .memory_budget import budget_for
+from .memory_prompt import MemoryPrompt
 from .store import dumps
 from .transcript import render_transcript
 from .vision import (
@@ -43,6 +44,7 @@ class ContextBuilder:
     ):
         self.store, self.pool = store, pool
         self.global_memory = global_memory
+        self.memory_prompt = MemoryPrompt(self)
         self.application_emojis = application_emojis
         self.engrams = engrams
         self.filesystems = filesystems
@@ -406,6 +408,7 @@ class ContextBuilder:
         image_plan=None,
         engram=None,
         audio_plan=None,
+        memory_snapshot=None,
     ):
         rows = self.visible_rows(bot, rows)
         if image_plan is None or not bot.get("allow_images", True):
@@ -424,7 +427,9 @@ class ContextBuilder:
                 self.audio.enabled(bot),
             )
         audio_inputs = current_audio(self.store, channel_id, audio_plan)
-        prepared_layers = self.layers(bot, channel_id)
+        prepared_layers, memory_deltas, memory_meta = self.memory_prompt.project(
+            bot, channel_id, self.layers(bot, channel_id), memory_snapshot
+        )
         budget_ids = {"memory_budget", "global_memory_budget"}
         budgets = [item for item in prepared_layers if item["id"] in budget_ids]
         layers = [item for item in prepared_layers if item["id"] not in budget_ids]
@@ -502,14 +507,14 @@ class ContextBuilder:
                 messages.append({"role": "user", "content": with_audio([], selected_audio)})
         if extras:
             messages.extend(extras)
-        # Keep notes before the growing transcript. Only changing usage counters
-        # move after exchanges, where they cannot invalidate earlier notes/history.
-        for index, item in enumerate(budgets):
+        # Keep pinned notes before the growing transcript. Saved changes and live
+        # usage counters follow exchanges without invalidating that earlier prefix.
+        for index, item in enumerate(memory_deltas + budgets):
             if index == 0:
                 messages.append({"role": item["role"], "content": item["content"]})
             else:
                 append(item)
-        layers.extend(budgets)
+        layers.extend(memory_deltas + budgets)
         estimated = await self.estimate_async(messages, tools or [])
         dynamic = self.dynamic_layers(bot, profile, channel_id, round_index, estimated)
         # The changing tail follows tool exchanges, regardless of static roles.
@@ -540,6 +545,7 @@ class ContextBuilder:
         estimate = await self.estimate_async(messages, tools or [])
         meta = {
             "channel_id": channel_id,
+            "memory_snapshot": memory_meta,
             "transcript_format": bot.get("transcript_format", "structured"),
             "message_ids": [r["discord_id"] for r in included_rows],
             "message_sequences": [r["seq"] for r in included_rows],
@@ -674,6 +680,7 @@ class ContextBuilder:
             raise ControlError(
                 "New-message audio capture exceeded 60 seconds; cached progress is retained, retry preparation"
             ) from exc
+        memory_snapshot = self.memory_prompt.prepare(bot, channel_id)
         messages, meta = await self.assemble(
             bot,
             profile,
@@ -684,6 +691,7 @@ class ContextBuilder:
             image_plan=image_plan,
             engram=engram,
             audio_plan=audio_plan,
+            memory_snapshot=memory_snapshot,
         )
         if audio_plan["inputs"] or audio_plan["omitted"] or audio_plan["disabled_clips"]:
             self.store.emit(
@@ -772,6 +780,9 @@ class ContextBuilder:
         if triggers:
             original_estimate = meta["estimated_tokens"]
             keep = min(profile["keep_recent_messages"], max(0, len(compactable) - 1))
+            # Fit the post-compaction layout, where memory will be consolidated.
+            # This candidate is detached; failed compaction retains the old pin.
+            fit_memory_snapshot = self.memory_prompt.capture(bot, channel_id)
             # If the tail itself exceeds the target, compact progressively more of it.
             while keep > 0:
                 tail_messages, tail_meta = await self.assemble(
@@ -784,6 +795,7 @@ class ContextBuilder:
                     image_plan=image_plan,
                     engram=engram,
                     audio_plan=audio_plan,
+                    memory_snapshot=fit_memory_snapshot,
                 )
                 if tail_meta["estimated_tokens"] * factor + profile[
                     "summary_tokens"
@@ -1040,6 +1052,9 @@ class ContextBuilder:
                     engram = self.engrams.capture(
                         bot, channel_id, turn_id, {**context, "summary": summary, "checkpoint": checkpoint}
                     )
+                previous_memory_snapshot = memory_snapshot
+                memory_snapshot = self.memory_prompt.capture(bot, channel_id)
+                memory_fit = self.memory_prompt.fitting_fingerprint(bot, channel_id, memory_snapshot)
                 messages, meta = await self.assemble(
                     bot,
                     profile,
@@ -1050,6 +1065,7 @@ class ContextBuilder:
                     image_plan=image_plan,
                     engram=engram,
                     audio_plan=audio_plan,
+                    memory_snapshot=memory_snapshot,
                 )
                 if (
                     meta["estimated_tokens"] * factor + profile["response_tokens"]
@@ -1068,6 +1084,13 @@ class ContextBuilder:
                         "Conversation or compaction instructions changed during compaction; "
                         "previous context retained and saved chunks will be revalidated on retry"
                     )
+                if memory_fit != self.memory_prompt.fitting_fingerprint(
+                    bot, channel_id, self.memory_prompt.capture(bot, channel_id)
+                ):
+                    raise ControlError(
+                        "Memory or its templates changed during final compaction fitting; "
+                        "previous context and memory snapshot retained; retry compaction"
+                    )
                 # Promote the finished summary and retire provisional progress
                 # atomically. Failed/cancelled attempts keep every validated chunk.
                 self.store.execute("BEGIN IMMEDIATE")
@@ -1081,6 +1104,7 @@ class ContextBuilder:
                         "UPDATE contexts SET summary=?,checkpoint=?,compactions=compactions+1,estimated_tokens=?,updated_at=? WHERE bot_id=? AND channel_id=?",
                         (summary, checkpoint, meta["estimated_tokens"], time.time(), bot["id"], channel_id),
                     )
+                    self.memory_prompt.epochs.save(memory_snapshot)
                     progress.clear()
                     self.store.execute("COMMIT")
                 except BaseException:
@@ -1090,6 +1114,8 @@ class ContextBuilder:
                     "compaction.completed",
                     {
                         "compaction_id": compaction_id,
+                        "memory_snapshot": self.memory_prompt.epochs.metadata(memory_snapshot),
+                        "previous_memory_epoch": previous_memory_snapshot["epoch_id"],
                         "completed_batches": completed_batches,
                         "before_tokens": original_estimate,
                         "after_tokens": meta["estimated_tokens"],
@@ -1135,6 +1161,7 @@ class ContextBuilder:
             (meta["estimated_tokens"], time.time(), bot["id"], channel_id),
         )
         self.store.emit("context.assembled", meta, bot_id=bot["id"], turn_id=turn_id)
+        meta["_memory_snapshot"] = memory_snapshot
         if engram is not None:
             meta["_engram_snapshot"] = engram
         return rows, "" if replace_summary else context["summary"], tail, meta

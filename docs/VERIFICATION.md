@@ -1,5 +1,59 @@
 # Verification record
 
+## 2026-10-14 — durable memory snapshots and late net changes
+
+Strategy item 2 follows merged PR #121. Local/mocked verification passed:
+
+- **240 tests, two dependency deprecation warnings, 55.17s** across counter
+  ordering, prompt layers, both memory stores, resumable compaction, snapshot
+  persistence, slash/panel behavior and Engram compatibility.
+- **138 tests, two dependency warnings, 45.46s** across memory prompt/runtime
+  integration, final compaction validation, provider diagnostics, end_cycle,
+  background handoff, response recovery and supersession. This overlaps some
+  compaction cases in the earlier run. The final eight compaction-specific cases
+  also passed separately in 2.78s after extending race checks to budget/delta text.
+- Final combined snapshot files: **72 passed in 17.35s**, including newly vault-known
+  secret redaction and repeated slash/panel invocation pins. Additional context
+  responsiveness, compaction limits/source revision and Engram integration:
+  **64 passed, two dependency warnings, 18.71s**.
+- The implementation helper separately passed 25 persistence/lifecycle cases
+  and 29 existing reset/snapshot cases. Ruff lint/format, frontend TypeScript
+  and the existing inspector's Prettier check passed.
+
+Tests prove unchanged early snapshot/history bytes after repeated writes, new
+keys and deletions, as well as early-memory reuse when conversation grows.
+Complete replacements coalesce per key; empty values remain distinct from deletion.
+Mocked generation loops make two real tool writes in each scope, retain the same
+pin/schema/prefix and send fresh deltas before successful final delivery.
+
+Persistence cases cover reopen/restart, scoped/current grants, custom roles and
+note wrappers, empty initial stores, missing delta placeholders before inference,
+full/selective restore and notes-only deltas. Compaction cases cover a fresh pin
+that fits when old-pin-plus-delta would not, later failed/truncated chunks,
+resumption, final-fit failure, cancellation, edits during final validation, and
+transaction rollback after writing the candidate pin. All preserve canonical
+notes and validated chunks as applicable; only successful final promotion changes
+the summary and pin together. Initial fixture failures matched generic prose
+instead of exact serialized note values; assertions were corrected without
+weakening grant checks.
+
+Independent published-PR review found a real projection defect: a newly
+vault-known credential in a saved key leaked through the deletion delta, and a
+credential requiring JSON escaping survived string redaction of the old wrapper.
+Parent regression probes confirmed both. The correction redacts complete saved
+records before comparing keys and substitutes their exact serialized representations
+in the frozen wrapper. It preserves custom roles, repeated placeholders and embedded
+historical counters without rewriting saved pins. A parent-raised key-collision
+case was independently reproduced by Sol; duplicate projected keys now fail locally
+instead of silently losing one note. Final focused suite: **82 passed in 20.65s**;
+Ruff lint and format passed. These probes use fake credentials only.
+
+These are local implementation checks, not live cache-hit or cost measurements.
+No provider/bot settings, saved note content, live context resets or tool-list
+restrictions were changed. Full current-head CI and independent Luna/Sol review
+remain PR gates. Publication debt: 0 unpublished commits after the corrective push to PR #122;
+review and current-head CI remain separate gates.
+
 ## 2026-10-14 — stable schema descriptions and late memory counters
 
 This first strategy PR moves only live channel/global budget guidance and

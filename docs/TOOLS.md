@@ -28,9 +28,21 @@ stays stable as usage changes and points to that current guidance. `read`,
 `budget` object with `limit_chars`, `used_chars`, `remaining_chars`, `grace_chars`,
 `hard_limit_chars`, `over_budget_chars`, `must_consolidate` and `note_limit_chars`.
 The fresh `memory_budget` prompt layer follows the conversation and current tool
-exchanges. The actual channel notes remain before history and reflect saved
-changes on the next prompt. Global memory follows the same separation with its
-own notes, budget and grants.
+exchanges. Channel notes remain before history as a durable pinned snapshot;
+the preceding `memory_delta` tail layer supplies complete saved replacements and
+deletions since that snapshot. Writes still persist immediately and tool reads
+return current notes. Global memory follows the same separation with its own
+notes, budget and grants. Counters embedded in a pinned note wrapper are
+historical; current budget guidance and `{}` help report current usage.
+
+Delta entries replace the whole note at `note.key` or mark a deleted `key` absent;
+all unchanged snapshot entries remain. Guidance is present even for an empty
+snapshot or change list. Active note wrappers containing `{{NOTES}}` require
+enabled, nonempty delta guidance containing `{{MEMORY_DELTA}}`; invalid guidance
+fails before inference. Disabled/empty note wrappers or wrappers omitting notes
+receive no hidden delta. Successful compaction, reset or relevant note-configuration
+changes rebuild snapshots; ordinary context fitting retains complete deltas.
+See [the editable prompt contract](PROMPTS.md#pinned-notes-and-saved-changes).
 
 `read` optionally accepts a `key` to select exactly one note; unmatched keys
 return an empty notes list without changing aggregate budget accounting. Both

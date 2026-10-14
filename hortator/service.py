@@ -571,6 +571,10 @@ class Service:
             )
             if self.engine:
                 await self.engine.cancel(affected, "Configuration deleted")
+            if kind == "bots":
+                # Drain preparation before removing its derived prompt state.
+                # Canonical notes and historical request evidence are retained.
+                self.store.execute("DELETE FROM memory_snapshots WHERE bot_id=?", (entity_id,))
             prefix = {"bots": "bot", "providers": "provider"}.get(kind)
             if prefix:
                 for scope in list(self.vault.values):

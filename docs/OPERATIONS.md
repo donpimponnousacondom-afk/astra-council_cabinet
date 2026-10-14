@@ -716,7 +716,19 @@ The normal budget counts Unicode characters in note **values**, not tokens, keys
 
 Small overshoots can use **5% temporary headroom**, rounded down. For example, the unchanged default allows **48,000 → 50,400** stored characters. With that budget, an accepted write at 48,128 is saved with a warning, not reported as a failed tool call. While above the configured budget, subsequent writes must strictly reduce the total; deletes are also allowed. Reductions can span several keys/calls, with warnings until usage is back within budget. Writes exceeding the configured budget plus headroom are rejected without changing notes. Merely reading, starting another turn or waiting does not renew headroom. There is no automatic summarization or extra provider call to fix notes.
 
-Enabled bots see current usage, remaining space, allowance and repair instructions in `{}`/error usage, read/write/delete results (`budget`) and a refreshed prompt layer each round. Channel/global memory advertise stable descriptions that point to this live guidance. Their `memory_budget` and `global_memory_budget` layers follow conversation and current tool exchanges; actual notes remain before history and reflect saved changes on the next prompt. The research tool likewise keeps live task-batch/capacity counts in the runtime facts at the tail while retaining configured limits in its advertised schema; its status is refreshed only for the tools available in that round under current grants. Over-budget mutations emit `memory.budget_warning` in console scope **c**, stating the accepted change, usage and required consolidation. Existing notes and the separate retained-summary/context/token budgets are preserved.
+Enabled bots see current usage, remaining space, allowance and repair instructions in `{}`/error usage, read/write/delete results (`budget`) and a refreshed prompt layer each round. Channel/global memory advertise stable descriptions that point to this live guidance. Their `memory_budget` and `global_memory_budget` layers follow conversation and current tool exchanges, after complete saved memory deltas; pinned note renderings remain before history. The research tool likewise keeps live task-batch/capacity counts in the runtime facts at the tail while retaining configured limits in its advertised schema; its status is refreshed only for the tools available in that round under current grants. Over-budget mutations emit `memory.budget_warning` in console scope **c**, stating the accepted change, usage and required consolidation. Existing notes and the separate retained-summary/context/token budgets are preserved.
+
+Each bot/conversation keeps durable note snapshots across turns and restarts.
+Canonical writes/deletes are immediate; the next prompt includes complete net
+replacements/deletions through the editable `memory_delta` and
+`global_memory_delta` layers. Existing note-template content is preserved, so any
+counters embedded in its pinned rendering are historical; use the current budget
+layers or tool `{}` help for current usage. Successful compaction, context reset
+or a relevant note-configuration change rebuilds the affected snapshots. There
+is no idle-time or delta-size rotation. Ordinary context fitting includes the
+complete snapshot and changes, without truncation; preparation may fail when
+existing compaction has no eligible history to reduce, including with Engram
+history reduction. See [prompt controls and required delta coverage](PROMPTS.md#pinned-notes-and-saved-changes).
 
 ### Retained conversation summaries
 
@@ -1282,6 +1294,12 @@ mislabelled as an observed input size.
 Enable **Plugins → Global memory**, then grant **Global memory** under the selected bot's **Capabilities**. This adds `global_memory` alongside the independent channel-scoped `memory` tool. It is off globally and ungranted by default. The bot's **Global memory budget (characters across channels)** field accepts 1–128,000 (default 48,000); zero and negative values are rejected. A 5% temporary allowance and the 8,000-character note limit follow the existing private-memory contract.
 
 Use **Bots → <bot> → Global notes** to inspect, create, replace or delete that bot's notes, including before its first channel conversation or while the plugin is disabled. This owner's editor cancels active work for the affected bot before a mutation; configuration saves cannot silently discard a pending note draft. Stored channel notes are not copied or merged automatically. Full snapshots include global notes; selective restoration requires **Also restore this bot's global notebook**. See [GLOBAL_MEMORY.md](GLOBAL_MEMORY.md) for scope, provenance, examples and budgets.
+
+Full application snapshots restore the durable prompt snapshots alongside the
+notes. Selective context restoration clears affected prompt snapshots so the
+next preparation pins current restored state. Notes-only restoration keeps the
+existing prompt snapshots and represents restored notes as complete deltas.
+Slash/panel synthetic conversation scopes retain their existing boundaries.
 
 ## Companion slash commands
 

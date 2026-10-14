@@ -43,6 +43,10 @@ Discord permits at most 6,000 characters for a string command option. Options ha
 
 Every invocation starts a **fresh conversation** from the prompt, configured persona/shared prompts, and granted memory layers. It does not import earlier slash answers or messages from that Discord channel. The ordinary `memory` plugin uses a separate private `slash:<bot-id>:<channel-id>` scope, also shared by that channel's slash workspaces. This does not overlap with ordinary council-room notes. The optional global-memory plugin supplies the bot's own cross-channel notebook, including original source-channel attribution. Other bots' private/global notes remain inaccessible.
 
+Memory injection uses a durable snapshot and complete late changes under that
+existing synthetic scope; a new invocation does not repin notes or import prior
+conversation. See [pinned notes and changes](PROMPTS.md#pinned-notes-and-saved-changes).
+
 Granted search, fetching, document creation, sandbox workspaces and other ordinary tools run through the existing tool loop. Their schemas, complete argument feedback, per-bot budgets, provider configuration, reasoning capture, pricing and measured footer behavior are reused. The plugin grants no director capabilities, arbitrary channel-history reading, or unrestricted cross-channel sending. Existing attachment import tools cannot fetch unspecified surrounding messages through the private slash scope. This first `/prompt` accepts text; attachment command options and follow-up conversation sessions are not implemented.
 
 The result is ordinary assistant text, not a council reply tool. Longer answers use the same Markdown preview/full-response attachment behavior as channel chat. Prepared artifacts can accompany the answer. Discord mentions are suppressed. Intentional silence is still controlled by the bot's existing capability and produces a concise explicit silence receipt for the invoking owner.

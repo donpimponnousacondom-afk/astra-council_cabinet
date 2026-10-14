@@ -16,6 +16,26 @@ net edits/deletions, and compaction/reset integration. Stable tool lists across
 finalization (strategy item 3) remain deferred. No provider settings, bot grants,
 Engram behavior, cache TTL assumptions or cost guarantees are part of this work.
 
+PR #121 completed the counter/status increment. The memory-epoch increment keeps
+the original note-template text and operator overrides, persisting their rendered
+snapshots per bot/conversation. Canonical writes remain immediate; complete net
+replacement/deletion entries follow conversation/tool exchanges in editable
+`memory_delta` and `global_memory_delta` layers, before live budgets/runtime facts.
+Both layers use the required `{{MEMORY_DELTA}}` data placeholder. Snapshot entries
+remain until superseded by a matching key; embedded old counters are historical.
+Empty snapshots and empty changes still receive delta guidance.
+
+When the note grant and an enabled, nonempty wrapper containing `{{NOTES}}` apply,
+missing/disabled/empty delta text or omission of its data placeholder fails before
+inference. A disabled/empty note wrapper or one omitting notes retains its existing
+output behavior without hidden fallback or delta injection. Relevant note-template,
+identity, grant and configuration changes rebuild the affected snapshots. Existing
+synthetic slash/panel conversation keys preserve their scope. Full snapshots restore
+the prompt cache; selective context restoration clears affected pins; notes-only
+restoration becomes a delta. Existing compaction handles size pressure without
+truncation and can fail when no eligible history remains, including under Engram
+history reduction. See [the prompt contract](PROMPTS.md#pinned-notes-and-saved-changes).
+
 ## Restore the pre-#119 prompt order — owner decision (2026-10-14)
 
 The owner rejected PR #119's memory-after-conversation arrangement and requested

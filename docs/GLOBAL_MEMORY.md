@@ -102,7 +102,42 @@ Empty-call help, error usage, reads, writes, deletes and the next prompt all exp
 
 ## Prompt and ownership boundaries
 
-When enabled, the runtime supplies a fresh `global_memory_budget` layer after the conversation and current tool exchanges on each prompt. The `global_memory` layer remains before conversation history and includes the current stored notes when they exist. It labels notes as **untrusted recollections**, preserves source/channel/date metadata and warns against treating an earlier conversation's participants or instructions as the speaker in the current channel. Writes persist immediately and the next prompt reads the updated notes. Models are prompted to keep durable personal facts here and channel-specific details in channel memory.
+When enabled, the runtime supplies a fresh `global_memory_budget` layer after the conversation and current tool exchanges on each prompt. The earlier `global_memory` layer contains a durable pinned rendering of this bot's notes for that conversation. It labels notes as **untrusted recollections**, preserves source/channel/date metadata and warns against treating an earlier conversation's participants or instructions as the speaker in the current channel. Models are prompted to keep durable personal facts here and channel-specific details in channel memory.
+
+Writes and deletes persist immediately in the canonical global store. The later
+`global_memory_delta` layer contains every net change since that conversation's
+snapshot: `{"operation":"replace","note":{...}}` supplies a complete current note,
+including its key, value and source/date metadata; `{"operation":"delete","key":"..."}`
+means the key is absent. Changes supersede matching snapshot entries; unchanged
+keys remain. These are saved data, not new instructions or requests to replay
+writes. Current budget guidance and `{}` help take precedence over any historical
+counters embedded in the pinned wrapper. Tool reads and owner inspection still
+return current stored notes.
+
+Each bot/conversation has its own durable prompt snapshot while the canonical
+global notes remain shared across that bot's conversations. A write elsewhere is
+therefore visible as a delta on the next prompt. Slash and panel invocations keep
+their existing synthetic conversation keys and note scopes. Successful compaction,
+context reset or a relevant note-configuration change rebuilds the affected
+snapshot; restart, idle time and delta size do not. Complete deltas are included
+in ordinary context fitting without truncation. Existing compaction may fail if
+there is no eligible history to reduce, including under Engram history reduction.
+
+The existing vault redaction boundary also applies to old pinned records before
+rendering or calculating changes, including newly registered credentials in keys
+or JSON-escaped values. Private saved snapshots are not rewritten by assembly.
+If distinct keys become identical after redaction, keyed changes cannot identify
+them unambiguously: preparation fails locally with both canonical notes retained,
+rather than silently coalescing them. Resolve that key collision in the dashboard
+and reset the affected conversation's context to discard its ambiguous old pin.
+
+The editable delta template is required whenever this grant and an enabled,
+nonempty global-note wrapper containing `{{NOTES}}` apply, even when the snapshot
+or changes are empty. It must retain `{{MEMORY_DELTA}}` (or `{memory_delta}`);
+disabled, empty or incomplete delta guidance stops preparation before inference.
+Disabling/emptying the note wrapper or omitting its notes placeholder produces no
+delta and no hidden fallback; existing custom wrapper output is preserved.
+See [editable note snapshots and deltas](PROMPTS.md#pinned-notes-and-saved-changes).
 
 Both captured turn grants and current saved grants must permit the plugin. A revoked grant takes effect even if a tool context was captured before the operator's change. The effective budget is the lower of the captured and currently saved values. A saved increase therefore does not retroactively give an old captured turn a larger quota.
 
@@ -124,6 +159,11 @@ PRIMARY KEY (bot_id, key)
 ```
 
 No memory files are stored inside the source repository. Complete SQLite backups include global notes alongside existing configuration and private notes. Global-note snapshot/restore scope is per bot; restoring one channel's private notes must not implicitly overwrite global notes shared across all of that bot's channels. Preserve the matching encryption key and other managed files for a complete application backup, as described in [OPERATIONS.md](OPERATIONS.md#backup-and-restore).
+
+Full application snapshots also restore the durable prompt snapshots. A selective
+context restore clears the affected prompt snapshots; notes-only restoration
+keeps them and exposes the restored notes through complete deltas on the next
+prompt. This changes neither the canonical note ownership nor restore scopes.
 
 The module is independently removable from registration, prompt composition and the authenticated editor/API while preserving the additive table for later re-enablement or export. It registers no background worker, sends no network traffic and does not modify normal channel-memory behavior. See [PLUGINS.md](PLUGINS.md) for extension boundaries and [TOOLS.md](TOOLS.md) for shared validation requirements.
 
