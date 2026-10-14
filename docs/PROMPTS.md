@@ -143,13 +143,15 @@ survive compaction within their current generation turn. See [VISION](VISION.md)
 | `director` | Hortator-only instructions |
 | `universal`, `persona` | Existing global prompt and per-bot personality |
 | `silence_policy` | Allowed/disabled variant according to the bot's actual silence capability |
-| `memory_budget`, `memory` | Channel quota guidance and notes, only with the memory grant |
-| `global_memory_budget`, `global_memory` | Bot-private cross-channel quota guidance and notes, only with that grant |
+| `slash_invocation`, `panel_invocation` | Fresh invocation guidance, only for its corresponding entry route |
 | `summary`, `transcript` | Retained conversation summary and current transcript input |
+| Assistant/tool exchanges and `reply_repair` | Existing tool history and bounded repair of malformed tool-wrapped answers |
+| `memory_budget`, `memory` | Fresh channel quota guidance and notes after exchanges, only with the memory grant |
+| `global_memory_budget`, `global_memory` | Fresh bot-private cross-channel quota guidance and notes after exchanges, only with that grant |
 | `runtime_facts`, `dynamic_prompt` | Clock, round/capability/activation facts and the existing per-bot tail |
-| `slash_invocation` | Fresh slash invocation guidance |
-| `reply_repair` | The existing single bounded repair of malformed tool-wrapped answers |
-| `compaction_instructions`, `compaction_summary`, `compaction_transcript` | Summary-request guidance and input wrappers |
+| `scheduled_alarm`, `background_completion`, `background_updates` | Applicable wake-up and job context |
+| `engram_instructions`, `engram_state` | Eligible ordinary conversations only; followed by the fixed Engram protocol and any feedback |
+| `compaction_instructions`, `compaction_summary`, `compaction_transcript` | Separate summary request: guidance, retained summary, then transcript |
 
 Budget guidance has normal/over-budget variants. An explicit override replaces either variant; include the usage placeholders if the custom template should still report them. Conditional layers remain conditional even with an override. Turning off guidance never bypasses the corresponding backend restriction. Turning off note injection does not erase notes or revoke the memory tool.
 
