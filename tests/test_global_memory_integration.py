@@ -25,8 +25,7 @@ async def test_production_registration_defaults_keyless_contract_and_context_lay
         for item in kernel.registry.schemas(context)
         if item["function"]["name"] == "global_memory"
     )
-    assert "104/100" not in schema["description"] and "WARNING" not in schema["description"]
-    assert "global-memory budget prompt" in schema["description"]
+    assert "104/100" in schema["description"] and "WARNING" in schema["description"]
     for raw in ["{}", '{"operation":', '{"operation":"write","key":12}']:
         result = await kernel.registry.call_raw("global_memory", raw, context, "usage-dynamic")
         assert "104/100" in result["usage"]["description"]

@@ -1,17 +1,18 @@
 # Implementation and acceptance plan
 
-## Preserve conversation prefixes across memory writes — owner decision (2026-10-14)
+## Restore the pre-#119 prompt order — owner decision (2026-10-14)
 
-The owner authorized moving changing channel/global memory notes and budgets
-after conversation/tool history and stabilizing advertised tool descriptions.
-The local audit matched all 500 provider-export rows by upstream request ID:
-early memory/counter changes accompanied many expensive cache misses, while
-some long unchanged prefixes still missed and remain an upstream question.
-Keep useful memory writes, fresh quotas/capacity, source attribution, saved
-timestamps, scopes, custom prompts and progress behavior. This is not authority
-to alter provider routing, replay private traffic, reset contexts, or promise a
-cache hit rate. [PROMPTS.md](PROMPTS.md), [GLOBAL_MEMORY.md](GLOBAL_MEMORY.md) and
-[RESEARCH_ASSISTANT.md](RESEARCH_ASSISTANT.md) define the resulting contracts.
+The owner rejected PR #119's memory-after-conversation arrangement and requested
+a complete revert, including its schema/status and dashboard changes. Conversation
+changes more often than saved notes; putting the growing transcript before a large
+unchanged memory block prevents reuse of that memory suffix. The earlier tests
+proved history-prefix stability during writes, not improved overall cache reuse.
+Restore the pre-#119 implementation and contracts; preserve saved memories,
+contexts, prompts, grants and provider/bot settings. The owner will supply a new
+design separately. Do not retain selected optimizations or introduce a replacement
+ordering as part of this revert. The established trailing runtime/Engram layers
+are restored unchanged; moving conversation to the literal end is not part of
+this rollback.
 
 ## Stabilize progress-mode tool use — owner decision (2026-10-13)
 
