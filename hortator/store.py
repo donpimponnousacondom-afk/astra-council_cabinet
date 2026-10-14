@@ -66,11 +66,42 @@ class Store:
           content TEXT NOT NULL, at REAL NOT NULL, reply_to TEXT, attachments TEXT NOT NULL DEFAULT '[]',
           deleted INTEGER NOT NULL DEFAULT 0);
         CREATE INDEX IF NOT EXISTS message_channel ON messages(channel_id,seq);
+        CREATE INDEX IF NOT EXISTS message_reply ON messages(channel_id,reply_to);
+        CREATE TABLE IF NOT EXISTS context_source_revisions (
+          channel_id TEXT PRIMARY KEY, revision INTEGER NOT NULL);
+        CREATE TRIGGER IF NOT EXISTS context_source_edit AFTER UPDATE ON messages
+        WHEN OLD.content IS NOT NEW.content OR OLD.deleted IS NOT NEW.deleted
+          OR OLD.attachments IS NOT NEW.attachments OR OLD.reply_to IS NOT NEW.reply_to
+          OR OLD.author_id IS NOT NEW.author_id OR OLD.author_name IS NOT NEW.author_name
+          OR OLD.bot_id IS NOT NEW.bot_id OR OLD.at IS NOT NEW.at
+          OR OLD.discord_id IS NOT NEW.discord_id OR OLD.channel_id IS NOT NEW.channel_id
+          OR OLD.seq IS NOT NEW.seq
+        BEGIN
+          INSERT INTO context_source_revisions VALUES(OLD.channel_id,1)
+          ON CONFLICT(channel_id) DO UPDATE SET revision=revision+1;
+          INSERT INTO context_source_revisions SELECT NEW.channel_id,1 WHERE NEW.channel_id IS NOT OLD.channel_id
+          ON CONFLICT(channel_id) DO UPDATE SET revision=revision+1;
+        END;
+        CREATE TRIGGER IF NOT EXISTS context_source_delete AFTER DELETE ON messages BEGIN
+          INSERT INTO context_source_revisions VALUES(OLD.channel_id,1)
+          ON CONFLICT(channel_id) DO UPDATE SET revision=revision+1;
+        END;
+        CREATE TRIGGER IF NOT EXISTS context_source_reply_arrived AFTER INSERT ON messages
+        WHEN EXISTS(SELECT 1 FROM messages WHERE channel_id=NEW.channel_id AND reply_to=NEW.discord_id)
+        BEGIN
+          INSERT INTO context_source_revisions VALUES(NEW.channel_id,1)
+          ON CONFLICT(channel_id) DO UPDATE SET revision=revision+1;
+        END;
         CREATE TABLE IF NOT EXISTS contexts (
           bot_id TEXT NOT NULL, channel_id TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '',
           checkpoint INTEGER NOT NULL DEFAULT 0, last_seen INTEGER NOT NULL DEFAULT 0,
           estimated_tokens INTEGER NOT NULL DEFAULT 0, compactions INTEGER NOT NULL DEFAULT 0,
           updated_at REAL NOT NULL, PRIMARY KEY(bot_id,channel_id));
+        CREATE TABLE IF NOT EXISTS compaction_progress (
+          bot_id TEXT NOT NULL, channel_id TEXT NOT NULL, basis TEXT NOT NULL,
+          source_hash TEXT NOT NULL, message_count INTEGER NOT NULL, summary TEXT NOT NULL,
+          summary_tokens INTEGER NOT NULL, completed_batches INTEGER NOT NULL,
+          request_id TEXT, updated_at REAL NOT NULL, PRIMARY KEY(bot_id,channel_id));
         CREATE TABLE IF NOT EXISTS memories (
           bot_id TEXT NOT NULL, channel_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
           updated_at REAL NOT NULL, PRIMARY KEY(bot_id,channel_id,key));
@@ -119,6 +150,14 @@ class Store:
             self.execute("ALTER TABLE channels ADD COLUMN name TEXT")
         if "discord_parts" not in {row["name"] for row in self.rows("PRAGMA table_info(messages)")}:
             self.execute("ALTER TABLE messages ADD COLUMN discord_parts TEXT NOT NULL DEFAULT '{}'")
+        self.db.executescript("""
+        CREATE TRIGGER IF NOT EXISTS context_source_addressing AFTER UPDATE OF addressing,discord_parts ON messages
+        WHEN OLD.addressing IS NOT NEW.addressing OR OLD.discord_parts IS NOT NEW.discord_parts
+        BEGIN
+          INSERT INTO context_source_revisions VALUES(NEW.channel_id,1)
+          ON CONFLICT(channel_id) DO UPDATE SET revision=revision+1;
+        END;
+        """)
         if "routing" not in {row["name"] for row in self.rows("PRAGMA table_info(outbox)")}:
             self.execute("ALTER TABLE outbox ADD COLUMN routing TEXT NOT NULL DEFAULT '{}'")
         if "retry_until" not in {row["name"] for row in self.rows("PRAGMA table_info(bot_runtime)")}:

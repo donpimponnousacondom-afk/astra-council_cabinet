@@ -162,11 +162,27 @@ def test_selective_context_restore_clears_only_matching_engrams(snapshot_data):
                 "INSERT INTO turn_action_receipts VALUES(?,?,?,?,?)",
                 (f"receipt-turn-{index}", bot, channel, '{"receipts":[],"omitted_count":0}', 1),
             )
+            db.execute(
+                "INSERT INTO compaction_progress VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (
+                    bot,
+                    channel,
+                    "basis",
+                    "source",
+                    10,
+                    "Saved chunk after snapshot",
+                    6,
+                    1,
+                    f"request{index}",
+                    1,
+                ),
+            )
     manager.restore(manifest["id"], fingerprint, scope="bot", bot_id="ada", channel_id="channel-a")
     with sqlite3.connect(directory / "council.sqlite3") as db:
         assert db.execute("SELECT count(*) FROM engram_states").fetchone()[0] == 3
         assert db.execute("SELECT count(*) FROM engram_candidates").fetchone()[0] == 3
         assert db.execute("SELECT count(*) FROM turn_action_receipts").fetchone()[0] == 3
+        assert db.execute("SELECT count(*) FROM compaction_progress").fetchone()[0] == 3
     receipt = manager.restore(
         manifest["id"],
         fingerprint,
@@ -177,7 +193,7 @@ def test_selective_context_restore_clears_only_matching_engrams(snapshot_data):
     )
     assert "engram" in receipt["context_warning"]
     with sqlite3.connect(directory / "council.sqlite3") as db:
-        for table in ("engram_states", "engram_candidates", "turn_action_receipts"):
+        for table in ("engram_states", "engram_candidates", "turn_action_receipts", "compaction_progress"):
             assert db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 2
             assert not db.execute(
                 f"SELECT 1 FROM {table} WHERE bot_id='ada' AND channel_id='channel-a'"

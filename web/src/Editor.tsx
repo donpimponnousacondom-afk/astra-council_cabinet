@@ -2259,6 +2259,16 @@ export function ContextPanel({
                     Uncompacted history
                     <strong>{data.message_count} messages</strong>
                   </span>
+                  {data.compaction_progress && (
+                    <span>
+                      Saved compaction progress
+                      <strong>
+                        {data.compaction_progress.completed_batches} chunks ·{" "}
+                        {num(data.compaction_progress.message_count)} messages
+                      </strong>
+                      Resumes on the next compaction attempt after validation.
+                    </span>
+                  )}
                 </div>
                 <h3>Current compaction summary</h3>
                 <pre className="summary-text">

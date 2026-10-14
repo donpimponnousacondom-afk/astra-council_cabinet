@@ -707,6 +707,11 @@ class Service:
             "SELECT key,value,updated_at FROM memories WHERE bot_id=? AND channel_id=?", (bot_id, channel_id)
         )
         value["reset_boundary"] = self.store.context_boundary(bot_id, channel_id)
+        value["compaction_progress"] = self.store.one(
+            "SELECT message_count,summary_tokens,completed_batches,request_id,updated_at "
+            "FROM compaction_progress WHERE bot_id=? AND channel_id=?",
+            (bot_id, channel_id),
+        )
         boundary = value["reset_boundary"] or {"after_seq": 0, "after_at": 0}
         after = max(value["checkpoint"], boundary["after_seq"])
         value["messages"] = self.store.filter_context_rows(

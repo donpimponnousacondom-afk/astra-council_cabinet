@@ -491,3 +491,14 @@ research jobs remain independently owned. A metadata-only journal carries truthf
 completed/refused/uncertain action receipts to the next ordinary cycle. No action
 replay, model/grant changes or actual memory cleanup is included. The current
 contract is [TOOLS](TOOLS.md#supersession-and-interrupted-action-receipts).
+
+## 2026-10-14 — resumable compaction catch-up
+
+After Sun's ninth catch-up batch exhausted its output allowance, the owner
+authorized saving successful chunks so retries do not reprocess completed work.
+Keep provisional progress durable and separate from the active context; validate
+its source and instructions before reuse, and preserve existing complete-summary
+and final context-budget gates. Expose saved/resumed progress to the operator.
+Do not reset or interrupt Sun's ongoing compaction for this change. Initial-history
+controls, renamed retention settings and provider tuning remain separate proposals.
+Current behavior lives in [OPERATIONS](OPERATIONS.md#resumable-compaction-chunks).

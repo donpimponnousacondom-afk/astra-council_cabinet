@@ -617,6 +617,7 @@ class Snapshots:
                     "engram_candidates",
                     "response_recovery_pending",
                     "turn_action_receipts",
+                    "compaction_progress",
                 ):
                     if table in current_tables:
                         target.execute(f"DELETE FROM {table} WHERE {clause}", args)
