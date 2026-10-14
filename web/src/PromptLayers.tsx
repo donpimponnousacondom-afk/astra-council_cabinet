@@ -13,10 +13,10 @@ function placeholderName(double: string | undefined, single: string) {
 
 const stages = [
   ["instructions", "1 · Shared instructions"],
-  ["bot", "2 · Personality & memory"],
+  ["bot", "2 · Personality"],
   ["input", "3 · Conversation input"],
   ["exchanges", "4 · Assistant / tool exchanges & repairs"],
-  ["tail", "5 · Dynamic tail & wake-up context"],
+  ["tail", "5 · Memory, dynamic tail & wake-up context"],
   ["compaction", "Separate request · Compaction"],
 ];
 

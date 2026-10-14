@@ -1,5 +1,33 @@
 # Verification record
 
+## 2026-10-14 — Preserve cacheable history across memory writes
+
+Local focused verification: **261 passed, 2 existing deprecation warnings in
+71.84 seconds** across prompt assembly/cache stability, both memory stores and
+budgets, research adapter/cycles/fanout/status, slash commands and response
+protocol configuration. A separate six-test research-status run passed in 2.07 s.
+Mocked provider captures exercise two memory writes and a repeated identical
+write across three requests: static input and prior tool exchanges remain
+identical, advertised schemas remain identical, and fresh scoped notes/budgets
+appear after exchanges. Both system/user template roles and ordinary/slash/panel
+assembly are covered, including disabled layers and revoked current grants.
+
+Research probes exercise real local admissions and batch/slot enforcement with
+mock workers; advertised schemas remain stable while helper/status text changes.
+A mocked runtime request verifies late status and its removal in a tool-free
+final round. Existing quota overshoot/consolidation and dynamic `{}`/error help
+remain covered. Initial test editing exposed a nullable assistant-content case
+in a test assertion; the assertion was corrected and the combined suite passed.
+
+Ruff lint/format, changed frontend Prettier, TypeScript and isolated Vite build
+passed. The prompt inspector uses the backend's new placement order and labels
+memory in the tail. Build output was `/tmp/hortator-cache-stable-ui`, not the live
+bundle. Tests use isolated storage; no live provider or Discord validation is
+claimed. No saved configuration, note content/timestamp or access policy changes.
+Full GitHub CI, Luna/Sol published-PR reviews and rollout remain separate gates;
+follow their PR evidence. The preceding read-only CSV correlation and derived
+request metadata remain under ignored `audit/2026-10-14/curie-cache/`.
+
 Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate older
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.

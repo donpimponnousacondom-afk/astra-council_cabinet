@@ -245,7 +245,8 @@ async def test_tools_usage_and_next_prompt_report_current_budget(kernel):
     schema = next(
         s["function"] for s in kernel.registry.schemas(context) if s["function"]["name"] == "memory"
     )
-    assert "104/100" in schema["description"] and "WARNING" in schema["description"]
+    assert "104/100" not in schema["description"] and "WARNING" not in schema["description"]
+    assert "channel-memory budget prompt" in schema["description"]
     for arguments in ["{}", '{"operation":', '{"key":"missing-operation"}']:
         report = await kernel.registry.call_raw("memory", arguments, context, "usage")
         assert "104/100" in report["usage"]["description"]
@@ -265,15 +266,18 @@ async def test_model_gets_accepted_overshoot_and_warning_on_next_tool_round(kern
     def respond(request):
         body = json.loads(request.content)
         bodies.append(body)
+        budget = next(
+            m["content"] for m in body["messages"] if (m.get("content") or "").startswith("Private memory:")
+        )
         if len(bodies) == 1:
-            assert "0/100 characters used" in body["messages"][0]["content"]
+            assert "0/100 characters used" in budget
             return reply(tool("memory", {"operation": "write", "key": "note", "value": "x" * 104}))
         if len(bodies) == 2:
-            assert "WARNING: 4 characters over budget" in body["messages"][0]["content"]
+            assert "WARNING: 4 characters over budget" in budget
             assert responses(body)[-1]["saved"] and "warning" in responses(body)[-1]
             return reply(tool("memory", {"operation": "write", "key": "note", "value": "x" * 90}))
-        assert "90/100 characters used" in body["messages"][0]["content"]
-        assert "WARNING" not in body["messages"][0]["content"]
+        assert "90/100 characters used" in budget
+        assert "WARNING" not in budget
         return completion("Consolidated my note.")
 
     await install_client(kernel, respond)

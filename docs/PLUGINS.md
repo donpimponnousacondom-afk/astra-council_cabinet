@@ -172,6 +172,15 @@ pagination, downloads, revocation and the narrow Discord diagnostic exception.
 - `references(kind, entity_id) -> list[str]`: report saved references that prevent deletion. Return an empty list for unrelated targets. Research profile references now belong to the researcher plugin.
 - `bind(kernel) -> None`: connect to fully constructed core services during Kernel's one binding phase, before opening its task lifetime or starting runtime services. Research registers its worker/admission policy here. Do not start tasks or perform remote I/O in this callback.
 
+Contextual specs may set `schema_description` to stable advertised text while
+retaining current usage/error guidance in `description`. `None` preserves the
+existing advertised-description behavior; parameters and validation always come
+from the contextual spec. Optional `prompt_status` supplies fresh status under
+late runtime facts for currently advertised, still-granted model tools. Both
+fields default to `None`; ordinary plugins need no change. Memory already uses
+its editable late budget layers; research uses `prompt_status` for task/slot
+counts. Do not move enforcement into either descriptive field.
+
 The `keyless` and `installed_description` booleans default false. They control catalog presentation: whether the credential field is needed and whether the current installed description supersedes saved seeded text. They do not grant capabilities, change credential resolution, or authorize model access. Existing plugins without hooks retain their previous behavior; no hook is required to register a normal tool.
 
 Core validation for shared workspace/document constraints and persistent shell jobs' additional workspace grant remain explicit. Hooks are not a dependency resolver or a new permission system. Background jobs remain a Kernel-owned service even with no researcher registered; removing the researcher removes its worker/contract hooks, not the service or its durable records. See [service construction and ownership](CONCURRENCY.md#service-construction-and-binding).

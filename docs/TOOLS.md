@@ -21,8 +21,9 @@ The model receives this instruction in its shared runtime prompt and each advert
 ## Private memory allowance and repair
 
 The built-in `memory` tool receives the bot's `memory_char_limit` (1–128,000,
-default 48,000) per channel. Tool descriptions and refreshed prompt guidance show
-actual used/remaining characters. `read`, `write` and `delete` results contain a
+default 48,000) per channel. Refreshed prompt guidance after conversation/tool
+history shows actual used/remaining characters; advertised tool descriptions stay
+stable and point to this guidance or `{}` help. `read`, `write` and `delete` results contain a
 `budget` object with `limit_chars`, `used_chars`, `remaining_chars`, `grace_chars`,
 `hard_limit_chars`, `over_budget_chars`, `must_consolidate` and `note_limit_chars`.
 Empty-call and argument-error usage includes the same current guidance.
@@ -51,6 +52,12 @@ the model to see current usage. Models cannot reliably count output characters;
 the allowance and explicit feedback avoid needless failed rounds. Zero and
 negative budgets are invalid. Disable the memory plugin to stop its tool and
 automatic note injection; existing notes remain owner-inspectable.
+
+Owner clarification, 2026-10-14: live usage belongs in the late memory-budget
+prompt and usage/error replies, not the advertised schema. The same relocation
+applies to both private channel notes and global notes, preserving contents,
+attribution, roles, grants, quotas and warnings. This supersedes the earlier
+requirement to include changing usage in advertised descriptions.
 
 ## Council inspector discovery and paging
 

@@ -1,5 +1,18 @@
 # Implementation and acceptance plan
 
+## Preserve conversation prefixes across memory writes — owner decision (2026-10-14)
+
+The owner authorized moving changing channel/global memory notes and budgets
+after conversation/tool history and stabilizing advertised tool descriptions.
+The local audit matched all 500 provider-export rows by upstream request ID:
+early memory/counter changes accompanied many expensive cache misses, while
+some long unchanged prefixes still missed and remain an upstream question.
+Keep useful memory writes, fresh quotas/capacity, source attribution, saved
+timestamps, scopes, custom prompts and progress behavior. This is not authority
+to alter provider routing, replay private traffic, reset contexts, or promise a
+cache hit rate. [PROMPTS.md](PROMPTS.md), [GLOBAL_MEMORY.md](GLOBAL_MEMORY.md) and
+[RESEARCH_ASSISTANT.md](RESEARCH_ASSISTANT.md) define the resulting contracts.
+
 ## Stabilize progress-mode tool use — owner decision (2026-10-13)
 
 Keep `end_cycle` experiments parked until the owner has stable models for a

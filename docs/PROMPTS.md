@@ -20,11 +20,21 @@ exact request sent to a provider.
 
 The compact list follows assembly placement, not the alphabetical library order:
 shared generated instructions → selected additional shared prompts in their saved
-order → personality and memory → invocation guidance and conversation input →
-accumulated assistant/tool exchanges and any repair → dynamic tail and wake-up
-context. Compaction layers appear separately in their own request order. Adjacent
-text of the same role may be combined into one provider message. Inspection does
-not change this existing runtime order.
+order → personality → invocation guidance and conversation input → accumulated
+assistant/tool exchanges and any repair → channel/global memory notes and budgets
+→ dynamic tail and wake-up context. Compaction layers appear separately in their
+own request order. Adjacent text of the same role may be combined into one provider
+message. Memory and runtime tails each begin a new message so changing content is
+not folded into earlier input or exchanges. Inspection follows this runtime order.
+
+Owner decision, 2026-10-14: memory writes must not change the prefix before a long
+conversation. Notes and budgets remain fresh each round, with the same roles,
+scope, attribution and editable templates, but are placed after tool history.
+Advertised memory/research descriptions omit live usage and capacity counters;
+memory-budget layers and runtime facts supply those counters at the tail, and
+`{}`/error help remains current. Research facts are included only while its tool
+is available in that round; finalization does not advertise removed tools through
+stale status. No provider cache lifetime or hit rate is guaranteed by this order.
 
 Checked means the layer is permitted **when applicable**, not necessarily
 injected. **Eligible** means configuration allows it; **Turn only** still requires
