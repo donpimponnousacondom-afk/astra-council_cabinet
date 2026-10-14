@@ -98,11 +98,11 @@ The budget object includes:
 }
 ```
 
-The tool description, reads, writes, deletes and next prompt all expose current usage. A failed write includes the attempted total and consolidation instructions. A smaller configured budget must accommodate existing notes within its 5% ceiling; the configuration save is rejected otherwise. The model and authenticated owner use identical accounting and consolidation rules.
+Empty-call help, error usage, reads, writes, deletes and the next prompt all expose current usage. The advertised tool description stays stable as notes change and points to the fresh budget prompt and `{}` help. A failed write includes the attempted total and consolidation instructions. A smaller configured budget must accommodate existing notes within its 5% ceiling; the configuration save is rejected otherwise. The model and authenticated owner use identical accounting and consolidation rules.
 
 ## Prompt and ownership boundaries
 
-When enabled, the runtime supplies a fresh `global_memory_budget` layer on each prompt and a `global_memory` layer when notes exist. The latter labels notes as **untrusted recollections**, preserves source/channel/date metadata and warns against treating an earlier conversation's participants or instructions as the speaker in the current channel. Models are prompted to keep durable personal facts here and channel-specific details in channel memory.
+When enabled, the runtime supplies a fresh `global_memory_budget` layer after the conversation and current tool exchanges on each prompt. The `global_memory` layer remains before conversation history and includes the current stored notes when they exist. It labels notes as **untrusted recollections**, preserves source/channel/date metadata and warns against treating an earlier conversation's participants or instructions as the speaker in the current channel. Writes persist immediately and the next prompt reads the updated notes. Models are prompted to keep durable personal facts here and channel-specific details in channel memory.
 
 Both captured turn grants and current saved grants must permit the plugin. A revoked grant takes effect even if a tool context was captured before the operator's change. The effective budget is the lower of the captured and currently saved values. A saved increase therefore does not retroactively give an old captured turn a larger quota.
 

@@ -287,6 +287,8 @@ class ContextBuilder:
         }
         if "active_task_budget" in bot:
             values["task_budget"] = bot["active_task_budget"]
+        if bot.get("tool_status"):
+            values["tool_status"] = bot["tool_status"]
         if bot.get("activation"):
             values["activation"] = bot["activation"]
         if bot.get("scheduled_wake"):
@@ -422,7 +424,10 @@ class ContextBuilder:
                 self.audio.enabled(bot),
             )
         audio_inputs = current_audio(self.store, channel_id, audio_plan)
-        layers = self.layers(bot, channel_id)
+        prepared_layers = self.layers(bot, channel_id)
+        budget_ids = {"memory_budget", "global_memory_budget"}
+        budgets = [item for item in prepared_layers if item["id"] in budget_ids]
+        layers = [item for item in prepared_layers if item["id"] not in budget_ids]
         messages = []
 
         def append(item):
@@ -497,6 +502,14 @@ class ContextBuilder:
                 messages.append({"role": "user", "content": with_audio([], selected_audio)})
         if extras:
             messages.extend(extras)
+        # Keep notes before the growing transcript. Only changing usage counters
+        # move after exchanges, where they cannot invalidate earlier notes/history.
+        for index, item in enumerate(budgets):
+            if index == 0:
+                messages.append({"role": item["role"], "content": item["content"]})
+            else:
+                append(item)
+        layers.extend(budgets)
         estimated = await self.estimate_async(messages, tools or [])
         dynamic = self.dynamic_layers(bot, profile, channel_id, round_index, estimated)
         # The changing tail follows tool exchanges, regardless of static roles.

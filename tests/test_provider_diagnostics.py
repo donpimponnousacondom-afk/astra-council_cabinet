@@ -164,7 +164,15 @@ async def test_replay_is_private_and_console_P_can_page_reasoning_without_secret
             data = response.json()
             data["choices"][0]["message"]["reasoning_content"] = reasoning
             return httpx.Response(200, json=data)
-        assert json.loads(request.content)["messages"][-3]["reasoning_content"] == reasoning
+        messages = json.loads(request.content)["messages"]
+        replay = [i for i, message in enumerate(messages) if message.get("tool_calls")]
+        assert len(replay) == 1
+        index = replay[0]
+        assert messages[index]["role"] == "assistant"
+        assert messages[index]["tool_calls"] == [tool("memory", {"operation": "read"})]
+        assert messages[index]["reasoning_content"] == reasoning
+        assert messages[index + 1]["role"] == "tool"
+        assert messages[index + 1]["tool_call_id"] == "call"
         return completion("Final answer")
 
     await install_client(kernel, handler)

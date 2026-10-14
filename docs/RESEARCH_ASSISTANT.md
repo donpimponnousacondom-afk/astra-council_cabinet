@@ -92,10 +92,16 @@ search rounds when tuning an existing prompt, preserving other operator text.
 it; blank restores inheritance. The default and minimum are four, with no fixed
 upper ceiling. Active jobs and pending completion notifications share this
 allowance across the bot's channels. Completed results whose follow-up has been
-read, claimed or revoked no longer occupy a slot. Status/list/start responses
-include current capacity and available slots; the tool description also states
-the current allowance. Model-facing lists include all outstanding jobs in their
-admitted channel plus up to 30 recent settled jobs.
+read, claimed or revoked no longer occupy a slot. Status/list/start responses,
+`{}` help and error usage include current capacity and available slots.
+The advertised description stays stable as jobs and task-batch usage change;
+configured output, deadline, search and notification settings remain in the
+schema. Fresh runtime facts after conversation and tool exchanges report task
+dispatch batches used/remaining, dispatch unavailability when applicable, and
+outstanding researchers/available slots. This status is included only while the
+tool is available in the current round and its grants still permit it.
+Model-facing lists include all outstanding jobs in their admitted channel plus
+up to 30 recent settled jobs.
 
 Each `start` creates exactly one researcher and consumes one tool call. For
 example, eight independent assignments require eight starts, an allowance of at
