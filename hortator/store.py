@@ -71,6 +71,11 @@ class Store:
           checkpoint INTEGER NOT NULL DEFAULT 0, last_seen INTEGER NOT NULL DEFAULT 0,
           estimated_tokens INTEGER NOT NULL DEFAULT 0, compactions INTEGER NOT NULL DEFAULT 0,
           updated_at REAL NOT NULL, PRIMARY KEY(bot_id,channel_id));
+        CREATE TABLE IF NOT EXISTS compaction_progress (
+          bot_id TEXT NOT NULL, channel_id TEXT NOT NULL, basis TEXT NOT NULL,
+          source_hash TEXT NOT NULL, message_count INTEGER NOT NULL, summary TEXT NOT NULL,
+          summary_tokens INTEGER NOT NULL, completed_batches INTEGER NOT NULL,
+          request_id TEXT, updated_at REAL NOT NULL, PRIMARY KEY(bot_id,channel_id));
         CREATE TABLE IF NOT EXISTS memories (
           bot_id TEXT NOT NULL, channel_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
           updated_at REAL NOT NULL, PRIMARY KEY(bot_id,channel_id,key));

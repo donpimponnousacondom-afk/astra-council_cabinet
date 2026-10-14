@@ -4,6 +4,27 @@ Use the [newest-first chronology](history/VERIFICATION_INDEX.md) to navigate old
 entries. New entries follow the [evidence template](verification-template.md);
 historical claims retain their original date and scope.
 
+## Resumable compaction chunks (2026-10-14)
+
+Base: `3f0d4be65ac59eb8ede3d0c2942359e76ac697ef`; task branch
+`hotfix/resumable-compaction`. Local focused existing contracts: 59 passed,
+2 dependency deprecation warnings in 17.01 s (`test_compaction_limits.py`,
+`test_context_responsiveness.py`, `test_context_reset.py`, `test_snapshots.py`).
+The new resume suite adds 22 regression cases. Together with context-reset and
+snapshot coverage it passed 51 tests (2 dependency warnings) in 16.97 s.
+Coverage includes restart, failure/cancellation, prefix/prompt invalidation,
+new/pending messages, scoped restores/resets, atomic promotion and final-budget
+failure followed by promotion with no further model calls.
+Ruff lint/format, dashboard Prettier and TypeScript checks passed. The first
+Prettier invocation used the repository root with a web-relative path and found
+no files; rerunning from `web/` checked the intended file successfully.
+
+Classification: isolated SQLite and mocked provider requests, including real
+batch construction and summary validation. No live provider calls or bot settings
+were changed. The current Sun activation remains on the existing runtime; no
+reset/restart was used to apply this work while it was running. Required published
+PR reviews and full CI are separate from these local checks.
+
 ## Actionable tool argument feedback and shell scope help (2026-10-13)
 
 Commit: base `b8d17a08dcd82b1ca5df2e74339a1d4fbc316579` plus task changes;

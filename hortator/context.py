@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -9,6 +10,7 @@ from zoneinfo import ZoneInfo
 import tiktoken
 
 from .concurrency import error_text
+from .compaction_progress import CompactionProgress, digest, prefix_hashes
 from .models import ControlError, OWNER_ID
 from .memory_budget import budget_for
 from .store import dumps
@@ -160,6 +162,48 @@ class ContextBuilder:
         ):
             variant = "conversation"
         return prompt_layer(self.store, bot, key, self.prompt_values(bot, values), variant=variant, raw=raw)
+
+    def compaction_basis(self, bot, channel_id, context):
+        values = {
+            "summary": "<saved summary>",
+            "summary_tokens": "<summary limit>",
+            "transcript": "<source transcript>",
+            "channel_id": channel_id,
+        }
+        return digest(
+            {
+                "version": 1,
+                "checkpoint": context["checkpoint"],
+                "summary": context["summary"],
+                "boundary": self.store.context_boundary(bot["id"], channel_id),
+                "format": bot.get("transcript_format", "structured"),
+                "prompts": [
+                    self.prompt(bot, key, values)
+                    for key in ("compaction_instructions", "compaction_summary", "compaction_transcript")
+                ],
+            }
+        )
+
+    async def compaction_source_unchanged(self, bot, channel_id, rows, expected):
+        # Re-read selected records (including reply previews) before promotion.
+        # New messages beyond this operation's snapshot remain for the next turn.
+        source = []
+        for offset in range(0, len(rows), 64):
+            selected = {row["seq"] for row in rows[offset : offset + 64]}
+            current = self.store.rows(
+                "SELECT * FROM messages WHERE channel_id=? AND seq IN ("
+                + ",".join("?" for _ in selected)
+                + ") ORDER BY seq",
+                (channel_id, *sorted(selected)),
+            )
+            for row in current:
+                for field in ("attachments", "addressing", "discord_parts"):
+                    row[field] = json.loads(row[field])
+            source.extend(self.conversation(current, bot))
+            await asyncio.sleep(0)
+        async with self.token_slots:
+            hashes = await asyncio.to_thread(prefix_hashes, source)
+        return bool(hashes and len(hashes) == len(rows) and hashes[-1] == expected)
 
     def layers(self, bot, channel_id):
         layers = []
@@ -523,6 +567,7 @@ class ContextBuilder:
 
     async def prepare(self, bot, profile, channel_id, turn_id, tools, force=False):
         context = self.store.context(bot["id"], channel_id)
+        progress = CompactionProgress(self.store, bot["id"], channel_id)
         engram = (
             self.engrams.capture(bot, channel_id, turn_id, context) if self.engrams and not force else None
         )
@@ -688,6 +733,8 @@ class ContextBuilder:
         triggers = []
         if force:
             triggers.append("manual")
+        if progress.get():
+            triggers.append("saved_progress")
         if meta["estimated_tokens"] * factor >= threshold:
             triggers.append("token_threshold")
         if image_count(messages) > max_images:
@@ -733,6 +780,8 @@ class ContextBuilder:
             recent = sorted(pinned + recent, key=lambda row: row["seq"])
             summary = context["summary"]
             pending = list(old_rows)
+            completed_messages = completed_batches = 0
+            summary_size = 0
             compaction_id = "cmp_" + turn_id
             last_request_id = None
             output_cap = profile.get("compaction_max_tokens")
@@ -764,6 +813,46 @@ class ContextBuilder:
                 turn_id=turn_id,
             )
             try:
+                # Bind progress to the active checkpoint, reset boundary and
+                # effective compaction instructions. Changing model/output
+                # allowance may reuse a valid text summary; changing its source
+                # or instructions must not. Relative message ages are excluded.
+                basis = self.compaction_basis(bot, channel_id, context)
+                source = await self.conversation_async(old_rows, bot)
+                async with self.token_slots:
+                    hashes = await asyncio.to_thread(prefix_hashes, source)
+                saved = progress.get()
+                if saved:
+                    count = saved["message_count"]
+                    valid = (
+                        saved["basis"] == basis
+                        and 0 < count <= len(hashes)
+                        and saved["source_hash"] == hashes[count - 1]
+                        and saved["summary_tokens"] <= profile["summary_tokens"]
+                    )
+                    if valid:
+                        completed_messages, completed_batches = count, saved["completed_batches"]
+                        summary, summary_size = saved["summary"], saved["summary_tokens"]
+                        pending = pending[count:]
+                        last_request_id = saved["request_id"]
+                    else:
+                        progress.clear()
+                    self.store.emit(
+                        "compaction.resumed" if valid else "compaction.progress_invalidated",
+                        {
+                            "compaction_id": compaction_id,
+                            "channel_id": channel_id,
+                            "completed_batches": completed_batches,
+                            "completed_messages": completed_messages,
+                            "remaining_messages": len(pending),
+                            "reason": "Validated saved chunks"
+                            if valid
+                            else "Source, context, instructions or summary limit changed",
+                        },
+                        bot_id=bot["id"],
+                        turn_id=turn_id,
+                        request_id=saved["request_id"],
+                    )
                 while pending:
                     last_request_id = None
                     values = {
@@ -794,7 +883,7 @@ class ContextBuilder:
                     output_reserve = max(profile["summary_tokens"], output_cap or 0)
                     budget = int((profile["context_window"] - output_reserve) / factor * 0.85)
                     prepared_at = time.perf_counter()
-                    transcript = await self.conversation_async(pending, bot)
+                    transcript = source[completed_messages:]
                     async with self.token_slots:
                         count, payload, estimated, probes = await asyncio.to_thread(
                             self.compaction_batch, prefix, pending, transcript, budget, batch_profile
@@ -906,7 +995,32 @@ class ContextBuilder:
                             "Private reasoning is excluded. The complete candidate is saved in the request; previous context is retained and no text was truncated."
                         )
                     summary = result.content
+                    completed_messages += count
+                    completed_batches += 1
+                    progress.save(
+                        basis=basis,
+                        source_hash=hashes[completed_messages - 1],
+                        message_count=completed_messages,
+                        summary=summary,
+                        summary_tokens=summary_size,
+                        batches=completed_batches,
+                        request_id=result.request_id,
+                    )
                     pending = pending[count:]
+                    self.store.emit(
+                        "compaction.chunk_saved",
+                        {
+                            "compaction_id": compaction_id,
+                            "channel_id": channel_id,
+                            "completed_batches": completed_batches,
+                            "completed_messages": completed_messages,
+                            "remaining_messages": len(pending),
+                            "summary_tokens": summary_size,
+                        },
+                        bot_id=bot["id"],
+                        turn_id=turn_id,
+                        request_id=result.request_id,
+                    )
                 checkpoint = old_rows[-1]["seq"]
                 if engram is not None:
                     engram = self.engrams.capture(
@@ -930,15 +1044,32 @@ class ContextBuilder:
                     raise ControlError(
                         "Compacted context still exceeds the model budget; previous context is retained"
                     )
-                # Commit only after every batch succeeds. The original transcript is never rewritten.
-                self.store.execute(
-                    "UPDATE contexts SET summary=?,checkpoint=?,compactions=compactions+1,estimated_tokens=?,updated_at=? WHERE bot_id=? AND channel_id=?",
-                    (summary, checkpoint, meta["estimated_tokens"], time.time(), bot["id"], channel_id),
-                )
+                unchanged = await self.compaction_source_unchanged(bot, channel_id, old_rows, hashes[-1])
+                if not unchanged or basis != self.compaction_basis(
+                    bot, channel_id, self.store.context(bot["id"], channel_id)
+                ):
+                    raise ControlError(
+                        "Conversation or compaction instructions changed during compaction; "
+                        "previous context retained and saved chunks will be revalidated on retry"
+                    )
+                # Promote the finished summary and retire provisional progress
+                # atomically. Failed/cancelled attempts keep every validated chunk.
+                self.store.execute("BEGIN IMMEDIATE")
+                try:
+                    self.store.execute(
+                        "UPDATE contexts SET summary=?,checkpoint=?,compactions=compactions+1,estimated_tokens=?,updated_at=? WHERE bot_id=? AND channel_id=?",
+                        (summary, checkpoint, meta["estimated_tokens"], time.time(), bot["id"], channel_id),
+                    )
+                    progress.clear()
+                    self.store.execute("COMMIT")
+                except BaseException:
+                    self.store.execute("ROLLBACK")
+                    raise
                 self.store.emit(
                     "compaction.completed",
                     {
                         "compaction_id": compaction_id,
+                        "completed_batches": completed_batches,
                         "before_tokens": original_estimate,
                         "after_tokens": meta["estimated_tokens"],
                         "summary_tokens": summary_size,
@@ -963,8 +1094,11 @@ class ContextBuilder:
                         "compaction_id": compaction_id,
                         "error": error_text(exc),
                         "channel_id": channel_id,
-                        "reason": "Previous context retained; checkpoint was not advanced",
+                        "reason": "Previous context retained; validated chunks saved for resumption",
                         "previous_context_retained": True,
+                        "completed_batches": completed_batches,
+                        "completed_messages": completed_messages,
+                        "remaining_messages": len(pending),
                     },
                     bot_id=bot["id"],
                     turn_id=turn_id,

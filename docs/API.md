@@ -208,6 +208,13 @@ The dashboard's Reasoning controls use the existing profile `request_json` field
 
 Compaction request context includes `compaction_output_policy: "provider_default" | "explicit_max_tokens"`, `compaction_max_tokens`, `omitted_output_cap_fields`, `retained_summary_token_limit` and `summary_tokenizer`. `compaction.summary_checked` includes the output policy/cap, `summary_tokens`, retained limit/tokenizer, reported output/reasoning counts, finish reason and `accepted`. Acceptance is for one candidate; all batches and final context fitting must pass before the summary/checkpoint commits. Failed/incomplete candidates remain inspectable under the usual authentication/redaction rules.
 
+Complete validated chunks are durable in `compaction_progress`, keyed by bot and
+channel, independently of that final checkpoint. Context detail adds nullable
+`compaction_progress` metadata: `message_count`, `summary_tokens`,
+`completed_batches`, `request_id`, `updated_at`. It does not include provisional
+summary text. New progress events and resumption validity rules are documented in
+[resumable compaction](OPERATIONS.md#resumable-compaction-chunks).
+
 Credential kinds/fields:
 
 - `providers/{id}/api_key`

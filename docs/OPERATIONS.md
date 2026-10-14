@@ -670,6 +670,37 @@ The counter is `cl100k_base` with a 15% allowance and framing estimate, calibrat
 
 At the threshold, the bot summarizes the older input in bounded requests, retaining a recent tail when it fits. Very large backlogs are summarized in multiple batches. Only after every batch returns a complete, usable summary is the checkpoint advanced. A failed, truncated or oversized summary leaves the old context intact and fails the turn visibly. Individual messages or system prompts that cannot fit cause an explicit error; they are never silently dropped. Use a larger model/profile, smaller prompts or shorter memory when that occurs.
 
+### Resumable compaction chunks
+
+Owner decision, 2026-10-14: retain successful chunks across failed catch-up attempts.
+Each complete, size-validated chunk saves its running summary in SQLite separately
+from the active conversation checkpoint. A later automatic compaction or **Compact
+now** resumes after the saved prefix, including after a restart. A failed,
+truncated, oversized or cancelled next request never replaces that progress.
+There is no automatic retry loop for incomplete summaries: the current attempt
+still ends visibly; the next activation or operator attempt can resume.
+
+Resumption validates the active checkpoint/reset boundary, effective compaction
+templates, source prefix (including edited/deleted messages and reply previews),
+transcript format and current retained-summary allowance. Relative message ages
+do not invalidate progress. Changed sources/instructions or an incompatible
+summary limit discard provisional progress and reprocess the selected history;
+source messages and diagnostic records are not deleted. Model, reasoning and
+output-cap changes can reuse a valid summary. New messages remain in the remaining
+work/recent tail. The completed operation also rechecks source records before
+promoting the summary. Promotion and removal of provisional progress are atomic.
+
+Clean-slate resets and selective context restores clear progress only in their
+selected bot/channel scope. Full database snapshots include it. This does not
+recover intermediate chunks produced by versions before this feature, change
+the initial history selection, or change any bot/profile settings.
+
+The Context panel shows saved chunk/message counts. `compaction.chunk_saved`,
+`compaction.resumed` and `compaction.progress_invalidated` expose progress and
+request provenance in the ledger/console; failure/cancellation events report
+completed chunks/messages and remaining messages. The active summary remains
+unchanged until the full operation and final context budget check succeed.
+
 Full request snapshots preserve which summary and source messages were actually sent, including per-round tool additions. Compaction events retain before/after summaries and source boundaries. Scoped memory notes are separate, editable via the Context panel or `!memory`.
 
 ### Private memory budgets
