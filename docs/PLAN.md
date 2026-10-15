@@ -1,5 +1,24 @@
 # Implementation and acceptance plan
 
+## 2026-10-15 — explain shell limits and saved package installation
+
+The owner declined raising Sun's entry limit after his NumPy/chess installation
+hit the existing 1,000-file/directory ceiling. Keep all live limits unchanged.
+Expose the exceeded tree, entry ceiling, measured lower bound and discarded-save
+semantics to the model and operator. Do not infer OOM from a bare SIGKILL.
+
+Correct tool instructions left stale by PR #126: owner-execute already persists.
+Explain `pip --target /workspace/pylibs` and subsequent `PYTHONPATH` for suitable
+regular-file packages when persistent storage is mounted. This grants no extra
+capacity and does not imply every package tree or native dependency is supported.
+Keep these instructions static; live limits/counts belong in tool results, with
+no prompt-layer reordering or changing counters in the stable prefix.
+
+The owner separately authorized placing the supplied local CPU/Eigen lc0 binary
+in Sun's saved filesystem. Use the existing atomic generation/quota machinery,
+preserve all other files and settings, retain owner-execute permission, and verify
+the executable in an isolated sandbox before installing it.
+
 ## 2026-10-15 — preserve executable files between shell calls
 
 The owner asked whether the recurring lost executable bit was a regression and

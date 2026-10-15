@@ -14,6 +14,16 @@ SHELL_JOB_GUIDANCE = (
     "Do not pass length to read or limit to read_result. "
 )
 
+SAVED_PACKAGE_GUIDANCE = (
+    "With persistent storage mounted, suitable Python packages can survive calls: "
+    "pip install --no-cache-dir --no-compile --target /workspace/pylibs PACKAGE; "
+    "then use PYTHONPATH=/workspace/pylibs python3 SCRIPT on each call. "
+    "Choose the packages/dependencies to fit both the byte and file/directory entry limits; "
+    "free bytes do not imply room for more entries. Keep venvs, linked trees and caches in /packages. "
+    "Saved regular files preserve owner-execute permission set with chmod, including across edits. "
+    "Run results report effective limits; entry-limit failures identify the tree and count. "
+)
+
 
 SHELL_DESCRIPTION = (
     "Run real Bash pipelines/scripts with host networking, DNS and HTTPS in a bounded OS sandbox. "
@@ -22,7 +32,7 @@ SHELL_DESCRIPTION = (
     "use uv pip install PACKAGE or pip install PACKAGE. For native tools use pkg install PACKAGE "
     "(conda-forge); installed commands enter PATH. Extra environments: python3.14 -m venv /packages/myenv. "
     "All /packages installs/caches are disposable and vanish when this job ends: install AND use them in "
-    "one command. Save deliverables in /workspace; never put venvs, linked trees or package caches there. "
+    "one command. " + SAVED_PACKAGE_GUIDANCE + "Save deliverables in /workspace. "
     "The base Python 3.14 is read-only; no host apt/sudo. Large downloads/builds can hit finite job limits. "
     "Omit task for a disposable command with only the shell grant: /workspace starts empty and all files "
     "vanish after this call; stdout/stderr and job evidence remain readable. To keep files between calls, "
@@ -123,8 +133,8 @@ FILESYSTEM_SHELL_DESCRIPTION = (
     "commands read and modify the same saved files as the filesystem tool, without a task or start step. "
     "Includes Python 3.14/Pillow, uv/pip, curl, wget, git, jq, Perl and core utilities; Node is not supplied. "
     "Default pip/uv and pkg installations use temporary /packages and disappear after this call. "
-    "Package files explicitly saved in /workspace consume its quota; links are unsupported and execute bits "
-    "are not preserved. Valid saved changes survive normal command completion, including nonzero exits; "
+    + SAVED_PACKAGE_GUIDANCE
+    + "Links are unsupported. Valid saved changes survive normal command completion, including nonzero exits; "
     "timeouts, cancellation and invalid output discard the current call's changes. "
     "No background process survives this call. "
     "Operations: run(command,cwd,timeout_seconds), status(job_id), read(job_id,stream,offset,limit), "

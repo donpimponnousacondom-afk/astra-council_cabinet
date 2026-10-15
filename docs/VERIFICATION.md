@@ -1,5 +1,50 @@
 # Verification record
 
+## 2026-10-15 — shell entry-limit receipts, package guidance and supplied lc0
+
+The owner's Sun jobs at 18:36–18:38 Europe/Madrid returned `resource_limited`,
+exit -9 and no committed changes. A read-only diagnosis traced that status to
+the entry monitors. An isolated NumPy/chess installation with an instrumented
+temporary worker exceeded `/workspace`'s 1,000-entry limit in 4.778s; changing
+only the isolated limit to 5,000 saved 1,069 entries / 57,018,862 bytes in 5.983s.
+This was diagnostic evidence, not an operator configuration change. The owner
+explicitly retained the live limits.
+
+The repair gives monitored failures a validated tree/count/limit receipt,
+explains discarded filesystem changes, records effective filesystem bounds in
+job results, and corrects the static model-facing install/execute instructions.
+No prompt ordering or live usage counters were added to the stable prefix.
+
+Local checks:
+
+- New shell-feedback cases: **15 passed in 37.07s**. Actual Bubblewrap jobs cover
+  all three monitored roots under Simple filesystem, Private workspace and
+  disposable storage; receipts reach saved metadata and events, previous files
+  survive rollback, and malformed receipts are rejected. Guidance/schema checks
+  confirm usage changes leave advertised schemas unchanged.
+- Added bounded-scan boundary case plus existing filesystem, workspace, shell,
+  disposable shell, executable-bit and capacity suites: **112 passed, 2 optional
+  public-package probes skipped in 132.48s**.
+- Filesystem API and agentic-runtime suites: **12 passed**, two dependency
+  deprecation warnings, **12.22s**. Ruff lint/format and diff whitespace pass.
+
+Separately, the owner supplied the local lc0 CPU/Eigen build (2,466,192 bytes;
+SHA-256 `295fbd5b7abc91f6b4ccd438b4c958367490248f13392babab74f1f5350c4e40`).
+Two independent shell calls in temporary storage loaded the existing Maia weights,
+reported `Lc0 v0.32.1`, and returned `bestmove e2e4` with exit zero in 0.727s and
+0.773s. The binary was then installed at Sun's `/workspace/chess/maia/lc0` through
+the existing atomic generation validator, while the runtime was stopped and its
+writer lock held. All 60 previous regular files retained their bytes and modes;
+the executable is 0700 and the filesystem has 77 entries / 108,717,044 bytes.
+All configuration revisions are unchanged. The source build remains available.
+The import receipt is retained in the event ledger and ignored dated audit data.
+Temporary diagnostic stores were removed. This is local sandbox execution and
+operator file placement, not a Discord/provider acceptance test.
+
+The shared runtime was idle and stopped before worker protocol edits. Publication,
+independent reviews, full current-head CI and final rollout are recorded on the
+task PR; this entry precedes publication.
+
 ## 2026-10-15 — executable permission across saved shell calls
 
 History review found an unresolved limitation, not a regression from PR #125:

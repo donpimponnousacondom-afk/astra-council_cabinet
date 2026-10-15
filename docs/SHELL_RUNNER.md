@@ -85,7 +85,24 @@ zstd input.txt -o output.txt.zst
 
 `pkg install PACKAGE...` uses micromamba in `/packages/native`, whose `bin` is already on PATH; subsequent installs add to the same environment within that job. Packages, virtualenv symlinks, caches and installer temporary files remain on a separate **2 GiB per-job tmpfs**, with a separate monitored 50,000-entry ceiling. This supports rootless native packages without a writable host filesystem or pretending that apt works inside the sandbox. Native installation depends on upstream package availability and remains subject to the 90-second command deadline, memory, process, output and storage limits. It is not a guarantee that every large package or source build will fit. No native application package (including ImageMagick) is preinstalled by this feature. [micromamba installation](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html), [uv environments](https://docs.astral.sh/uv/pip/environments/), [Python 3.14 venv](https://docs.python.org/3.14/library/venv.html)
 
-**All `/packages` content disappears after every job**, including failure, timeout and cancellation. Install and use a dependency in one command, and save deliverables under `/workspace` with an explicit persistent task. Keep requirements/lockfiles/scripts in that task for repeatable future jobs; do not place virtualenvs, package trees or symlinks there. Workspace copyback still rejects links and oversized/invalid trees. `/tmp` remains a separate 16 MiB mount; `TMPDIR` points to `/packages/tmp` for package installers. Package scratch is not persisted or backed up.
+**All `/packages` content disappears after every job**, including failure, timeout and cancellation. Install and use temporary dependencies in one command. With Simple filesystem mounted, or an explicit persistent Private workspace task, suitable regular-file Python package trees can instead be saved under `/workspace`:
+
+```bash
+pip install --no-cache-dir --no-compile --target /workspace/pylibs PACKAGE
+# On each call that uses those saved packages:
+PYTHONPATH=/workspace/pylibs python3 script.py
+```
+
+Choose packages and dependencies to fit both the saved byte capacity and the
+independent file/directory entry ceiling. These options avoid a persistent pip
+cache and bytecode compilation during installation; they do not guarantee that
+an arbitrary package tree fits or is compatible with the supplied Python/native
+libraries. Keep virtualenvs, linked trees and package caches in `/packages`;
+saved trees still reject links and invalid/oversized files. A failed or interrupted
+snapshot does not save a partial install. Requirements/lockfiles remain useful
+for deliberate reinstallations. A disposable `/workspace` never persists.
+`/tmp` remains a separate 16 MiB mount; `TMPDIR` points to `/packages/tmp` for
+installers. Package scratch is not persisted or backed up.
 
 `pkg install` confirms automatically and accepts optional `-y` / `--yes` before or after package names. Other arguments remain literal package operands. The wrapper selects the bundled read-only `/runner/mambarc` explicitly, which sets metadata parsing to one worker and bypasses ambient RC-file discovery. The shell environment requests one download and extraction worker. The pinned micromamba version ignores an environment variable for metadata threads, so that setting must come from the explicit file. This reduces installer concurrency; it does not raise any sandbox limit. Use `command -v node` (or another command name) to inspect availability; `which` is not supplied.
 
@@ -128,6 +145,24 @@ There is one concurrent model shell job globally. The memory field is **per proc
 Tmpfs `size` limits data blocks; its default inode ceiling can depend on host RAM. The file-count monitor is deliberately documented as a monitored limit and can briefly overshoot between checks. This runner does not claim a hard aggregate kernel-memory or inode controller. Filesystem/process isolation and tmpfs byte bounds do not depend on that monitor. An operator requiring a single cgroup-wide resident/kernel-memory ceiling must supply an appropriately delegated container/cgroup deployment; this runner does not configure the host automatically. [Kernel tmpfs limits](https://cdn.kernel.org/doc/html/latest/filesystems/tmpfs.html)
 
 ## Job output, cancellation and restart
+
+Entry-monitor termination reports `status: "resource_limited"`, an explanatory
+`error`, and `resource_limit` with `resource: "entries"`, `path` (`/workspace`,
+`/tmp` or `/packages`), `limit`, and `observed_at_least`. The bounded scan stops
+after discovering one excess entry; this is a lower bound, not a final inventory.
+The worker stops descendants and discards the call's filesystem changes. The
+receipt survives job persistence, status inspection and the failure event.
+`limits` also records the effective `quota_bytes`, `max_file_bytes` and
+`max_files` used for that job. Old job records remain unchanged and may lack
+these additional fields. A bare SIGKILL alone does not establish an entry-limit
+or out-of-memory cause; only the monitored failure receives this receipt.
+
+Owner decision, 2026-10-15: keep existing limits, including Sun's 1,000-entry
+ceiling. Correct the model-facing persistence/execute guidance and explain actual
+limit failures. Static tool instructions contain no live usage counters; changing
+counts and diagnostic receipts stay in tool results, preserving prompt ordering
+and avoiding recurring prefix changes. Updating static guidance changes the
+prefix once on rollout; it is not a zero-invalidation deployment.
 
 `run` waits for bounded completion and returns a job ID, exit code, status, elapsed seconds, saved working directory, commit state, measured stdout/stderr byte sizes and small previews. `cd` persists as a persistent task's next working directory through Bash's exit hook; disposable calls always start fresh. Explicit `cwd` selects a workspace-relative directory. A script replacing the exit hook can leave the prior directory in effect; inspect the returned `cwd`.
 
