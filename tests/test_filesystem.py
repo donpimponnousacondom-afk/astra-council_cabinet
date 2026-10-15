@@ -324,6 +324,6 @@ async def test_full_snapshot_contains_filesystem_bytes_and_database(kernel):
 
 def test_configuration_rejects_unknown_and_inconsistent_limits():
     assert validate_config()["max_bytes"] == 256 * MIB
-    for config in ({"max_bytes": True}, {"retention_days": 1}, {"max_bytes": 20 * MIB}):
+    for config in ({"max_bytes": True}, {"retention_days": 1}, {"max_bytes": 19 * MIB}):
         with pytest.raises(ControlError):
             validate_config(config)

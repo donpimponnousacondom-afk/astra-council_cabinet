@@ -24,6 +24,13 @@ Do not add package-specific bans or silently relax the inherited path, original
 attachment, link or credential boundaries. No background shell process may
 survive the end of its shell call.
 
+On 2026-10-15 the owner requested a file limit that scales with saved capacity:
+each regular file may occupy at most half of that bot's effective capacity,
+rounded down to whole bytes. There is no independent file-size setting. A
+256 MiB capacity allows 128 MiB per file; 512 MiB allows 256 MiB. This is a
+per-file ceiling, not a reservation: several files can collectively fill the
+whole capacity. The total quota and existing file-count limit still apply.
+
 When the mount is OFF, explicitly tell previously provisioned bots that their
 saved files still exist, cannot currently be accessed, and require the owner's
 help if needed. Do not imply that disabling the mount deleted files. A bot that
@@ -128,9 +135,21 @@ Global configuration and per-bot overrides use these strict integer settings:
 | Setting | Default |
 | --- | --- |
 | `max_bytes` | 268,435,456 bytes (256 MiB) |
-| `max_file_bytes` | 33,554,432 bytes (32 MiB) |
 | `max_files` | 1,000 files and directories |
 | `max_read_bytes` | 12,000 bytes per file-read page |
+
+The effective `max_file_bytes` in status, usage and shell limits is always
+`floor(max_bytes / 2)`, derived after global configuration and per-bot capacity
+overrides are combined. The dashboard displays the automatic value. A 20 MiB
+capacity therefore allows 10 MiB per file; the existing attachment intake
+ceiling does not override this smaller saved-file allowance.
+
+Startup removes the retired `max_file_bytes` configuration key from the global
+filesystem plugin and per-bot filesystem overrides in one transaction, recording
+each removal in `config.migrated`. All other settings, grants and saved files
+remain intact. New configuration writes containing the retired key fail with
+instructions to remove it; change `max_bytes` to change the file limit. Private
+workspaces and disposable shell storage keep their independent existing limits.
 
 There is no task-count setting or retention timer. Filling the filesystem blocks
 growth, not deletion or directory listing. The direct delete operation does not

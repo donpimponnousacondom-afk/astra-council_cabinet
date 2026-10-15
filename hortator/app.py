@@ -47,6 +47,7 @@ class Kernel:
         self.service.seed()
         self.service.migrate_response_protocol()
         self.service.migrate_engram_token_limit()
+        self.service.migrate_filesystem_file_limit()
         self.service.seed_prompt_templates()
         self.registry = Registry(self.store, self.vault, self.directory, self.service.inspect_model)
         self.engine = Engine(self.store, self.vault, self.pool, self.registry, reporting=self.reporting)
