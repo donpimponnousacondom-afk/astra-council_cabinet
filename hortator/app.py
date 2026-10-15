@@ -12,7 +12,7 @@ from urllib.parse import quote, urlparse
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -749,6 +749,12 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
 
     assets = Path(os.getenv("HORTATOR_WEB_DIR", str(Path(__file__).resolve().parent.parent / "web" / "dist")))
     if assets.is_dir():
+        if (assets / "favicon.svg").is_file() and not (assets / "favicon.ico").is_file():
+
+            @app.api_route("/favicon.ico", methods=["GET", "HEAD"], include_in_schema=False)
+            async def favicon():
+                return RedirectResponse("/favicon.svg", status_code=308)
+
         app.mount("/", StaticFiles(directory=assets, html=True), name="dashboard")
     else:
 
