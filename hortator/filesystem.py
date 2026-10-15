@@ -15,7 +15,6 @@ from . import workspaces
 MIB = workspaces.MIB
 DEFAULTS = {
     "max_bytes": 256 * MIB,
-    "max_file_bytes": 32 * MIB,
     "max_files": 1000,
     "max_read_bytes": 12000,
 }
@@ -23,10 +22,15 @@ CONFIG_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
-        "max_bytes": {"type": "integer", "minimum": 20 * MIB, "maximum": 1024 * MIB},
+        "max_bytes": {
+            "type": "integer",
+            "minimum": 20 * MIB,
+            "maximum": 1024 * MIB,
+            "description": "Total saved capacity. Each individual file may use up to half this capacity.",
+        },
         **{
             name: copy.deepcopy(workspaces.CONFIG_SCHEMA["properties"][name])
-            for name in ("max_file_bytes", "max_files", "max_read_bytes")
+            for name in ("max_files", "max_read_bytes")
         },
     },
 }
@@ -128,15 +132,14 @@ PARAMETERS = {
 
 def validate_config(config=None):
     config = {} if config is None else config
+    if isinstance(config, dict) and "max_file_bytes" in config:
+        raise ControlError("max_file_bytes is automatic: half of max_bytes. Remove the retired setting.")
     issues = errors_for(CONFIG_SCHEMA, config)
     if issues:
         raise ControlError(
             "Invalid filesystem configuration: " + "; ".join(item["message"] for item in issues)
         )
-    result = {**DEFAULTS, **config}
-    if result["max_file_bytes"] > result["max_bytes"]:
-        raise ControlError("max_file_bytes must not exceed max_bytes")
-    return result
+    return {**DEFAULTS, **config}
 
 
 def storage_config(config):
@@ -144,7 +147,8 @@ def storage_config(config):
     config = validate_config(config)
     return {
         **workspaces.DEFAULTS,
-        **{name: config[name] for name in ("max_file_bytes", "max_files", "max_read_bytes")},
+        **{name: config[name] for name in ("max_files", "max_read_bytes")},
+        "max_file_bytes": config["max_bytes"] // 2,
         "max_workspace_bytes": config["max_bytes"],
         "max_bot_bytes": config["max_bytes"],
         "max_workspaces": 1,
@@ -183,6 +187,22 @@ class Filesystems(workspaces.Workspaces):
 
     def effective_config(self, bot_id):
         return storage_config(self.configuration(bot_id))
+
+    def validate_storage_config(self, config):
+        # Shared file operations receive the complete adapted configuration, not
+        # the independent Private workspace schema (whose limits differ).
+        if not isinstance(config, dict):
+            raise ControlError("Invalid filesystem storage configuration")
+        expected = storage_config(
+            {
+                "max_bytes": config.get("max_workspace_bytes"),
+                "max_files": config.get("max_files"),
+                "max_read_bytes": config.get("max_read_bytes"),
+            }
+        )
+        if config != expected:
+            raise ControlError("Invalid filesystem storage configuration: limits must derive from capacity")
+        return expected
 
     def _require(self, context):
         if self.allowed is not None and not self.allowed("filesystem", context):
@@ -248,7 +268,7 @@ class Filesystems(workspaces.Workspaces):
             "display": f"{used_mib}/{limit_mib} MiB ({percent}%)",
             "entries": (row or {}).get("entries", 0),
             "max_files": config["max_files"],
-            "max_file_bytes": config["max_file_bytes"],
+            "max_file_bytes": config["max_bytes"] // 2,
         }
 
     def describe(self, row):

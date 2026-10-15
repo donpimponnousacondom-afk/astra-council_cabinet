@@ -257,6 +257,9 @@ class Workspaces:
             {**plugin.get("config", {}), **bot.get("plugin_config", {}).get("workspace", {})}
         )
 
+    def validate_storage_config(self, config):
+        return validate_config(config)
+
     def _workspace(self, bot_id, channel_id, task):
         row = self.store.one(
             f"SELECT * FROM {self.table} WHERE bot_id=? AND channel_id=? AND task=?",
@@ -506,7 +509,7 @@ class Workspaces:
         row = self._workspace(bot_id, channel_id, task)
         self._idle(row)
         safe_path(path, directory=True)
-        config = validate_config(config) if config is not None else self.effective_config(bot_id)
+        config = self.validate_storage_config(config) if config is not None else self.effective_config(bot_id)
         with self._root(row) as root:
             entries, _ = self._scan(root, config)
         if path != "." and not any(
@@ -531,7 +534,7 @@ class Workspaces:
         row = self._workspace(bot_id, channel_id, task)
         self._idle(row)
         safe_path(path, directory=True)
-        config = validate_config(config) if config is not None else self.effective_config(bot_id)
+        config = self.validate_storage_config(config) if config is not None else self.effective_config(bot_id)
         with self._root(row) as root:
             entries, total = self._scan(root, config)
             matching = next((entry for entry in entries if entry["path"] == path), None)
@@ -568,7 +571,7 @@ class Workspaces:
     ):
         row = self._workspace(bot_id, channel_id, task)
         self._idle(row)
-        config = validate_config(config) if config is not None else self.effective_config(bot_id)
+        config = self.validate_storage_config(config) if config is not None else self.effective_config(bot_id)
         if type(offset) is not int or offset < 0 or type(limit_bytes) is not int or limit_bytes < 1:
             raise ControlError("offset must be a nonnegative integer and limit_bytes a positive integer")
         limit_bytes = min(limit_bytes, config["max_read_bytes"])
@@ -841,7 +844,11 @@ class Workspaces:
             ) from exc
 
     async def call(self, args, context, config=None, key=""):
-        config = validate_config(config) if config is not None else self.effective_config(context.bot["id"])
+        config = (
+            self.validate_storage_config(config)
+            if config is not None
+            else self.effective_config(context.bot["id"])
+        )
         operation = args["operation"]
         if operation == "list" and "task" not in args:
             return {
@@ -997,7 +1004,11 @@ class Workspaces:
         raise ControlError("Unknown workspace operation; call {} for complete usage")
 
     def prepare_job(self, context, task, config=None):
-        config = validate_config(config) if config is not None else self.effective_config(context.bot["id"])
+        config = (
+            self.validate_storage_config(config)
+            if config is not None
+            else self.effective_config(context.bot["id"])
+        )
         row = self._workspace(context.bot["id"], context.channel_id, task)
         self._idle(row)
         self._clean_generations(row)

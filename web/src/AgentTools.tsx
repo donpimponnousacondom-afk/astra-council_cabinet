@@ -54,6 +54,11 @@ export function AgentToolSettings({
   }, []);
   const schema = catalog?.config_schemas?.[pluginId]?.properties || {};
   const defaults = catalog?.defaults?.[pluginId] || {};
+  const filesystemCapacity = config.max_bytes ?? defaults.max_bytes;
+  const fileLimit =
+    Number.isSafeInteger(filesystemCapacity) && filesystemCapacity > 0
+      ? Math.floor(filesystemCapacity / 2)
+      : null;
   return (
     <section className="agent-tools" aria-label="Working limits">
       <Notice>
@@ -71,11 +76,9 @@ export function AgentToolSettings({
             label={
               pluginId === "filesystem" && key === "max_files"
                 ? "Files and directories"
-                : pluginId === "filesystem" && key === "max_file_bytes"
-                  ? "Maximum file size (bytes)"
-                  : pluginId === "shell" && key === "retention_days"
-                    ? "Job log retention (days)"
-                    : labels[key] || property.title || key.replaceAll("_", " ")
+                : pluginId === "shell" && key === "retention_days"
+                  ? "Job log retention (days)"
+                  : labels[key] || property.title || key.replaceAll("_", " ")
             }
             hint={property.description}
           >
@@ -99,6 +102,18 @@ export function AgentToolSettings({
             />
           </Field>
         ))}
+        {pluginId === "filesystem" && (
+          <Field
+            label="Maximum file size (automatic)"
+            hint="Always half of saved filesystem capacity. A bot's capacity override determines its own file limit. This does not reserve free space."
+          >
+            <output>
+              {fileLimit === null
+                ? "Set a filesystem capacity"
+                : `${num(fileLimit)} bytes (${num(fileLimit / 1048576)} MiB)`}
+            </output>
+          </Field>
+        )}
       </div>
     </section>
   );
@@ -273,6 +288,12 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
                     </span>
                     {item.url && <span>{item.url}</span>}
                     {item.usage && <strong>{item.usage.display}</strong>}
+                    {kind === "filesystems" && item.usage && (
+                      <span>
+                        Maximum file size: {num(item.usage.max_file_bytes)}{" "}
+                        bytes ({num(item.usage.max_file_bytes / 1048576)} MiB)
+                      </span>
+                    )}
                     <span>
                       {item.status || "Saved"}
                       {item.archived ? " · Archived" : ""} ·{" "}

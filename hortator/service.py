@@ -25,6 +25,41 @@ class Service:
     def version(self):
         return self.vault.redact(self._version)
 
+    def migrate_filesystem_file_limit(self):
+        """Retire stored fixed limits so every capacity uses the half-size rule."""
+        plugin = self.store.get("plugins", "filesystem")
+        targets = []
+        if plugin and "max_file_bytes" in plugin.get("config", {}):
+            targets.append(("plugins", plugin, plugin["config"], "config.max_file_bytes"))
+        for bot in self.store.list("bots"):
+            config = bot.get("plugin_config", {}).get("filesystem", {})
+            if "max_file_bytes" in config:
+                targets.append(("bots", bot, config, "plugin_config.filesystem.max_file_bytes"))
+        if not targets:
+            return
+        self.store.execute("BEGIN IMMEDIATE")
+        try:
+            for kind, entity, config, field in targets:
+                old_value = config.pop("max_file_bytes")
+                entity.pop("revision", None)
+                saved = self.store.put(kind, entity)
+                self.store.emit(
+                    "config.migrated",
+                    {
+                        "resource": kind,
+                        "id": saved["id"],
+                        "field": field,
+                        "previous_value": old_value,
+                        "revision": saved["revision"],
+                        "reason": "Simple filesystem file limit is automatically half of configured capacity",
+                    },
+                    bot_id=saved["id"] if kind == "bots" else None,
+                )
+            self.store.execute("COMMIT")
+        except BaseException:
+            self.store.execute("ROLLBACK")
+            raise
+
     def migrate_engram_token_limit(self):
         """Remove the retired ceiling without changing memory or other budgets."""
         plugin = self.store.get("plugins", "engram")

@@ -1,5 +1,47 @@
 # Verification record
 
+## 2026-10-15 — capacity-derived filesystem file limit
+
+Simple filesystem files now have a ceiling of half the effective saved capacity,
+including bot overrides. Startup retires fixed file-size settings with atomic
+configuration migration receipts. The dashboard displays the calculated limit;
+the current contract is in [FILESYSTEM](FILESYSTEM.md).
+
+Local validation:
+
+- Filesystem, filesystem API, Private workspace, agentic-runtime and disposable
+  shell suites, including the initial capacity cases: **71 passed, two dependency
+  deprecation warnings, 57.24s**. Sandbox tests ran locally without skips.
+- After adding exact-boundary and aggregate-quota coverage, the final capacity
+  file passed **11 tests in 6.62s**. A real sandbox saved a 104 MiB binary, exposed
+  bounded binary reads, and preserved that file and a small note when a later
+  shell result exceeded 128 MiB. Temporary staged files also proved two files
+  can exactly fill capacity, one excess byte is rejected, and changing capacity
+  during a job is rechecked on save. Global 512 MiB and per-bot 256 MiB settings
+  reach the shared storage adapter with 256 MiB and 128 MiB file limits.
+- Migration tests preserve saved files, grants and other configuration, remove
+  only the retired global/per-bot keys, reject stale configuration writes,
+  establish idempotence, and roll back records and receipts together on failure.
+- Ruff lint/format, changed-component Prettier, TypeScript compilation and
+  `git diff --check` pass. An initial legacy-limit assertion and a new test's
+  expected error wording were corrected to the actual contract; no production
+  behavior was weakened to satisfy them.
+
+The generated binary is a local fixture, not a live download or provider test.
+Private workspace and disposable-shell limits remain unchanged. A separate
+timestamp-based hash-cache experiment was rejected after same-size edits shared
+the same timestamp fingerprint; no hash cache is included in this change.
+
+Full current-head CI, Luna/Sol PR reviews and production rollout are subsequent
+gates, recorded on the PR. Publication debt at this entry: the task awaits its
+commit and open PR.
+
+PR #125 review follow-up: Luna identified that the global editor displayed the
+automatic limit, while individual filesystem cards showed only used/total bytes.
+The cards now also display the server's effective per-file limit, making bot
+capacity overrides visible. This changes presentation only; Prettier and
+TypeScript checks are rerun for the correction, with fresh-head CI/reviews required.
+
 ## 2026-10-15 — plugin authoring skill and executable clock starter
 
 The old manual's `schema({})` example could only return discovery help: the

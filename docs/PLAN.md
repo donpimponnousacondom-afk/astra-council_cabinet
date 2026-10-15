@@ -1,5 +1,22 @@
 # Implementation and acceptance plan
 
+## 2026-10-15 — filesystem capacity determines file size
+
+The owner requested that a saved binary can use half of its bot's configured
+Simple filesystem capacity: 256 MiB allows a 128 MiB file, and 512 MiB allows
+256 MiB. Derive the limit from effective capacity, including per-bot overrides,
+and retire the independent fixed setting rather than leaving existing 32 MiB
+values in force. The current contract and migration are in [FILESYSTEM](FILESYSTEM.md).
+Keep total capacity, entry limits, original-file protection and atomic shell
+save/rollback behavior. This does not authorize changing Private workspace or
+disposable-shell limits, import/export limits, or filesystem access boundaries.
+
+File-hash reuse is deferred: a local experiment found same-size content changes
+with identical inode, modification-time and change-time fingerprints. Reusing
+those hashes would return stale metadata. Existing fresh hashing and validated
+shell snapshot copying remain in place; a future optimization needs reliable
+content-version tracking rather than filesystem timestamps alone.
+
 ## 2026-10-14 — cache-stable memory epochs (owner scope)
 
 The owner accepts strategy items 1 and 2: move changing usage counters to the
