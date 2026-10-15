@@ -36,6 +36,12 @@ Full current-head CI, Luna/Sol PR reviews and production rollout are subsequent
 gates, recorded on the PR. Publication debt at this entry: the task awaits its
 commit and open PR.
 
+PR #125 review follow-up: Luna identified that the global editor displayed the
+automatic limit, while individual filesystem cards showed only used/total bytes.
+The cards now also display the server's effective per-file limit, making bot
+capacity overrides visible. This changes presentation only; Prettier and
+TypeScript checks are rerun for the correction, with fresh-head CI/reviews required.
+
 ## 2026-10-15 — plugin authoring skill and executable clock starter
 
 The old manual's `schema({})` example could only return discovery help: the

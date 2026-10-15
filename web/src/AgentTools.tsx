@@ -288,6 +288,12 @@ export function AgentToolsPanel({ botId }: { botId?: string }) {
                     </span>
                     {item.url && <span>{item.url}</span>}
                     {item.usage && <strong>{item.usage.display}</strong>}
+                    {kind === "filesystems" && item.usage && (
+                      <span>
+                        Maximum file size: {num(item.usage.max_file_bytes)}{" "}
+                        bytes ({num(item.usage.max_file_bytes / 1048576)} MiB)
+                      </span>
+                    )}
                     <span>
                       {item.status || "Saved"}
                       {item.archived ? " · Archived" : ""} ·{" "}

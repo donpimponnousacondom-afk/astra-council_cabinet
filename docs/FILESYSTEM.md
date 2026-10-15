@@ -140,7 +140,9 @@ Global configuration and per-bot overrides use these strict integer settings:
 
 The effective `max_file_bytes` in status, usage and shell limits is always
 `floor(max_bytes / 2)`, derived after global configuration and per-bot capacity
-overrides are combined. The dashboard displays the automatic value. A 20 MiB
+overrides are combined. The dashboard displays the automatic global value in
+plugin settings and each existing filesystem's effective value in the bot's
+Files, web reading and jobs panel (including capacity overrides). A 20 MiB
 capacity therefore allows 10 MiB per file; the existing attachment intake
 ceiling does not override this smaller saved-file allowance.
 
