@@ -878,6 +878,9 @@ class ShellRunner:
                                 target.mkdir(mode=0o700, parents=True, exist_ok=True)
                             else:
                                 size = record["size"]
+                                executable = record.get("executable")
+                                if type(executable) is not bool:
+                                    raise ControlError("Invalid workspace executable flag")
                                 if type(size) is not int or not 0 <= size <= config["max_file_bytes"]:
                                     raise ControlError("Workspace export exceeded per-file quota")
                                 total_bytes += size
@@ -887,6 +890,7 @@ class ShellRunner:
                                 output_file = os.fdopen(
                                     os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb"
                                 )
+                                os.fchmod(output_file.fileno(), 0o700 if executable else 0o600)
                                 output_remaining = size
                         elif kind == "data":
                             data = base64.b64decode(record["data"], validate=True)

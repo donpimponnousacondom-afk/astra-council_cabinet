@@ -1,5 +1,42 @@
 # Verification record
 
+## 2026-10-15 — executable permission across saved shell calls
+
+History review found an unresolved limitation, not a regression from PR #125:
+the original shell implementation in PR #10 (`937c8b8`, 2026-09-08) discarded
+executable mode on input copying, transport staging and generation save. The
+October 10 workspace probe below observed it directly; Simple filesystem
+inherited it in PR #100. Separate snapshot-copy and packaged-wrapper permission
+handling did not repair this shell path. This conclusion covers canonical merged
+history; it does not establish what a prior conversation may have promised.
+
+Before the fix, a real isolated `/usr/bin/true` copy executed at mode 0700 in its
+first call, returned as 0600 and failed with exit 126 in the next, then executed
+after another chmod. Read-only inspection also found Sun's saved `chess/maia/lc0`
+at 0600. No live bot binary was executed or modified for that diagnosis.
+
+Local verification after the fix:
+
+- `uv run pytest -q tests/test_executable_files.py` — **22 passed in 34.15s**,
+  no skips. Real Bubblewrap checks exercise binary/script execution across calls
+  for both storage types, direct script editing, explicit execute removal,
+  ordinary nonzero exits, invalid-tree and timeout rollback, and rejection of
+  missing/non-boolean executable transport flags. Local storage cases cover
+  mode normalization, list/stat/read metadata, edit/overwrite preservation,
+  non-executable new writes, and a mode change during snapshot validation.
+- Existing filesystem, Private workspace, shell runner, disposable shell,
+  capacity and snapshot suites — **107 passed, 2 skipped, two dependency
+  deprecation warnings in 104.07s**. Network-opt-in probes remain separately
+  gated. The large-file capacity regression still passes.
+- Ruff lint/format and `git diff --check` pass. Tests use temporary stores and
+  local executables; no provider/Discord or live native-library compatibility
+  acceptance is claimed. The existing CPU/SIGILL report remains separate.
+
+The shared runtime was stopped after Sun's active turn finished because the
+sandbox worker source is loaded from the checkout for each job. Publication,
+current-head full CI, independent Luna/Sol review and rollout are recorded on
+the PR. Publication debt at this entry: the task awaits its commit and open PR.
+
 ## 2026-10-15 — capacity-derived filesystem file limit
 
 Simple filesystem files now have a ceiling of half the effective saved capacity,

@@ -64,6 +64,15 @@ Outbound artifacts retain their separate **8,000,000-byte** delivery limit. A 10
 
 Workspace bytes live under `$HORTATOR_DATA_DIR/workspaces/<opaque-workspace-id>/<generation>/`. The SQLite tables `workspaces`, `workspace_imports` and `workspace_turn_refs` retain scope, active-generation pointers, original hashes and turn references. Directories are private and stored files use owner-only permissions. Runtime files must never enter Git.
 
+Owner decision, 2026-10-15: owner-execute permission persists through shell
+snapshots, including adding or removing it with `chmod`. Regular saved files are
+0600 or 0700; group/other permissions and special mode bits are not copied.
+File-tool edits and overwrites preserve the existing owner-execute bit, while
+new writes start non-executable. File list/stat/read metadata includes
+`executable`. Invalid or interrupted shell saves retain the previous generation's
+contents and executable flags together. Files affected by the earlier limitation
+need one successful `chmod u+x` save; the harness cannot reconstruct a lost bit.
+
 Global plugin configuration is merged with per-bot overrides. Configuration values are strict integers; strings, booleans, unknown fields and inconsistent limits are rejected. Defaults:
 
 | Setting | Default | Meaning |

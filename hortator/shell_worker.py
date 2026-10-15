@@ -93,12 +93,12 @@ def files(root, config):
                 info = item.stat(follow_symlinks=False)
                 if stat.S_ISDIR(info.st_mode):
                     pending.append(Path(item.path))
-                    result.append(("directory", relative, 0))
+                    result.append(("directory", relative, 0, False))
                 elif stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
                     if info.st_size > config["max_file_bytes"]:
                         raise ValueError("Workspace output exceeds the per-file byte limit")
                     total += info.st_size
-                    result.append(("file", relative, info.st_size))
+                    result.append(("file", relative, info.st_size, bool(info.st_mode & stat.S_IXUSR)))
                 else:
                     raise ValueError("Workspace output contains a symlink, hardlink, or special file")
                 if len(result) > config["max_files"] or total > config["quota_bytes"]:
@@ -151,7 +151,7 @@ def main():
     config = json.loads(Path("/runner/config.json").read_text())
     os.umask(0o077)
     root = Path("/workspace")
-    for kind, relative, _ in files(Path("/source"), config):
+    for kind, relative, _, executable in files(Path("/source"), config):
         destination = root / relative
         if kind == "directory":
             destination.mkdir(parents=True, exist_ok=True)
@@ -160,6 +160,7 @@ def main():
             with open(Path("/source") / relative, "rb") as source, open(destination, "xb") as target:
                 while data := source.read(32_768):
                     target.write(data)
+                os.fchmod(target.fileno(), 0o700 if executable else 0o600)
     cwd = root / config["cwd"]
     if not cwd.is_dir() or cwd.resolve().is_relative_to(root) is False:
         raise ValueError("Working directory is missing or outside the workspace")
@@ -249,12 +250,12 @@ def main():
         cwd=new_cwd,
     )
     if state in ("succeeded", "failed"):
-        for kind, relative, size in files(root, config):
+        for kind, relative, size, executable in files(root, config):
             # Validate the same filesystem bounds, but never send disposable
             # file contents back to the host for staging or persistence.
             if not config.get("persist_files", True):
                 continue
-            emit(kind, path=relative, size=size)
+            emit(kind, path=relative, size=size, **({"executable": executable} if kind == "file" else {}))
             if kind == "file":
                 with open(root / relative, "rb") as source:
                     while data := source.read(32_768):
