@@ -31,6 +31,13 @@ rounded down to whole bytes. There is no independent file-size setting. A
 per-file ceiling, not a reservation: several files can collectively fill the
 whole capacity. The total quota and existing file-count limit still apply.
 
+On 2026-10-15 the owner requested that executable files survive separate shell
+calls, after confirming the earlier workspace limitation remained unresolved.
+Preserve the owner-execute bit across shell snapshots and saved generations:
+regular files are stored as 0600 or 0700. Existing file edits/overwrites preserve
+that bit; new file-tool writes start non-executable. Other permission bits and
+special mode bits are not retained. This does not expand tool grants or host access.
+
 When the mount is OFF, explicitly tell previously provisioned bots that their
 saved files still exist, cannot currently be accessed, and require the owner's
 help if needed. Do not imply that disabling the mount deleted files. A bot that
@@ -172,10 +179,13 @@ filesystem job under its previous grant.
 Default pip/uv/native installs in `/packages` vanish after every shell call.
 Compatible package files explicitly installed under `/workspace` can persist;
 later calls must select their import path again. This is not a complete persistent
-container: links are rejected, saved execute bits are not preserved, and ordinary
-virtual environments are not supported unchanged. Supplied runtimes remain
-read-only and are provided afresh. The planning probe in
-[VERIFICATION.md](VERIFICATION.md) records these existing limitations.
+container: links are rejected and ordinary virtual environments are not supported
+unchanged. Supplied runtimes remain read-only and are provided afresh. Owner-execute
+permission now persists through shell calls, including an explicit `chmod u-x`.
+File list/stat/read results expose an `executable` boolean. Files whose bit was
+lost before this fix need one successful `chmod u+x` shell save; no existing
+file is automatically marked executable. The October 10 planning probe in
+[VERIFICATION.md](VERIFICATION.md) records the superseded execute-bit limitation.
 
 ## Operator inspection and backups
 

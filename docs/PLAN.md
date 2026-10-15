@@ -1,5 +1,23 @@
 # Implementation and acceptance plan
 
+## 2026-10-15 — preserve executable files between shell calls
+
+The owner asked whether the recurring lost executable bit was a regression and
+authorized its repair for saved files. Canonical merged history shows the shell
+pipeline has dropped it since PR #10 (`937c8b8`, 2026-09-08); the October 10
+workspace probe explicitly documented the limitation, and Simple filesystem
+inherited it in PR #100 (`09ff2ad`). PR #125 changed capacity limits without
+altering this path. Snapshot backup copying and packaged shell wrappers already
+preserved executable permission in separate paths; neither fixed shell persistence.
+
+Carry only owner-executable intent through the shared shell/file pipeline,
+preserving the existing private access boundary, grants and atomic save behavior.
+Apply it to both Simple filesystem and Private workspaces, including direct
+file edits and overwrite, explicit removal, and rollback. Do not infer executable
+status for previously saved files or change the bot's binaries/libraries.
+Current contracts: [FILESYSTEM](FILESYSTEM.md), [WORKSPACES](WORKSPACES.md),
+and [SHELL_RUNNER](SHELL_RUNNER.md).
+
 ## 2026-10-15 — filesystem capacity determines file size
 
 The owner requested that a saved binary can use half of its bot's configured

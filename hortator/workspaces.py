@@ -405,7 +405,12 @@ class Workspaces:
                         total += info.st_size
                         if enforce_limits and total > config["max_workspace_bytes"]:
                             raise ControlError(f"Workspace exceeds {config['max_workspace_bytes']} bytes")
-                        item = {"path": path, "kind": "file", "bytes": info.st_size}
+                        item = {
+                            "path": path,
+                            "kind": "file",
+                            "bytes": info.st_size,
+                            "executable": bool(info.st_mode & stat.S_IXUSR),
+                        }
                         if metadata:
                             with self._file(root, path) as (file_fd, _):
                                 item.update(self._metadata(file_fd, path, info))
@@ -431,6 +436,7 @@ class Workspaces:
             "bytes": info.st_size,
             "sha256": digest.hexdigest(),
             "mime": mime,
+            "executable": bool(info.st_mode & stat.S_IXUSR),
         }
         if (
             head.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"GIF87a", b"GIF89a"))
@@ -666,6 +672,7 @@ class Workspaces:
                     with os.fdopen(descriptor, "wb") as handle:
                         handle.write(data)
                         handle.flush()
+                        os.fchmod(handle.fileno(), 0o700 if prior and prior["executable"] else 0o600)
                         os.fsync(handle.fileno())
                     os.replace(temporary, name, src_dir_fd=parent, dst_dir_fd=parent)
                     os.fsync(parent)
@@ -1071,7 +1078,10 @@ class Workspaces:
                             os.mkdir(name, 0o700, dir_fd=parent)
                         else:
                             with self._file(source, path) as (descriptor, info):
-                                if info.st_size != entry["bytes"]:
+                                if (
+                                    info.st_size != entry["bytes"]
+                                    or bool(info.st_mode & stat.S_IXUSR) != entry["executable"]
+                                ):
                                     raise ControlError("Sandbox output changed during snapshot validation")
                                 output = os.open(
                                     name,
@@ -1089,9 +1099,15 @@ class Workspaces:
                                         handle.write(chunk)
                                         digest.update(chunk)
                                         remaining -= len(chunk)
-                                    if os.read(descriptor, 1) or digest.hexdigest() != entry["sha256"]:
+                                    if (
+                                        os.read(descriptor, 1)
+                                        or digest.hexdigest() != entry["sha256"]
+                                        or bool(os.fstat(descriptor).st_mode & stat.S_IXUSR)
+                                        != entry["executable"]
+                                    ):
                                         raise ControlError("Sandbox output changed during snapshot copy")
                                     handle.flush()
+                                    os.fchmod(handle.fileno(), 0o700 if entry["executable"] else 0o600)
                                     os.fsync(handle.fileno())
                         os.fsync(parent)
                 os.fsync(target)

@@ -20,6 +20,13 @@ every remote run before trying a development change. Do not deploy an unpublishe
 completed change or accumulate a backlog of deployed changes without PRs. Pending
 remote checks/reviews remain pending; they do not establish merge readiness.
 
+The shell sandbox starts a fresh supervisor from `hortator/shell_worker.py` on
+each job. That single source file is mounted read-only from the checkout; the
+rest of the checkout is not mounted. Unlike already-imported server modules,
+editing it can affect a running server's next shell job. For worker/server
+transport changes, stop the shared foreground runtime before editing the worker,
+then publish, verify and restart both together under the deployment rules above.
+
 Rebuild the dashboard after the final commit and restart through shared Screen so
 the dashboard and server identify the intended commit. A review or CI fix requires
 another ordinary task-branch commit/push and fresh evidence for the new head; use

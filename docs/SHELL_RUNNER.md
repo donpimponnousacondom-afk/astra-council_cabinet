@@ -99,6 +99,13 @@ The sandbox has no host home, application checkout, runtime database, vault, mas
 
 The trusted supervisor is namespace PID 1. It reads stdout and stderr concurrently, kills remaining descendants (including detached sessions), validates the complete output tree and sends bounded regular-file frames to the host. The host independently enforces paths, counts and byte sizes, then asks the workspace store to commit a validated generation atomically. There is no writable host mount accessible to the model. For persistent tasks, successful valid changes and valid changes from nonzero command exits persist. Disposable jobs never export file bytes or commit a generation. Timeout, cancellation, output-limit termination, invalid output trees and interrupted execution discard the sandbox snapshot. A script can therefore have run even when its workspace changes are not committed; check `workspace_committed` and the reported status.
 
+For both saved storage types, the owner-execute bit is carried through the input
+copy, the worker's strictly boolean `executable` file-export field, host staging,
+and the committed generation. Saved regular files normalize to 0600/0700;
+directories remain private. This preserves `chmod u+x` and `chmod u-x` without
+retaining group/other access or special mode bits. It does not resolve CPU
+instruction or native-library incompatibilities in a saved binary.
+
 ## Limits and their scope
 
 | Setting | Default | Enforcement |
