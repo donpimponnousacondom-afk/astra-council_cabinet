@@ -136,6 +136,10 @@ See [operations and behavior](docs/OPERATIONS.md) for scheduling, recovery, secu
 
 ## Built-in plugins
 
+For new tools or extensions, coding agents can start with the project-specific
+[council-plugin-author skill](skills/council-plugin-author/SKILL.md) and its tested
+package example. The [plugin manual](docs/PLUGINS.md) remains the registry contract.
+
 | Registry ID | Capability | Configuration |
 | --- | --- | --- |
 | `web_fetch` | Complete public text snapshots, chunking and search | No key; 1 MB download cap, owned stable offsets, storage/retention limits |
