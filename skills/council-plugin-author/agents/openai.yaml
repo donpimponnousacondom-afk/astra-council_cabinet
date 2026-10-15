@@ -1,0 +1,4 @@
+interface:
+  display_name: "Council Plugin Author"
+  short_description: "Build and test plugins for the Hortator council"
+  default_prompt: "Use $council-plugin-author to implement a Hortator plugin with the project contracts, isolated tests, and PR workflow."

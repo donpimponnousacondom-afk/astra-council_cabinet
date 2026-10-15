@@ -64,40 +64,47 @@ The built-in owner-only `council_inspect` accepts `resource: "version"` to read 
 
 The separate keyless owner-only `discord_send` action posts owner-requested text/current-turn artifacts as Hortator to another configured room/channel or allowed observed thread. It requires explicit global/bot grants (off on new installations). It exposes targets/send/status, uses the existing outbox/destination lock and strict reply transport, and preserves per-turn delivery-key idempotence/uncertainty. It does not change Hortator intake, impersonate the owner or replace normal assistant content. See [the tool contract](TOOLS.md) and [cross-channel operations](OPERATIONS.md#hortator-control-scope-and-cross-channel-posts).
 
-Example package metadata:
+## Minimal installable example
+
+The project-specific [council-plugin-author skill](../skills/council-plugin-author/SKILL.md)
+guides coding agents through the registry, isolated tests and the publication
+workflow. It links these contracts rather than keeping a separate copy. Agents
+can read that file directly; local discovery setup is documented in
+[OPERATIONS](OPERATIONS.md#plugin-authoring-skill).
+
+The complete [clock package](../skills/council-plugin-author/assets/clock-plugin)
+is the maintained starter. Its [package metadata](../skills/council-plugin-author/assets/clock-plugin/pyproject.toml)
+registers the Python entry point:
 
 ```toml
 [project.entry-points."hortator.plugins"]
-local_clock = "my_clock:register"
+local_clock = "council_clock:register"
 ```
 
-Example `my_clock.py`:
+Its [implementation](../skills/council-plugin-author/assets/clock-plugin/src/council_clock/__init__.py)
+registers a keyless `PluginSpec` whose required `operation` accepts only `"now"`.
+The async handler receives `(arguments, context, configuration, api_key)` and
+returns the current council-local timestamp with its UTC offset.
 
-```python
-import time
-from hortator.plugins import PluginSpec, schema
-from hortator.timekeeping import council_timezone, local_timestamp
+- `clock {}` returns usage without invoking the handler.
+- `clock {"operation":"now"}` executes the action.
+- Invalid operations return the registry's complete argument feedback.
 
+Even a tool with no other input needs a nonempty action shape. An empty-only
+`schema({})` cannot execute a regular plugin, because the registry intercepts
+`{}` as discovery. Do not copy the engine's `end_cycle` exception into a plugin.
+The starter is tested through real entry-point loading and `registry.call_raw`
+in [test_plugin_starter.py](../tests/test_plugin_starter.py).
 
-def register(registry):
-    async def clock(arguments, context, configuration, api_key):
-        # context has bot, channel_id, turn_id, and a verified owner flag.
-        # API keys are registry-owned; never put them in tool results.
-        return {"now": local_timestamp(time.time(), council_timezone(registry.store))}
-
-    registry.register(
-        PluginSpec(
-            id="clock",
-            name="Clock",
-            description="Read the current council-local time with its UTC offset.",
-            parameters=schema({}),
-            handler=clock,
-            defaults={},
-        )
-    )
-```
-
-Install the package in the same environment, restart the runtime, enable it in **Plugins**, and grant `clock` to the desired bots. New registry entries are seeded disabled unless they are the explicitly chosen built-ins. Duplicate/reserved IDs are rejected. Tool schemas use the standard OpenAI function-call envelope.
+Copy and rename the package for a new plugin; the host provides the `hortator`
+imports. Build and test it in an isolated environment. Integrate an installed
+package into the application's locked dependencies through the normal task
+branch/PR workflow before a shared-runtime restart. Once installed and the
+rollout is authorized, enable it in **Plugins** and grant its ID to the desired
+bots. The bundled example is not installed or enabled by adding the skill.
+New registry entries seed disabled unless they are explicitly chosen built-ins;
+duplicate/reserved IDs are rejected. Tool schemas use the standard OpenAI
+function-call envelope.
 
 The registry validates arguments, checks global and per-bot authorization at execution time, enforces a 120-second tool deadline (shell.run instead allows max(120, configured command seconds + 30), up to 630), records complete results before character-based paging, records start/result/failure/cancellation, resolves per-bot credential overrides, and redacts known secret values. Bot-level tool-round and call limits are enforced separately in the council engine. The reserved `tool_result_read` fallback gives packs without a native reader access to their own saved replies under the original scope and grants; never register that name. [Shared result limits and continuation](AGENTIC_TOOLS.md#task-and-active-context-budgets).
 

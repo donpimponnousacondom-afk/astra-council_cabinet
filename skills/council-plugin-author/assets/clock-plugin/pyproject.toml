@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hortator-clock-example"
+version = "0.1.0"
+description = "Minimal keyless Hortator plugin authoring example"
+requires-python = ">=3.14,<3.15"
+
+[project.entry-points."hortator.plugins"]
+local_clock = "council_clock:register"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/council_clock"]

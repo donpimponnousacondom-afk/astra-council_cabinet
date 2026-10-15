@@ -1,5 +1,33 @@
 # Verification record
 
+## 2026-10-15 — plugin authoring skill and executable clock starter
+
+The old manual's `schema({})` example could only return discovery help: the
+registry intercepted its only valid argument object before executing the handler.
+The versioned `council-plugin-author` skill now includes a complete keyless package
+with the explicit `{"operation":"now"}` action. The manual links to that tested
+source. No production registry, response protocol, grants or live plugin set changed.
+
+Local validation: `uv run pytest -q tests/test_plugin_starter.py
+tests/test_plugin_hooks.py tests/test_plugins.py` — **11 passed in 3.39s**.
+The new cases load the package's declared entry point and exercise discovery
+without execution, invalid arguments, winter/summer council timestamps, disabled
+defaults and execution-time grant revocation. Initial test assumptions about the
+help envelope and absent-key return value were corrected to the existing API;
+the implementation contract was not changed to satisfy those assertions.
+
+An isolated wheel build and `uv pip install --no-deps --target` probe also passed:
+Python discovered the installed distribution's real `hortator.plugins` entry
+point, the registry returned help for `{}`, and the explicit action executed in
+a temporary Kernel. Scratch was removed after completion. The shared environment
+was then checked and still had no `local_clock` entry point. No Discord/provider
+calls, live configuration edits or runtime restart were used for these checks.
+Ruff lint/format, the skill-creator validator and `git diff --check` pass.
+
+These are focused local and packaging checks; full CI and independent Luna/Sol
+reviews remain publication gates and will be recorded on the PR. Publication
+debt at this verification entry: this task awaits its commit and open PR.
+
 ## 2026-10-15 — conventional dashboard favicon fallback
 
 Live anonymous HTTP probes found `/favicon.svg` returning 200 while the browser's

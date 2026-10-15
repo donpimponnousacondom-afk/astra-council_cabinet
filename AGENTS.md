@@ -131,4 +131,8 @@ including superseded behavior, and must not be treated as current configuration.
 - Single per-bot filesystem and mount toggle: [FILESYSTEM.md](docs/FILESYSTEM.md).
 - Optional Discord panels and automatic attachments: [DISCORD_PANELS.md](docs/DISCORD_PANELS.md).
 - Plugin extension contracts: [PLUGINS.md](docs/PLUGINS.md).
+- Plugin authoring workflow and tested starter: [council-plugin-author](skills/council-plugin-author/SKILL.md).
+  Its source is versioned here; the local discovery link does not install a bot
+  plugin or authorize enabling one. Coordinate parallel edits and publication
+  ownership under the existing branch/review rules.
 - Task ownership and cancellation: [CONCURRENCY.md](docs/CONCURRENCY.md).

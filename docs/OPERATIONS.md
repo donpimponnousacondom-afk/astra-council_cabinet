@@ -107,6 +107,31 @@ within the task's scope.
 
 ## Plugins and experiments
 
+### Plugin authoring skill
+
+The project-owned source is
+[`skills/council-plugin-author/SKILL.md`](../skills/council-plugin-author/SKILL.md).
+Coding agents can read it directly alongside [PLUGINS](PLUGINS.md), even when
+their harness has no skill discovery. This is development guidance, separate
+from the Python plugins loaded by Hortator.
+
+On this host, local skill discovery can use
+`/home/codexy/.codex/skills/council-plugin-author` as a symlink to
+`/home/codexy/codex/astra-council_cabinet/skills/council-plugin-author`.
+Keep that source in the repository's normal PR workflow instead of maintaining
+a second copy. Preserve any existing different installation when setting up
+the link. A session whose skill catalog was already loaded can read the source
+file explicitly. This setup does not require a Hortator restart or install the
+bundled clock package into its environment.
+
+When agents work concurrently, agree on branch/file ownership and one integration
+owner. A separate branch name in a shared checkout does not isolate edits; use
+agreed isolated checkouts for independent writers or keep their paths disjoint
+without checkout changes. Shared-runtime operations and publication still follow
+AGENTS and the PR procedure above.
+
+### Existing capabilities
+
 Enable the optional researcher through **Plugins → Sub-agent researcher · experimental**,
 select its dedicated research profile, and grant it under **Bots → Capabilities**.
 Use **Bots → Control → Background jobs** or the plugin editor to inspect assignments,
