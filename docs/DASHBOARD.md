@@ -15,6 +15,11 @@ The previous dashboard is a frozen comparison and fallback during operator accep
 
 `npm run build --prefix web` builds both HTML entries into `web/dist`. The existing Python static-file host serves the resulting files; Python does not import React components, CSS, frontend state or a legacy version flag. This transition changes no backend/API contract. Both frontends use the same authenticated HTTP API and external runtime data. Running either dashboard must not start another scheduler, Discord gateway or provider client.
 
+Both entries use `/favicon.svg`. Browser probes for `/favicon.ico` redirect to
+that existing asset when the build has no native ICO file. A missing/expired
+dashboard session still returns 401 from `/api/auth/session`; its console reason
+is independent of a missing static asset's 404.
+
 The active frontend must never import a module or stylesheet from `web/src/legacy/`. The frozen copy owns its complete component/API-helper/style tree; relative imports remain inside that tree. Proven functionality may be copied into the active frontend and adapted there, but that must not become an ongoing shared UI dependency. Trajectory and Analytics are deliberately carried forward because the owner values those workflows.
 
 The legacy HTML wrapper may identify the fallback and link to the workbench. That wrapper is outside the frozen application. Legacy retains the same security assumptions and authentication requirements as the active dashboard; its existence does not create a bypass or a second credential system. Its build identity must still describe the artifact being served.

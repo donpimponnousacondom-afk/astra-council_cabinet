@@ -1,5 +1,23 @@
 # Verification record
 
+## 2026-10-15 — conventional dashboard favicon fallback
+
+Live anonymous HTTP probes found `/favicon.svg` returning 200 while the browser's
+`/favicon.ico` probe returned 404. The adjacent `/api/auth/session` warnings were
+separate 401 requests; the console adds the authentication explanation only to
+401 records. The static host now redirects GET/HEAD ICO probes to the existing
+SVG when a native ICO is absent, preserving custom builds with their own ICO.
+
+Local validation: `uv run pytest -q tests/test_dashboard_assets.py
+tests/test_security.py::test_web_session_csrf_and_origin tests/test_console.py`
+— **32 passed, two dependency deprecation warnings, 9.53s**. Checks cover the
+unauthenticated icon, native ICO precedence, HEAD requests, unrelated missing
+assets, session authentication, CSRF/origin enforcement and existing console
+formatting. Ruff lint/format and `git diff --check` pass. These tests use isolated
+temporary runtimes; full CI, independent Luna/Sol PR reviews and live rollout
+remain separate gates. Publication debt: this change awaits publication at the
+time of this local verification entry.
+
 ## 2026-10-14 — durable memory snapshots and late net changes
 
 Strategy item 2 follows merged PR #121. Local/mocked verification passed:
