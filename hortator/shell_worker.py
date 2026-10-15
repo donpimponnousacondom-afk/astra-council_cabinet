@@ -128,7 +128,7 @@ def kill_descendants():
     raise RuntimeError("Could not confirm every sandbox descendant stopped; output discarded")
 
 
-def too_many_entries(root, limit):
+def entry_limit_exceeded(root, limit):
     pending, count = [root], 0
     while pending:
         try:
@@ -136,13 +136,18 @@ def too_many_entries(root, limit):
                 for entry in entries:
                     count += 1
                     if count > limit:
-                        return True
+                        return {
+                            "resource": "entries",
+                            "path": str(root),
+                            "limit": limit,
+                            "observed_at_least": count,
+                        }
                     if entry.is_dir(follow_symlinks=False):
                         pending.append(entry.path)
         except FileNotFoundError:
             # A model process may remove its own directory while we scan.
             continue
-    return False
+    return None
 
 
 def main():
@@ -190,6 +195,7 @@ def main():
         selector.register(pipe, selectors.EVENT_READ, stream)
     count = 0
     state = None
+    resource_limit = None
     cleaned = False
     last_scan = started
     while any(key.data != "parent" for key in selector.get_map().values()) or child.poll() is None:
@@ -197,11 +203,12 @@ def main():
             state = "timed_out"
         if time.monotonic() - last_scan >= 0.05 and state is None:
             last_scan = time.monotonic()
-            if (
-                too_many_entries(root, config["max_files"])
-                or too_many_entries("/tmp", config["max_files"])
-                or too_many_entries("/packages", config["package_entries"])
-            ):
+            resource_limit = (
+                entry_limit_exceeded(root, config["max_files"])
+                or entry_limit_exceeded("/tmp", config["max_files"])
+                or entry_limit_exceeded("/packages", config["package_entries"])
+            )
+            if resource_limit is not None:
                 state = "resource_limited"
         if (state is not None or child.poll() is not None) and not cleaned:
             kill_descendants()
@@ -248,6 +255,7 @@ def main():
         exit_code=code,
         elapsed_seconds=round(time.monotonic() - started, 3),
         cwd=new_cwd,
+        **({"resource_limit": resource_limit} if state == "resource_limited" else {}),
     )
     if state in ("succeeded", "failed"):
         for kind, relative, size, executable in files(root, config):

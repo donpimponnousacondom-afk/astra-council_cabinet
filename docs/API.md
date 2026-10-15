@@ -289,6 +289,12 @@ Bots expose `document_task_rounds` (default20,0–100 additional rounds), `docum
 
 ## Private tool inspection
 
+Shell job results/inspection retain `resource_limit` on monitored entry-limit
+failures: `resource`, `path`, `limit`, and `observed_at_least`, plus an explanatory
+`error`. Job `limits` includes the effective filesystem byte, per-file and entry
+limits. These are per-job observations, not new configuration fields; historical
+records may lack them. See [shell failure details](SHELL_RUNNER.md#job-output-cancellation-and-restart).
+
 `GET /api/agentic-tools?bot_id=&limit=30` returns runner readiness, selected toolchain/limits, keyless configuration schemas/defaults and bounded recent workspace/fetched-document/job metadata. `limit` is 1–100. `GET /api/agentic-tools/inspect` takes `resource=files|file|document|job|output`, required `bot_id`/`channel_id`, and the relevant `task`/`path` or `id`. Optional `offset` is nonnegative; `length` is 1–18,000 (job pages cap at 8,000); `stream` is stdout/stderr. Text-file/log offsets count bytes, while fetched-document offsets count Python Unicode characters. Read responses expose continuation metadata; binary files return measured metadata without treating their bytes as text. Both endpoints require the normal authenticated dashboard session and expose no execution or publication mutation. GET inspection does not extend retention. The catalog also includes `filesystems` with per-bot saved usage. For Simple filesystem inspection, use `resource=filesystem_files|filesystem_file` and `bot_id` without a channel/task; `cursor` pages directory listings and `offset`/`length` page file bytes. Authenticated operator inspection remains available while the bot mount is OFF. See [FILESYSTEM.md](FILESYSTEM.md).
 
 Plugin GETs include `keyless`; new workspace/shell packs seed disabled. Bot schemas include `work_task_rounds`, `work_task_calls_per_round`, `work_task_seconds` and `tool_working_set_tokens`, with effective defaults exposed for older records. Saves use the existing revision-aware configuration control path, validate global/per-bot effective working limits and cancel affected active work. See [the feature contract](AGENTIC_TOOLS.md).

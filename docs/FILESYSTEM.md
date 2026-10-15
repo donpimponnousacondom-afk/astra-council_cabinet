@@ -9,6 +9,14 @@ workspace selector. Private workspaces retain their existing contract in
 
 ## Owner decisions
 
+On 2026-10-15 the owner retained the existing file/directory limit after a package
+install exceeded it. Do not raise limits as a workaround. Models receive explicit
+saved-package instructions and entry-limit failure receipts; changing usage stays
+in tool results rather than the stable prompt prefix. Suitable regular-file
+package trees can persist with `pip install --target /workspace/pylibs PACKAGE`
+and `PYTHONPATH=/workspace/pylibs` on subsequent calls, within all existing
+limits. See [package guidance and failure details](SHELL_RUNNER.md#python-314-and-disposable-packages).
+
 On 2026-10-10 the owner authorized this independent plugin for experimentation,
 without migrating existing tasks or changing bot grants automatically. The final
 decision **supersedes the earlier read-only-on-disable proposal**: OFF unmounts

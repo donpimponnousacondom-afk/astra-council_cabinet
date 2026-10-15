@@ -217,6 +217,7 @@ class ShellRunner:
             "stderr_bytes",
             "workspace_committed",
             "error",
+            "resource_limit",
         )
         self.workspaces.store.emit(
             kind,
@@ -855,6 +856,41 @@ class ShellRunner:
                         elif kind == "result":
                             if record["status"] not in FINAL_STATES:
                                 raise ControlError("Invalid worker status")
+                            if record["status"] == "resource_limited":
+                                detail = record.get("resource_limit")
+                                entry_limits = {
+                                    "/workspace": config["max_files"],
+                                    "/tmp": config["max_files"],
+                                    "/packages": config["package_entries"],
+                                }
+                                if (
+                                    not isinstance(detail, dict)
+                                    or set(detail) != {"resource", "path", "limit", "observed_at_least"}
+                                    or detail["resource"] != "entries"
+                                    or not isinstance(detail["path"], str)
+                                    or detail["path"] not in entry_limits
+                                    or type(detail["limit"]) is not int
+                                    or detail["limit"] != entry_limits[detail["path"]]
+                                    or type(detail["observed_at_least"]) is not int
+                                    or detail["observed_at_least"] != detail["limit"] + 1
+                                ):
+                                    raise ControlError("Invalid worker resource-limit detail")
+                                metadata["resource_limit"] = detail
+                                rollback = (
+                                    "This call's filesystem changes were discarded; previously saved files are unchanged. "
+                                    if config.get("persist_files", True)
+                                    else "This disposable call's files were discarded. "
+                                )
+                                metadata["error"] = (
+                                    f"{detail['path']} exceeded its file/directory entry limit: "
+                                    f"observed at least {detail['observed_at_least']} entries; "
+                                    f"limit {detail['limit']}. The harness stopped the command. "
+                                    + rollback
+                                    + "Reduce the entry count before retrying; more free bytes or a longer timeout "
+                                    "does not increase this limit."
+                                )
+                            elif "resource_limit" in record:
+                                raise ControlError("Unexpected worker resource-limit detail")
                             metadata.update(
                                 {
                                     name: record[name]
@@ -1042,7 +1078,10 @@ class ShellRunner:
             "started_at": time.time(),
             "cwd": cwd or (prepared["cwd"] if prepared else "."),
             "workspace_committed": False,
-            "limits": config,
+            "limits": {
+                **config,
+                **{name: (prepared or DISPOSABLE_LIMITS)[name] for name in DISPOSABLE_LIMITS},
+            },
             "stdout_bytes": 0,
             "stderr_bytes": 0,
         }
