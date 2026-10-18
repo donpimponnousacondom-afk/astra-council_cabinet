@@ -291,7 +291,7 @@ class ShellRunner:
                         "entry_limit": config["package_entries"],
                     }
                 ),
-                "lifetime": "Current human task, including same-human/same-channel follow-ups; cleared when the task finishes or is cancelled. Processes end after every command.",
+                "lifetime": "Current task, retained when same-human/same-channel input replaces an unsent answer; cleared on final completion, failure, explicit cancellation, configuration invalidation or shutdown. Processes end after every command.",
                 "failure_behavior": "Scratch changes are temporary and are not rolled back on a failed command; saved /workspace changes retain their separate commit rules.",
             },
         }
@@ -798,7 +798,7 @@ class ShellRunner:
             "C",
             "--setenv",
             "LD_LIBRARY_PATH",
-            "/packages/native/lib:/lib",
+            "/lib",
             "--setenv",
             "PYTHONDONTWRITEBYTECODE",
             "1",

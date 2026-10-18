@@ -1008,7 +1008,8 @@ Default storage is `$HORTATOR_DATA_DIR`'s sibling with `-snapshots` appended: `/
 Owner decision, 2026-10-08: **create full backups only when explicitly requested,
 not for every feature, hotfix or deployment**. This supersedes earlier generic
 instructions to back up before deploying or migrating a schema. Offloading is
-also on request, with no scheduled worker. Keep one newest verified usable local
+also on request, with no scheduled worker. The 2026-10-18 explicit relocation
+below overrides the one-local-copy rule for that operation. Otherwise keep one newest verified usable local
 recovery copy after cleanup; archive completed copies to the Storage Box with
 the checks below, including the newest copy while retaining its local source.
 Each requested offload must verify that this retained copy also exists remotely.
@@ -1023,11 +1024,28 @@ hortator backup /absolute/path/to/new-backup-directory
 
 This uses SQLite's backup API, copies `artifacts/`, `images/`, `audio/`, `sites/`, `ssh/`, `workspaces/`, `filesystems/`, `jobs/`, `fetched_documents/` and `site_history/` when present, and saves the matching encryption key separately inside the new backup directory. The SSH private identity is already encrypted in SQLite; `ssh/` contains public exports and verified host pins. The separate content history is backed up with its Git metadata, not added to the application repository. The command can read a running database, but filesystem changes during a live copy need not match its database snapshot. **Stop the foreground runtime in shared Screen for a complete point-in-time archive**; merely pausing model work does not stop every writer. Move the key to separate secure storage after verifying the backup.
 
-This workspace uses timestamped snapshots under `/home/codexy/.local/share/hortator-backups`, outside both the code checkout and live data directory. Its **`.latest-requested`** file identifies the latest requested snapshot; inspect that path and the snapshot's `manifest.json` for current evidence rather than relying on a copied session note. [VERIFICATION.md](VERIFICATION.md) records dated checks. A Git repository around a live SQLite database does not provide a consistent snapshot and risks tracking the master key and bootstrap password. Use the CLI's SQLite backup, then capture host settings and logs while the server is stopped for a complete archive. Complete snapshots include a matching key, all nine directories above, redacted configuration export, bootstrap password if present, logs, external launcher/environment and `.screenrc`, with `manifest.json` hashes and `RESTORE.md`. Verify SQLite integrity, hashes and matching-key decryption before declaring a snapshot usable. Keep directories 0700 and files 0600. These local snapshots provide rollback; an independent secure disk copy is still needed for disk-loss recovery. Never overwrite an earlier snapshot, commit these files to the application repository, or confuse a redacted JSON export with a credentials backup.
+This workspace stages requested timestamped snapshots under `/home/codexy/.local/share/hortator-backups`, outside both the code checkout and live data directory. The owner-authorized 2026-10-18 relocation moves completed copies to the Storage Box archives described below. Its **`.latest-requested`** file identifies the latest requested recovery copy, either an uncompressed local directory or a verified remote `.tar.zst` archive. Inspect that target and its `manifest.json` (inside the archive when compressed) rather than relying on a copied session note. A compressed archive must be extracted to a private directory before following its `RESTORE.md`; it is not a live database or a dashboard snapshot directory. [VERIFICATION.md](VERIFICATION.md) records dated checks. A Git repository around a live SQLite database does not provide a consistent snapshot and risks tracking the master key and bootstrap password. Use the CLI's SQLite backup, then capture host settings and logs while the server is stopped for a complete archive. Complete snapshots include a matching key, all nine directories above, redacted configuration export, bootstrap password if present, logs, external launcher/environment and `.screenrc`, with `manifest.json` hashes and `RESTORE.md`. Verify SQLite integrity, hashes and matching-key decryption before declaring a snapshot usable. Keep directories 0700 and files 0600. These local snapshots provide rollback; an independent secure disk copy is still needed for disk-loss recovery. Never overwrite an earlier snapshot, commit these files to the application repository, or confuse a redacted JSON export with a credentials backup.
 
 ### On-request Storage Box archival
 
-Owner decision, 2026-10-03, retention updated 2026-10-08: archive completed manual backups and dashboard
+**Owner relocation, 2026-10-18:** all completed Hortator backups are to reside on
+the existing Storage Box mounted at `/opt/remote-backup`. Its existing archive
+collection is `/opt/remote-backup/council-snapshots`; the server-side directory
+remains `council-snapshots/`. No new backup is requested. An already archived
+identical copy can satisfy the move after fresh source/manifest and remote
+checksum verification; do not upload a duplicate unnecessarily. After verification,
+update `~/.local/share/hortator-backups/.latest-requested` to the verified archive
+path before deleting the explicit matching local recovery directory. Preserve
+archive sidecars, manifests, encryption-key material and verification receipts.
+This operation explicitly permits no complete local recovery copy to remain.
+Restore requires access to the remote archive and extraction according to its
+`RESTORE.md`; future agents must not assume the pointer targets a directory.
+The empty live dashboard snapshot directory/default and live application data
+are unchanged. Other projects' backups are outside this relocation.
+
+
+General archival procedure (2026-10-03, retention updated 2026-10-08; apply the
+explicit relocation exception above when relevant): archive completed manual backups and dashboard
 snapshots to `u390720@u390720.your-storagebox.de:council-snapshots/`, using SSH
 port **23** and the existing `codexy` SSH key. Keep **one newest verified usable
 copy overall**, not one per collection. Inspect timestamps/manifests and preserve
@@ -1038,8 +1056,10 @@ downloaded and extracted back into its snapshot directory.
 
 Run only when requested. This is a one-off compression/rsync procedure, not a
 recurring job, daemon, plugin or automatic retention policy. Use direct SSH and
-rsync; the temporary SSHFS mount at `/home/codexy/codex/claude/asdfg` is only an
-optional browsing view and must not be a dependency. The
+rsync where appropriate; the existing Storage Box browsing/relocation mount is
+now `/opt/remote-backup` (formerly `asdfg`). Verify it is mounted from the expected
+Storage Box before treating it as remote storage; a missing mount must not cause
+a silent write to the local root disk. The
 [Storage Box SSH documentation](https://docs.hetzner.com/storage/storage-box/access/access-ssh-rsync-borg/)
 describes its restricted shell: invoke `sha256sum` directly over SSH; remote
 pipes, redirects and uploaded scripts are unavailable.

@@ -103,3 +103,28 @@ async def test_settings_change_replaces_old_scratch_and_shutdown_releases_all(sa
     await runner.close()
     assert not runner._scratch_turns
     assert not list(runner.root.glob("scratch-*"))
+
+
+async def test_retained_native_libraries_do_not_change_supervisor_startup(sandbox):
+    runner, _, context = sandbox
+    # An incompatible package library must affect only command processes, not
+    # the next call's trusted Python supervisor or its platform libraries.
+    first = await runner.run(
+        context,
+        command="""set -eu
+mkdir -p /packages/native/lib
+printf incompatible-library > /packages/native/lib/libpython3.14.so.1.0
+printf incompatible-library > /packages/native/lib/libseccomp.so.2
+""",
+    )
+    assert first["status"] == "succeeded", first
+    second = await runner.run(
+        context,
+        command="""set -eu
+test "$LD_LIBRARY_PATH" = /packages/native/lib:/lib
+test -f /packages/native/lib/libseccomp.so.2
+printf supervisor-started
+""",
+    )
+    assert second["status"] == "succeeded", second
+    assert second["stdout"]["text"] == "supervisor-started"

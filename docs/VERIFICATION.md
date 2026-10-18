@@ -3616,3 +3616,25 @@ requested task-specific ignored audit report. Local evidence above does not
 claim a full-suite pass or real bot delivery/provider validation.
 
 Additional live sandbox evidence: `HORTATOR_REQUIRE_SANDBOX=1 HORTATOR_TEST_PACKAGE_NETWORK=1 uv run pytest -q tests/test_shell_runner.py::test_real_public_https_and_native_package_install` — **1 passed in 10.33s**. HTTPS via curl/wget, Git remote lookup, real `uv pip install six==1.17.0`, `pkg install zstd`, repeated native installation, and reuse of both packages in a second call succeeded. This is public package-network evidence, not live Discord/provider validation.
+
+PR #129 review corrections: the parent accepted the retained-native-library
+startup issue reported by Sol before its review was interrupted. Trusted worker
+startup now excludes the task native-library directory, libseccomp loads from
+the readonly baseline path, and only command processes receive native package
+libraries. A real two-call regression leaves incompatible native library files
+in scratch and verifies that the next supervisor still starts normally. That
+probe plus guidance/prefix tests passed **9 tests in 5.62s**. Luna's wording
+finding was also accepted: instructions now distinguish retained same-human
+supersession from explicit cancellation. Its separate stale-facts candidate was
+withdrawn after tracing generation reassembly and the separate compaction payload.
+
+Owner subsequently requested moving all Hortator backups to the remounted
+Storage Box at `/opt/remote-backup`. The destination was verified as SSHFS to
+the existing Storage Box, and fresh archive/source verification is required
+before removing the sole local copy. This is an explicitly requested relocation,
+not an automatic backup or deletion policy; completion evidence belongs to the
+task audit after it actually finishes.
+
+After the loader-environment correction, real public HTTPS/Python/native package
+installation plus next-call reuse and the normal saved-workspace pipeline passed
+again: **2 tests in 15.06s**, sandbox execution required.

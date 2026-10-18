@@ -146,6 +146,11 @@ Bubblewrap creates private user, PID, mount, IPC and UTS namespaces and explicit
 
 The sandbox has no host home, application checkout, runtime database, vault, master key, bootstrap password, ambient proxy variables, SSH/Screen sockets, Docker socket or other workspaces. Its `/proc` describes only the new PID namespace and is mounted read-only. Network sockets are allowed; DNS, hosts/NSS configuration and a CA trust bundle are bound read-only. Outbound connections and host loopback services are reachable. Seccomp denies further namespace/mount operations, ptrace/process-memory access, memfd/SysV shared-memory creation, kernel keyrings and related unsupported kernel interfaces. Granted shell commands can fetch directly; bounded web-fetch and observed attachment-import tools remain available. The supervisor is nondumpable; model children cannot open its `/proc/1/fd` transport handles. [libseccomp rule API](https://libseccomp.readthedocs.io/en/latest/man/man3/seccomp_rule_add.3/)
 
+The trusted supervisor starts with only the readonly baseline library search
+path and loads libseccomp from its readonly absolute path. Only the command
+subprocess receives `/packages/native/lib` in its loader search path; retained
+package libraries must not influence supervisor startup.
+
 The trusted supervisor is namespace PID 1. It reads stdout and stderr concurrently, kills remaining descendants (including detached sessions), validates the complete output tree and sends bounded regular-file frames to the host. The host independently enforces paths, counts and byte sizes, then asks the workspace store to commit a validated generation atomically. There is no writable host mount accessible to the model. For persistent tasks, successful valid changes and valid changes from nonzero command exits persist. Disposable jobs never export file bytes or commit a generation. Timeout, cancellation, output-limit termination, invalid output trees and interrupted execution discard the sandbox snapshot. A script can therefore have run even when its workspace changes are not committed; check `workspace_committed` and the reported status.
 
 For both saved storage types, the owner-execute bit is carried through the input

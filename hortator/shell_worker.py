@@ -49,7 +49,7 @@ def restrict(config):
     # removes kernel interfaces that could allocate unaccounted shared memory,
     # bypass the transport or modify namespace topology. Network sockets use
     # the host network namespace; filesystem and process restrictions remain.
-    seccomp = ctypes.CDLL("libseccomp.so.2", use_errno=True)
+    seccomp = ctypes.CDLL("/lib/libseccomp.so.2", use_errno=True)
     seccomp.seccomp_init.argtypes = [ctypes.c_uint32]
     seccomp.seccomp_init.restype = ctypes.c_void_p
     seccomp.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
@@ -188,6 +188,10 @@ def main():
         stderr=subprocess.PIPE,
         close_fds=True,
         start_new_session=True,
+        # Only command processes load task-installed native libraries. The
+        # trusted supervisor must always start/import/restrict against readonly
+        # baseline libraries, even when scratch survives earlier commands.
+        env={**os.environ, "LD_LIBRARY_PATH": "/packages/native/lib:/lib"},
     )
     selector = selectors.DefaultSelector()
     selector.register(0, selectors.EVENT_READ, "parent")
