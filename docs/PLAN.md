@@ -645,3 +645,11 @@ is introduced. Review disk usage read-only, including existing backups, and
 provide a task-specific external audit digest/prompt. The separate external
 auditor will be invoked manually by the owner. Normal independent PR reviews
 remain required.
+
+### Owner decision: shell concurrency — 2026-10-18
+
+Prioritize removing the single global shell collision that rejected Loki while
+Curie worked. Allow one command per bot, bounded by a global configurable default
+of four, and wait automatically when capacity is occupied. Preserve existing
+grants, per-command quotas and task deadlines, and keep changing facts at the
+prompt tail. Address the completed external shell audit after this scheduling fix.

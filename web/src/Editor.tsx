@@ -327,6 +327,7 @@ export function Editor({
     label: string,
     hint?: string,
     step: number | string = 1,
+    defaultValue?: number,
   ) => (
     <Field label={label} hint={hint}>
       <input
@@ -339,9 +340,11 @@ export function Editor({
         }
         max={schemas[kind]?.properties?.[key]?.maximum}
         required={
-          key === "memory_char_limit" || key === "global_memory_char_limit"
+          key === "memory_char_limit" ||
+          key === "global_memory_char_limit" ||
+          key === "max_concurrent_shell_jobs"
         }
-        value={draft[key] ?? ""}
+        value={draft[key] ?? defaultValue ?? ""}
         onChange={(e) =>
           set(key, e.target.value === "" ? null : Number(e.target.value))
         }
@@ -1782,6 +1785,14 @@ export function Editor({
                     {numeric(
                       "max_concurrent_turns",
                       "Maximum simultaneous bot turns",
+                    )}
+                    {numeric(
+                      "max_concurrent_shell_jobs",
+                      "Maximum simultaneous shell jobs across council",
+                      "One active shell command per bot. Excess commands wait automatically for a slot. Separate from simultaneous bot turns.",
+                      1,
+                      schemas.settings?.properties?.max_concurrent_shell_jobs
+                        ?.default ?? 4,
                     )}
                     {text(
                       "timezone",

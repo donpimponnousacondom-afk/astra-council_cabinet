@@ -3638,3 +3638,29 @@ task audit after it actually finishes.
 After the loader-environment correction, real public HTTPS/Python/native package
 installation plus next-call reuse and the normal saved-workspace pipeline passed
 again: **2 tests in 15.06s**, sandbox execution required.
+
+## 2026-10-18 — Per-bot shell admission and council concurrency
+
+Replaced the global busy refusal with an owning-turn queue, default four council
+slots and one active command per bot. Queued work has no job record, process or
+workspace lease; grant revocation, supersession, cancellation and outer deadlines
+prevent dispatch and record known unstarted actions accurately. Command/export
+deadlines begin after admission. Mutable concurrency facts stay in the existing
+prompt tail; shell schemas do not depend on queue state or the new global setting.
+
+- `HORTATOR_REQUIRE_SANDBOX=1 uv run pytest -q tests/test_shell_admission.py
+  tests/test_shell_concurrency_settings.py tests/test_shell_queue_integration.py
+  tests/test_shell_runner.py`: **66 passed, 2 skipped in 82.73s**. The two skips
+  are opt-in public package-network tests. Real bubblewrap coverage includes two
+  different bots executing overlapping commands and committing separate saved
+  workspaces. Controlled-worker tests cover eligible FIFO, per-bot serialization
+  through export, capacity changes, failure release and joined shutdown.
+- Broader runtime, supersession, progress-boundary, shell-lifecycle, action-receipt
+  and agentic regression group: **87 passed in 32.82s**. Engine/registry tests use
+  controlled tools/providers; they are not live Discord or provider evidence.
+- Ruff lint/format, frontend Prettier, TypeScript and `git diff --check` pass.
+  Full current-head CI and the two independent open-PR reviews remain merge gates.
+
+Normal dashboard/API settings saves retain existing affected-turn cancellation;
+the scheduler's direct capacity-change tests do not change that service contract.
+No bot grants, per-command quotas, upstream provider settings or live data changed.

@@ -269,12 +269,17 @@ class ExtractText(HTMLParser):
             self.parts.append(data)
 
 
+class ToolBoundaryInterrupted(ControlError):
+    """Owning turn stopped before an action started; never return a model error."""
+
+
 @dataclass
 class ToolContext:
     bot: dict
     channel_id: str
     turn_id: str
     owner_verified: bool = False
+    before_shell_start: Callable[[], None] | None = None
 
 
 class WakeSource(Protocol):
@@ -846,11 +851,10 @@ class Registry:
             )
             tool_timeout = 120
             if name == "shell" and args.get("operation") == "run":
-                from .shell_runner import limits
-
-                # Worker deadline + host export/cleanup allowance. Other tools
-                # retain their existing timeout; owner/task cancellation wins.
-                tool_timeout = max(120, limits(config)["timeout_seconds"] + 30)
+                # ShellRunner starts its bounded command/export deadline only
+                # after admission. Waiting consumes the owning turn/task budget,
+                # not this command's time allowance. Other tools keep 120 seconds.
+                tool_timeout = None
             async with asyncio.timeout(tool_timeout):
                 if (
                     name
@@ -954,7 +958,7 @@ class Registry:
                 level="error" if http.get("transport_error") else "warning" if web_warning else "info",
             )
             return result
-        except asyncio.CancelledError as exc:
+        except (asyncio.CancelledError, ToolBoundaryInterrupted) as exc:
             self.store.emit(
                 "tool.cancelled",
                 {
@@ -974,6 +978,9 @@ class Registry:
         except Exception as exc:
             error = self.vault.redact(error_text(exc))[:2000]
             result = {"ok": False, "error": error}
+            interrupted_result = getattr(exc, "tool_result", None)
+            if isinstance(interrupted_result, dict) and interrupted_result.get("executed") is False:
+                result["executed"] = False
             if spec:
                 result["usage"] = self.vault.redact(usage(name, spec.parameters, spec.description, args))
             result = self.evidence.record(context, name, call_id, result)

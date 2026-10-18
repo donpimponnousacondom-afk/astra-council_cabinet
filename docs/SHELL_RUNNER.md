@@ -164,7 +164,8 @@ instruction or native-library incompatibilities in a saved binary.
 
 | Setting | Default | Enforcement |
 | --- | --- | --- |
-| `timeout_seconds` | 90 seconds (configurable 0.1–600) | Worker wall deadline; host allows 10 additional seconds for export/cleanup; the registry allows the larger of 120 seconds and the configured command limit + 30 seconds. Outer turn/task cancellation remains authoritative |
+| `timeout_seconds` | 90 seconds (configurable 0.1–600) | Worker wall deadline; host allows 10 additional seconds for export/cleanup; the runner allows the larger of 120 seconds and the effective command limit + 30 seconds after admission. Queue waiting uses the outer turn/task budget, not this command allowance |
+| Global `max_concurrent_shell_jobs` | 4 (configurable 1–32) | Separate bots may execute concurrently; each bot has one slot through workspace commit and cleanup. Additional calls wait cancellably within their owning turn |
 | `output_bytes` | 1 MiB | Combined stdout/stderr ceiling; both stream logs together cannot exceed it; exceeding output stops the job |
 | `memory_bytes_per_process` | 2 GiB | Hard `RLIMIT_AS` for each worker/model process; a process cannot raise the limit |
 | `process_limit` | 16 | Hard `RLIMIT_NPROC`, including supervisor/Bash/threads; real fork exhaustion is tested |
@@ -176,8 +177,19 @@ instruction or native-library incompatibilities in a saved binary.
 | `max_jobs_per_bot` | 200 recent records | Before admitting another job, automatically archive the oldest final records outside running turns; archived history no longer consumes these slots |
 | `job_storage_bytes_per_bot` | 100 MiB | New jobs reserve their complete output allowance against retained log bytes |
 
-There is one concurrent model shell job globally. Different unfinished bot tasks
-can retain separate scratch allocations between commands; the per-task budget is
+The global **Maximum concurrent shell jobs** setting is independent of provider
+and turn concurrency. Existing installations without that field use four slots.
+Waiting calls create no job or workspace lease. Admission is FIFO among eligible
+bots: another queued command for a running bot does not hold up unrelated bots.
+Current grants and ordinary-turn supersession are checked while waiting and again
+before admission. Cancellation or shutdown removes waiting work without executing
+it; the interrupted-action receipt records that it did not run. The scheduler
+honors changed capacity within 250 ms without evicting admitted work. Normal
+dashboard/API settings saves retain their existing affected-turn cancellation
+behavior. Queue/admission events and `queue_wait_ms` distinguish waiting
+from execution. Changing counts appear only in the late runtime-facts layer.
+
+Different unfinished bot tasks can retain separate scratch allocations between commands; the per-task budget is
 not a global aggregate RAM limit. Tmpfs may use swap under normal kernel policy.
 No browser or host RAM-pressure management is performed by this feature. The memory field is **per process**, not an aggregate resident-memory setting: 16 × 2 GiB gives an upper bound of 32 GiB of summed process virtual address space, with separately bounded tmpfs data and kernel overhead. Linux resource-limit accounting can refuse forks earlier on a host sharing UID counts; the runner does not raise its limit to compensate. File descriptors, locked memory, core dumps and CPU seconds also receive hard limits. [Linux resource-limit definitions](https://man7.org/linux/man-pages/man2/getrlimit.2.html)
 
@@ -255,3 +267,8 @@ storage mode the same installation/environment instructions and place changing
 limits, usage and attachment preparation state in the late runtime facts.
 The requested external audit is owner-dispatched; its digest records remaining
 questions rather than treating local tests as live provider or Discord proof.
+
+Replace the single council-wide shell slot with one slot per bot and a configurable
+council cap, default four. Automatically wait at capacity instead of returning a
+busy error that spends another model round. Keep per-command limits and storage
+ownership intact; queue waiting remains subject to the owning human task deadline.

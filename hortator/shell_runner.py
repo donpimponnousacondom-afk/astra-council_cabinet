@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 import importlib.util
 import json
@@ -166,8 +167,14 @@ class _Active:
     task: asyncio.Task | None = None
 
 
+@dataclass(eq=False)
+class _Admission:
+    bot_id: str
+    task: asyncio.Task
+
+
 class ShellRunner:
-    def __init__(self, jobs_root: Path, workspaces=None):
+    def __init__(self, jobs_root: Path, workspaces=None, *, concurrency_limit=None):
         self.root = Path(jobs_root)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         if self.root.is_symlink() or not self.root.is_dir():
@@ -180,6 +187,10 @@ class ShellRunner:
         os.chmod(self.archive, 0o700)
         self.workspaces = workspaces
         self.active: dict[str, _Active] = {}
+        self._concurrency_limit = concurrency_limit or (lambda: 4)
+        self._waiting: list[_Admission] = []
+        self._admitted: dict[str, _Admission] = {}
+        self._admission_changed = asyncio.Event()
         self._toolchain = None
         self._readiness = None
         self._readiness_lock = asyncio.Lock()
@@ -202,6 +213,95 @@ class ShellRunner:
                 )
                 _private_json(path, metadata)
             shutil.rmtree(path.parent / ".execution", ignore_errors=True)
+
+    def _shell_capacity(self):
+        value = self._concurrency_limit()
+        if type(value) is not int or not 1 <= value <= 32:
+            raise ControlError("Maximum concurrent shell jobs must be an integer 1..32")
+        return value
+
+    def _wake_waiters(self):
+        # Replace the event synchronously: a waiter captures the current event
+        # only after checking eligibility, so release/close cannot lose a wakeup.
+        self._admission_changed.set()
+        self._admission_changed = asyncio.Event()
+
+    def _can_admit(self, ticket):
+        remaining = self._shell_capacity() - len(self._admitted)
+        blocked_bots = set(self._admitted)
+        for waiting in self._waiting:
+            if waiting.bot_id in blocked_bots:
+                continue
+            if remaining <= 0:
+                return False
+            if waiting is ticket:
+                return True
+            # Reserve free capacity for older eligible bots. Another request
+            # for an already-running bot cannot block unrelated bots behind it.
+            remaining -= 1
+            blocked_bots.add(waiting.bot_id)
+        return False
+
+    @asynccontextmanager
+    async def _admission(self, context, before_start):
+        bot, _, turn = _identity(context)
+        ticket = _Admission(bot, asyncio.current_task())
+        self._waiting.append(ticket)
+        started = time.monotonic()
+        waiting_reported = False
+        entered = False
+        try:
+            while True:
+                if self._closed:
+                    raise ControlError("Shell runner is shutting down")
+                if before_start is not None:
+                    before_start()
+                if self._can_admit(ticket):
+                    self._waiting.remove(ticket)
+                    self._admitted[bot] = ticket
+                    self._wake_waiters()
+                    if before_start is not None:
+                        before_start()
+                    waited = round((time.monotonic() - started) * 1000, 3)
+                    if waiting_reported:
+                        self._event(
+                            {"bot_id": bot, "turn_id": turn},
+                            "tool.admitted",
+                            name="shell",
+                            operation="run",
+                            queue_wait_ms=waited,
+                        )
+                    entered = True
+                    yield waited
+                    return
+                if not waiting_reported:
+                    self._event(
+                        {"bot_id": bot, "turn_id": turn},
+                        "tool.queued",
+                        name="shell",
+                        operation="run",
+                        concurrency_limit=self._shell_capacity(),
+                    )
+                    waiting_reported = True
+                changed = self._admission_changed
+                try:
+                    # No command or workspace lease exists while waiting.
+                    # Poll only for configuration/attention changes, which may
+                    # not release a slot; release and shutdown wake immediately.
+                    async with asyncio.timeout(0.25):
+                        await changed.wait()
+                except TimeoutError:
+                    pass
+        except BaseException as error:
+            if not entered and not hasattr(error, "tool_result"):
+                error.tool_result = {"ok": False, "executed": False, "status": "cancelled"}
+            raise
+        finally:
+            if ticket in self._waiting:
+                self._waiting.remove(ticket)
+            if self._admitted.get(bot) is ticket:
+                self._admitted.pop(bot)
+            self._wake_waiters()
 
     def begin_turn(self, context, *, owner_id=None):
         """Adopt only the same human's unfinished task in the same conversation."""
@@ -267,6 +367,12 @@ class ShellRunner:
             state = self._scratch_pending.get((str(bot_id), str(channel_id)))
         scratch = state["namespace"] if state else None
         return {
+            "concurrency": {
+                "council_limit": self._shell_capacity(),
+                "per_bot_limit": 1,
+                "running_jobs": len(self.active),
+                "waiting_calls": len(self._waiting),
+            },
             "limits": {
                 key: config[key]
                 for key in (
@@ -308,6 +414,7 @@ class ShellRunner:
             "storage",
             "status",
             "elapsed_seconds",
+            "queue_wait_ms",
             "exit_code",
             "stdout_bytes",
             "stderr_bytes",
@@ -1139,6 +1246,7 @@ class ShellRunner:
         timeout_seconds=None,
         configuration=None,
         filesystem=None,
+        before_start=None,
     ):
         if self._closed:
             raise ControlError("Shell runner is shutting down")
@@ -1161,11 +1269,22 @@ class ShellRunner:
             raise ControlError(readiness["error"] + " " + SETUP)
         if task is not None and self.workspaces is None:
             raise ControlError("Workspace store is unavailable")
+        async with self._admission(context, before_start) as queue_wait_ms:
+            # Waiting is bounded by the owning task, never charged against the
+            # command's execution allowance. The worker keeps its own deadline.
+            async with asyncio.timeout(max(120, config["timeout_seconds"] + 30)):
+                return await self._run_admitted(
+                    context,
+                    command=command,
+                    task=task,
+                    cwd=cwd,
+                    config=config,
+                    filesystem=filesystem,
+                    queue_wait_ms=queue_wait_ms,
+                )
+
+    async def _run_admitted(self, context, *, command, task, cwd, config, filesystem, queue_wait_ms):
         bot, channel, turn = _identity(context)
-        # Concurrent provider work is separate; a finite global shell slot also
-        # bounds total address-space/tmpfs multiplication across bots.
-        if self.active:
-            raise ControlError("The shell runner is busy; inspect the active job and retry after completion")
         self._reserve(bot, config)
         storage = filesystem if filesystem is not None else self.workspaces
         prepared = (
@@ -1184,6 +1303,7 @@ class ShellRunner:
             "filesystem_id": prepared["workspace_id"] if prepared and filesystem is not None else None,
             "status": "running",
             "started_at": time.time(),
+            "queue_wait_ms": queue_wait_ms,
             "cwd": cwd or (prepared["cwd"] if prepared else "."),
             "workspace_committed": False,
             "limits": {
@@ -1267,6 +1387,11 @@ class ShellRunner:
 
     async def close(self):
         self._closed = True
+        waiting_tasks = {ticket.task for ticket in self._waiting}
+        for task in waiting_tasks:
+            if task is not asyncio.current_task() and not task.done():
+                task.cancel()
+        self._wake_waiters()
         running = list(self.active.values()) + ([self._probe] if self._probe is not None else [])
         for active in running:
             active.cancelled = True
@@ -1274,5 +1399,6 @@ class ShellRunner:
                 await self._terminate(active)
             if active.task is not None and active.task is not asyncio.current_task():
                 await join_tasks(active.task)
+        await join_tasks(*waiting_tasks)
         for key in list(self._scratch_turns) + list(self._scratch_pending):
             self.clear_bot(key[0])

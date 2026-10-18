@@ -33,6 +33,15 @@ cancelled answer means nothing ran. See [receipt semantics and lifecycle](TOOLS.
 
 ## Responsive preparation
 
+Shell admission is owned by the calling turn, with one active command per bot and
+a separate global `max_concurrent_shell_jobs` cap (default four). Waiters hold no
+workspace lease and launch no process. FIFO admission skips bots already running,
+checks current grants and supersession during the wait, and releases capacity
+only after command cleanup and workspace commit. No background queue task is
+created. Shutdown cancels and joins waiters and active execution before closing
+scratch or storage. Queue time consumes the outer task deadline; command deadlines
+start after admission. See [shell limits](SHELL_RUNNER.md#limits-and-their-scope).
+
 TaskGroup cannot prevent synchronous code from blocking every coroutine. Context tokenization and tool working-set estimation operate on detached values in worker threads. The writer SQLite connection, vault access, grant checks and viewer attribution stay on the event-loop thread. Reporting uses separately owned read connections as described below. Transcript assembly yields between bounded chunks. Context preparation admits two simultaneous tokenization operations; operator bot/provider concurrency and budgets remain separate.
 
 Compaction previously rebuilt and tokenized every growing transcript prefix, repeating most text N times for N messages. Preparation now checks the complete candidate first, then bisects only if it exceeds token/image limits. Every selected batch is checked; no checkpoint advances until all summary requests succeed. Cancellation during pure preparation cannot commit a checkpoint or send a late request. Cancellation does not forcibly stop native worker computation: keep it bounded and free of state mutations. [Python guidance on blocking work](https://docs.python.org/3.14/library/asyncio-dev.html#running-blocking-code).
