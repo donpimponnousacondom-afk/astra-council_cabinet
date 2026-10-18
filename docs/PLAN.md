@@ -1,5 +1,13 @@
 # Implementation and acceptance plan
 
+## 2026-10-18 — explain temporary files in the late mount notice
+
+The owner approved a small model-guidance correction after Sun and Zelda saved
+downloads in `/tmp` and expected them in a later shell call. State that `/tmp`
+is cleared after every call and direct reusable files to mounted `/workspace`.
+Use the existing late filesystem notice; preserve tool schemas, early prompt
+text, storage lifetimes and limits. See [FILESYSTEM](FILESYSTEM.md).
+
 ## 2026-10-15 — explain shell limits and saved package installation
 
 The owner declined raising Sun's entry limit after his NumPy/chess installation

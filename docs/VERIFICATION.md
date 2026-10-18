@@ -1,5 +1,15 @@
 # Verification record
 
+## 2026-10-18 — temporary-file lifetime in the late filesystem notice
+
+The existing mount-notice/schema test passed (**1 passed in 0.52s**). An isolated
+temporary-store comparison assembled requests with the old and new notices:
+only message 3 / the `runtime_facts` layer changed; all earlier messages and
+advertised tool schemas were identical. The temporary store was removed. Ruff
+lint/format and diff whitespace checks passed. No new tests were added for this
+wording-only change, and no provider/cache-hit or Discord acceptance is claimed.
+Publication, independent reviews, full CI and rollout are recorded on the task PR.
+
 ## 2026-10-15 — shell entry-limit receipts, package guidance and supplied lc0
 
 The owner's Sun jobs at 18:36–18:38 Europe/Madrid returned `resource_limited`,
