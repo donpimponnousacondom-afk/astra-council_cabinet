@@ -184,6 +184,7 @@ def scratch_directory(path):
 
 
 def prepare_scratch():
+    scratch_directory("/packages/cache")
     scratch_directory("/packages/tmp")
     scratch_directory("/packages/tmp/runtime")
     os.environ["TMPDIR"] = "/packages/tmp"

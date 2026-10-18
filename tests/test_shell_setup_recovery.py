@@ -10,7 +10,7 @@ from test_shell_runner import read_file, sandbox as _sandbox
 sandbox = _sandbox
 
 
-@pytest.mark.parametrize("path", ["/packages/tmp", "/packages/tmp/runtime"])
+@pytest.mark.parametrize("path", ["/packages/cache", "/packages/tmp", "/packages/tmp/runtime"])
 @pytest.mark.parametrize("kind", ["file", "symlink", "socket"])
 async def test_required_scratch_directories_recover_without_following_targets(sandbox, path, kind):
     runner, _, context = sandbox
@@ -42,7 +42,8 @@ from pathlib import Path
 assert os.environ['HOME'] == '/workspace'
 assert os.environ['TMPDIR'] == '/packages/tmp'
 assert os.environ['XDG_RUNTIME_DIR'] == '/packages/tmp/runtime'
-for name in ('/packages/tmp', os.environ['XDG_RUNTIME_DIR']):
+assert os.environ['XDG_CACHE_HOME'] == '/packages/cache'
+for name in ('/packages/tmp', os.environ['XDG_RUNTIME_DIR'], os.environ['XDG_CACHE_HOME']):
     info = Path(name).lstat()
     assert stat.S_ISDIR(info.st_mode)
     assert stat.S_IMODE(info.st_mode) == 0o700
@@ -62,7 +63,8 @@ async def test_existing_scratch_directories_keep_contents_and_repair_mode(sandbo
         command="""set -eu
 printf temp > /tmp/preserved
 printf runtime > "$XDG_RUNTIME_DIR/preserved"
-chmod 0500 "$XDG_RUNTIME_DIR" /packages/tmp
+printf cache > "$XDG_CACHE_HOME/preserved"
+chmod 0500 "$XDG_RUNTIME_DIR" /packages/tmp "$XDG_CACHE_HOME"
 """,
     )
     assert first["status"] == "succeeded", first
@@ -71,7 +73,9 @@ chmod 0500 "$XDG_RUNTIME_DIR" /packages/tmp
         command="""set -eu
 [ "$(cat /tmp/preserved)" = temp ]
 [ "$(cat "$XDG_RUNTIME_DIR/preserved")" = runtime ]
+[ "$(cat "$XDG_CACHE_HOME/preserved")" = cache ]
 printf writable > "$XDG_RUNTIME_DIR/new"
+printf writable > "$XDG_CACHE_HOME/new"
 """,
     )
     assert second["status"] == "succeeded", second

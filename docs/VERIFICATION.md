@@ -1,5 +1,39 @@
 # Verification record
 
+## 2026-10-18 — XDG application caches in task scratch
+
+The shell now sets `XDG_CACHE_HOME=/packages/cache` and prepares that directory
+through the existing scratch repair helper. No model prompt/schema text changes.
+
+Local verification used real isolated Bubblewrap jobs with no live bot state:
+
+- `HORTATOR_REQUIRE_SANDBOX=1 .venv/bin/pytest -q tests/test_shell_cache.py`
+  passed **4 tests in 12.81s**, covering all three storage modes, saved settings
+  and existing cache preservation, explicit saved cache selection, usage
+  accounting, same-task reuse, task-end release and injected preparation failure.
+- The broader run of that file plus `test_shell_setup_recovery.py`,
+  `test_shell_limit_feedback.py`, `test_shell_scratch.py` and
+  `test_shell_guidance.py` had **62 passes and 3 failures in 166.29s**. All three
+  failures were an incorrectly escaped newline in the new test's embedded
+  Python, corrected before the four-test rerun above. The other files were
+  unchanged after their passes. Those checks include cache-directory file/link/
+  socket repair, preserved contents, cache entry-limit receipts and stable schemas.
+  This is focused evidence across runs, not a claimed full-suite pass.
+- An isolated public-package probe adapted from the retained external audit,
+  now using the implemented environment and explicit result assertions, passed
+  **1 test in 15.35s**. zstd and Matplotlib installed and remained usable across
+  calls; 224 conda cache files went into scratch and only five micromamba state
+  entries were added to the saved tree. Matplotlib, Wget and Git discovered
+  seeded saved settings. Task completion released the scratch cache/packages
+  and retained saved configuration and the existing cache marker. Wget used a
+  loopback HTTP server; HTTPS/HSTS behavior was not retested. Probe source/output
+  are retained in ignored `audit/2026-10-18/task-cache-routing/`.
+- Ruff lint/format checks and `git diff --check` passed.
+
+These checks do not establish live Discord/provider behavior or provider-cache
+savings. Full current-head CI, independent PR reviews and deployment identity
+are recorded on the task PR separately.
+
 ## 2026-10-18 — temporary-file lifetime in the late filesystem notice
 
 The existing mount-notice/schema test passed (**1 passed in 0.52s**). An isolated
