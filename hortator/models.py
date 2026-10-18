@@ -297,6 +297,7 @@ class Settings(Entity):
     control_channel_id: str = ""
     global_prompt: str = "You are part of a council of distinct minds. Engage with others, ask questions, and develop ideas. Let conversations breathe; silence is a valid choice."
     max_concurrent_turns: int = Field(default=8, ge=1, le=100)
+    max_concurrent_shell_jobs: int = Field(default=4, ge=1, le=32, strict=True)
     incident_notifications: bool = True
     timezone: str = "Europe/Madrid"
 

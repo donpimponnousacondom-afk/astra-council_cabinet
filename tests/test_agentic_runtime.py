@@ -263,7 +263,9 @@ async def test_shell_configured_deadlines_and_model_schema_share_600_second_limi
     assert result["status"] == "succeeded"
     assert run.await_args.kwargs["timeout_seconds"] == 600
     assert run.await_args.kwargs["configuration"]["timeout_seconds"] == 600
-    assert calls == [630]
+    # Waiting has no registry deadline; the runner applies the configured
+    # command/export allowance after admission (covered in runner tests).
+    assert calls == [None]
     invalid = await kernel.registry.call(
         "shell",
         {"operation": "run", "task": "long-job", "command": "true", "timeout_seconds": 601},

@@ -182,7 +182,13 @@ class AgentTools:
         registry.fetched_documents = fetched_documents.FetchedDocuments(
             registry.store, directory, registry.vault
         )
-        self.runner = shell_runner.ShellRunner(directory / "jobs", registry.workspaces)
+        self.runner = shell_runner.ShellRunner(
+            directory / "jobs",
+            registry.workspaces,
+            concurrency_limit=lambda: registry.store.get("settings", "global").get(
+                "max_concurrent_shell_jobs", 4
+            ),
+        )
         registry.register(
             PluginSpec(
                 "workspace",
@@ -245,6 +251,23 @@ class AgentTools:
         if storage == "filesystem" and not mounted:
             raise ControlError(filesystem.MOUNT_OFF, 403)
         if operation == "run":
+
+            def before_start():
+                # Admission can wait behind other bots. Recheck both captured
+                # and current grants before allowing the selected storage mode.
+                if not self.registry.allowed("shell", context):
+                    error = "Shell is no longer enabled for this bot and trusted request"
+                elif storage != "disposable" and not self.registry.allowed(storage, context):
+                    error = "The selected shell storage is no longer enabled for this bot"
+                else:
+                    error = None
+                if error:
+                    refusal = ControlError(error, 403)
+                    refusal.tool_result = {"ok": False, "executed": False}
+                    raise refusal
+                if context.before_shell_start:
+                    context.before_shell_start()
+
             result = await self.runner.run(
                 context,
                 task=args.get("task"),
@@ -253,6 +276,7 @@ class AgentTools:
                 timeout_seconds=args.get("timeout_seconds"),
                 configuration=config,
                 filesystem=self.registry.filesystems if storage == "filesystem" else None,
+                before_start=before_start,
             )
         elif operation == "status":
             result = self.runner.status(context, args["job_id"])

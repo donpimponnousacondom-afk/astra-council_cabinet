@@ -114,6 +114,16 @@ output contains no message bodies, tool arguments or reasoning. See the
 
 The configuration kinds are `providers`, `profiles`, `bots`, `prompts`, `rooms`, `plugins`, and `settings` (`global`). `id` is immutable. Optional `revision` guards concurrent edits. A patch merges top-level fields; nested JSON objects and lists are deliberately replaced, not magically combined.
 
+`settings.max_concurrent_shell_jobs` controls simultaneous shell commands across
+the council, separately from `max_concurrent_turns`. It accepts a strict integer
+**1–32**, default **4**, with one active shell command per bot. Excess commands
+wait for admission automatically; cancellation while waiting does not execute
+the command. Existing records without this field use the effective default
+without a configuration rewrite. The active dashboard shows this control under
+**Council settings → Runtime preferences**. Save through the existing
+revision-protected `settings/global` control route. See [SHELL_RUNNER](SHELL_RUNNER.md)
+for admission, cancellation and per-command resource limits.
+
 Bots expose `response_protocol` and `max_progress_messages_per_turn` through the
 existing configuration/control routes. Effective defaults for older records are
 `narrate` and `1`; reads expose them without opting bots into progress.

@@ -118,6 +118,35 @@ async def test_real_command_accepts_600_second_budget_without_changing_default(s
         validate_config({"timeout_seconds": 601})
 
 
+async def test_real_different_bots_overlap_and_commit_to_separate_workspaces(sandbox):
+    runner, workspace, first_context = sandbox
+    second_context = ToolContext({"id": "grace"}, "123456", "turn-other")
+    await workspace.call({"operation": "start", "task": "default"}, second_context)
+
+    async def execute(context):
+        return await runner.run(
+            context,
+            task="default",
+            command=(
+                "python3 - <<'PY'\nimport json, time\nfrom pathlib import Path\n"
+                "start = time.monotonic()\ntime.sleep(1)\n"
+                f"Path('owner.txt').write_text({context.bot['id']!r})\n"
+                "print(json.dumps([start, time.monotonic()]))\nPY"
+            ),
+        )
+
+    async with asyncio.TaskGroup() as group:
+        first = group.create_task(execute(first_context))
+        second = group.create_task(execute(second_context))
+    intervals = []
+    for context, job in ((first_context, first.result()), (second_context, second.result())):
+        assert job["status"] == "succeeded" and job["workspace_committed"], job
+        assert (await read_file(workspace, context, "owner.txt"))["content"] == context.bot["id"]
+        intervals.append(json.loads(job["stdout"]["text"]))
+    assert max(start for start, _ in intervals) < min(end for _, end in intervals), intervals
+    assert not runner.active and not runner._admitted and not runner._waiting
+
+
 async def test_real_stdout_stderr_concurrent_byte_paging_and_limit(sandbox):
     runner, _, context = sandbox
     job = await runner.run(

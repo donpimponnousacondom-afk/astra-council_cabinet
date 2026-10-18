@@ -17,7 +17,14 @@ from .addressing import human_directed_elsewhere
 from .footer import render_footer
 from .diagnostics import reasoning_settings
 from .models import ControlError, OWNER_ID
-from .plugins import ATTACH, END_CYCLE, SILENCE, TERMINAL_COMPATIBLE_WRITES, ToolContext
+from .plugins import (
+    ATTACH,
+    END_CYCLE,
+    SILENCE,
+    TERMINAL_COMPATIBLE_WRITES,
+    ToolBoundaryInterrupted,
+    ToolContext,
+)
 from .provider import strip_reasoning
 from .response_recovery import queue_failed_response, read_note
 from .store import dumps, uid
@@ -42,7 +49,7 @@ class DeliveryError(Exception):
         return self.message
 
 
-class TurnSuperseded(ControlError):
+class TurnSuperseded(ToolBoundaryInterrupted):
     pass
 
 
@@ -739,6 +746,18 @@ class Engine:
         strikes = 0
         reply_to = None
         context = ToolContext(bot, channel_id, turn_id, owner_verified=bot["role"] == "hortator")
+        if record_actions:
+
+            def before_shell_start():
+                try:
+                    if not self.valid(bot, profile, provider) or not self.channel_allowed(bot, channel_id):
+                        raise asyncio.CancelledError()
+                    self.stop_superseded_work(bot, channel_id, turn_id, "shell_queue", remaining_calls=1)
+                except (asyncio.CancelledError, TurnSuperseded) as exc:
+                    exc.tool_result = {"ok": False, "executed": False, "status": "cancelled"}
+                    raise
+
+            context.before_shell_start = before_shell_start
         try:
             if self.is_single_shot(bot):
                 await self.transport.prepare_single_shot(bot)
@@ -1016,6 +1035,18 @@ class Engine:
                         "uses another strike. At the limit this cycle stops without publishing.",
                     }
                 )
+
+            async def call_plugin(name, call, receipt_id):
+                try:
+                    return await self.registry.call_raw(
+                        name, call["function"]["arguments"], context, call["id"]
+                    )
+                except (asyncio.CancelledError, ToolBoundaryInterrupted) as exc:
+                    # Record known unstarted work before an outer task deadline
+                    # converts cancellation into a budget-exhausted failure.
+                    if receipt_id and isinstance(getattr(exc, "tool_result", None), dict):
+                        self.action_receipts.finish(context, receipt_id, exc.tool_result)
+                    raise
 
             async def budgeted(awaitable):
                 try:
@@ -1744,9 +1775,7 @@ class Engine:
                             if record_actions
                             else None
                         )
-                        result_value = await budgeted(
-                            self.registry.call_raw(name, call["function"]["arguments"], context, call["id"])
-                        )
+                        result_value = await budgeted(call_plugin(name, call, receipt_id))
                         if receipt_id:
                             self.action_receipts.finish(context, receipt_id, result_value)
                         if (
