@@ -84,6 +84,10 @@ def function(name, description, parameters):
 ATTACH = function(
     "discord_attach",
     "Prepare files for your next ordinary text answer. This does not post or end your turn. "
+    "Exporting a file only creates its artifact ID. This tool selects those artifacts; prepared:true "
+    "and posted:false mean the files are still waiting for the final answer. Progress messages never "
+    "carry these files and may be posted before this tool executes. Describe preparation as preparation, "
+    "not completed delivery; only a successful delivery receipt confirms a send. "
     "Use artifact IDs created in this turn; an optional reply_to must be a message ID in this context. "
     "The list replaces your previous selection; [] clears it. After preparation, write your answer "
     "as normal assistant content. No tool is needed for an answer without files.",
@@ -739,7 +743,6 @@ class Registry:
         seconds = config["timeout_seconds"]
         return replace(
             spec,
-            description=spec.description + f" Current command time limit: {seconds} seconds.",
             parameters={
                 **spec.parameters,
                 "properties": {

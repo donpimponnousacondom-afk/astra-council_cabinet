@@ -9,7 +9,16 @@ workspace selector. Private workspaces retain their existing contract in
 
 ## Owner decisions
 
-On 2026-10-18 the owner requested an explicit `/tmp` lifetime reminder after Sun
+Later on 2026-10-18 the owner authorized task-lived, RAM-backed shell scratch.
+`/tmp` and `/packages` now share the shell's existing configurable package budget
+and survive individual calls within an active human task. This supersedes the
+earlier per-call lifetime reminder below; saved `/workspace` quotas and commit
+rules are unchanged. Processes still end after every call. Read the
+[shell contract](SHELL_RUNNER.md) for task ownership, cleanup and effective limits.
+Common installation guidance applies to every shell storage mode. Changing
+usage and state belong in late runtime facts, after conversation and tool results.
+
+Earlier on 2026-10-18 the owner requested an explicit `/tmp` lifetime reminder after Sun
 and Zelda tried to reuse downloads from earlier shell calls. Put it in the existing
 late mount notice, without changing tool schemas or storage behavior. Files needed
 by later calls belong in the mounted `/workspace`.
@@ -79,9 +88,9 @@ rewriting stable schemas with byte counters. The ON notice is:
 
 > Simple filesystem is ON. Your saved files are at /workspace. The filesystem
 > tool and, when available, shell.run use this same directory automatically.
-> Files remain until deleted; /packages and running shell processes do not
-> survive a shell call. /tmp is cleared after every shell call. Save files needed
-> by later calls under /workspace.
+> Files remain until deleted. Shell processes end after every call; /packages and
+> /tmp are task scratch, not saved files. Read the shell runtime facts for scratch
+> lifetime and limits. Save files needed after the current task under /workspace.
 
 Usage includes `display: "182/256 MiB (71%)"`, exact used/limit/remaining bytes,
 integer percent, entry count and file/entry limits. Displayed MiB and percent are
@@ -190,7 +199,8 @@ Configuration edits cancel affected bot turns; save also rechecks the current
 grant and limits before committing. Turning OFF cannot commit an in-flight
 filesystem job under its previous grant.
 
-Default pip/uv/native installs in `/packages` vanish after every shell call.
+Default pip/uv/native installs in `/packages` survive calls within the current
+human task; they vanish when that task ends.
 Compatible package files explicitly installed under `/workspace` can persist;
 later calls must select their import path again. This is not a complete persistent
 container: links are rejected and ordinary virtual environments are not supported

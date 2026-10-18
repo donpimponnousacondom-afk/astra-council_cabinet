@@ -624,3 +624,24 @@ and all unrelated settings. Retire saved token-limit fields with an auditable
 startup migration; upgrade only the unedited shipped prompt and preserve custom
 text. Token counts remain diagnostic. See [Engram](ENGRAMS.md) for the current
 contract; this does not alter provider output limits or context/compaction budgets.
+
+
+### Owner decision: shell task scratch and prompt stability — 2026-10-18
+
+Implement a shared shell environment/install instruction block across storage
+modes. Normal `pkg install` and `uv pip install` come first; persistent Python
+package trees remain optional. `/tmp` and `/packages` share the existing configurable
+package allowance in RAM-backed private tmpfs, retained across shell calls and
+qualifying same-human/channel follow-ups until task completion. Command processes
+remain per-call. Keep changing limits/usage and attachment state in the late
+runtime-facts layer. Preserve explicit export → attachment preparation → final
+answer delivery; progress is not a receipt. Do not carry old prepared attachments
+into a replacement turn.
+
+The owner accepts tmpfs resource risk and explicitly rejected RAM-pressure
+mitigations/browser intervention; normal task ownership/cleanup still applies.
+No idle TTL, pressure eviction, host browser changes or disk-backed package cache
+is introduced. Review disk usage read-only, including existing backups, and
+provide a task-specific external audit digest/prompt. The separate external
+auditor will be invoked manually by the owner. Normal independent PR reviews
+remain required.

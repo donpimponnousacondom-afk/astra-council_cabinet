@@ -26,8 +26,8 @@ const labels: Record<string, string> = {
   memory_bytes_per_process: "Address space per process (bytes)",
   max_processes: "Processes per job",
   process_limit: "Processes per job",
-  package_bytes: "Disposable package storage per job (bytes)",
-  package_entries: "Disposable package entries per job",
+  package_bytes: "Task scratch shared by /tmp and /packages (bytes)",
+  package_entries: "Task scratch files and directories",
   max_jobs_per_bot: "Recent jobs per bot (older records archived)",
   job_storage_bytes_per_bot: "Job output storage per bot (bytes)",
 };

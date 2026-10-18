@@ -242,7 +242,8 @@ async def test_shell_configured_deadlines_and_model_schema_share_600_second_limi
     context = grant(kernel, "workspace", "shell", plugin_config={"shell": {"timeout_seconds": 600}})
     spec = kernel.registry.spec_for("shell", context)
     assert spec.parameters["properties"]["timeout_seconds"]["maximum"] == 600
-    assert "Current command time limit: 600 seconds" in spec.description
+    assert "late runtime shell facts" in spec.description
+    assert "600 seconds" not in spec.description
     calls = []
     original_timeout = asyncio.timeout
 

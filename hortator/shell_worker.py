@@ -49,7 +49,7 @@ def restrict(config):
     # removes kernel interfaces that could allocate unaccounted shared memory,
     # bypass the transport or modify namespace topology. Network sockets use
     # the host network namespace; filesystem and process restrictions remain.
-    seccomp = ctypes.CDLL("libseccomp.so.2", use_errno=True)
+    seccomp = ctypes.CDLL("/lib/libseccomp.so.2", use_errno=True)
     seccomp.seccomp_init.argtypes = [ctypes.c_uint32]
     seccomp.seccomp_init.restype = ctypes.c_void_p
     seccomp.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
@@ -169,9 +169,11 @@ def main():
     cwd = root / config["cwd"]
     if not cwd.is_dir() or cwd.resolve().is_relative_to(root) is False:
         raise ValueError("Working directory is missing or outside the workspace")
-    venv.EnvBuilder(system_site_packages=True, symlinks=True).create("/packages/venv")
-    Path("/packages/tmp").mkdir()
+    if not Path("/packages/venv/bin/python3.14").exists():
+        venv.EnvBuilder(system_site_packages=True, symlinks=True).create("/packages/venv")
+    Path("/packages/tmp").mkdir(exist_ok=True)
     os.environ["TMPDIR"] = "/packages/tmp"
+    Path("/tmp/hortator-cwd").unlink(missing_ok=True)
     restrict(config)
     if select.select([0], [], [], 0)[0] and not os.read(0, 1):
         raise RuntimeError("Runner parent disconnected before Bash startup")
@@ -186,6 +188,10 @@ def main():
         stderr=subprocess.PIPE,
         close_fds=True,
         start_new_session=True,
+        # Only command processes load task-installed native libraries. The
+        # trusted supervisor must always start/import/restrict against readonly
+        # baseline libraries, even when scratch survives earlier commands.
+        env={**os.environ, "LD_LIBRARY_PATH": "/packages/native/lib:/lib"},
     )
     selector = selectors.DefaultSelector()
     selector.register(0, selectors.EVENT_READ, "parent")
@@ -203,10 +209,8 @@ def main():
             state = "timed_out"
         if time.monotonic() - last_scan >= 0.05 and state is None:
             last_scan = time.monotonic()
-            resource_limit = (
-                entry_limit_exceeded(root, config["max_files"])
-                or entry_limit_exceeded("/tmp", config["max_files"])
-                or entry_limit_exceeded("/packages", config["package_entries"])
+            resource_limit = entry_limit_exceeded(root, config["max_files"]) or entry_limit_exceeded(
+                "/packages", config["package_entries"]
             )
             if resource_limit is not None:
                 state = "resource_limited"
