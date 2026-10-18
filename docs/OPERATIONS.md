@@ -114,6 +114,34 @@ state, reviewed head and outstanding actions. This protocol governs required PR
 reviewers; useful sub-agent delegation and parallel work elsewhere remain welcome
 within the task's scope.
 
+### Owner-relayed external audits
+
+Owner decision, 2026-10-18: changes with substantial stability impact merit a
+proactive recommendation for an external audit, including a return pass after
+fixes when useful. Bot behavior varies enough that a successful run or quiet
+period can miss failures in scheduling, cancellation, shell execution and state
+lifetime. Distinguish observed bot behavior, deterministic regression tests and
+review evidence; none alone proves the absence of underlying defects.
+
+For an auditor this harness cannot invoke, ask the owner to relay a focused
+brief with repository/PR links, pinned base and head commits, behavior changed,
+measured checks and their limits, remaining questions and explicitly deferred
+items. Identify the audit scope and access boundaries; ordinary review uses
+read-only inspection and isolated reproductions rather than changes to the live
+harness or bot configuration.
+
+When the auditor replies, validate findings and address confirmed in-scope
+issues through the normal task-branch workflow. Return a digest mapping findings
+to fixes, reviewed commits, new evidence and outstanding uncertainties. Recommend
+another targeted pass when the fixes interact or leave material questions;
+repeated requests for useful external help are welcome. Keep the exchange active
+instead of relying on the owner to remember to request its next step.
+
+This supplements the mandatory Luna/Sol open-PR reviews and current-head checks.
+It does not substitute an external report for either review or create an
+automatic extra merge/deployment gate; an explicit owner request to wait for an
+audit remains binding. Record what was actually reviewed and what remains open.
+
 ## Plugins and experiments
 
 ### Plugin authoring skill
