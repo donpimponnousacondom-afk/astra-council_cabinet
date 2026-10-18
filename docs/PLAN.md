@@ -1,5 +1,20 @@
 # Implementation and acceptance plan
 
+## 2026-10-18 — prompt tuning deferred
+
+The owner has frozen the reviewed shell/tool prompt-tuning proposals while
+observing the bots. Keep current model-facing wording, prompt ordering, tool
+availability and live configuration unchanged by this proposal. The audit and
+coding-agent recommendations remain proposals, not an implementation backlog
+authorized for automatic rollout.
+
+Revisit them when a concrete owner-reported behavior problem makes guidance a
+plausible cause. Compare the effective prompt, tool receipts and runtime path;
+do not assume that unusual model behavior is a prompt failure or that an incident
+is necessarily a new regression. Bring relevant evidence and a targeted proposal
+back to the owner before lifting this hold. The separate external review of the
+shell implementation continues; freezing prompt tuning does not cancel it.
+
 ## 2026-10-18 — explain temporary files in the late mount notice
 
 The owner approved a small model-guidance correction after Sun and Zelda saved

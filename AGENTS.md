@@ -50,6 +50,15 @@
   reviews and CI; preserve any explicit owner hold. See the
   [external audit procedure](docs/OPERATIONS.md#owner-relayed-external-audits).
 
+- Owner decision, 2026-10-18: prompt tuning is frozen. Do not implement or roll
+  out the reviewed shell/tool prompt recommendations until the owner reopens
+  that work. When the owner reports a concrete behavior problem, consider the
+  effective prompt alongside tool receipts and runtime code: distinguish model
+  behavior, misleading guidance, new regressions and pre-existing bugs before
+  proposing a change. Raise prompt tuning when evidence makes it relevant;
+  discussing a possible cause does not lift the hold. The ongoing external shell
+  audit remains separate. See [the deferred decision](docs/PLAN.md#2026-10-18--prompt-tuning-deferred).
+
 ## Read before continuing
 
 Read `README.md` and `docs/OPERATIONS.md`. Consult `docs/PLAN.md` for the researched design, `docs/VERIFICATION.md` for actual test evidence, and `docs/API.md` / `docs/PLUGINS.md` for the control and extension contracts. Continue the existing implementation; do not replace it with a new scaffold or assume this is still a planning exercise.
