@@ -231,13 +231,14 @@ async def test_cwd_pipe_does_not_leak_host_descriptors_after_timeout_or_cancel(s
         ),
     ],
 )
-async def test_invalid_saved_entries_report_path_and_type_without_link_target(sandbox, command, kind):
+@pytest.mark.parametrize("task", ["default", None])
+async def test_invalid_workspace_entries_report_path_and_type_without_link_target(
+    sandbox, command, kind, task
+):
     runner, workspace, context = sandbox
     first = await runner.run(context, task="default", command="printf before > sentinel")
     assert first["status"] == "succeeded", first
-    rejected = await runner.run(
-        context, task="default", command=f"set -eu; printf changed > sentinel; {command}"
-    )
+    rejected = await runner.run(context, task=task, command=f"set -eu; printf changed > sentinel; {command}")
     assert rejected["status"] == "failed", rejected
     assert not rejected["workspace_committed"]
     assert kind in rejected["error"]
@@ -246,7 +247,7 @@ async def test_invalid_saved_entries_report_path_and_type_without_link_target(sa
         kind == "hardlinked regular file" and "sentinel" in rejected["error"]
     )
     assert "/packages/not-a-published-target" not in rejected["error"]
-    assert "saved changes were discarded" in rejected["error"]
+    assert "No workspace changes from this call will be saved" in rejected["error"]
     assert (await read_file(workspace, context, "sentinel"))["content"] == "before"
 
 

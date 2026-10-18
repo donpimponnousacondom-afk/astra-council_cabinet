@@ -110,8 +110,8 @@ def files(root, config):
                     )
                     raise ValueError(
                         f"Workspace output contains a {kind} at {relative!r}; "
-                        "saved files must be regular files or directories. This call's saved changes "
-                        "were discarded. Keep linked/runtime/cache files in /packages or /tmp."
+                        "saved files must be regular files or directories. No workspace changes "
+                        "from this call will be saved. Keep linked/runtime/cache files in /packages or /tmp."
                     )
                 if len(result) > config["max_files"] or total > config["quota_bytes"]:
                     raise ValueError("Workspace output exceeds its file-count or byte quota")

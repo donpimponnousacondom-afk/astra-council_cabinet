@@ -3712,3 +3712,10 @@ deprecation warnings, no skips. Guidance/prefix tests plus the strengthened
 preparation-failure assertion: **9 passed in 2.97s**. Ruff check/format,
 `git diff --check`, frontend Prettier and TypeScript pass. Independent PR reviews
 and current-head CI remain separate merge gates.
+
+PR #131 review correction: Luna found the saved-tree failure text was also used
+for disposable workspaces, which have no saved changes. The wording now states
+that no workspace changes from the call will be saved. The error-path regression
+covers symlink, hardlink and special-file failures in both modes: **6 passed in
+18.29s**, preserving the prior saved sentinel. Ruff formatting was corrected
+after this test run; no execution behavior changed.
