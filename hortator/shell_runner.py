@@ -1262,7 +1262,13 @@ class ShellRunner:
             config["timeout_seconds"] = timeout_seconds
         if cwd is not None:
             cwd = relative(cwd)
-        readiness = await self.readiness()
+        try:
+            readiness = await self.readiness()
+        except asyncio.CancelledError as error:
+            # Cold readiness (including its shared lock) precedes admission.
+            # Its diagnostic probe is never the model's requested command.
+            error.tool_result = {"ok": False, "executed": False, "status": "cancelled"}
+            raise
         if self._closed:
             raise ControlError("Shell runner is shutting down")
         if not readiness["ready"]:

@@ -219,6 +219,42 @@ async def test_operator_cancellation_of_queued_shell_preserves_unstarted_receipt
     transport.send.assert_not_awaited()
 
 
+@pytest.mark.parametrize("waiting_for_lock", [False, True])
+async def test_cancellation_during_cold_readiness_records_unstarted_command(
+    kernel, monkeypatch, waiting_for_lock
+):
+    bot, transport = ready_shell(kernel)
+    runner = kernel.registry.agentic.runner
+    entered = asyncio.Event()
+    original = runner.readiness
+
+    async def readiness():
+        entered.set()
+        if waiting_for_lock:
+            return await original()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(runner, "readiness", readiness)
+    if waiting_for_lock:
+        await runner._readiness_lock.acquire()
+    try:
+        await install_client(
+            kernel, lambda request: reply(tool("shell", {"operation": "run", "command": "true"}))
+        )
+        await kernel.engine.tick()
+        await asyncio.wait_for(entered.wait(), 2)
+        await kernel.engine.cancel([bot["id"]], "Stop before readiness completed")
+        await settle(kernel)
+        assert receipt_outcomes(kernel) == ["refused"]
+        cancelled = kernel.store.one("SELECT data FROM events WHERE kind='tool.cancelled'")
+        assert json.loads(cancelled["data"])["result"]["executed"] is False
+        assert not runner.inspect() and not runner._waiting and not runner._admitted
+        transport.send.assert_not_awaited()
+    finally:
+        if waiting_for_lock:
+            runner._readiness_lock.release()
+
+
 async def test_task_budget_expiry_keeps_queued_action_receipt_unstarted(kernel, monkeypatch):
     # A deliberately shortened stored test budget avoids a real thirty-second
     # wait while exercising the engine's actual task-deadline conversion.

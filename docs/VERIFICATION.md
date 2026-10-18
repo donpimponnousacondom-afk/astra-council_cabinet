@@ -3664,3 +3664,11 @@ prompt tail; shell schemas do not depend on queue state or the new global settin
 Normal dashboard/API settings saves retain existing affected-turn cancellation;
 the scheduler's direct capacity-change tests do not change that service contract.
 No bot grants, per-command quotas, upstream provider settings or live data changed.
+
+PR #130 review correction: Luna reproduced cancellation during cold readiness
+before admission leaving an unknown action receipt despite no model command
+starting. That boundary now records `executed:false` too. Engine/registry tests
+cover both unfinished readiness and its shared-lock wait; with admission tests,
+**27 passed in 5.94s**. Both reviewers independently found deadline wording drift;
+current extension/operations guides now identify runner-owned timing after
+admission. These are local fixture results, not live bot validation.
