@@ -105,8 +105,18 @@ context reset and shutdown still release the bot's allocations. A different huma
 or conversation cannot adopt them. Changes to scratch capacity/entry settings
 replace the old allocation before another call.
 
-Worker setup repairs a conflicting file or link at the required `/packages/tmp`
-and `/packages/tmp/runtime` directories without following link targets. The latter
+`XDG_CACHE_HOME=/packages/cache` routes applications that honor XDG cache settings
+into task scratch, alongside the existing UV/PIP caches. These caches share the
+package byte/entry allowance and are released with the task. `HOME=/workspace`
+and normal configuration/data/state lookup stay unchanged. Existing saved
+`~/.cache` files are not moved or deleted, but applications may stop reusing them
+by default and download or rebuild caches in later tasks. With persistent storage
+mounted, an explicit `XDG_CACHE_HOME=/workspace/.cache COMMAND` can retain a
+suitable cache within the saved-file quotas and regular-file rules. Applications
+that ignore XDG cache settings retain their own behavior.
+
+Worker setup repairs a conflicting file or link at the required `/packages/cache`,
+`/packages/tmp` and `/packages/tmp/runtime` directories without following link targets. The latter
 is the private `XDG_RUNTIME_DIR`, keeping audio-library runtime files in scratch.
 Missing default-venv scaffolding (including `pyvenv.cfg`) is restored in place;
 installed packages are retained. A setup failure explains that Bash did not start.

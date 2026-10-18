@@ -25,7 +25,7 @@ def test_entry_monitor_counts_directories_and_returns_a_bounded_lower_estimate(t
 
 
 @pytest.mark.parametrize("storage", ["filesystem", "workspace", "disposable"])
-@pytest.mark.parametrize("path", ["/workspace", "/tmp", "/packages"])
+@pytest.mark.parametrize("path", ["/workspace", "/tmp", "/packages", "/packages/cache"])
 async def test_real_entry_limit_names_tree_count_and_preserves_saved_files(kernel, storage, path):
     runner = await require_runner(kernel)
     context = grant(kernel, "shell", *([] if storage == "disposable" else [storage]))
@@ -54,7 +54,7 @@ async def test_real_entry_limit_names_tree_count_and_preserves_saved_files(kerne
     )
     expected = {
         "resource": "entries",
-        "path": "/packages" if path == "/tmp" else path,
+        "path": "/workspace" if path == "/workspace" else "/packages",
         "limit": 1000,
         "observed_at_least": 1001,
     }

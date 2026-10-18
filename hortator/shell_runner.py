@@ -947,6 +947,7 @@ class ShellRunner:
             "/runner/config.json",
         ]
         environment = {
+            "XDG_CACHE_HOME": "/packages/cache",
             "VIRTUAL_ENV": "/packages/venv",
             "UV_PYTHON": "/packages/venv/bin/python3.14",
             "UV_PYTHON_DOWNLOADS": "never",

@@ -669,6 +669,18 @@ of four, and wait automatically when capacity is occupied. Preserve existing
 grants, per-command quotas and task deadlines, and keep changing facts at the
 prompt tail. Address the completed external shell audit after this scheduling fix.
 
+### Cache-only shell follow-up — 2026-10-18
+
+Following the final external audit, route XDG-aware application caches to
+`/packages/cache` and prepare that directory with the existing scratch-repair
+helper. Keep saved HOME/configuration/data/state, existing cache files, quotas
+and task lifetime unchanged. Rebuilding caches across completed tasks is the
+explicit tradeoff; operators/bots can select a saved cache path within existing
+filesystem rules. This is filesystem storage behavior, not a provider-cache
+optimization. No model prompts or tool schemas change. The owner closed the
+external audit rounds; optional allocation visibility and prompt tuning remain
+deferred. See [SHELL_RUNNER](SHELL_RUNNER.md) for the environment contract.
+
 ### External shell audit follow-up — 2026-10-18
 
 Repair required scratch directories and incomplete default virtualenv scaffolding
