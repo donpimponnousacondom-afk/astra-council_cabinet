@@ -9,6 +9,11 @@ workspace selector. Private workspaces retain their existing contract in
 
 ## Owner decisions
 
+On 2026-10-18 the owner requested an explicit `/tmp` lifetime reminder after Sun
+and Zelda tried to reuse downloads from earlier shell calls. Put it in the existing
+late mount notice, without changing tool schemas or storage behavior. Files needed
+by later calls belong in the mounted `/workspace`.
+
 On 2026-10-15 the owner retained the existing file/directory limit after a package
 install exceeded it. Do not raise limits as a workaround. Models receive explicit
 saved-package instructions and entry-limit failure receipts; changing usage stays
@@ -75,7 +80,8 @@ rewriting stable schemas with byte counters. The ON notice is:
 > Simple filesystem is ON. Your saved files are at /workspace. The filesystem
 > tool and, when available, shell.run use this same directory automatically.
 > Files remain until deleted; /packages and running shell processes do not
-> survive a shell call.
+> survive a shell call. /tmp is cleared after every shell call. Save files needed
+> by later calls under /workspace.
 
 Usage includes `display: "182/256 MiB (71%)"`, exact used/limit/remaining bytes,
 integer percent, entry count and file/entry limits. Displayed MiB and percent are
