@@ -83,9 +83,27 @@ pkg install zstd
 zstd input.txt -o output.txt.zst
 ```
 
-`pkg install PACKAGE...` uses micromamba in `/packages/native`, whose `bin` is already on PATH; subsequent installs add to the same environment within that job. Packages, virtualenv symlinks, caches and installer temporary files remain on a separate **2 GiB per-job tmpfs**, with a separate monitored 50,000-entry ceiling. This supports rootless native packages without a writable host filesystem or pretending that apt works inside the sandbox. Native installation depends on upstream package availability and remains subject to the 90-second command deadline, memory, process, output and storage limits. It is not a guarantee that every large package or source build will fit. No native application package (including ImageMagick) is preinstalled by this feature. [micromamba installation](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html), [uv environments](https://docs.astral.sh/uv/pip/environments/), [Python 3.14 venv](https://docs.python.org/3.14/library/venv.html)
+`pkg install PACKAGE...` uses micromamba in `/packages/native`, whose `bin` is already on PATH; subsequent installs add to the same environment throughout the human task. Packages, virtualenv symlinks, caches, installer temporary files and `/tmp` share one **2 GiB task-scoped tmpfs**, with a monitored 50,000-entry ceiling. This supports rootless native packages without a writable host filesystem or pretending that apt works inside the sandbox. Native installation depends on upstream package availability and remains subject to the 90-second command deadline, memory, process, output and storage limits. It is not a guarantee that every large package or source build will fit. No native application package (including ImageMagick) is preinstalled by this feature. [micromamba installation](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html), [uv environments](https://docs.astral.sh/uv/pip/environments/), [Python 3.14 venv](https://docs.python.org/3.14/library/venv.html)
 
-**All `/packages` content disappears after every job**, including failure, timeout and cancellation. Install and use temporary dependencies in one command. With Simple filesystem mounted, or an explicit persistent Private workspace task, suitable regular-file Python package trees can instead be saved under `/workspace`:
+**`/packages` and `/tmp` survive successive shell calls in the same human task.**
+Every call still starts fresh command processes and destroys all its descendants.
+An ordinary same-human, same-channel follow-up can retain scratch when it replaces
+an unsent answer. A final answer, silence, failed turn, explicit cancellation,
+configuration invalidation, context reset or shutdown releases scratch. Routine
+turns and invocations receive scratch for their current internal turn only.
+Scratch is not durable: a crash loses it, and a failed shell command can leave
+partial scratch changes for the next call to inspect or remove. Saved `/workspace`
+commit/rollback rules remain separate. No prepared attachments or old job-ID
+permissions are transferred with scratch.
+
+There is no guessed idle TTL or RAM-pressure eviction. An unfinished task waiting
+for its eligible follow-up retains scratch until that task resumes, is cancelled,
+or shutdown occurs. A different human or conversation cannot adopt it. Changes
+to scratch capacity/entry settings replace the old allocation before another call.
+
+To retain suitable regular-file Python packages **across completed human tasks**,
+Simple filesystem or an explicit persistent Private workspace can optionally save
+them under `/workspace`:
 
 ```bash
 pip install --no-cache-dir --no-compile --target /workspace/pylibs PACKAGE
@@ -101,8 +119,10 @@ libraries. Keep virtualenvs, linked trees and package caches in `/packages`;
 saved trees still reject links and invalid/oversized files. A failed or interrupted
 snapshot does not save a partial install. Requirements/lockfiles remain useful
 for deliberate reinstallations. A disposable `/workspace` never persists.
-`/tmp` remains a separate 16 MiB mount; `TMPDIR` points to `/packages/tmp` for
-installers. Package scratch is not persisted or backed up.
+`/tmp` is an alias for `/packages/tmp`; `TMPDIR` points there too. Both names
+consume the same byte and entry allowance. Scratch is not persisted or backed up;
+large intermediate audio and package trees belong here, with final deliverables
+copied into `/workspace` within its independent limits.
 
 `pkg install` confirms automatically and accepts optional `-y` / `--yes` before or after package names. Other arguments remain literal package operands. The wrapper selects the bundled read-only `/runner/mambarc` explicitly, which sets metadata parsing to one worker and bypasses ambient RC-file discovery. The shell environment requests one download and extraction worker. The pinned micromamba version ignores an environment variable for metadata threads, so that setting must come from the explicit file. This reduces installer concurrency; it does not raise any sandbox limit. Use `command -v node` (or another command name) to inspect availability; `which` is not supplied.
 
@@ -110,7 +130,19 @@ A nonzero exit from an otherwise completed disposable job is reported as `comman
 
 ## Execution boundary
 
-Bubblewrap creates private user, PID, mount, IPC and UTS namespaces and explicitly shares host networking (`--share-net`). The sandbox UID/GID is 1000 with all capabilities removed, `no_new_privs`, further user namespaces disabled and a read-only root. Only the current task's input snapshot (or an empty directory for a disposable job) is visible read-only at `/source`; the writable `/workspace` is a finite tmpfs copy. `/tmp` has its own 16 MiB tmpfs. The minimal environment contains a fixed tool path, workspace home, temporary directory, C locale and runtime library settings. Bash uses `--noprofile --norc`; the human Screen shell retains its own normal configuration. This follows bubblewrap's documented filesystem and namespace controls. [Bubblewrap manual](https://raw.githubusercontent.com/containers/bubblewrap/main/bwrap.xml)
+A short trusted setup process creates private user/mount namespaces and a sized
+tmpfs. The runner pins those namespaces with file descriptors, then joins the
+setup process. Before each job, a trusted launcher enters that outer namespace
+and execs bubblewrap; it closes the setup descriptors before execution. The
+normal fresh sandbox below is then constructed. Only the task tmpfs is reused;
+the model never runs in the outer setup namespace or receives its handles. The
+host mountpoint is an empty private directory, not a writable host data tree.
+Closing the descriptors after the last job releases the tmpfs without copying
+or hashing package contents. Readiness exercises this setup path and fails closed
+if the kernel cannot provide it.
+
+
+Bubblewrap creates private user, PID, mount, IPC and UTS namespaces and explicitly shares host networking (`--share-net`). The sandbox UID/GID is 1000 with all capabilities removed, `no_new_privs`, further user namespaces disabled and a read-only root. Only the current task's input snapshot (or an empty directory for a disposable job) is visible read-only at `/source`; the writable `/workspace` is a finite tmpfs copy. `/packages` binds the current task's private tmpfs, and `/tmp` aliases its `tmp` directory. The minimal environment contains a fixed tool path, workspace home, temporary directory, C locale and runtime library settings. Bash uses `--noprofile --norc`; the human Screen shell retains its own normal configuration. This follows bubblewrap's documented filesystem and namespace controls. [Bubblewrap manual](https://raw.githubusercontent.com/containers/bubblewrap/main/bwrap.xml)
 
 The sandbox has no host home, application checkout, runtime database, vault, master key, bootstrap password, ambient proxy variables, SSH/Screen sockets, Docker socket or other workspaces. Its `/proc` describes only the new PID namespace and is mounted read-only. Network sockets are allowed; DNS, hosts/NSS configuration and a CA trust bundle are bound read-only. Outbound connections and host loopback services are reachable. Seccomp denies further namespace/mount operations, ptrace/process-memory access, memfd/SysV shared-memory creation, kernel keyrings and related unsupported kernel interfaces. Granted shell commands can fetch directly; bounded web-fetch and observed attachment-import tools remain available. The supervisor is nondumpable; model children cannot open its `/proc/1/fd` transport handles. [libseccomp rule API](https://libseccomp.readthedocs.io/en/latest/man/man3/seccomp_rule_add.3/)
 
@@ -132,15 +164,17 @@ instruction or native-library incompatibilities in a saved binary.
 | `memory_bytes_per_process` | 2 GiB | Hard `RLIMIT_AS` for each worker/model process; a process cannot raise the limit |
 | `process_limit` | 16 | Hard `RLIMIT_NPROC`, including supervisor/Bash/threads; real fork exhaustion is tested |
 | Workspace byte quota | 128 MiB by default | Hard tmpfs data-block ceiling; persistent tasks are also constrained by remaining bot quota; workspace per-file sizes are strictly validated before export; process-wide `RLIMIT_FSIZE` uses the larger of the workspace file limit and package byte budget |
-| `/tmp` | 16 MiB | Separate hard tmpfs data-block ceiling |
-| `package_bytes` | 2 GiB | Separate hard `/packages` tmpfs data-block ceiling; configurable 64 MiB–4 GiB |
-| `package_entries` | 50,000 | Monitored independently during execution; configurable 1,000–100,000 |
+| `package_bytes` | 2 GiB | One hard tmpfs data-block ceiling shared by `/packages` and `/tmp` for each unfinished human task; configurable 64 MiB–4 GiB |
+| `package_entries` | 50,000 | Combined scratch tree monitored during execution, counting `/tmp` only once; configurable 1,000–100,000 |
 | File/directory count | Workspace `max_files` | Checked during execution at roughly 50 ms intervals and strictly on final copy-back |
 | `retention_days` | 7 days | Expired inactive logs removed when admitting a new job; metadata retains an explicit expiration marker |
 | `max_jobs_per_bot` | 200 recent records | Before admitting another job, automatically archive the oldest final records outside running turns; archived history no longer consumes these slots |
 | `job_storage_bytes_per_bot` | 100 MiB | New jobs reserve their complete output allowance against retained log bytes |
 
-There is one concurrent model shell job globally. The memory field is **per process**, not an aggregate resident-memory setting: 16 × 2 GiB gives an upper bound of 32 GiB of summed process virtual address space, with separately bounded tmpfs data and kernel overhead. Linux resource-limit accounting can refuse forks earlier on a host sharing UID counts; the runner does not raise its limit to compensate. File descriptors, locked memory, core dumps and CPU seconds also receive hard limits. [Linux resource-limit definitions](https://man7.org/linux/man-pages/man2/getrlimit.2.html)
+There is one concurrent model shell job globally. Different unfinished bot tasks
+can retain separate scratch allocations between commands; the per-task budget is
+not a global aggregate RAM limit. Tmpfs may use swap under normal kernel policy.
+No browser or host RAM-pressure management is performed by this feature. The memory field is **per process**, not an aggregate resident-memory setting: 16 × 2 GiB gives an upper bound of 32 GiB of summed process virtual address space, with separately bounded tmpfs data and kernel overhead. Linux resource-limit accounting can refuse forks earlier on a host sharing UID counts; the runner does not raise its limit to compensate. File descriptors, locked memory, core dumps and CPU seconds also receive hard limits. [Linux resource-limit definitions](https://man7.org/linux/man-pages/man2/getrlimit.2.html)
 
 Tmpfs `size` limits data blocks; its default inode ceiling can depend on host RAM. The file-count monitor is deliberately documented as a monitored limit and can briefly overshoot between checks. This runner does not claim a hard aggregate kernel-memory or inode controller. Filesystem/process isolation and tmpfs byte bounds do not depend on that monitor. An operator requiring a single cgroup-wide resident/kernel-memory ceiling must supply an appropriately delegated container/cgroup deployment; this runner does not configure the host automatically. [Kernel tmpfs limits](https://cdn.kernel.org/doc/html/latest/filesystems/tmpfs.html)
 
@@ -148,9 +182,11 @@ Tmpfs `size` limits data blocks; its default inode ceiling can depend on host RA
 
 Entry-monitor termination reports `status: "resource_limited"`, an explanatory
 `error`, and `resource_limit` with `resource: "entries"`, `path` (`/workspace`,
-`/tmp` or `/packages`), `limit`, and `observed_at_least`. The bounded scan stops
+`/packages`, which includes `/tmp`), `limit`, and `observed_at_least`. Historical
+receipts may still identify the formerly separate `/tmp` tree. The bounded scan stops
 after discovering one excess entry; this is a lower bound, not a final inventory.
-The worker stops descendants and discards the call's filesystem changes. The
+The worker stops descendants and discards the call's saved-workspace changes;
+temporary scratch can retain partial changes until the task ends. The
 receipt survives job persistence, status inspection and the failure event.
 `limits` also records the effective `quota_bytes`, `max_file_bytes` and
 `max_files` used for that job. Old job records remain unchanged and may lack
@@ -160,7 +196,9 @@ or out-of-memory cause; only the monitored failure receives this receipt.
 Owner decision, 2026-10-15: keep existing limits, including Sun's 1,000-entry
 ceiling. Correct the model-facing persistence/execute guidance and explain actual
 limit failures. Static tool instructions contain no live usage counters; changing
-counts and diagnostic receipts stay in tool results, preserving prompt ordering
+counts, scratch capacity/usage and attachment preparation state stay in tool
+results or the existing late runtime-facts layer after conversation/tool history,
+preserving prompt ordering
 and avoiding recurring prefix changes. Updating static guidance changes the
 prefix once on rollout; it is not a zero-invalidation deployment.
 
@@ -180,7 +218,8 @@ Jobs live under external `$HORTATOR_DATA_DIR/jobs/`, with 0700 directories and 0
 
 Archived metadata stays indefinitely, is included in normal `jobs/` backups, and resolves through existing job/output inspection by ID even outside the recent list. Recent lists include the archive marker. Original stdout/stderr stay at `jobs/<job_id>/` until the configured log retention makes them eligible for removal on a subsequent admission for that bot. After those logs expire, only the archived metadata remains. Archival does not reset age, discard unexpired logs, change workspace files or clear database/trajectory evidence. The independent output-byte quota counts both recent and archived retained logs; archival cannot bypass it. Empty expired archive log directories are removed so ordinary admissions do not rescan lifetime archive metadata. Full historical enumeration happens only on owner inspection.
 
-In **Plugins → Isolated Bash → Working limits**, edit **Recent jobs per bot (older records archived)**, **Job log retention (days)** and **Command time limit (seconds)**. Per-bot `plugin_config.shell` overrides remain available. The command limit accepts up to 600 seconds; existing settings/default 90 are preserved. The model's tool schema and usage show its effective configured ceiling, and a call can only shorten it. Shell run gets a matching longer registry deadline; read/status and other tools keep 120 seconds. This does not extend the parent work-task or slash deadline, and operator cancellation still cancels/joins the sandbox.
+In **Plugins → Isolated Bash → Working limits**, edit **Recent jobs per bot (older records archived)**, **Job log retention (days)** and **Command time limit (seconds)**. Per-bot `plugin_config.shell` overrides remain available. The command limit accepts up to 600 seconds; existing settings/default 90 are preserved. The model's tool schema enforces its effective configured ceiling, while the
+late runtime facts report the current number, and a call can only shorten it. Shell run gets a matching longer registry deadline; read/status and other tools keep 120 seconds. This does not extend the parent work-task or slash deadline, and operator cancellation still cancels/joins the sandbox.
 
 Archives are runtime data outside source Git. Older code will not inspect the new archive directory; keep matching code/data snapshots when rolling back. There is no database schema migration or automatic removal of audit history. Monitor disk usage separately; record archival solves count exhaustion, not disk exhaustion.
 
@@ -200,3 +239,14 @@ Existing decision dates and qualifications below remain authoritative.
 ## Owner decision — 2026-10-09
 
 Keep shell execution independent from persistent workspaces. A shell-only grant must support one-off curl/inline Python/POST commands with disposable files using the existing supplied tools. An explicit task opts into persistent storage and its existing workspace grant. No bot grants, networking boundary or package/toolchain selection change automatically.
+
+## Owner decision — 2026-10-18
+
+Keep scratch RAM-backed and extend it through the human task, including qualifying
+follow-ups, using the existing configurable package allowance shared by `/tmp`
+and `/packages`. Preserve per-call process cleanup and saved-workspace quotas.
+Do not introduce browser/RAM-pressure management or idle eviction. Give every
+storage mode the same installation/environment instructions and place changing
+limits, usage and attachment preparation state in the late runtime facts.
+The requested external audit is owner-dispatched; its digest records remaining
+questions rather than treating local tests as live provider or Discord proof.

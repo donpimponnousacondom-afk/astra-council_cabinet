@@ -52,11 +52,20 @@ async def test_real_entry_limit_names_tree_count_and_preserves_saved_files(kerne
         context,
         "limited",
     )
-    expected = {"resource": "entries", "path": path, "limit": 1000, "observed_at_least": 1001}
+    expected = {
+        "resource": "entries",
+        "path": "/packages" if path == "/tmp" else path,
+        "limit": 1000,
+        "observed_at_least": 1001,
+    }
     assert result["status"] == "resource_limited" and result["exit_code"] == -9, result
     assert not result["workspace_committed"]
     assert result["resource_limit"] == expected
-    assert path in result["error"] and "at least 1001" in result["error"] and "limit 1000" in result["error"]
+    assert (
+        expected["path"] in result["error"]
+        and "at least 1001" in result["error"]
+        and "limit 1000" in result["error"]
+    )
     assert "entry count" in result["error"] and "longer timeout" in result["error"]
     assert result["limits"]["max_files"] == 1000
     capacity = (256 if storage == "filesystem" else 128) * 1024 * 1024

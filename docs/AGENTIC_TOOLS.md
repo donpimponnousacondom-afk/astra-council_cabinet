@@ -13,11 +13,21 @@ while enabled. The task-based setup below remains available independently.
 3. Inspect **Files, web reading and jobs** for actual runner readiness and selected utilities. A non-root Linux account, a compatible Bubblewrap, unprivileged namespaces, pidfds, libseccomp, Bash and the installed Python 3.14/Pillow/pip, uv, micromamba and documented utilities are needed. Readiness executes a real isolated probe. The runner fails closed when these requirements are unavailable. See [operator setup and execution boundary](SHELL_RUNNER.md).
 4. Adjust the visible global working limits and per-bot **Extended file and reading tasks** fields. Advanced per-bot plugin JSON overrides the global configuration under the same validation. Provider keys, Discord credentials and document publication settings are independent.
 
-Model commands may install Python/native packages into disposable sandbox storage; they cannot install host packages or change host policy. Installing/enabling the feature in another checkout requires the ordinary integration, committed build and shared-Screen rollout procedure; the parallel implementation branch itself is not a deployment.
+Model commands may install Python/native packages into task-lived sandbox scratch;
+they cannot install host packages or change host policy. All storage modes receive
+one common environment description: use `uv pip install PACKAGE` or
+`pip install PACKAGE` in the active `/packages/venv`, and `pkg install PACKAGE`
+for conda-forge native tools whose commands enter PATH. `/tmp` aliases
+`/packages/tmp`; both share the shell package budget and task lifetime. Persistent
+`pip --target /workspace/pylibs` installs are an optional technique for suitable
+packages that fit the saved filesystem limits. See [shell details](SHELL_RUNNER.md).
+Installing/enabling the feature in another checkout requires the ordinary
+integration, committed build and shared-Screen rollout procedure; the parallel
+implementation branch itself is not a deployment.
 
 ## Model workflow
 
-For one-off commands, call `shell` with `{"operation":"run","command":"python3 -c \"print(1 + 1)\""}` and omit `task`. This needs only shell, starts with empty disposable files and keeps job logs. To retain files between calls, use the task workflow below. See [storage modes and limits](SHELL_RUNNER.md#disposable-commands-and-persistent-tasks).
+For one-off commands, call `shell` with `{"operation":"run","command":"python3 -c \"print(1 + 1)\""}` and omit `task`. This needs only shell, starts with an empty disposable `/workspace` when Simple filesystem is not mounted, and keeps job logs. Task scratch is separate from that workspace. To retain `/workspace` files between calls and completed tasks, use Simple filesystem or the task workflow below. See [storage modes and limits](SHELL_RUNNER.md#disposable-commands-and-persistent-tasks).
 
 Each available tool accepts `{}` for full usage without executing its handler. Invalid calls return all detectable argument errors and complete usage. Arguments are named JSON fields. See the permanent [tool contract](TOOLS.md).
 

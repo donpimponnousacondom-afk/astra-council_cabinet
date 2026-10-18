@@ -2,7 +2,7 @@
 set -euo pipefail
 usage() {
   echo 'Usage: pkg install PACKAGE... (conda-forge native packages, e.g. zstd)' >&2
-  echo 'Installs to /packages/native for this job only. Save outputs in /workspace.' >&2
+  echo 'Installs to /packages/native for this human task. Save outputs in /workspace.' >&2
   echo 'Confirmation is automatic; -y and --yes are optional.' >&2
   exit 2
 }

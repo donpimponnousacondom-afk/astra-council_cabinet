@@ -40,7 +40,15 @@ from .audio_input import (
 
 class ContextBuilder:
     def __init__(
-        self, store, pool, global_memory=None, application_emojis=None, engrams=None, filesystems=None
+        self,
+        store,
+        pool,
+        global_memory=None,
+        application_emojis=None,
+        engrams=None,
+        filesystems=None,
+        *,
+        shell_facts=None,
     ):
         self.store, self.pool = store, pool
         self.global_memory = global_memory
@@ -48,6 +56,7 @@ class ContextBuilder:
         self.application_emojis = application_emojis
         self.engrams = engrams
         self.filesystems = filesystems
+        self.shell_facts = shell_facts
         self.images = ImageCache(store)
         self.audio = AudioInput(store)
         self.encoder = tiktoken.get_encoding("cl100k_base")
@@ -307,6 +316,12 @@ class ContextBuilder:
             mount = self.filesystems.mount_facts(bot)
             if mount is not None:
                 values["filesystem_mount"] = mount
+        if self.shell_facts is not None:
+            shell = self.shell_facts(bot, channel_id)
+            if shell is not None:
+                values["shell"] = shell
+        if "attachment_state" in bot:
+            values["attachment_state"] = bot["attachment_state"]
         custom = render(bot["dynamic_prompt"], {**values, "MODEL": profile["model"]})
         facts = {**values, "model": profile["model"]}
         for key in ("background_completion", "background_handoff"):

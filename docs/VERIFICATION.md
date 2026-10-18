@@ -3573,3 +3573,46 @@ then the non-shortened-backoff regression plus end-cycle compatibility file
 **28 passed in 10.56s**. Only ordinary cycles supply the new owner callback;
 end-cycle/slash callers retain the original provider wait behavior. Ruff lint and
 formatting pass. Full fresh-head CI and both delta reviews remain PR gates.
+
+
+## 2026-10-18 — task-scoped shell scratch and cache-aware guidance
+
+Local evidence before publication:
+
+- Runtime ownership, supersession, addressing, progress and ordinary runtime
+  files: **100 passed in 37.82s**. Provider/delivery and scratch callbacks are
+  mocked here; this is not live Discord evidence. Same-human/channel handoff,
+  final/silence/failure cleanup, active/idle operator cancellation, configuration
+  invalidation, preparation failure and delivery uncertainty are covered. Old
+  prepared attachments are suppressed, never carried automatically.
+- Real namespace runner/receipt tests initially produced **47 passed, 2 skipped,
+  4 failed**. Three failures expected the old separate `/tmp` entry receipt; the
+  fourth test filled scratch without freeing space for its EXIT trap. Assertions
+  now match the shared tree and that probe removes its deliberate overflow file.
+  The affected scratch/receipt suite plus actual Python package reuse test then
+  passed **23 tests in 65.27s**, with `HORTATOR_REQUIRE_SANDBOX=1`. These run real
+  bubblewrap, subprocess cleanup, byte quotas, entry monitors, package installs
+  from a synthetic local wheel and saved-workspace rollback. Public package
+  network checks are separate opt-in evidence, not implied by those results.
+- Shared instructions/grants/effective-timeout and prompt comparisons: **8 passed
+  in 2.51s**. Both changing scratch/attachment facts with fixed history and growing
+  history with fixed settings preserve the prior stable instruction prefix.
+  Schema equality holds for changing scratch usage/package budget. Operator
+  timeout changes still update the effective validation maximum; round-dependent
+  tool-list stability remains a separate deferred change. No upstream cache-hit
+  or billing improvement is claimed from these local comparisons.
+- Ruff lint/format checks and dashboard formatting/build pass. Static model
+  guidance changes create a one-time rollout prefix change; mutable counters
+  remain after transcript/current tool exchanges. No provider/CPA edits.
+- Read-only disk audit: live data **12.424 GiB**, one existing requested backup
+  **7.730 GiB**, checkout/dependencies **0.521 GiB**; combined **20.675 GiB**.
+  Live DB **11.232 GiB**: requests 74.68%, events 22.85%; only 776 KiB freelist.
+  Root filesystem 90% used with 46 GiB available, inodes 7%. No cleanup, new
+  backup, browser intervention or RAM-pressure mitigation was performed.
+
+Full CI and both independent open-PR reviews remain publication gates; their
+current-head results and the exact restart timestamp belong to the PR and the
+requested task-specific ignored audit report. Local evidence above does not
+claim a full-suite pass or real bot delivery/provider validation.
+
+Additional live sandbox evidence: `HORTATOR_REQUIRE_SANDBOX=1 HORTATOR_TEST_PACKAGE_NETWORK=1 uv run pytest -q tests/test_shell_runner.py::test_real_public_https_and_native_package_install` — **1 passed in 10.33s**. HTTPS via curl/wget, Git remote lookup, real `uv pip install six==1.17.0`, `pkg install zstd`, repeated native installation, and reuse of both packages in a second call succeeded. This is public package-network evidence, not live Discord/provider validation.

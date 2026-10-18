@@ -169,9 +169,11 @@ def main():
     cwd = root / config["cwd"]
     if not cwd.is_dir() or cwd.resolve().is_relative_to(root) is False:
         raise ValueError("Working directory is missing or outside the workspace")
-    venv.EnvBuilder(system_site_packages=True, symlinks=True).create("/packages/venv")
-    Path("/packages/tmp").mkdir()
+    if not Path("/packages/venv/bin/python3.14").exists():
+        venv.EnvBuilder(system_site_packages=True, symlinks=True).create("/packages/venv")
+    Path("/packages/tmp").mkdir(exist_ok=True)
     os.environ["TMPDIR"] = "/packages/tmp"
+    Path("/tmp/hortator-cwd").unlink(missing_ok=True)
     restrict(config)
     if select.select([0], [], [], 0)[0] and not os.read(0, 1):
         raise RuntimeError("Runner parent disconnected before Bash startup")
@@ -203,10 +205,8 @@ def main():
             state = "timed_out"
         if time.monotonic() - last_scan >= 0.05 and state is None:
             last_scan = time.monotonic()
-            resource_limit = (
-                entry_limit_exceeded(root, config["max_files"])
-                or entry_limit_exceeded("/tmp", config["max_files"])
-                or entry_limit_exceeded("/packages", config["package_entries"])
+            resource_limit = entry_limit_exceeded(root, config["max_files"]) or entry_limit_exceeded(
+                "/packages", config["package_entries"]
             )
             if resource_limit is not None:
                 state = "resource_limited"

@@ -51,8 +51,9 @@ DESCRIPTION = (
 MOUNT_ON = (
     "Simple filesystem is ON. Your saved files are at /workspace. "
     "The filesystem tool and, when available, shell.run use this same directory automatically. "
-    "Files remain until deleted; /packages and running shell processes do not survive a shell call. "
-    "/tmp is cleared after every shell call. Save files needed by later calls under /workspace."
+    "Files remain until deleted. Shell processes end after every call; /packages and /tmp are task scratch, "
+    "not saved files. Read the shell runtime facts for scratch lifetime and limits. "
+    "Save files needed after the current task under /workspace."
 )
 MOUNT_OFF = (
     "Your filesystem mount is OFF. Your saved files still exist, but you cannot access them for now. "

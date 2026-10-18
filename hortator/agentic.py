@@ -15,7 +15,7 @@ SHELL_JOB_GUIDANCE = (
 )
 
 SAVED_PACKAGE_GUIDANCE = (
-    "With persistent storage mounted, suitable Python packages can survive calls: "
+    "Optional: with persistent storage mounted, suitable Python packages can survive completed tasks: "
     "pip install --no-cache-dir --no-compile --target /workspace/pylibs PACKAGE; "
     "then use PYTHONPATH=/workspace/pylibs python3 SCRIPT on each call. "
     "Choose the packages/dependencies to fit both the byte and file/directory entry limits; "
@@ -25,23 +25,34 @@ SAVED_PACKAGE_GUIDANCE = (
 )
 
 
-SHELL_DESCRIPTION = (
+SHELL_ENVIRONMENT_GUIDANCE = (
     "Run real Bash pipelines/scripts with host networking, DNS and HTTPS in a bounded OS sandbox. "
     "Includes curl, wget, git, jq, Perl, coreutils, ps/pgrep, id/whoami, ss/netstat/ip, uv and Python 3.14/Pillow. "
-    "python and python3 both mean Python 3.14; Node is not supplied. Each job activates /packages/venv: "
+    "python and python3 both mean Python 3.14; Node is not supplied. Each call activates /packages/venv: "
     "use uv pip install PACKAGE or pip install PACKAGE. For native tools use pkg install PACKAGE "
     "(conda-forge); installed commands enter PATH. Extra environments: python3.14 -m venv /packages/myenv. "
-    "All /packages installs/caches are disposable and vanish when this job ends: install AND use them in "
-    "one command. " + SAVED_PACKAGE_GUIDANCE + "Save deliverables in /workspace. "
+    "/packages holds task scratch and installed packages; /tmp is the same storage as /packages/tmp, "
+    "also selected by TMPDIR. They share one byte and entry budget. Scratch survives calls during "
+    "the current human task, including accepted same-human follow-ups, but is discarded when the task "
+    "finishes, fails, is cancelled or replaced, or the service stops. It is not saved storage. "
+    "Every call starts fresh processes; no process or shell environment change survives the call. "
+    "Read the late runtime shell facts for current scratch state and effective limits; check df for free "
+    "scratch space before large downloads. Save deliverables in /workspace when its storage mode is persistent. "
     "The base Python 3.14 is read-only; no host apt/sudo. Large downloads/builds can hit finite job limits. "
-    "Omit task for a disposable command with only the shell grant: /workspace starts empty and all files "
-    "vanish after this call; stdout/stderr and job evidence remain readable. To keep files between calls, "
+    "Commands use the configured time limit; timeout_seconds may shorten it. " + SAVED_PACKAGE_GUIDANCE
+)
+
+SHELL_DESCRIPTION = (
+    SHELL_ENVIRONMENT_GUIDANCE
+    + "Storage mode: omit task for a disposable command with only the shell grant: /workspace starts empty "
+    "and its files vanish after this call; stdout/stderr and job evidence remain readable. "
+    "To keep /workspace files between calls, "
     'also obtain the workspace grant, call workspace with {"operation":"start","task":"your-task"}, '
     "then pass that task to run. A supplied task must exist; shell never creates one or falls back to disposable storage. "
     "A persistent task uses its saved working directory unless cwd is supplied; disposable jobs start at '.'. "
-    "Commands use the configured time limit (default 90 seconds, "
-    "configurable up to 600); timeout_seconds may shorten it. No detached job "
-    "survives completion. Original imported files are protected; write transformed copies to new paths. "
+    "Valid saved changes survive normal completion, including nonzero exits; timeouts, cancellation "
+    "and invalid output discard the current call's workspace changes. Links in saved files are unsupported. "
+    "Original imported files are protected; write transformed copies to new paths. "
     "Operations: run(task,command,cwd,timeout_seconds), status(job_id), read(job_id,stream,offset,limit), "
     "cancel(job_id), read_result(result_id,offset,length). "
     + SHELL_JOB_GUIDANCE
@@ -129,13 +140,10 @@ SHELL_PARAMETERS = {
 }
 
 FILESYSTEM_SHELL_DESCRIPTION = (
-    "Run Bash commands in a fresh, bounded sandbox. Your Simple filesystem is mounted at /workspace; "
+    SHELL_ENVIRONMENT_GUIDANCE + "Storage mode: your Simple filesystem is mounted at /workspace; "
     "commands read and modify the same saved files as the filesystem tool, without a task or start step. "
-    "Includes Python 3.14/Pillow, uv/pip, curl, wget, git, jq, Perl and core utilities; Node is not supplied. "
-    "Default pip/uv and pkg installations use temporary /packages and disappear after this call. "
-    + SAVED_PACKAGE_GUIDANCE
-    + "Links are unsupported. Valid saved changes survive normal command completion, including nonzero exits; "
-    "timeouts, cancellation and invalid output discard the current call's changes. "
+    "Links in saved files are unsupported. Valid saved changes survive normal command completion, including nonzero exits; "
+    "timeouts, cancellation and invalid output discard the current call's workspace changes. "
     "No background process survives this call. "
     "Operations: run(command,cwd,timeout_seconds), status(job_id), read(job_id,stream,offset,limit), "
     "cancel(job_id), read_result(result_id,offset,length). "
@@ -206,6 +214,19 @@ class AgentTools:
                 shell_runner.DEFAULTS,
             )
         )
+
+    def runtime_facts(self, bot, channel_id):
+        """Changing resource data belongs after conversation and tool exchanges."""
+        from .plugins import ToolContext
+
+        context = ToolContext(bot, channel_id, "", owner_verified=bot["role"] == "hortator")
+        if not self.registry.allowed("shell", context):
+            return None
+        configuration = {
+            **self.registry.store.get("plugins", "shell")["config"],
+            **bot["plugin_config"].get("shell", {}),
+        }
+        return self.runner.runtime_facts(bot["id"], channel_id, configuration)
 
     async def shell(self, args, context, config, key):
         operation = args["operation"]

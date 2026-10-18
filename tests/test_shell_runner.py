@@ -283,11 +283,12 @@ PY"""
     assert result["status"] == "succeeded", result
     assert "memory-bounded" in result["stdout"]["text"]
     assert "processes-bounded" in result["stdout"]["text"]
-    # /tmp's independent hard 16 MiB tmpfs limit includes separate files.
+    # /tmp and packages share one kernel-enforced task tmpfs allowance.
     result = await runner.run(
         context,
         task="default",
-        command="python3 - <<'PY'\nimport errno\ntry:\n for i in range(8):\n  with open('/tmp/f'+str(i),'wb') as f: f.write(b'x'*4194304)\n raise AssertionError('tmpfs byte cap bypassed')\nexcept OSError as e:\n assert e.errno == errno.ENOSPC,e\n print('tmpfs-bounded')\nPY",
+        command="python3 - <<'PY'\nimport errno\ntry:\n for i in range(20):\n  with open('/tmp/f'+str(i),'wb') as f: f.write(b'x'*4194304)\n raise AssertionError('tmpfs byte cap bypassed')\nexcept OSError as e:\n assert e.errno == errno.ENOSPC,e\n print('tmpfs-bounded')\nPY",
+        configuration={"package_bytes": 67_108_864},
     )
     assert result["status"] == "succeeded", result
     assert "tmpfs-bounded" in result["stdout"]["text"]
@@ -603,7 +604,7 @@ cat /packages/system-pip-error
     assert result["workspace_committed"]
 
 
-async def test_real_python_package_install_and_disposable_environments(sandbox):
+async def test_real_python_package_install_survives_calls_until_task_finishes(sandbox):
     runner, workspace, context = sandbox
     # A local synthetic wheel exercises real uv/pip without relying on an index.
     command = """set -eu
@@ -629,10 +630,18 @@ printf saved > deliverable.txt
     next_job = await runner.run(
         context,
         task="default",
-        command="python3.14 -c 'import importlib.util; assert importlib.util.find_spec(\"sandbox_fixture\") is None'; test ! -e /packages/uv-env; cat deliverable.txt",
+        command="set -eu; python3.14 -c 'import sandbox_fixture; assert sandbox_fixture.VALUE == 42'; test -d /packages/uv-env; cat deliverable.txt",
     )
     assert next_job["status"] == "succeeded", next_job
     assert next_job["stdout"]["text"] == "saved"
+    runner.finish_turn(context)
+    final_job = await runner.run(
+        context,
+        task="default",
+        command="set -eu; python3.14 -c 'import importlib.util; assert importlib.util.find_spec(\"sandbox_fixture\") is None'; test ! -e /packages/uv-env; cat deliverable.txt",
+    )
+    assert final_job["status"] == "succeeded", final_job
+    assert final_job["stdout"]["text"] == "saved"
 
 
 async def test_real_package_storage_byte_and_entry_limits(sandbox):
@@ -666,6 +675,13 @@ async def test_real_public_https_and_native_package_install(sandbox):
     )
     assert result["status"] == "succeeded" and result["workspace_committed"], result
     assert "Zstandard" in result["stdout"]["text"]
+    reused = await runner.run(
+        context,
+        task="default",
+        command="set -eu; python3.14 -c 'import six; assert six.__version__ == \"1.17.0\"'; zstd --version",
+    )
+    assert reused["status"] == "succeeded", reused
+    assert "Zstandard" in reused["stdout"]["text"]
 
 
 @pytest.mark.skipif(

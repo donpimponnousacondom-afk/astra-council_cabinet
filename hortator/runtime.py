@@ -72,6 +72,7 @@ class Engine:
             registry.application_emojis,
             registry.engrams,
             registry.filesystems,
+            shell_facts=registry.agentic.runtime_facts,
         )
         self.transport = transport
         self.tasks: dict[str, asyncio.Task] = {}
@@ -330,6 +331,24 @@ class Engine:
             turn_id=turn_id,
         )
         raise TurnSuperseded("New directed human input is waiting; stop before starting more work")
+
+    def shell_handoff_owner(self, bot, context, owner_id, ordinary_delivery_id):
+        """Carry scratch only to the same human's replacement of an unsent answer."""
+        if not owner_id or bot.get("invocation") or bot.get("response_protocol", "narrate") == "end_cycle":
+            return None
+        if ordinary_delivery_id and self.store.one(
+            "SELECT 1 FROM outbox WHERE id=? AND status IN ('sending','sent','unknown')",
+            (ordinary_delivery_id,),
+        ):
+            return None
+        return next(
+            (
+                owner_id
+                for row in self.superseding_attention(bot, context.channel_id, context.turn_id)
+                if row["author_id"] == owner_id and row["channel_id"] == context.channel_id
+            ),
+            None,
+        )
 
     def budget_error(self, bot):
         now = time.time()
@@ -706,6 +725,9 @@ class Engine:
         typing_task = None
         engram_candidate = None
         ordinary_delivery_id = None
+        shell_started = False
+        shell_owner_id = None
+        shell_superseded = False
         response_protocol = bot.get("response_protocol", "narrate")
         cycle_mode = response_protocol == "end_cycle"
         record_actions = not cycle_mode and not bot.get("invocation")
@@ -748,6 +770,10 @@ class Engine:
                 bot = {**bot, "activation": activation}
                 if not self.is_single_shot(bot):
                     self.store.execute("UPDATE turns SET trigger=? WHERE id=?", (activation["kind"], turn_id))
+            if record_actions and activation and activation.get("channel_id") == channel_id:
+                shell_owner_id = activation.get("author_id")
+            self.registry.agentic.runner.begin_turn(context, owner_id=shell_owner_id)
+            shell_started = True
             extras = []
             round_index, round_limit = 0, bot["max_tool_rounds"]
             calls_limit = bot["max_calls_per_round"]
@@ -1027,6 +1053,18 @@ class Engine:
                     available_tools, can_attach = [], False
                 budget_bot = {**bot, "max_tool_rounds": round_limit, "max_calls_per_round": calls_limit}
                 budget_bot["tool_status"] = self.registry.prompt_status(context, available_tools)
+                exported = self.store.one(
+                    "SELECT count(*) AS count FROM artifacts WHERE bot_id=? AND turn_id=?",
+                    (bot["id"], turn_id),
+                )["count"]
+                if exported:
+                    budget_bot["attachment_state"] = {
+                        "exported": exported,
+                        "prepared": len(artifact_ids),
+                        "posted": False,
+                        "next": "Export only stages files; discord_attach prepares them. "
+                        "The final ordinary reply delivers prepared files. Progress messages carry no files.",
+                    }
                 if background_handoff:
                     budget_bot["background_handoff"] = self.jobs.handoff(context)
                 if task_extension_used:
@@ -1920,6 +1958,7 @@ class Engine:
                 )
         except TurnSuperseded:
             status, error = "cancelled", "New human-directed message superseded an unsent draft"
+            shell_superseded = True
         except asyncio.CancelledError:
             confirmed = ordinary_delivery_id and self.store.one(
                 "SELECT 1 FROM outbox WHERE id=? AND status='sent'", (ordinary_delivery_id,)
@@ -1933,6 +1972,7 @@ class Engine:
                     "Companion delivery interrupted after the written reply was confirmed",
                 )
             else:
+                shell_superseded = turn_id in self.human_superseded
                 status, error = (
                     "cancelled",
                     "New human-directed message superseded a cooldown wait"
@@ -1969,6 +2009,21 @@ class Engine:
                     cycle["reason"] = "cancelled"
                     raise
         finally:
+            # Commands and their descendants have already settled. Scratch can
+            # cross only an authenticated same-human supersession; attachments
+            # and job/result ownership remain scoped to their original turn.
+            if shell_started:
+                preserve_for = (
+                    self.shell_handoff_owner(bot, context, shell_owner_id, ordinary_delivery_id)
+                    if shell_superseded
+                    and self.valid(bot, profile, provider)
+                    and self.channel_allowed(bot, channel_id)
+                    else None
+                )
+                self.registry.agentic.runner.finish_turn(context, preserve_for=preserve_for)
+            else:
+                # Preparation/compaction may fail before adopting pending scratch.
+                self.registry.agentic.runner.clear_bot(bot["id"])
             if status in ("sent", "silent"):
                 self.incomplete_streaks.pop(self.cycle_scope(bot, channel_id), None)
             if cycle is not None:
@@ -2472,9 +2527,13 @@ class Engine:
             # Already cancelled above. A second cancellation can interrupt the
             # turn's finally block while it joins typing/provider cleanup.
             await join_tasks(*tasks)
+        for bot_id in bot_ids:
+            # Also clear an idle bot's pending handoff. Explicit cancellation
+            # overrides a scheduler supersession racing with the operator.
+            self.registry.agentic.runner.clear_bot(bot_id)
 
     async def close(self):
         self.closed = True
         if self.task:
             await cancel_and_wait(self.task)
-        await self.cancel(list(self.tasks), "Shutdown")
+        await self.cancel({*self.tasks, *(bot["id"] for bot in self.store.list("bots"))}, "Shutdown")

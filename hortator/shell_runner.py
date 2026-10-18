@@ -25,6 +25,7 @@ from .concurrency import join_tasks, task_group, error_text
 
 from .models import ControlError
 from .workspaces import DEFAULTS as WORKSPACE_DEFAULTS
+from .shell_scratch import ScratchNamespace
 
 
 DEFAULTS = {
@@ -184,6 +185,8 @@ class ShellRunner:
         self._readiness_lock = asyncio.Lock()
         self._probe = None
         self._closed = False
+        self._scratch_turns = {}
+        self._scratch_pending = {}
         # The one-runtime data lock belongs to Kernel. Recovery never signals a
         # persisted PID (it may now belong to an unrelated process).
         for path in self.root.glob("job_*/meta.json"):
@@ -199,6 +202,99 @@ class ShellRunner:
                 )
                 _private_json(path, metadata)
             shutil.rmtree(path.parent / ".execution", ignore_errors=True)
+
+    def begin_turn(self, context, *, owner_id=None):
+        """Adopt only the same human's unfinished task in the same conversation."""
+        bot, channel, turn = _identity(context)
+        pending = self._scratch_pending.pop((bot, channel), None)
+        self.clear_bot(bot)
+        if pending is not None and (owner_id is None or pending["owner_id"] != owner_id):
+            pending["namespace"].close()
+            pending = None
+        self._scratch_turns[(bot, channel, turn)] = pending or {
+            "owner_id": owner_id,
+            "namespace": None,
+        }
+
+    def finish_turn(self, context, *, preserve_for=None):
+        bot, channel, turn = _identity(context)
+        state = self._scratch_turns.pop((bot, channel, turn), None)
+        if state is None or state["namespace"] is None:
+            return
+        if preserve_for is not None and state["owner_id"] == preserve_for and not self._closed:
+            previous = self._scratch_pending.pop((bot, channel), None)
+            if previous is not None:
+                previous["namespace"].close()
+            self._scratch_pending[(bot, channel)] = state
+        else:
+            state["namespace"].close()
+
+    def clear_bot(self, bot_id):
+        for collection in (self._scratch_turns, self._scratch_pending):
+            for key in list(collection):
+                if key[0] == str(bot_id):
+                    state = collection.pop(key)
+                    if state["namespace"] is not None:
+                        state["namespace"].close()
+
+    async def _task_scratch(self, context, config):
+        state = self._scratch_turns.setdefault(_identity(context), {"owner_id": None, "namespace": None})
+        scratch = state["namespace"]
+        if scratch is not None and (scratch.byte_limit, scratch.entry_limit) != (
+            config["package_bytes"],
+            config["package_entries"],
+        ):
+            scratch.close()
+            state["namespace"] = scratch = None
+        if scratch is None:
+            scratch = await ScratchNamespace.create(
+                self.root, config["package_bytes"], config["package_entries"]
+            )
+            state["namespace"] = scratch
+        return scratch
+
+    def runtime_facts(self, bot_id, channel_id, configuration=None):
+        config = limits(configuration)
+        state = next(
+            (
+                value
+                for key, value in self._scratch_turns.items()
+                if key[:2] == (str(bot_id), str(channel_id))
+            ),
+            None,
+        )
+        if state is None:
+            state = self._scratch_pending.get((str(bot_id), str(channel_id)))
+        scratch = state["namespace"] if state else None
+        return {
+            "limits": {
+                key: config[key]
+                for key in (
+                    "timeout_seconds",
+                    "output_bytes",
+                    "memory_bytes_per_process",
+                    "process_limit",
+                    "package_bytes",
+                    "package_entries",
+                )
+            },
+            "scratch": {
+                "allocated": scratch is not None,
+                **(
+                    scratch.facts()
+                    if scratch is not None
+                    else {
+                        "shared_paths": ["/packages", "/tmp"],
+                        "capacity_bytes": config["package_bytes"],
+                        "used_bytes": 0,
+                        "available_bytes": config["package_bytes"],
+                        "entry_limit": config["package_entries"],
+                    }
+                ),
+                "lifetime": "Current human task, including same-human/same-channel follow-ups; cleared when the task finishes or is cancelled. Processes end after every command.",
+                "failure_behavior": "Scratch changes are temporary and are not rolled back on a failed command; saved /workspace changes retain their separate commit rules.",
+            },
+        }
 
     def _save(self, metadata):
         _private_json(self._safe_job(metadata["job_id"]), metadata)
@@ -637,9 +733,15 @@ class ShellRunner:
                     metadata = {"job_id": "probe", "status": "running"}
                     probe = _Active(metadata, task=asyncio.current_task())
                     self._probe = probe
+                    scratch = None
                     try:
-                        await self._execute(root, source, config, probe)
+                        scratch = await ScratchNamespace.create(
+                            root, config["package_bytes"], config["package_entries"]
+                        )
+                        await self._execute(root, source, config, probe, scratch)
                     finally:
+                        if scratch is not None:
+                            scratch.close()
                         self._probe = None
                     if metadata.get("status") != "succeeded":
                         raise ControlError(metadata.get("error", "Isolation probe failed"))
@@ -647,9 +749,9 @@ class ShellRunner:
                     "ready": True,
                     "boundary": "bubblewrap + seccomp",
                     "network": "host",
-                    "message": "Host networking, DNS and HTTPS enabled. Python 3.14, uv/venv and disposable native packages ready.",
+                    "message": "Host networking, DNS and HTTPS enabled. Python 3.14, uv/venv and task-scoped native packages ready.",
                     "python": "3.14",
-                    "package_storage": "Per-job /packages tmpfs; discarded after every job",
+                    "package_storage": "Task-scoped private tmpfs shared by /packages and /tmp; discarded when the task ends",
                     "tools": self._toolchain["tools"],
                     "limits": limits(),
                     "memory_scope": "per process; process count bounds multiplied address space",
@@ -711,14 +813,14 @@ class ShellRunner:
             str(config["quota_bytes"]),
             "--tmpfs",
             "/workspace",
-            "--size",
-            "16777216",
-            "--tmpfs",
+            *(
+                ["--bind", config["scratch_path"], "/packages"]
+                if "scratch_path" in config
+                else ["--size", str(config["package_bytes"]), "--tmpfs", "/packages"]
+            ),
+            "--symlink",
+            "/packages/tmp",
             "/tmp",
-            "--size",
-            str(config["package_bytes"]),
-            "--tmpfs",
-            "/packages",
             "--ro-bind",
             str(source),
             "/source",
@@ -784,7 +886,7 @@ class ShellRunner:
         ]
         return command
 
-    async def _execute(self, directory, source, config, active):
+    async def _execute(self, directory, source, config, active, scratch=None):
         execution = directory / ".execution"
         execution.mkdir(mode=0o700)
         if source is None:
@@ -813,8 +915,14 @@ class ShellRunner:
         process = None
         try:
             info_fd = os.open(active.info_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            command = self._command(source, config_path, config)
+            command = self._command(
+                source, config_path, {**config, **({"scratch_path": str(scratch.path)} if scratch else {})}
+            )
             command[1:1] = ["--info-fd", str(info_fd)]
+            pass_fds = (info_fd,)
+            if scratch is not None:
+                command = scratch.wrap(command)
+                pass_fds += (scratch.user_fd, scratch.mount_fd)
             try:
                 process = await asyncio.create_subprocess_exec(
                     *command,
@@ -824,7 +932,7 @@ class ShellRunner:
                     env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
                     start_new_session=True,
                     limit=100_000,
-                    pass_fds=(info_fd,),
+                    pass_fds=pass_fds,
                 )
             finally:
                 os.close(info_fd)
@@ -860,7 +968,6 @@ class ShellRunner:
                                 detail = record.get("resource_limit")
                                 entry_limits = {
                                     "/workspace": config["max_files"],
-                                    "/tmp": config["max_files"],
                                     "/packages": config["package_entries"],
                                 }
                                 if (
@@ -877,15 +984,16 @@ class ShellRunner:
                                     raise ControlError("Invalid worker resource-limit detail")
                                 metadata["resource_limit"] = detail
                                 rollback = (
-                                    "This call's filesystem changes were discarded; previously saved files are unchanged. "
+                                    "This call's saved-workspace changes were discarded; previously saved files are unchanged. "
                                     if config.get("persist_files", True)
-                                    else "This disposable call's files were discarded. "
+                                    else "This disposable call's /workspace files were discarded. "
                                 )
                                 metadata["error"] = (
                                     f"{detail['path']} exceeded its file/directory entry limit: "
                                     f"observed at least {detail['observed_at_least']} entries; "
                                     f"limit {detail['limit']}. The harness stopped the command. "
                                     + rollback
+                                    + "Temporary /packages and /tmp may retain partial changes within this task. "
                                     + "Reduce the entry count before retrying; more free bytes or a longer timeout "
                                     "does not increase this limit."
                                 )
@@ -1109,9 +1217,11 @@ class ShellRunner:
                 "cwd": metadata["cwd"],
                 "command": command,
             }
+            scratch = await self._task_scratch(context, config)
             staged = await self._execute(
-                directory, Path(prepared["path"]) if prepared else None, run_config, active
+                directory, Path(prepared["path"]) if prepared else None, run_config, active, scratch
             )
+            metadata["scratch"] = scratch.facts()
             if prepared and staged is not None and metadata["status"] in ("succeeded", "failed"):
                 storage.finish_job(prepared["workspace_id"], staged, metadata["cwd"])
                 metadata["workspace_committed"] = True
@@ -1164,3 +1274,5 @@ class ShellRunner:
                 await self._terminate(active)
             if active.task is not None and active.task is not asyncio.current_task():
                 await join_tasks(active.task)
+        for key in list(self._scratch_turns) + list(self._scratch_pending):
+            self.clear_bot(key[0])

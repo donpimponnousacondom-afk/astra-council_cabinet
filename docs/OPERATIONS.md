@@ -21,10 +21,12 @@ completed change or accumulate a backlog of deployed changes without PRs. Pendin
 remote checks/reviews remain pending; they do not establish merge readiness.
 
 The shell sandbox starts a fresh supervisor from `hortator/shell_worker.py` on
-each job. That single source file is mounted read-only from the checkout; the
-rest of the checkout is not mounted. Unlike already-imported server modules,
-editing it can affect a running server's next shell job. For worker/server
-transport changes, stop the shared foreground runtime before editing the worker,
+each job; that file alone is mounted read-only inside the sandbox. The trusted
+`hortator/shell_scratch.py` namespace setup/launcher also executes directly from
+the checkout outside the model sandbox. Unlike already-imported server modules,
+editing these helpers can affect a running server's next shell job. For helper
+or worker/server transport changes, stop the shared foreground runtime before
+editing either helper,
 then publish, verify and restart both together under the deployment rules above.
 
 Rebuild the dashboard after the final commit and restart through shared Screen so
