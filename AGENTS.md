@@ -38,6 +38,18 @@
   problems. This PR-specific protocol does not restrict useful sub-agent work
   elsewhere; delegation and parallel agent work are welcome within task scope.
 
+- Owner decision, 2026-10-18: proactively recommend external audits for changes
+  with substantial stability impact, including scheduling, cancellation, shell
+  execution and state lifetime. When the auditor is outside this harness, the
+  owner relays the exchange. Treat it as a back-and-forth: provide focused
+  questions and a pinned change digest, validate the findings, and return fixes
+  and measured evidence for another pass when useful. Ask again when the changes
+  or remaining uncertainties warrant it; do not leave follow-up solely to the
+  owner's memory. A quiet stretch of bot activity is not proof that hidden
+  failures are absent. These audits supplement the required independent PR
+  reviews and CI; preserve any explicit owner hold. See the
+  [external audit procedure](docs/OPERATIONS.md#owner-relayed-external-audits).
+
 ## Read before continuing
 
 Read `README.md` and `docs/OPERATIONS.md`. Consult `docs/PLAN.md` for the researched design, `docs/VERIFICATION.md` for actual test evidence, and `docs/API.md` / `docs/PLUGINS.md` for the control and extension contracts. Continue the existing implementation; do not replace it with a new scaffold or assume this is still a planning exercise.
