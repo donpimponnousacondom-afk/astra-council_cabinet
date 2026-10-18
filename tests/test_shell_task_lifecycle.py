@@ -3,6 +3,7 @@
 import asyncio
 from dataclasses import replace
 import json
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -53,6 +54,11 @@ def lifecycle(kernel, monkeypatch):
     )
     monkeypatch.setattr(
         runner, "clear_bot", lambda bot_id: events.append(("clear", bot_id, None)), raising=False
+    )
+    monkeypatch.setattr(
+        runner,
+        "clear_conversation",
+        lambda bot_id, channel_id: events.append(("clear_conversation", bot_id, channel_id)),
     )
     return events
 
@@ -311,7 +317,7 @@ async def test_preparation_failure_clears_unadopted_pending_scratch(kernel, life
     await kernel.engine.tick()
     await settle(kernel)
     assert kernel.store.one("SELECT status FROM turns")["status"] == "failed"
-    assert lifecycle == [("clear", bot["id"], None)]
+    assert lifecycle == [("clear_conversation", bot["id"], CHANNEL)]
 
 
 @pytest.mark.parametrize("status", ["sending", "sent", "unknown"])
@@ -329,3 +335,37 @@ async def test_confirmed_or_uncertain_final_cannot_transfer_scratch(kernel, life
         )
         is None
     )
+
+
+async def test_preparation_failure_keeps_other_conversations_pending_scratch(kernel, monkeypatch):
+    bot, _ = setup(kernel)
+    runner = kernel.registry.agentic.runner
+    current = Mock()
+    unrelated = Mock()
+    runner._scratch_pending[(bot["id"], CHANNEL)] = {"owner_id": OWNER_ID, "namespace": current}
+    runner._scratch_pending[(bot["id"], "other-channel")] = {"owner_id": OWNER_ID, "namespace": unrelated}
+
+    async def failed_preparation(*args, **kwargs):
+        raise RuntimeError("Preparation failed before scratch adoption")
+
+    monkeypatch.setattr(kernel.engine.contexts, "prepare", failed_preparation)
+    await kernel.engine.tick()
+    await settle(kernel)
+    turn = kernel.store.one("SELECT status,error FROM turns")
+    assert turn["status"] == "failed"
+    assert "Preparation failed before scratch adoption" in turn["error"]
+    current.close.assert_called_once_with()
+    unrelated.close.assert_not_called()
+    assert set(runner._scratch_pending) == {(bot["id"], "other-channel")}
+
+
+async def test_explicit_bot_cancellation_releases_every_pending_conversation(kernel):
+    bot, _ = setup(kernel)
+    runner = kernel.registry.agentic.runner
+    namespaces = [Mock(), Mock()]
+    for channel, namespace in zip((CHANNEL, "other-channel"), namespaces, strict=True):
+        runner._scratch_pending[(bot["id"], channel)] = {"owner_id": OWNER_ID, "namespace": namespace}
+    await kernel.engine.cancel([bot["id"]], "Explicit operator stop")
+    assert not runner._scratch_pending
+    for namespace in namespaces:
+        namespace.close.assert_called_once_with()

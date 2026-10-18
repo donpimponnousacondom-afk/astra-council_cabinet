@@ -307,7 +307,7 @@ class ShellRunner:
         """Adopt only the same human's unfinished task in the same conversation."""
         bot, channel, turn = _identity(context)
         pending = self._scratch_pending.pop((bot, channel), None)
-        self.clear_bot(bot)
+        self.clear_conversation(bot, channel)
         if pending is not None and (owner_id is None or pending["owner_id"] != owner_id):
             pending["namespace"].close()
             pending = None
@@ -328,6 +328,14 @@ class ShellRunner:
             self._scratch_pending[(bot, channel)] = state
         else:
             state["namespace"].close()
+
+    def clear_conversation(self, bot_id, channel_id):
+        for collection in (self._scratch_turns, self._scratch_pending):
+            for key in list(collection):
+                if key[:2] == (str(bot_id), str(channel_id)):
+                    state = collection.pop(key)
+                    if state["namespace"] is not None:
+                        state["namespace"].close()
 
     def clear_bot(self, bot_id):
         for collection in (self._scratch_turns, self._scratch_pending):

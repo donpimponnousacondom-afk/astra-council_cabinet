@@ -344,7 +344,7 @@ export function Editor({
           key === "global_memory_char_limit" ||
           key === "max_concurrent_shell_jobs"
         }
-        value={draft[key] ?? defaultValue ?? ""}
+        value={(draft[key] === undefined ? defaultValue : draft[key]) ?? ""}
         onChange={(e) =>
           set(key, e.target.value === "" ? null : Number(e.target.value))
         }

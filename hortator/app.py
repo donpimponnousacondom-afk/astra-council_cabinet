@@ -30,6 +30,7 @@ from .security import Actor, Auth, Vault
 from .service import Service
 from .store import Store
 from .snapshot_runtime import SnapshotGate, SnapshotRuntime
+from .shell_scratch import recover_scratch_mountpoints
 
 
 class Kernel:
@@ -207,9 +208,12 @@ def create_app(directory=None, start_runtime=True, *, stopping=None, console=Non
             raise RuntimeError(
                 "Another Hortator process owns this database. Run exactly one worker."
             ) from exc
-        controller = SnapshotRuntime(app, directory, Kernel, start_runtime=start_runtime, console=console)
-        app.state.snapshots = controller
         try:
+            # Only the exclusive owner, before constructing any runtime, can
+            # distinguish these empty host mountpoints from live task scratch.
+            recover_scratch_mountpoints(directory / "jobs")
+            controller = SnapshotRuntime(app, directory, Kernel, start_runtime=start_runtime, console=console)
+            app.state.snapshots = controller
             async with asyncio.TaskGroup() as group:
                 task = group.create_task(controller.run(), name="snapshot-runtime-owner")
                 await controller.ready.wait()

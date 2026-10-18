@@ -11,11 +11,42 @@ from __future__ import annotations
 
 import asyncio
 import ctypes
+import errno
 from dataclasses import dataclass
 import os
 from pathlib import Path
 import sys
 import tempfile
+
+
+def recover_scratch_mountpoints(root):
+    """Remove stale empty mountpoints only at exclusive runtime startup.
+
+    A live task's host mountpoint also looks empty. The caller must own the
+    runtime lock and invoke this before constructing any runner or scratch.
+    Never use this from ShellRunner construction or ordinary retention cleanup.
+    """
+    try:
+        descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError, NotADirectoryError:
+        return 0
+    removed = 0
+    try:
+        with os.scandir(descriptor) as entries:
+            for entry in entries:
+                if not entry.name.startswith("scratch-"):
+                    continue
+                try:
+                    if not entry.is_dir(follow_symlinks=False):
+                        continue
+                    os.rmdir(entry.name, dir_fd=descriptor)
+                    removed += 1
+                except OSError as error:
+                    if error.errno not in (errno.ENOENT, errno.ENOTDIR, errno.ENOTEMPTY, errno.EEXIST):
+                        raise
+    finally:
+        os.close(descriptor)
+    return removed
 
 
 @dataclass

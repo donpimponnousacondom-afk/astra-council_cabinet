@@ -3672,3 +3672,50 @@ cover both unfinished readiness and its shared-lock wait; with admission tests,
 **27 passed in 5.94s**. Both reviewers independently found deadline wording drift;
 current extension/operations guides now identify runner-owned timing after
 admission. These are local fixture results, not live bot validation.
+
+
+## 2026-10-18 — External shell audit recovery follow-up
+
+Required scratch paths now repair conflicting entries without following their
+link targets; cwd reporting uses a bounded drained pipe; missing default-venv
+scaffolding is repaired in place. Pending scratch in another conversation
+survives turn startup/preparation failure. Empty stale mountpoints are swept
+only under the exclusive application runtime lock. Invalid saved-tree errors
+name the relative path and rollback. Resource and saved-file policies are unchanged.
+
+Before application to the canonical branch, isolated-source required-sandbox
+coverage passed **34 cases in 113.92s**, followed by **2 additional setup-error
+cases in 7.40s**. The selection covered cwd/timeout/cancellation, descriptor and
+process cleanup, output/storage limits and retained-tree recovery. Separate
+handoff/startup-lock coverage passed **36 cases in 33.91s**, with two existing
+dependency deprecation warnings. These are real disposable sandbox and fixture
+checks, not live bot turns.
+
+A public conda-forge FluidSynth install and `fluidsynth --version` probe against
+the exact patched worker succeeded in **11.036s**, with workspace commit true,
+private scratch `XDG_RUNTIME_DIR`, and no saved-workspace symlinks. It still
+reported unavailable SDL/PulseAudio playback; this verifies workspace handling,
+not audio rendering or Discord delivery. The receipt and worker hash are retained
+in the ignored dated shell-audit folder.
+
+The common static lookup hint has a one-time prefix impact. Changing usage and
+limits remain late facts; no provider-cache savings are inferred from local tests.
+The recursive entry monitor is deliberately unchanged pending a design that
+preserves directory-entry semantics.
+
+Canonical combined check after applying both repairs on the task branch:
+`HORTATOR_REQUIRE_SANDBOX=1 uv run pytest -q tests/test_shell_setup_recovery.py
+tests/test_shell_scratch.py tests/test_shell_scratch_recovery.py
+tests/test_shell_task_lifecycle.py tests/test_shell_admission.py
+tests/test_shell_queue_integration.py`: **83 passed in 104.18s**, two dependency
+deprecation warnings, no skips. Guidance/prefix tests plus the strengthened
+preparation-failure assertion: **9 passed in 2.97s**. Ruff check/format,
+`git diff --check`, frontend Prettier and TypeScript pass. Independent PR reviews
+and current-head CI remain separate merge gates.
+
+PR #131 review correction: Luna found the saved-tree failure text was also used
+for disposable workspaces, which have no saved changes. The wording now states
+that no workspace changes from the call will be saved. The error-path regression
+covers symlink, hardlink and special-file failures in both modes: **6 passed in
+18.29s**, preserving the prior saved sentinel. Ruff formatting was corrected
+after this test run; no execution behavior changed.
