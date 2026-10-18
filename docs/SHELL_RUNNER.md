@@ -97,9 +97,20 @@ commit/rollback rules remain separate. No prepared attachments or old job-ID
 permissions are transferred with scratch.
 
 There is no guessed idle TTL or RAM-pressure eviction. An unfinished task waiting
-for its eligible follow-up retains scratch until that task resumes, is cancelled,
-or shutdown occurs. A different human or conversation cannot adopt it. Changes
-to scratch capacity/entry settings replace the old allocation before another call.
+for its eligible follow-up keeps its allocation when the bot works in another
+conversation, including when preparation of that other turn fails. In the original
+conversation, a qualifying same-human follow-up adopts it; a nonmatching human or
+routine turn replaces it. Explicit bot cancellation, configuration invalidation,
+context reset and shutdown still release the bot's allocations. A different human
+or conversation cannot adopt them. Changes to scratch capacity/entry settings
+replace the old allocation before another call.
+
+Worker setup repairs a conflicting file or link at the required `/packages/tmp`
+and `/packages/tmp/runtime` directories without following link targets. The latter
+is the private `XDG_RUNTIME_DIR`, keeping audio-library runtime files in scratch.
+Missing default-venv scaffolding (including `pyvenv.cfg`) is restored in place;
+installed packages are retained. A setup failure explains that Bash did not start.
+Use `command -v NAME` to locate available commands; a separate `which` is not required.
 
 To retain suitable regular-file Python packages **across completed human tasks**,
 Simple filesystem or an explicit persistent Private workspace can optionally save
@@ -219,13 +230,19 @@ preserving prompt ordering
 and avoiding recurring prefix changes. Updating static guidance changes the
 prefix once on rollout; it is not a zero-invalidation deployment.
 
-`run` waits for bounded completion and returns a job ID, exit code, status, elapsed seconds, saved working directory, commit state, measured stdout/stderr byte sizes and small previews. `cd` persists as a persistent task's next working directory through Bash's exit hook; disposable calls always start fresh. Explicit `cwd` selects a workspace-relative directory. A script replacing the exit hook can leave the prior directory in effect; inspect the returned `cwd`.
+`run` waits for bounded completion and returns a job ID, exit code, status, elapsed seconds, saved working directory, commit state, measured stdout/stderr byte sizes and small previews. `cd` persists as a persistent task's next working directory through Bash's exit hook and a bounded pipe, independent of writable scratch files; disposable calls always start fresh. Explicit `cwd` selects a workspace-relative directory. A script replacing the exit hook can leave the prior directory in effect; inspect the returned `cwd`. Saved-tree link/special-file errors identify the rejected relative path and explain that the call's saved changes were discarded.
 
 `status`, `read` and `cancel` require the original bot, channel **and turn** plus current grants. Persistent workspace files can be reopened in later authorized turns. The authenticated dashboard may inspect retained jobs with their recorded ownership. `read` takes `stream`, byte `offset` and `limit` up to 8,000 bytes. Its `start`, exclusive `end`, `total_bytes` and `next_offset` are stable byte coordinates. `text` uses replacement characters if a byte page splits UTF-8; `data_base64` preserves exact bytes. Follow `next_offset` to reconstruct a stream without loss. EOF returns an empty page and no next offset. Output and retrieved files are untrusted source content.
 
 Cancellation first closes the supervisor's parent-control pipe and targets namespace PID 1 through a pidfd obtained from bubblewrap's trusted startup channel. It then reaps the outer process before releasing any persistent workspace lease. Killing namespace init also causes the kernel to kill all remaining namespace members. The control pipe and parent-death handling cover an abrupt application SIGKILL, including during setup; no model job survives as a detached service. Shutdown waits for actual cleanup. [Linux PID namespace termination](https://man7.org/linux/man-pages/man7/pid_namespaces.7.html)
 
 On restart, persisted `running` jobs become `interrupted`, stale staging directories are removed, and commands are never replayed. Persisted PIDs are never signalled during recovery. A crash during final atomic workspace commit can leave the committed files ahead of job metadata; inspect the workspace and retained evidence before retrying an irreversible transformation. No network or publication side effect is authorized through this runner.
+
+After acquiring the exclusive application runtime lock, startup removes only
+empty stale `scratch-*` mountpoint directories. It neither follows links nor
+recurses into nonempty directories. Constructing another runner does not perform
+this sweep. The existing recursive entry monitor remains unchanged: replacing it
+with inode counts or a mount inode quota would change what the entry limit means.
 
 Jobs live under external `$HORTATOR_DATA_DIR/jobs/`, with 0700 directories and 0600 metadata/logs. Backup and restore this directory with workspaces and the database. Stop the runtime for a consistent complete snapshot. Active jobs and outputs referenced by a running turn are protected from retention cleanup. At the recent-record count limit, admission automatically archives the oldest eligible metadata without deleting history. See the archival policy below. Missing/expired IDs produce a useful error. Never put these stores in Git.
 

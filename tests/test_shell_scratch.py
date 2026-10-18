@@ -87,7 +87,18 @@ async def test_scratch_does_not_transfer_to_other_people_or_conversations(sandbo
     runner.begin_turn(replacement, owner_id=owner)
     next_job = await runner.run(replacement, command="test ! -e /packages/private")
     assert next_job["status"] == "succeeded", next_job
-    assert not runner._scratch_pending
+    if channel == context.channel_id:
+        assert not runner._scratch_pending
+    else:
+        assert set(runner._scratch_pending) == {(context.bot["id"], context.channel_id)}
+        runner.finish_turn(replacement)
+        returning = ToolContext(context.bot, context.channel_id, "returning")
+        runner.begin_turn(returning, owner_id="human")
+        resumed = await runner.run(returning, command="cat /packages/private")
+        assert resumed["status"] == "succeeded", resumed
+        assert resumed["stdout"]["text"] == "private"
+        assert not runner._scratch_pending
+        runner.finish_turn(returning)
 
 
 async def test_settings_change_replaces_old_scratch_and_shutdown_releases_all(sandbox):

@@ -2051,8 +2051,9 @@ class Engine:
                 )
                 self.registry.agentic.runner.finish_turn(context, preserve_for=preserve_for)
             else:
-                # Preparation/compaction may fail before adopting pending scratch.
-                self.registry.agentic.runner.clear_bot(bot["id"])
+                # Preparation/compaction may fail before adopting this
+                # conversation's pending scratch. Other conversations survive.
+                self.registry.agentic.runner.clear_conversation(bot["id"], channel_id)
             if status in ("sent", "silent"):
                 self.incomplete_streaks.pop(self.cycle_scope(bot, channel_id), None)
             if cycle is not None:

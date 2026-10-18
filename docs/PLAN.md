@@ -653,3 +653,17 @@ Curie worked. Allow one command per bot, bounded by a global configurable defaul
 of four, and wait automatically when capacity is occupied. Preserve existing
 grants, per-command quotas and task deadlines, and keep changing facts at the
 prompt tail. Address the completed external shell audit after this scheduling fix.
+
+### External shell audit follow-up — 2026-10-18
+
+Repair required scratch directories and incomplete default virtualenv scaffolding
+between calls without erasing unrelated task files. Move working-directory receipt
+transport off writable scratch and give audio libraries a private scratch runtime
+directory. Preserve another conversation's pending handoff; keep existing
+same-conversation replacement and explicit whole-bot cancellation semantics.
+Sweep only empty stale scratch mountpoints at exclusive application startup.
+Name rejected saved-tree paths and teach the common `command -v` lookup.
+These are recovery and guidance corrections, not changes to saved-file policy,
+resource ceilings, attachment delivery or prompt ordering. Entry-monitor
+optimization remains a separate design follow-up because inode counts are not
+equivalent to the existing directory-entry quota. See [SHELL_RUNNER](SHELL_RUNNER.md).

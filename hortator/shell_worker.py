@@ -7,6 +7,7 @@ application package, credentials, or writable host directory exists here.
 from __future__ import annotations
 
 import base64
+from contextlib import ExitStack
 import ctypes
 import errno
 import json
@@ -100,7 +101,18 @@ def files(root, config):
                     total += info.st_size
                     result.append(("file", relative, info.st_size, bool(info.st_mode & stat.S_IXUSR)))
                 else:
-                    raise ValueError("Workspace output contains a symlink, hardlink, or special file")
+                    kind = (
+                        "symlink"
+                        if stat.S_ISLNK(info.st_mode)
+                        else "hardlinked regular file"
+                        if stat.S_ISREG(info.st_mode)
+                        else "special file"
+                    )
+                    raise ValueError(
+                        f"Workspace output contains a {kind} at {relative!r}; "
+                        "saved files must be regular files or directories. This call's saved changes "
+                        "were discarded. Keep linked/runtime/cache files in /packages or /tmp."
+                    )
                 if len(result) > config["max_files"] or total > config["quota_bytes"]:
                     raise ValueError("Workspace output exceeds its file-count or byte quota")
     return sorted(result, key=lambda row: (row[0] != "directory", row[1]))
@@ -150,6 +162,155 @@ def entry_limit_exceeded(root, limit):
     return None
 
 
+def scratch_directory(path):
+    """Restore required scratch directories without following replaced links."""
+    path = Path(path)
+    try:
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            info = None
+        if info is not None and not stat.S_ISDIR(info.st_mode):
+            path.unlink()
+        path.mkdir(exist_ok=True, mode=0o700)
+        path.chmod(0o700)
+    except OSError as error:
+        raise RuntimeError(
+            f"Cannot prepare task scratch directory {str(path)!r}: {error.strerror}. "
+            "Bash did not start, so a command cannot repair this setup failure. "
+            "Finish the current human task to release its temporary scratch before retrying. "
+            "Saved workspace files are unchanged."
+        ) from error
+
+
+def prepare_scratch():
+    scratch_directory("/packages/tmp")
+    scratch_directory("/packages/tmp/runtime")
+    os.environ["TMPDIR"] = "/packages/tmp"
+    os.environ["XDG_RUNTIME_DIR"] = "/packages/tmp/runtime"
+    if not Path("/packages/venv/bin/python3.14").exists() or not Path("/packages/venv/pyvenv.cfg").is_file():
+        try:
+            # Repair scaffolding in place: installed packages must survive.
+            venv.EnvBuilder(system_site_packages=True, symlinks=True).create("/packages/venv")
+        except (OSError, ValueError) as error:
+            cause = error.strerror if isinstance(error, OSError) else str(error)
+            raise RuntimeError(
+                f"Cannot repair task Python environment '/packages/venv': {cause}. "
+                "Bash did not start; retained packages may be incomplete. "
+                "Finish the current human task to release its temporary scratch before retrying. "
+                "Saved workspace files are unchanged."
+            ) from error
+
+
+def run_command(config, cwd, root):
+    emit("started", pid_namespace=os.readlink("/proc/self/ns/pid"))
+    started = time.monotonic()
+    cwd_bytes = bytearray()
+    cwd_size = 0
+    # A pipe cannot collide with retained scratch entries or require tmpfs space.
+    # Only its write end reaches the command, never the worker's framed transport.
+    with ExitStack() as resources:
+        read_fd, write_fd = os.pipe()
+        cwd_read = resources.enter_context(os.fdopen(read_fd, "rb", buffering=0))
+        cwd_write = resources.enter_context(os.fdopen(write_fd, "wb", buffering=0))
+        os.set_blocking(cwd_read.fileno(), False)
+        command = f"trap 'builtin pwd -P >&{write_fd}' EXIT\n" + config["command"]
+        child = subprocess.Popen(
+            ["/bin/bash", "--noprofile", "--norc", "-c", command],
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            close_fds=True,
+            pass_fds=(write_fd,),
+            start_new_session=True,
+            # Only command processes load task-installed native libraries. The
+            # trusted supervisor must always start/import/restrict against readonly
+            # baseline libraries, even when scratch survives earlier commands.
+            env={**os.environ, "LD_LIBRARY_PATH": "/packages/native/lib:/lib"},
+        )
+        cwd_write.close()
+        resources.callback(child.stdout.close)
+        resources.callback(child.stderr.close)
+        selector = resources.enter_context(selectors.DefaultSelector())
+        selector.register(cwd_read, selectors.EVENT_READ, "cwd")
+        selector.register(0, selectors.EVENT_READ, "parent")
+        for stream in ("stdout", "stderr"):
+            pipe = getattr(child, stream)
+            os.set_blocking(pipe.fileno(), False)
+            selector.register(pipe, selectors.EVENT_READ, stream)
+        count = 0
+        state = None
+        resource_limit = None
+        cleaned = False
+        last_scan = started
+        while any(key.data != "parent" for key in selector.get_map().values()) or child.poll() is None:
+            if time.monotonic() - started >= config["timeout_seconds"] and state is None:
+                state = "timed_out"
+            if time.monotonic() - last_scan >= 0.05 and state is None:
+                last_scan = time.monotonic()
+                resource_limit = entry_limit_exceeded(root, config["max_files"]) or entry_limit_exceeded(
+                    "/packages", config["package_entries"]
+                )
+                if resource_limit is not None:
+                    state = "resource_limited"
+            if (state is not None or child.poll() is not None) and not cleaned:
+                kill_descendants()
+                cleaned = True
+            for key, _ in selector.select(0.03):
+                if key.data == "parent":
+                    if not os.read(0, 1):
+                        state = "cancelled"
+                        selector.unregister(0)
+                    continue
+                data = os.read(key.fileobj.fileno(), 16_384)
+                if not data:
+                    selector.unregister(key.fileobj)
+                    key.fileobj.close()
+                    continue
+                if key.data == "cwd":
+                    cwd_size += len(data)
+                    cwd_bytes.extend(data[: max(0, 1024 - len(cwd_bytes))])
+                    continue
+                allowed = min(len(data), config["output_bytes"] - count)
+                if allowed:
+                    emit(key.data, data=base64.b64encode(data[:allowed]).decode())
+                    count += allowed
+                if allowed != len(data):
+                    state = "output_limited"
+        code = child.wait()
+        kill_descendants()
+        while True:
+            try:
+                pid, _ = os.waitpid(-1, os.WNOHANG)
+                if pid == 0:
+                    break
+            except ChildProcessError:
+                break
+    state = state or ("succeeded" if code == 0 else "failed")
+    new_cwd = config["cwd"]
+    try:
+        if cwd_size > 1024:
+            raise ValueError("Command working directory exceeds its bounded receipt")
+        candidate = cwd_bytes.decode().strip()
+        candidate_path = Path(candidate)
+        if candidate_path.is_absolute():
+            resolved = candidate_path.resolve(strict=True)
+            if resolved.is_relative_to(root) and resolved.is_dir():
+                new_cwd = resolved.relative_to(root).as_posix()
+    except OSError, ValueError:
+        pass
+    emit(
+        "result",
+        status=state,
+        exit_code=code,
+        elapsed_seconds=round(time.monotonic() - started, 3),
+        cwd=new_cwd,
+        **({"resource_limit": resource_limit} if state == "resource_limited" else {}),
+    )
+    return state
+
+
 def main():
     if select.select([0], [], [], 0)[0] and not os.read(0, 1):
         raise RuntimeError("Runner parent disconnected before sandbox startup")
@@ -169,98 +330,11 @@ def main():
     cwd = root / config["cwd"]
     if not cwd.is_dir() or cwd.resolve().is_relative_to(root) is False:
         raise ValueError("Working directory is missing or outside the workspace")
-    if not Path("/packages/venv/bin/python3.14").exists():
-        venv.EnvBuilder(system_site_packages=True, symlinks=True).create("/packages/venv")
-    Path("/packages/tmp").mkdir(exist_ok=True)
-    os.environ["TMPDIR"] = "/packages/tmp"
-    Path("/tmp/hortator-cwd").unlink(missing_ok=True)
+    prepare_scratch()
     restrict(config)
     if select.select([0], [], [], 0)[0] and not os.read(0, 1):
         raise RuntimeError("Runner parent disconnected before Bash startup")
-    emit("started", pid_namespace=os.readlink("/proc/self/ns/pid"))
-    started = time.monotonic()
-    command = "trap 'builtin pwd -P > /tmp/hortator-cwd' EXIT\n" + config["command"]
-    child = subprocess.Popen(
-        ["/bin/bash", "--noprofile", "--norc", "-c", command],
-        cwd=cwd,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        close_fds=True,
-        start_new_session=True,
-        # Only command processes load task-installed native libraries. The
-        # trusted supervisor must always start/import/restrict against readonly
-        # baseline libraries, even when scratch survives earlier commands.
-        env={**os.environ, "LD_LIBRARY_PATH": "/packages/native/lib:/lib"},
-    )
-    selector = selectors.DefaultSelector()
-    selector.register(0, selectors.EVENT_READ, "parent")
-    for stream in ("stdout", "stderr"):
-        pipe = getattr(child, stream)
-        os.set_blocking(pipe.fileno(), False)
-        selector.register(pipe, selectors.EVENT_READ, stream)
-    count = 0
-    state = None
-    resource_limit = None
-    cleaned = False
-    last_scan = started
-    while any(key.data != "parent" for key in selector.get_map().values()) or child.poll() is None:
-        if time.monotonic() - started >= config["timeout_seconds"] and state is None:
-            state = "timed_out"
-        if time.monotonic() - last_scan >= 0.05 and state is None:
-            last_scan = time.monotonic()
-            resource_limit = entry_limit_exceeded(root, config["max_files"]) or entry_limit_exceeded(
-                "/packages", config["package_entries"]
-            )
-            if resource_limit is not None:
-                state = "resource_limited"
-        if (state is not None or child.poll() is not None) and not cleaned:
-            kill_descendants()
-            cleaned = True
-        for key, _ in selector.select(0.03):
-            if key.data == "parent":
-                if not os.read(0, 1):
-                    state = "cancelled"
-                    selector.unregister(0)
-                continue
-            data = os.read(key.fileobj.fileno(), 16_384)
-            if not data:
-                selector.unregister(key.fileobj)
-                key.fileobj.close()
-                continue
-            allowed = min(len(data), config["output_bytes"] - count)
-            if allowed:
-                emit(key.data, data=base64.b64encode(data[:allowed]).decode())
-                count += allowed
-            if allowed != len(data):
-                state = "output_limited"
-    selector.close()
-    code = child.wait()
-    kill_descendants()
-    while True:
-        try:
-            pid, _ = os.waitpid(-1, os.WNOHANG)
-            if pid == 0:
-                break
-        except ChildProcessError:
-            break
-    state = state or ("succeeded" if code == 0 else "failed")
-    new_cwd = config["cwd"]
-    try:
-        candidate = Path("/tmp/hortator-cwd").read_text()[:1024].strip()
-        candidate_path = Path(candidate)
-        if candidate_path.is_relative_to(root) and candidate_path.is_dir():
-            new_cwd = candidate_path.relative_to(root).as_posix()
-    except OSError, ValueError:
-        pass
-    emit(
-        "result",
-        status=state,
-        exit_code=code,
-        elapsed_seconds=round(time.monotonic() - started, 3),
-        cwd=new_cwd,
-        **({"resource_limit": resource_limit} if state == "resource_limited" else {}),
-    )
+    state = run_command(config, cwd, root)
     if state in ("succeeded", "failed"):
         for kind, relative, size, executable in files(root, config):
             # Validate the same filesystem bounds, but never send disposable
