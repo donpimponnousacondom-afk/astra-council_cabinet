@@ -29,7 +29,9 @@ remain in private request diagnostics. The corrected direct-attachment/provider/
 diagnostic selection passed **60 tests in 17.96s**; the preceding Engram/native
 selection passed 65 tests with one test identifying missing original-caption
 diagnostic retention, subsequently fixed and covered in that 60-test pass.
-The broken direct-file contract anchors were corrected as well.
+An initial review claim about broken direct-file anchors was disproved: the
+existing level-three heading already provides the target. The unnecessary
+duplicate heading introduced while addressing that claim was removed.
 
 The larger native schema reduced headroom in the fixed 14k-context working-set
 fixture: the original result remained retrievable by its evidence handle, but its

@@ -417,9 +417,7 @@ The optional `global_memory` tool mirrors channel memory's `read`, `write` (same
 
 `discord_attach` accepts a `document_site` file source with site/path and an optional pinned revision; it uses the existing owned-file checks and delivers directly. `document_site.export` remains available when another action needs a current-turn artifact ID. Export neither edits, publishes nor sends. Workspace export and image generation remain independent optional artifact producers. Automatic full-answer attachments need no plugin and no checkbox.
 
-## Direct file replies
-
-Owner decision, 2026-10-22.
+## Owner decision — direct attachments, 2026-10-22
 
 The owner approved one-call file replies: reference a saved file, optionally
 include a message, and send it without a separate export, artifact selection,
