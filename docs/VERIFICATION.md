@@ -18,6 +18,12 @@ and zero usage, ERROR severity/request correlation, private capture retention,
 no retry/circuit penalty/recovery note, console rendering and unchanged end-cycle
 and response-recovery behavior. Repository Ruff lint/format and `git diff --check`
 pass. Full-suite CI and the independent open-PR reviews remain separate gates.
+Sol independently ran the published initial head
+`64e48563ddb47da74e3baebc4ff114d8a1935c9a`: **94 passed in 29.53s**
+across console, silence, Engram integration and reply protocol tests. That review
+also found old README/operations instructions still requiring an identical-code
+restart; those current workflow instructions were reconciled in a docs-only
+follow-up. The corrected head still requires renewed review and CI.
 
 This change does not modify model-facing prompts, tool schemas, provider settings,
 cache keys or response parsing. It does not detect nonempty incoherent answers or

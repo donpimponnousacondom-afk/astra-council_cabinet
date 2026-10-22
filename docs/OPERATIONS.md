@@ -334,13 +334,13 @@ cleanup scope.
 
 Keep the database, encryption key, bootstrap password, artifacts, and logs in the external data directory. Some historical branches tracked `data/`; moving between those commits can replace or remove files inside the checkout even though the current branch ignores them. Never restore those historical files over the external live directory.
 
-Before switching a running application's branch, stop the foreground server with Ctrl-C in Screen. Switch to the intended feature branch, rebuild `web/dist` for the selected commit (including after a squash merge even when UI code is identical), then run `hortator serve --host 127.0.0.1 --port 8000 --color`. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
+Follow the [single-restart procedure](#publication-and-local-development-deployment). An identical-tree branch preparation or squash merge does not need a stop, rebuild or reload. When changing checkout-loaded code or deploying a different source tree, stop the foreground server with Ctrl-C in Screen, prepare the intended task branch, and leave the runtime stopped until the finished change is published and checked. Then rebuild `web/dist` for the selected commit and start through the external launcher. The launcher selects the same external database on every branch. Code, dependencies, and generated UI remain in the checkout.
 
 Separating storage from Git does not make schema changes reversible. Follow the owner's [on-request backup policy](#backup-and-restore), including for branches with schema changes; do not create a backup implicitly for each deployment. Use an explicit `--data-dir` pointing to separate temporary storage for tests or experiments that should not use live configuration.
 
 ### Repeating the squash-merge workflow
 
-From any normal shell prompt on this workspace, after the previous PR is merged:
+The default next-task path verifies the merged PR and identical running, checkout and fetched-main trees, then creates the fresh task branch directly from `origin/main` without restarting; see [publication and local development deployment](#publication-and-local-development-deployment). The following helper is an **optional full stop/build/start**, for an intentional reload or branch transition that needs one. It is not an automatic step after every merge. From a normal shell prompt:
 
 ```bash
 hortator-next-feature
@@ -374,7 +374,7 @@ ln -s /home/codexy/codex/astra-council_cabinet/scripts/hortator-next-feature \
 
 Installation does not alter `.bashrc`, `.profile`, `.screenrc`, the runtime launcher or credentials. It requires the existing runtime environment/launcher plus Git, GNU Screen, Python 3.14, uv, npm and `ss`; GitHub CLI authentication is needed for squash-merge verification when ordinary ancestry cannot prove inclusion. This launcher is local operator automation, not a bot tool.
 
-For the manual equivalent, attach with `screen -x hortator`, let active work finish, then press Ctrl-C and wait for the shared Bash prompt. Use a new task name when the placeholder already exists:
+For a manual branch transition that requires stopping, attach with `screen -x hortator`, let active work finish, then press Ctrl-C and wait for the shared Bash prompt. This begins the task's one planned stop/start cycle; do not start an intermediate unchanged build. Use a new task name when the placeholder already exists:
 
 ```bash
 cd /home/codexy/codex/astra-council_cabinet
@@ -387,7 +387,7 @@ git switch -c feat/next_feature
 
 The clean-tree guard stops if edits remain; commit them on their task branch or resolve them deliberately. `--ff-only` refuses divergent history instead of creating a merge commit. Do not work on main if the pull or new branch creation fails. A squash merge has a new commit ID, so do not merge the old feature branch back into main or rebase it automatically. Keep old local branches until their work is verified as merged; delete them only when requested. [Git pull documentation](https://git-scm.com/docs/git-pull).
 
-After the branch is created, restore dependencies if needed, build the dashboard and start the foreground server:
+Implement and verify the change on the task branch, commit and publish its PR, and complete the intended review corrections while the server stays stopped. When ready for the planned deployment, restore dependencies if needed, build the dashboard and start the foreground server:
 
 ```bash
 uv sync --frozen &&
