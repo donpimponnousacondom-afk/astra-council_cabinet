@@ -26,7 +26,7 @@ from .plugins import (
     ToolBoundaryInterrupted,
     ToolContext,
 )
-from .provider import strip_reasoning
+from .provider import public_attachment_arguments, public_tool_calls, strip_reasoning
 from .response_recovery import queue_failed_response, read_note
 from .store import dumps, uid
 from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage
@@ -1416,7 +1416,12 @@ class Engine:
                                 else "Only end_cycle {} with your first answer (or council_silence if available) "
                                 "can finalize now; no action was executed"
                             )
-                            extras.append(result.message())
+                            extras.append(
+                                {
+                                    **result.message(),
+                                    "tool_calls": public_tool_calls(result.tool_calls, {"engram": engram}),
+                                }
+                            )
                             for call in calls:
                                 value = {"ok": False, "executed": False, "error": error}
                                 self.store.emit(
@@ -1624,7 +1629,12 @@ class Engine:
                         cycle_error = "Response included tool narration without end_cycle"
                     if cycle_error or batch_error:
                         freeze_draft(result, parsed_engram)
-                extras.append(result.message())
+                extras.append(
+                    {
+                        **result.message(),
+                        "tool_calls": public_tool_calls(result.tool_calls, {"engram": engram}),
+                    }
+                )
                 finished = False
                 ending_call = None
                 companion_failed = False
@@ -1709,6 +1719,8 @@ class Engine:
                             except (ValueError, TypeError) as exc:
                                 argument_report = syntax_feedback(name, exc, parameters, description)
                             else:
+                                if name == "discord_attach":
+                                    batch_args = public_attachment_arguments(batch_args, {"engram": engram})
                                 argument_report = feedback(name, batch_args, parameters, description) or {
                                     "usage": usage(name, parameters, description, arguments=batch_args)
                                 }
@@ -1730,6 +1742,16 @@ class Engine:
                         except (ValueError, TypeError) as exc:
                             result_value = syntax_feedback(name, exc, parameters, description)
                         else:
+                            if name == "discord_attach":
+                                if (
+                                    engram is not None
+                                    and isinstance(args, dict)
+                                    and isinstance(args.get("message"), str)
+                                ):
+                                    parsed_engram = await self.registry.engrams.parse(
+                                        engram, args["message"], final=True
+                                    )
+                                args = public_attachment_arguments(args, {"engram": engram})
                             result_value = feedback(name, args, parameters, description)
                             if (
                                 name == "discord_attach"
@@ -1754,11 +1776,6 @@ class Engine:
                                     )
                                 caption = args.get("message", result.content)
                                 if isinstance(caption, str):
-                                    if engram is not None and "message" in args:
-                                        parsed_engram = await self.registry.engrams.parse(
-                                            engram, caption, final=True
-                                        )
-                                        caption = self.registry.engrams.sanitize(engram, caption)
                                     if wrapped_reply(caption):
                                         issues.append({"path": "$.message", "message": REPLY_REPAIR})
                                     if len(strip_reasoning(caption)) > 12000:

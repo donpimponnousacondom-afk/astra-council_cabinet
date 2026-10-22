@@ -216,6 +216,7 @@ async def test_private_engram_in_caption_is_never_posted_and_requires_confirmed_
         assert state(kernel)[0]["MEM"] == PRIVATE
     turn_id = kernel.store.one("SELECT id FROM turns")["id"]
     assert PRIVATE not in str(kernel.service.inspect_model("turn", turn_id))
+    assert PRIVATE in str(kernel.service.turn(turn_id, include_diagnostics=True))
 
 
 async def test_file_only_interaction_keeps_private_response_and_finishes_once(kernel):
@@ -239,3 +240,60 @@ async def test_file_only_interaction_keeps_private_response_and_finishes_once(ke
     }
     item.edit_original_response.assert_awaited_once()
     assert len(item.edit_original_response.call_args.kwargs["attachments"]) == 1
+
+
+@pytest.mark.parametrize("invalid", ["missing_file", "caption_list", "non_object"])
+@pytest.mark.parametrize("rejected_batch", [False, True])
+async def test_invalid_attachment_does_not_echo_private_caption_into_error_evidence(
+    kernel, invalid, rejected_batch
+):
+    from test_engram_integration import PRIVATE, enable, response
+
+    _, transport = enable(kernel)
+    count = 0
+
+    def handler(request):
+        nonlocal count
+        count += 1
+        body = json.loads(request.content)
+        if count == 1:
+            caption = response(body)
+            args = {"message": caption}
+            if invalid == "caption_list":
+                args["message"] = [caption]
+            elif invalid == "non_object":
+                args = [caption]
+            calls = [tool("discord_attach", args)]
+            if rejected_batch:
+                calls.append(tool("discord_attach", {}, "duplicate"))
+            return reply(*calls)
+        assert PRIVATE not in str(body)
+        return completion("No file was selected.")
+
+    await install_client(kernel, handler)
+    await kernel.engine.tick()
+    await settle(kernel)
+    assert count == 2
+    assert transport.send.await_args is not None, kernel.store.one("SELECT error FROM turns")
+    assert transport.send.await_args.args[4] == []
+    assert PRIVATE not in str(kernel.store.rows("SELECT data FROM events WHERE kind='tool.failed'"))
+
+
+async def test_tagged_caption_reasoning_stays_private_without_engram(kernel):
+    _, transport = await saved_file(kernel)
+    private = "PRIVATE_REASONING_CAPTION_PROBE"
+    await install_client(
+        kernel,
+        lambda _: reply(
+            tool(
+                "discord_attach",
+                {"files": ["report.md"], "message": f"<think>{private}</think>Public caption"},
+            )
+        ),
+    )
+    await kernel.engine.tick()
+    await settle(kernel)
+    assert transport.send.await_args.args[2] == "Public caption"
+    turn_id = kernel.store.one("SELECT id FROM turns")["id"]
+    assert private not in str(kernel.service.inspect_model("turn", turn_id))
+    assert private in str(kernel.service.turn(turn_id, include_diagnostics=True))

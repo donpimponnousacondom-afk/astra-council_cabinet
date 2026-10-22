@@ -21,6 +21,16 @@ verified confirmed-only state commit and omission from public/model-readable
 evidence, while private provider diagnostics retain the original arguments.
 Interaction file-only delivery preserves its private response scope.
 
+PR review additionally found tagged caption reasoning exposed in model-readable
+inspection when Engram was disabled. Captions now share the existing answer
+privacy boundary in stored public evidence, continuation messages and validation
+errors, including invalid argument types and rejected batches. Original arguments
+remain in private request diagnostics. The corrected direct-attachment/provider/
+diagnostic selection passed **60 tests in 17.96s**; the preceding Engram/native
+selection passed 65 tests with one test identifying missing original-caption
+diagnostic retention, subsequently fixed and covered in that 60-test pass.
+The broken direct-file contract anchors were corrected as well.
+
 The larger native schema reduced headroom in the fixed 14k-context working-set
 fixture: the original result remained retrievable by its evidence handle, but its
 body was omitted. That fixture now uses 16k to retain its intended assertion that
