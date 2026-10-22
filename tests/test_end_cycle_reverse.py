@@ -139,10 +139,7 @@ async def test_reverse_engram_uses_first_answer_and_requires_delivery(kernel, fa
         assert events(kernel, "delivery.queued")[0]["request_id"] == answer_request
 
 
-@pytest.mark.parametrize("diagnostic_failure", [False, True])
-async def test_confirmed_first_answer_keeps_reverse_linkage_if_voice_companion_is_cancelled(
-    kernel, monkeypatch, diagnostic_failure
-):
+async def test_direct_attachment_keeps_confirmed_caption_if_voice_companion_is_cancelled(kernel):
     from hortator.plugins import ToolContext
     from test_end_cycle import read_call, tool
     from test_voice_notes import note
@@ -151,15 +148,6 @@ async def test_confirmed_first_answer_keeps_reverse_linkage_if_voice_companion_i
         kernel, response_protocol="end_cycle", enabled_plugins=["memory"], cooldown_seconds=0
     )
     transport.send.side_effect = ["666666666666666666", asyncio.CancelledError()]
-    emit = kernel.store.emit
-
-    def record(kind, *args, **kwargs):
-        if diagnostic_failure and kind == "cycle.answer_published":
-            raise OSError("Injected diagnostic event-write failure")
-        return emit(kind, *args, **kwargs)
-
-    monkeypatch.setattr(kernel.store, "emit", record)
-
     count = 0
     artifact_id = None
 
@@ -170,21 +158,32 @@ async def test_confirmed_first_answer_keeps_reverse_linkage_if_voice_companion_i
             turn_id = kernel.store.one("SELECT id FROM turns")["id"]
             artifact_id = note(kernel, ToolContext(bot, "222222222222222222", turn_id))
             return mixed("", read_call())
-        if count == 2:
-            return mixed("", tool("discord_attach", {"artifact_ids": [artifact_id]}, call_id="attach"), end())
-        assert count == 3 and not tool_names(json.loads(request.content))
-        return completion("Confirmed first answer")
+        assert count == 2
+        return mixed(
+            "",
+            tool(
+                "discord_attach",
+                {"artifact_ids": [artifact_id], "message": "Confirmed attachment caption"},
+                call_id="attach",
+            ),
+            end(),
+        )
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert count == 3
+    assert count == 2
+    assert transport.send.await_args_list[0].args[2] == "Confirmed attachment caption"
+    assert not events(kernel, "cycle.answer_pending")
     assert [r["status"] for r in kernel.store.rows("SELECT status FROM outbox ORDER BY created_at")] == [
         "sent",
         "unknown",
     ]
     assert cycle(kernel)["published"] is True
-    assert cycle(kernel)["reason"] == "end_cycle_then_text"
-    assert len(events(kernel, "cycle.answer_published")) == (0 if diagnostic_failure else 1)
+    assert cycle(kernel)["reason"] == "attachment_sent"
+    receipt = next(event for event in events(kernel, "tool.failed") if event["name"] == "discord_attach")
+    assert receipt["posted"] is None
+    assert receipt["attachments"] == [{"artifact_id": artifact_id, "status": "unknown"}]
+    assert receipt["delivery_status"] == "sent"
     turn = kernel.store.one("SELECT status,error FROM turns")
     assert turn["status"] == "sent"
     assert "Companion delivery interrupted" in turn["error"]

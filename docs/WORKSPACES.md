@@ -49,16 +49,27 @@ PNG optimization is lossless but its reduction depends on the source. The model 
 
 ```json
 {"operation":"stat","task":"compress-image","path":"compressed.png"}
-{"operation":"export","task":"compress-image","path":"compressed.png"}
 ```
 
-Pass the returned artifact ID to `discord_attach` inside `artifact_ids`, then write the final answer as ordinary assistant content. Leave a normal tool round for attachment preparation; preparation does not post or end the turn. An export is registration, not delivery. The existing final-response handling, mention suppression, ownership checks, cooldowns and uncertain-send behavior still decide delivery. An authorized persistent output can be exported again in a later turn, producing a fresh artifact owned by that turn. An artifact ID from an earlier turn cannot be reused directly.
+Send the saved output directly through `discord_attach`:
+
+```json
+{"files":[{"source":"workspace","task":"compress-image","path":"compressed.png"}],"message":"Compressed image attached."}
+```
+
+The attachment call sends the file and optional message and finishes the reply.
+No separate export or later assistant answer is needed. Existing final-response
+handling, mention suppression, ownership checks, cooldowns and uncertain-send
+behavior still apply. Explicit export remains available when another action needs
+an artifact ID; export alone never sends. A later turn may attach an authorized
+saved path again, but cannot reuse an earlier turn's artifact ID.
+See [direct file replies](TOOLS.md#direct-file-replies).
 
 Image imports reuse integrity-checked cached pixels from [VISION.md](VISION.md), including images larger than 8 MiB. The original image intake limit remains **20 MiB (20,971,520 bytes)** and **20 megapixels**. The automatic vision pipeline's separate combined request budget remains 40 MiB and eight images. General attachment imports are also capped at 20 MiB. Only stored Discord attachment IDs and trusted CDN observations are accepted; a model cannot supply a download URL. Uncached imports have bounded network deadlines and do not use ambient proxy credentials. Images retain their original encoded bytes and pixels.
 
 An expired signed URL produces an explicit failure. A refreshed authenticated Discord observation or a new upload can repair it; cached pixels remain usable after the URL expires. An edit/removal observed during a download cancels that import. Imported paths are protected: file writes and sandbox snapshot commits reject changed or deleted originals. Save transformations under a new filename.
 
-Outbound artifacts retain their separate **8,000,000-byte** delivery limit. A 10 MiB image can be imported and inspected, but must be compressed into an eligible output before attachment export. Document-site import limits are independent. Workspaces do not read or write the site's publication store and do not enable any remote transport.
+Outbound artifacts retain their separate **8,000,000-byte** delivery limit. A 10 MiB image can be imported and inspected, but must be compressed into an eligible output before delivery. Document-site import limits are independent. Workspaces do not read or write the site's publication store and do not enable any remote transport.
 
 ## Storage, quotas and retention
 

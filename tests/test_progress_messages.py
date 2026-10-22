@@ -233,7 +233,7 @@ async def test_silence_does_not_publish_accompanying_text(kernel):
     assert kernel.store.one("SELECT status FROM turns")["status"] == "silent"
 
 
-async def test_prepared_attachments_and_panels_wait_for_final_answer(kernel, monkeypatch):
+async def test_progress_has_no_files_and_attachment_caption_waits_for_validation(kernel, monkeypatch):
     bot, transport = ready(
         kernel, response_protocol="progress", enabled_plugins=["memory"], cooldown_seconds=0
     )
@@ -249,20 +249,31 @@ async def test_prepared_attachments_and_panels_wait_for_final_answer(kernel, mon
             turn_id = kernel.store.one("SELECT id FROM turns")["id"]
             ctx = ToolContext(bot, "222222222222222222", turn_id)
             kernel.registry.artifact(b"Useful output", "text/plain", ".txt", ctx)
-            return mixed("", tool("memory", {"operation": "read"}))
-        if count == 2:
-            artifact_id = kernel.store.one("SELECT id FROM artifacts")["id"]
-            return mixed("", tool("discord_attach", {"artifact_ids": [artifact_id]}))
-        if count == 3:
-            return mixed("Finishing the note.", write_call())
+            return mixed("Checking the note.", tool("memory", {"operation": "read"}))
         assert not panel_lookup.called
+        assert transport.send.await_count == 1
         assert transport.send.await_args_list[0].args[4] == []
-        return completion("Finished, with the file.")
+        if count == 2:
+            return mixed(
+                "This success claim must stay private.",
+                tool("discord_attach", {"artifact_ids": ["missing"], "message": "Not delivered."}),
+            )
+        assert count == 3
+        receipt = responses(json.loads(request.content))[-1]
+        assert receipt["ok"] is False
+        artifact_id = kernel.store.one("SELECT id FROM artifacts")["id"]
+        return mixed(
+            "Ignored fallback text.",
+            tool("discord_attach", {"artifact_ids": [artifact_id], "message": "Finished, with the file."}),
+        )
 
     await install_client(kernel, handler)
     await kernel.engine.tick()
     await settle(kernel)
+    assert count == 3
     assert transport.send.await_count == 2
+    assert transport.send.await_args_list[0].args[2] == "Checking the note."
+    assert transport.send.await_args_list[1].args[2] == "Finished, with the file."
     assert len(transport.send.await_args_list[1].args[4]) == 1
     panel_lookup.assert_called_once()
 

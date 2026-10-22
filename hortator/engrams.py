@@ -427,7 +427,7 @@ class Engrams:
         return (
             "ENGRAM WIRE CONTRACT (runtime-enforced): If nothing useful has changed, you may omit "
             "the private block and keep the previous memory. When updating memory, on the FINAL "
-            "ordinary assistant answer only, write the public answer first, then append exactly "
+            "answer only, write the public answer first, then append exactly "
             "this private terminal block on new lines:\n"
             f"[^ENGRAM:{nonce}]\n"
             '{"MEM":"complete replacement of factual working memory","FACTS":"complete replacement of attributed facts"}\n'
@@ -448,10 +448,12 @@ class Engrams:
                 "If the harness has already accepted end_cycle and requests your first answer with no tools, "
                 "append the block to that first answer without calling end_cycle again. A retained draft keeps "
                 "its original block; do not generate a replacement during confirmation. "
-                "Do not emit the block on intermediate tool responses or silence. "
+                "Do not emit the block on intermediate work responses or silence. "
                 if snapshot.get("response_protocol") == "end_cycle"
-                else "Do not emit the block on tool-call responses or silence. "
+                else "Do not emit the block on intermediate work responses or silence. "
             )
+            + "For a direct discord_attach reply, append this block inside its message after the public caption. "
+            "It is removed before sending and saved only after confirmed delivery; no end_cycle is needed. "
             + "Any public joke, sign-off, or footer you write goes BEFORE the private block, "
             "never after END. "
             f"The combined MEM and FACTS string values must fit within {config['state_char_limit']} "
@@ -506,7 +508,7 @@ class Engrams:
         covered_through is the captured input horizon actually represented by
         transcript plus acknowledged summary, never a fresh live database tail.
         terminal_call_id is supplied only after the engine validates end_cycle
-        and successfully executes its permitted companions.
+        or a direct attachment reply and executes its permitted companions.
         """
         if not parsed.get("state") or parsed.get("invalid"):
             raise ControlError("Cannot stage invalid or absent engram state")
@@ -616,15 +618,19 @@ class Engrams:
                 terminal = False
             if not terminal:
                 raise ControlError("Engram draft requires a valid end_cycle-only confirmation")
-        elif terminal_call_id is not None and snapshot.get("response_protocol") == "end_cycle":
-            endings = [
-                call
-                for call in response.get("tool_calls", [])
-                if call.get("function", {}).get("name") == "end_cycle"
-            ]
-            if len(endings) == 1 and endings[0].get("id") == terminal_call_id:
+        elif terminal_call_id is not None:
+            endings = [call for call in response.get("tool_calls", []) if call.get("id") == terminal_call_id]
+            if len(endings) == 1:
                 try:
-                    terminal = parse_arguments(endings[0]["function"]["arguments"]) == {}
+                    name = endings[0]["function"]["name"]
+                    arguments = parse_arguments(endings[0]["function"]["arguments"])
+                    if name == "discord_attach":
+                        from .attachments import PARAMETERS
+                        from .tool_feedback import errors_for
+
+                        terminal = not errors_for(PARAMETERS, arguments)
+                    elif name == "end_cycle" and snapshot.get("response_protocol") == "end_cycle":
+                        terminal = arguments == {}
                 except KeyError, TypeError, ValueError:
                     pass
         if not (

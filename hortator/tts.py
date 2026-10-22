@@ -15,7 +15,7 @@ DESCRIPTION = (
     'List available voices: {"operation":"voices"}; follow returned next until null. '
     "Discovery depends on the configured provider; it does not need an API key from you. "
     "Use returned voice IDs, not guessed names. A voice override applies only to this call. "
-    "Generation returns an artifact ID for discord_attach, then answer normally."
+    "Generation returns an artifact ID; discord_attach with artifact_ids and an optional message sends it and finishes the reply."
 )
 PARAMETERS = {
     "type": "object",

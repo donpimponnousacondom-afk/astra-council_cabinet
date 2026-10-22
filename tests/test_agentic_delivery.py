@@ -11,7 +11,6 @@ from hortator.plugins import ToolContext
 from hortator.store import dumps
 from hortator.vision import validate_image
 from support.provider import install_client
-from support.runtime import completion
 from support.runtime_feedback import ready, reply, responses, tool
 
 
@@ -49,7 +48,7 @@ async def test_real_large_image_import_isolated_compression_and_existing_discord
         "vision": {"status": "ready", "sha256": digest, **validate_image(original)},
     }
     kernel.store.execute("UPDATE messages SET attachments=?", (dumps([attachment]),))
-    count, artifact_id = 0, None
+    count = 0
     command = """python3 - <<'PY'
 from PIL import Image
 from pathlib import Path
@@ -62,7 +61,7 @@ with Image.open(p) as image:
 PY"""
 
     async def handle(request):
-        nonlocal count, artifact_id
+        nonlocal count
         count += 1
         body = json.loads(request.content)
         if count == 1:
@@ -91,20 +90,16 @@ PY"""
             assert measurements["bytes"] == len(original) and measurements["width"] == 3072
             assert measurements["compressed_bytes"] < 8_000_000
             return reply(
-                tool("workspace", {"operation": "export", "task": "compress-image", "path": "compressed.jpg"})
-            )
-        if count == 5:
-            artifact_id = responses(body)[-1]["artifact_id"]
-            return reply(
                 tool(
                     "discord_attach",
-                    {"artifact_ids": [artifact_id]},
+                    {
+                        "files": [
+                            {"source": "workspace", "task": "compress-image", "path": "compressed.jpg"}
+                        ],
+                        "message": "Compressed a copy; original preserved.",
+                    },
                 )
             )
-        if count == 6:
-            assert responses(body)[-1]["prepared"] is True
-            assert responses(body)[-1]["posted"] is False
-            return completion("Compressed a copy; original preserved.")
         raise AssertionError("Unexpected extra model call")
 
     await install_client(kernel, handle)
@@ -112,7 +107,10 @@ PY"""
     await asyncio.wait_for(asyncio.gather(*kernel.engine.tasks.values()), 30)
     turn = kernel.store.one("SELECT * FROM turns")
     assert turn["status"] == "sent", turn["error"]
+    assert count == 4
     transport.send.assert_awaited_once()
+    assert transport.send.await_args.args[2] == "Compressed a copy; original preserved."
+    artifact_id = json.loads(kernel.store.one("SELECT artifacts FROM outbox")["artifacts"])[0]
     paths = transport.send.await_args.args[4]
     assert len(paths) == 1 and paths[0].stat().st_size < 8_000_000
     with Image.open(paths[0]) as compressed:

@@ -29,7 +29,7 @@ async def test_plain_content_is_the_final_answer_without_a_reply_tool(kernel, co
     await settle(kernel)
     assert len(requests) == 1
     body = requests[0]
-    assert {t["function"]["name"] for t in body["tools"]} == {"council_silence"}
+    assert {t["function"]["name"] for t in body["tools"]} == {"council_silence", "discord_attach"}
     assert "ordinary assistant content" in body["messages"][0]["content"]
     assert "follow the current response protocol" in body["messages"][0]["content"]
     transport.send.assert_awaited_once()

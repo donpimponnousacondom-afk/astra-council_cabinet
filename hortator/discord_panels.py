@@ -21,7 +21,7 @@ DESCRIPTION = (
     "Call {} for usage. prepare requires title and buttons and/or select_options. "
     "Each action needs label and prompt. Optional description, accent_color (#D6A447 default), "
     "select_placeholder and expires_hours (1–720, default 168). Only one prepared panel per turn; prepare replaces it. "
-    "This does not post: finish with ordinary assistant content, optionally discord_attach for prepared files. "
+    "This does not post: finish with ordinary assistant content, or send files and a message through discord_attach. "
     "list/status inspect your panels; disable revokes an existing panel's actions; cancel removes this turn's preparation. "
     "Clicks have the same provider/tool limits and 14-minute interaction deadline as /prompt; "
     "they do not read surrounding history or resume the original turn. Never claim a task ran before it actually did."
@@ -252,7 +252,7 @@ class DiscordPanels:
         return {
             **self.describe(self.owned(panel_id, bot_id)),
             "prepared": True,
-            "next": "Finish with ordinary assistant text; this panel is not posted yet. Optional discord_attach prepares files.",
+            "next": "Finish with ordinary assistant text, or send files and a message through discord_attach. This panel is not posted yet.",
         }
 
     def prepared(self, context):

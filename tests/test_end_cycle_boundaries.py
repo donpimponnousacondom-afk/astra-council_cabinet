@@ -16,9 +16,9 @@ from test_end_cycle import cycle, end, events, mixed, read_call, run, tool, tool
 from test_engram_integration import PRIVATE, enable, response, state
 
 
-@pytest.mark.parametrize("reverse", [False, True])
-@pytest.mark.parametrize("preparation", ["success", "invalid", "help"])
-async def test_attachment_action_count_tracks_successful_preparation(kernel, preparation, reverse):
+@pytest.mark.parametrize("caption_in_tool", [False, True])
+@pytest.mark.parametrize("attempt", ["success", "invalid", "help"])
+async def test_attachment_action_count_tracks_successful_delivery(kernel, attempt, caption_in_tool):
     bot, transport = ready(kernel, response_protocol="end_cycle", enabled_plugins=["memory"])
     requests = []
 
@@ -37,20 +37,30 @@ async def test_attachment_action_count_tracks_successful_preparation(kernel, pre
                 "success": {"artifact_ids": [artifact_id]},
                 "invalid": {"artifact_ids": ["missing"]},
                 "help": {},
-            }[preparation]
+            }[attempt]
+            if caption_in_tool and attempt != "help":
+                args["message"] = "Here is the file."
             return mixed(
-                "" if reverse else "Here is the file.", tool("discord_attach", args, call_id="attach"), end()
+                "" if caption_in_tool else "Here is the file.",
+                tool("discord_attach", args, call_id="attach"),
+                end(),
             )
-        assert reverse and preparation == "success" and not tool_names(body)
-        return completion("Here is the file.")
+        assert len(requests) == 3 and attempt != "success"
+        transport.send.assert_not_awaited()
+        assert "discord_attach" in tool_names(body)
+        receipts = [json.loads(m["content"]) for m in body["messages"] if m["role"] == "tool"]
+        assert any(r.get("usage_only") or r.get("ok") is False for r in receipts)
+        return mixed("No file was sent.", end())
 
     await install_client(kernel, handler)
     await run(kernel)
-    assert len(requests) == (3 if reverse and preparation == "success" else 2)
-    assert transport.send.await_count == (1 if preparation == "success" else 0)
-    if preparation == "success":
-        assert len(transport.send.await_args.args[4]) == 1
-    assert cycle(kernel)["actions_executed"] == (2 if preparation == "success" else 1)
+    assert len(requests) == (2 if attempt == "success" else 3)
+    transport.send.assert_awaited_once()
+    assert transport.send.await_args.args[2] == (
+        "Here is the file." if attempt == "success" else "No file was sent."
+    )
+    assert len(transport.send.await_args.args[4]) == (1 if attempt == "success" else 0)
+    assert cycle(kernel)["actions_executed"] == (2 if attempt == "success" else 1)
 
 
 @pytest.mark.parametrize("finish", ["tool_calls", "stop"])

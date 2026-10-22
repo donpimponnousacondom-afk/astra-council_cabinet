@@ -173,11 +173,11 @@ async def test_working_set_accounts_for_large_existing_summary_before_calling_pr
         "profiles",
         {
             **profile,
-            "context_window": 14000,
+            "context_window": 16000,
             "response_tokens": 1500,
             "summary_tokens": 1000,
             # Keep this test focused on fitting tool results beside an existing
-            # summary, independent of small additions to runtime instructions.
+            # summary, including the stable native attachment schema in the baseline.
             "compact_threshold": 0.85,
         },
     )
@@ -191,9 +191,9 @@ async def test_working_set_accounts_for_large_existing_summary_before_calling_pr
         requests.append(body)
         if len(requests) == 1:
             return reply(tool("web_fetch", {"url": "https://example.com/large"}))
-        assert responses(body)[-1]["result_is_paged"] is True
+        assert responses(body)[-1].get("result_is_paged") is True, responses(body)[-1]
         assert responses(body)[-1]["text"]
-        assert kernel.engine.contexts.estimate_request(body["messages"], body.get("tools", [])) < 12500
+        assert kernel.engine.contexts.estimate_request(body["messages"], body.get("tools", [])) < 14500
         return reply(tool("council_silence", {"label": "Reference retained"}))
 
     await install_client(kernel, handle)

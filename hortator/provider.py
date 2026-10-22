@@ -142,6 +142,30 @@ def public_content(content, context):
     return content
 
 
+def public_tool_calls(calls, context):
+    """Attachment captions share the final-answer Engram privacy boundary.
+
+    Raw arguments remain in private provider diagnostics. Do not mutate calls
+    used by the engine or continuation; sanitize only model-readable evidence.
+    """
+    if not context.get("engram"):
+        return calls
+    result = []
+    for call in calls:
+        function = call.get("function", {})
+        if function.get("name") == "discord_attach":
+            raw = function.get("arguments")
+            try:
+                arguments = json.loads(raw) if isinstance(raw, str) else raw
+            except TypeError, ValueError:
+                arguments = "[Private attachment caption omitted: invalid arguments]"
+            if isinstance(arguments, dict) and isinstance(arguments.get("message"), str):
+                arguments = {**arguments, "message": public_content(arguments["message"], context)}
+            call = {**call, "function": {**function, "arguments": dumps(arguments)}}
+        result.append(call)
+    return result
+
+
 def envelope_error(error, *, private_key=False):
     """HTTP-200 error envelopes still carry request/auth/rate/server semantics.
 
@@ -856,7 +880,7 @@ class ProviderPool:
                         self.vault.redact(
                             {
                                 "content": public_content(result.content, context),
-                                "tool_calls": result.tool_calls,
+                                "tool_calls": public_tool_calls(result.tool_calls, context),
                                 "finish_reason": result.finish_reason,
                                 "provider_metadata": result.metadata,
                                 "pricing": metrics["pricing"],
@@ -1029,7 +1053,7 @@ class ProviderPool:
                             {
                                 "partial": True,
                                 "content": public_content(result.content, context),
-                                "tool_calls": result.tool_calls,
+                                "tool_calls": public_tool_calls(result.tool_calls, context),
                                 "finish_reason": result.finish_reason,
                                 "provider_metadata": result.metadata,
                                 "pricing": metrics["pricing"],

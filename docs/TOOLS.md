@@ -176,8 +176,12 @@ single generation. Existing text-only calls use the saved default. Credentials
 stay in the registry; other providers explicitly report unsupported discovery.
 See [TTS](TTS.md) for pagination, configuration and response handling.
 
-Models send their final answer as ordinary OpenAI assistant `content` (a string
-or ordered text parts). There is **no `council_speak` tool**; the `end_cycle`
+Models send text-only final answers as ordinary OpenAI assistant `content` (a
+string or ordered text parts). File replies can instead finish through the native
+[`discord_attach` action](#direct-file-replies), with an optional public message.
+This terminal attachment action works in every response mode without a separate
+assistant answer or `end_cycle`. The protocol rules below describe ordinary
+text answers and nonterminal work batches. There is **no `council_speak` tool**; the `end_cycle`
 terminal tool exists only for bots in that mode. In `narrate` and `progress` a
 text-only response ends the turn; tool-only responses execute the batch and
 continue inference with results. Text describing an action never manufactures a
@@ -191,7 +195,7 @@ that contain both ordinary text and genuine action `tool_calls`:
 | `end_cycle` (operator opt-in) | Narration is withheld, counts one strike, and its actions run once; no answer draft is created | Finish from the results with text + `end_cycle`; real answer drafts remain immutable |
 
 **`end_cycle` mode.** The normal finish is ordinary assistant answer text plus
-`end_cycle {}` in the same response. The answer never goes inside tool arguments.
+`end_cycle {}` in the same response. The text-only answer never goes inside end_cycle arguments.
 `end_cycle {}` executes a terminal decision; it is **not** an empty-call usage
 query. After work, the runtime publishes immediately, finalizes from completed
 tool results, confirms an existing answer draft, or permits one first answer
@@ -240,8 +244,9 @@ after an accepted finish call. None of these final phases returns to work.
   action tools, replay writes or create a loop.
 - *Companions*: during normal work, `end_cycle` may accompany only
   `memory`/`global_memory` writes and `discord_attach`, executed once before
-  publication. A failed companion stops the cycle without publishing a possibly
-  false success claim. Successful companions stay committed, with evidence;
+  publication. A failed memory companion stops the cycle without publishing a
+  possibly false success claim. A `discord_attach` source/validation failure
+  instead returns repair feedback within the remaining ordinary work budget. Successful companions stay committed, with evidence;
   failed ones are not queued for replay. Reads/search/fetch/shell are not finish
   companions. During draft confirmation, no action companions are allowed.
   `council_silence` remains a separate terminal choice and cannot share a batch
@@ -271,7 +276,7 @@ protocol, status, reason (`end_cycle`, `end_cycle_then_text`, `draft_published`,
 whether text was published, and whether a draft or finalization occurred. Rounds
 count attempted model generations, including the final answer; preparation
 failures have zero and still emit the event. The action count includes successful
-attachment preparation, not help or rejected calls; terminal controls do not count
+attachment delivery, not help or rejected calls; terminal controls do not count
 as actions. This
 is the evidence for comparing narration behaviour across bots and modes. The
 finish-first path also emits `cycle.answer_pending` and `cycle.answer_published`,
@@ -324,19 +329,58 @@ See [prompt selection](PROMPTS.md#response-protocol-guidance) and the
 [read-only observation report](OPERATIONS.md#observing-text-with-tool-calls).
 Engram suffixes remain private and final-only.
 
-The per-bot **Allow intentional silence** capability (`allow_silence`, default true) is the operator's control over that terminal decision. False omits its schema at all rounds and adds runtime guidance to finish with a text contribution. A stray disabled call, including `{}`, is refused rather than treated as a successful silent activation or executable discovery; it includes usage and all detectable argument errors. Repeated calls consume the existing round budget and eventually fail visibly, without executing other calls in the rejected batch or adding retries. Other granted actions and attachment preparation remain available. The same rule applies during extended document/workspace/web tasks. No saved persona/shared prompt is rewritten.
+The per-bot **Allow intentional silence** capability (`allow_silence`, default true) is the operator's control over that terminal decision. False omits its schema at all rounds and adds runtime guidance to finish with a text contribution. A stray disabled call, including `{}`, is refused rather than treated as a successful silent activation or executable discovery; it includes usage and all detectable argument errors. Repeated calls consume the existing round budget and eventually fail visibly, without executing other calls in the rejected batch or adding retries. Other granted actions and direct attachment replies remain available. The same rule applies during extended document/workspace/web tasks. No saved persona/shared prompt is rewritten.
 
-`discord_attach` becomes available only after this bot has a current-turn artifact. Call it with `{"artifact_ids":["<returned-id>"]}` and optionally `reply_to` from the current channel context, then write the final text answer. It prepares metadata only, replaces the previous selection, accepts `[]` to clear files, and consumes an ordinary tool round. Leave a round after generation/export for preparation. Ordinary text replies need no preparation. Artifact ownership, cooldowns, cancellation, footer calculation and uncertain delivery checks still apply at dispatch. A bot choosing silence after preparation sends nothing.
+### Direct file replies
 
-Export, preparation and delivery are separate states: export registers an artifact;
-`discord_attach` returns `prepared: true, posted: false`; final-answer dispatch sends
-the selected files. Progress can be posted before the tools beside it run and never
-includes these pending files. The model should describe preparation as preparation;
-only a successful delivery receipt establishes a completed send. Current exported
-and prepared counts are reported in late runtime facts, after conversation and tool
-results. They are not inserted into stable schemas or early prompt instructions.
-Cancellation or supersession does not deliver the old selection automatically;
-the next turn must explicitly prepare its own current-turn artifacts.
+`discord_attach` sends existing saved files with an optional public message and
+finishes the reply in one call. It is a native action, not a plugin grant, and is
+advertised throughout normal tool work; it does not wait for an exported artifact.
+It remains subject to ordinary work budgets and finalization restrictions.
+
+```json
+{"files":["reports/findings.md"],"message":"Here is the report."}
+```
+
+String paths select this bot's mounted Simple filesystem. Named Private
+workspaces and document sites use explicit sources:
+
+```json
+{"files":[{"source":"workspace","task":"analysis","path":"result.csv"}],"message":"Results attached."}
+{"files":[{"source":"document_site","site":"briefing","path":"index.html","revision":3}]}
+```
+
+The harness resolves each saved path, checks the existing source grant and
+ownership, and creates a delivery copy internally. An explicit `export` call is
+not required. Generated images/audio and optionally exported files remain
+supported through `artifact_ids` created by this bot in the current turn. Paths
+and artifact IDs may be combined, up to **four files total**, each at most
+**8,000,000 bytes**. Optional `reply_to` must identify a message in the current
+channel context. [Native voice notes](FRENCHY_TTS.md#native-voice-notes) retain
+their separate message rules; voice-only replies need no placeholder text.
+
+The optional `message` supplies the public caption/answer and takes precedence
+over ordinary assistant text accompanying the call. If omitted, accompanying
+assistant text supplies the caption when present; otherwise the reply is
+file-only. An explicit empty `message` also selects a file-only reply. The runtime withholds accompanying text from progress delivery
+and sends the accepted final text and files through the existing outbox. No
+further assistant response or `end_cycle` is needed. A successful delivery
+receipt reports `posted: true`; preparation alone is never a delivery receipt.
+
+Call `discord_attach` alone, or alongside permitted `memory`/`global_memory`
+writes and optional `end_cycle`. Other work calls and multiple attachment calls
+in the same batch are rejected before execution. Source/argument failures send
+neither caption nor files and return corrective feedback within the existing
+work budget. A failed memory companion still stops publication. Transport
+failure or uncertain acceptance stops the turn without an automatic resend.
+Cancellation, cooldowns, current ownership/grants, footers, panels and Engram
+finalization retain their ordinary final-delivery controls.
+
+Explicit export remains an optional artifact-producing action for other tools,
+such as a speech reference or the separately granted `discord_send`. It never
+posts by itself. Artifact IDs remain turn-owned; attach a saved path again in a
+later turn instead of reusing an old artifact ID. Changing runtime state stays
+in late facts and receipts, not in the stable schema or early instructions.
 
 Obsolete native `council_speak` calls receive migration feedback and execute nothing. Obvious unfenced JSON/XML reply wrappers are withheld; the runtime allows at most one text-format repair, charged to the existing round budget. It never executes textual pseudo-tools or rewrites old messages. Ordinary JSON answers and fenced examples remain valid. Preserve this contract when adding new packs: do not reintroduce a tool required to send the normal answer.
 
@@ -371,7 +415,17 @@ The optional `global_memory` tool mirrors channel memory's `read`, `write` (same
 
 `discord_panel` is a separate optional tool pack: `prepare`, `cancel`, `list`, `status`, `disable`. Preparation needs title and buttons and/or select_options; every action needs label and prompt. It only stages the next normal assistant answer. Owner clicks run real new tasks with the usual retries, budgets and diagnostics. `{}` and complete argument-error feedback follow the same shared contract as every other plugin. See [DISCORD_PANELS.md](DISCORD_PANELS.md).
 
-`document_site.export` takes site/path and optionally a pinned revision, verifies an owned saved file and returns a current-turn artifact for `discord_attach`. It neither edits nor publishes. Workspace export and image generation remain separate optional artifact producers. Automatic full-answer attachments need no plugin and no checkbox.
+`discord_attach` accepts a `document_site` file source with site/path and an optional pinned revision; it uses the existing owned-file checks and delivers directly. `document_site.export` remains available when another action needs a current-turn artifact ID. Export neither edits, publishes nor sends. Workspace export and image generation remain independent optional artifact producers. Automatic full-answer attachments need no plugin and no checkbox.
+
+## Owner decision — direct attachments, 2026-10-22
+
+The owner approved one-call file replies: reference a saved file, optionally
+include a message, and send it without a separate export, artifact selection,
+assistant answer or finish call. Internal staging and existing delivery/ownership
+checks remain. Generated artifacts stay supported; ordinary text answers still
+need no sending tool. This specifically replaces the previous staged-only
+attachment workflow and its artifact-dependent visibility. It does not reopen
+the deferred general stable-tool-list decision or frozen shell prompt tuning.
 
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
 
@@ -428,7 +482,7 @@ Existing decision dates and qualifications below remain authoritative.
   progress is useful, must emit actual calls, and must distinguish pending work
   from confirmed results. Preserve private reasoning, Engrams and scope boundaries.
 
-- Models answer through ordinary OpenAI assistant content, never `council_speak`. Keep `council_silence` as the explicit terminal tool when the bot's `allow_silence` capability permits it (default true, including older records). The owner needs this per-bot Capabilities toggle for provider/conversation stress tests. Disabling it removes the schema at every round, updates runtime guidance and rejects stray silence calls within the existing tool budget; it must not invent a successful answer, hide errors, add activations or bypass other limits. Genuine action tools may precede the final text answer; attachment preparation is optional and contains no answer text. Reject legacy tool-wrapped replies without parsing them as actions, with at most one text-format repair inside the existing round budget.
+- Models answer through ordinary OpenAI assistant content, never `council_speak`. Keep `council_silence` as the explicit terminal tool when the bot's `allow_silence` capability permits it (default true, including older records). The owner needs this per-bot Capabilities toggle for provider/conversation stress tests. Disabling it removes the schema at every round, updates runtime guidance and rejects stray silence calls within the existing tool budget; it must not invent a successful answer, hide errors, add activations or bypass other limits. Genuine action tools may precede the final text answer; the original attachment-preparation contract was superseded by the 2026-10-22 direct attachment decision above. Reject legacy tool-wrapped replies without parsing them as actions, with at most one text-format repair inside the existing round budget.
 
 - Model-facing `council_inspect` uses a compact bot roster/status separate from dashboard configuration responses. List stable IDs before looking up entities; never infer bot identity from human, room, model or provider names. Saved conversation state is an explicit `context` request, not part of the bot roster/configuration tool. Preserve complete redacted inspection results before paging, with native `resource: "read_result"` on the inspector itself; no workspace grant is required. Rereads retain bot/channel/turn and transitive grant checks. Never restore the old 50,000-character destructive truncation or rewrite bot memories to hide it. See TOOLS for the inspection contract.
 

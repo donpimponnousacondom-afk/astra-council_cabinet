@@ -174,7 +174,8 @@ class VoiceNotes:
         from .runtime import DeliveryError
 
         parent = self.store.one("SELECT routing FROM outbox WHERE id=?", (parent_id,))
-        routing = json.loads(parent["routing"])
+        saved_routing = json.loads(parent["routing"])
+        routing = saved_routing if "mode" in saved_routing else {}
         pending = []
         for note in notes:
             outbox_id = uid("out_")

@@ -264,8 +264,10 @@ class SlashEngine(Engine):
         if not self.valid(bot, profile, provider) or not self.channel_allowed(bot, context.channel_id):
             raise ControlError("Interaction permission or configuration changed; answer withheld")
         content = self.vault.redact(strip_reasoning(content))
-        if not content or len(content) > 12000:
-            raise ControlError("Interaction answer must contain 1–12,000 visible characters")
+        if (not content and not artifact_ids) or len(content) > 12000:
+            raise ControlError(
+                "Interaction answer needs files or visible text, with at most 12,000 characters"
+            )
         if reply_to:
             raise ControlError(
                 "Interaction answers use their response; Discord message reply targets are unavailable"

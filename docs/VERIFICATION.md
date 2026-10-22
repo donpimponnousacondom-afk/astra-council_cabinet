@@ -1,5 +1,39 @@
 # Verification record
 
+## 2026-10-22 — Direct Discord file replies
+
+`discord_attach` resolves saved paths through the existing scoped export handlers,
+sends files with an optional message, and ends the reply in every response mode.
+Generated artifacts and compatible finish companions remain supported. Its schema
+stays present throughout ordinary work rounds; no export is needed to reveal it.
+Only attachment-specific default guidance is migrated by exact fingerprints.
+
+Local focused verification: **132 passed in 36.78s** across attachment sources,
+default-prompt migration, direct attachment delivery, native voice delivery,
+runtime validation and response-protocol configuration. Tests use isolated stores
+and mocked providers/Discord. Coverage includes source ownership/grant changes,
+current limits, previous-turn handles, error aggregation, snapshot cleanup,
+single-generation replies, caption withholding, final-round refusal, terminal
+companions, unchanged schemas after export, and partial/uncertain native sends.
+Separate integration coverage exercised a real isolated image transform and direct
+workspace-file send through mocked Discord. Caption Engram checks additionally
+verified confirmed-only state commit and omission from public/model-readable
+evidence, while private provider diagnostics retain the original arguments.
+Interaction file-only delivery preserves its private response scope.
+
+The larger native schema reduced headroom in the fixed 14k-context working-set
+fixture: the original result remained retrievable by its evidence handle, but its
+body was omitted. That fixture now uses 16k to retain its intended assertion that
+a nonempty result page fits beside the existing large summary; no live context
+setting or working-set algorithm changed. Full-suite checks and independent PR
+reviews are separate gates and will be recorded when complete. Ruff and diff
+checks pass. No live Discord send or paid provider call was performed.
+
+Rollout changes the static schema/default prompt prefix once. Prompt layer order,
+memory snapshots, live counters at the tail, unrelated frozen shell tuning and
+the general deferred tool-list decision are unchanged. Actual provider cache
+savings remain unmeasured.
+
 ## 2026-10-22 — Missing-answer operational diagnostics
 
 Completed responses without a publishable answer/tool call now produce a short

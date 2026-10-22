@@ -1476,7 +1476,7 @@ Enable **Plugins → Interactive Discord panels**, then the matching per-bot **C
 
 Use Trajectory's `panel_action` turns and `discord.panel_*` events to diagnose clicks. The bot's `discord_panel` list/status tools inspect its records; disable revokes one panel, and the dashboard capability toggle blocks all its callbacks. Old messages remain visible. Default lifetime is seven days, configurable per panel up to thirty. Unknown/expired/unconfirmed panels give a refusal, not a model call. See [DISCORD_PANELS.md](DISCORD_PANELS.md) for usage and lifecycle.
 
-Long answer attachments remain automatic. Document-enabled bots can now export site/path into an artifact and then call `discord_attach`; no workspace or image-generation grant is necessary. Those grants must not be enabled as a side effect of panel setup.
+Long answer attachments remain automatic. Document-enabled bots can send saved site files directly with `discord_attach`, using a document source and optional message; no export, later assistant answer, workspace grant or image-generation grant is necessary. See [direct file replies](TOOLS.md#direct-file-replies). Those independent grants must not be enabled as a side effect of panel setup.
 
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
 

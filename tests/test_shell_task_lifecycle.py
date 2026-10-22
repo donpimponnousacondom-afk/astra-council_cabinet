@@ -12,7 +12,7 @@ from hortator.models import OWNER_ID
 from hortator.plugins import ToolContext
 from support.provider import install_client
 from support.runtime import completion, settle
-from support.runtime_feedback import ready, reply, tool
+from support.runtime_feedback import ready, reply, responses, tool
 
 
 CHANNEL = "222222222222222222"
@@ -94,7 +94,7 @@ async def test_terminal_turn_always_releases_scratch(kernel, lifecycle, outcome)
     assert lifecycle == [("begin", turn["id"], OWNER_ID), ("finish", turn["id"], None)]
 
 
-async def test_same_human_followup_preserves_scratch_but_not_prepared_attachments(
+async def test_same_human_followup_preserves_scratch_but_blocks_superseded_attachment(
     kernel, lifecycle, monkeypatch
 ):
     bot, transport = setup(kernel)
@@ -109,6 +109,16 @@ async def test_same_human_followup_preserves_scratch_but_not_prepared_attachment
         return {**result, "artifact_id": artifact, "posted": False}
 
     monkeypatch.setitem(kernel.registry.specs, "memory", replace(original, handler=export_fixture))
+    deliver = kernel.engine.deliver
+
+    async def supersede_before_dispatch(*args, **kwargs):
+        if args[6]:
+            assert args[6] == [artifact]
+            assert kernel.registry.resolve_artifact(artifact, args[3]).is_file()
+            directed(kernel, bot, SECOND)
+        return await deliver(*args, **kwargs)
+
+    monkeypatch.setattr(kernel.engine, "deliver", supersede_before_dispatch)
 
     def handle(request):
         body = json.loads(request.content)
@@ -118,13 +128,14 @@ async def test_same_human_followup_preserves_scratch_but_not_prepared_attachment
         if len(calls) == 2:
             assert '"exported":1' in json.dumps(body, separators=(",", ":")).replace("\\", "")
             return reply(tool("discord_attach", {"artifact_ids": [artifact]}))
-        if len(calls) == 3:
-            assert '"prepared":1' in json.dumps(body, separators=(",", ":")).replace("\\", "")
-            directed(kernel, bot, SECOND)
-            return completion("Superseded answer must not deliver the prepared file.")
-        assert "discord_attach" not in {item["function"]["name"] for item in body.get("tools", [])}
+        assert "discord_attach" in {item["function"]["name"] for item in body.get("tools", [])}
         assert "attachment_state" not in str(body["messages"])
-        return completion("Answer to the updated request; no attachment was reselected.")
+        if len(calls) == 3:
+            return reply(tool("discord_attach", {"artifact_ids": [artifact]}))
+        assert len(calls) == 4
+        assert responses(body)[-1]["ok"] is False
+        transport.send.assert_not_awaited()
+        return completion("Answer to the updated request; the old artifact cannot be reused.")
 
     await install_client(kernel, handle)
     await kernel.engine.tick()
@@ -145,6 +156,7 @@ async def test_same_human_followup_preserves_scratch_but_not_prepared_attachment
         for row in kernel.store.rows("SELECT artifacts FROM outbox WHERE turn_id=?", (second,))
     )
     transport.send.assert_awaited_once()
+    assert len(calls) == 4
 
 
 @pytest.mark.parametrize("other_scope", ["author", "channel"])

@@ -206,7 +206,7 @@ DESCRIPTION = (
     "If the site is missing, create that intended slug first, then write its files. Call {} for full usage. "
     "One successful create/start/edit may open the turn's extended task budget. "
     "Write separate HTML/CSS/JS/SVG assets. read returns bounded pages with a pinned next_read cursor; "
-    "export with site/path and optional revision makes a current-turn attachment artifact; pass its artifact_id to discord_attach before your final text answer. It does not publish or require workspace/image generation. "
+    "Send a saved file directly with discord_attach files containing source:document_site, site, path and optional revision, plus an optional message. export optionally registers a current-turn artifact; it does not send, publish or require workspace/image generation. "
     "append/replace/restore require expected_revision and retain all history. list/status/history inspect your work. "
     "With auto_publish=true, each save publishes locally and queues remote sync; no separate publish call is needed. "
     "With auto_publish=false, call publish after saving the files. publish queues delivery, not instant confirmation. "
@@ -1005,7 +1005,7 @@ class DocumentSites:
                 "site": slug,
                 "path": path,
                 "revision": revision,
-                "next": "Call discord_attach with this artifact_id in artifact_ids, then answer with ordinary text. No Discord send or publication has occurred.",
+                "next": "Call discord_attach with this artifact_id in artifact_ids and an optional message to send it and finish the reply. No Discord send or publication has occurred.",
             }
         if operation == "history":
             return self._history(site, args)
