@@ -1191,6 +1191,21 @@ class OperationalConsole(logging.Handler):
         if event["kind"] == "request.failed":
             keys, summary_data = provider_failure_summary(data)
             summary_data = safe_value(self.redact(summary_data))
+        elif event["kind"] == "turn.failed" and data.get("error_origin") == "missing_answer":
+            keys = (
+                "error",
+                "http_status",
+                "finish_reason",
+                "answer_chars",
+                "tool_calls",
+                "output_tokens",
+                "reasoning_tokens",
+                "request_id",
+            )
+            summary_data = {
+                **{key: "unknown" if data.get(key) is None else data[key] for key in keys},
+                "request_id": event.get("request_id") or "unknown",
+            }
         fields = []
         for key in keys:
             value = summary_data.get(key)

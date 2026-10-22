@@ -61,6 +61,32 @@ class CycleIncomplete(ControlError):
     """An end_cycle activation stopped without publishing an answer."""
 
 
+class MissingAnswer(ControlError):
+    """A completed exchange produced neither a publishable answer nor an action."""
+
+    def __init__(self, store, result):
+        super().__init__("Model response contained no publishable answer or tool calls.")
+        self.request_id = result.request_id
+        self.details = {"origin": "missing_answer"}
+        # Read only reported transport/usage facts, not estimated footer counts
+        # or private reasoning. Missing evidence remains explicitly unknown.
+        request = (
+            store.one(
+                "SELECT http_status,output_tokens,reasoning_tokens FROM requests WHERE id=?",
+                (result.request_id,),
+            )
+            or {}
+        )
+        self.facts = {
+            "http_status": request.get("http_status"),
+            "finish_reason": result.finish_reason,
+            "answer_chars": len(result.content),
+            "tool_calls": len(result.tool_calls),
+            "output_tokens": request.get("output_tokens"),
+            "reasoning_tokens": request.get("reasoning_tokens"),
+        }
+
+
 PROGRESS_SEND_TIMEOUT = 5
 # Consecutive incomplete cycles in one channel after which public notices pause
 # until that bot publishes or chooses silence there again.
@@ -1466,15 +1492,7 @@ class Engine:
                             "text_only",
                         )
                     else:
-                        raise ControlError(
-                            "Provider returned no visible answer or tool call. "
-                            + (
-                                "Use council_silence for intentional silence. "
-                                if silence_tools
-                                else "Intentional silence is disabled for this bot. "
-                            )
-                            + "Inspect provider diagnostics for reasoning-only output."
-                        )
+                        raise MissingAnswer(self.store, result)
                     break
                 if len({c["id"] for c in result.tool_calls}) != len(result.tool_calls):
                     raise ControlError("Provider returned duplicate tool-call IDs; no actions executed")
@@ -2021,6 +2039,7 @@ class Engine:
                     "profile_id": profile["id"],
                     "channel_id": channel_id,
                     "error_origin": getattr(exc, "details", {}).get("origin"),
+                    **(exc.facts if isinstance(exc, MissingAnswer) else {}),
                 },
                 bot_id=bot["id"],
                 turn_id=turn_id,

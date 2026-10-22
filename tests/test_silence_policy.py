@@ -1,5 +1,6 @@
 import json
 
+import httpx
 import pytest
 
 from conftest import configured
@@ -135,11 +136,56 @@ async def test_disabling_silence_cancels_in_progress_turn_without_changing_other
     transport.send.assert_not_awaited()
 
 
-async def test_empty_response_with_silence_disabled_is_failure_not_silence(kernel):
-    _, transport = ready(kernel, allow_silence=False)
-    await install_client(kernel, lambda _: completion(""))
+@pytest.mark.parametrize("allow_silence", [False, True])
+@pytest.mark.parametrize(
+    "message,usage",
+    [
+        ({"content": ""}, {}),
+        ({"content": None}, {"completion_tokens": 0, "completion_tokens_details": {"reasoning_tokens": 0}}),
+        (
+            {"content": None, "reasoning_content": "Private native reasoning fixture"},
+            {"completion_tokens": 139, "completion_tokens_details": {"reasoning_tokens": 137}},
+        ),
+        ({"content": "<think>Private inline reasoning fixture</think>"}, {}),
+    ],
+)
+async def test_empty_response_has_factual_error_independent_of_silence_policy(
+    kernel, allow_silence, message, usage
+):
+    _, transport = ready(kernel, allow_silence=allow_silence)
+    await install_client(
+        kernel,
+        lambda _: httpx.Response(
+            200,
+            json={"choices": [{"message": message, "finish_reason": "stop"}], "usage": usage},
+        ),
+    )
     await kernel.engine.tick()
     await settle(kernel)
-    row = kernel.store.one("SELECT status,error FROM turns")
-    assert row["status"] == "failed" and "silence is disabled" in row["error"]
+    turn = kernel.store.one("SELECT * FROM turns")
+    assert turn["status"] == "failed" and "no publishable answer or tool calls" in turn["error"]
+    assert "silence" not in turn["error"].lower()
+    assert "reasoning-only" not in turn["error"]
+    requests = kernel.store.rows("SELECT * FROM requests")
+    assert len(requests) == 1  # No retry, invented answer, or silence decision.
+    request = requests[0]
+    assert request["status"] == "completed" and request["http_status"] == 200
+    event = next(e for e in kernel.store.events() if e["kind"] == "turn.failed")
+    assert event["level"] == "error" and event["request_id"] == request["id"]
+    assert event["turn_id"] == turn["id"]
+    assert event["data"]["error_origin"] == "missing_answer"
+    assert event["data"]["http_status"] == 200
+    assert event["data"]["finish_reason"] == "stop"
+    assert event["data"]["answer_chars"] == event["data"]["tool_calls"] == 0
+    assert event["data"]["output_tokens"] == usage.get("completion_tokens")
+    assert event["data"]["reasoning_tokens"] == usage.get("completion_tokens_details", {}).get(
+        "reasoning_tokens"
+    )
+    for private_text in ("Private native reasoning fixture", "Private inline reasoning fixture"):
+        assert private_text not in json.dumps(kernel.store.events())
+    if "Private" in str(message):
+        assert "Private" in str(kernel.service.turn(turn["id"], include_diagnostics=True))
+    assert kernel.store.health("openrouter")["consecutive_failures"] == 0
+    assert not kernel.store.rows("SELECT * FROM response_recovery_pending")
+    assert not any(e["kind"] == "decision.silence" for e in kernel.store.events())
     transport.send.assert_not_awaited()

@@ -1,6 +1,6 @@
 # Operations
 
-All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The agent publishes completed changes as task-branch PRs targeting `main`; the agent performs GitHub **Squash and merge** after both reviews and required checks pass, under standing owner authorization. After a merge, update main with a fast-forward pull and create a fresh task branch. Never make local implementation commits/merges on main, push directly to main, create merge commits, rewrite history or force-push.
+All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The agent publishes completed changes as task-branch PRs targeting `main`; the agent performs GitHub **Squash and merge** after both reviews and required checks pass, under standing owner authorization. After a merge, prepare a fresh task branch from verified fetched main using the restart-aware procedure below; fast-forward local main at the next planned stop. Never make local implementation commits/merges on main, push directly to main, create merge commits, rewrite history or force-push.
 
 ## Publication and local development deployment
 
@@ -19,6 +19,26 @@ local checks pass while GitHub CI and reviews run. There is no need to wait thro
 every remote run before trying a development change. Do not deploy an unpublished
 completed change or accumulate a backlog of deployed changes without PRs. Pending
 remote checks/reviews remain pending; they do not establish merge readiness.
+
+Owner decision, 2026-10-22: plan **one stop/start cycle per task**, preferably
+after the final reviewed change is ready. A GitHub squash merge does not require
+a reload when its source tree equals the already-running PR head. Keep the
+startup-captured version truthful; do not relabel that process with the merge SHA.
+
+For the next task, inspect the running startup commit, clean checkout, merged PR
+and fetched `origin/main`. If all three source trees match and the prior PR is
+verified merged, create the fresh task branch directly from `origin/main` without
+interrupting Screen. Preserve any existing placeholder branch under the normal
+merged-branch rules; never reset or discard it. Defer the local main fast-forward
+to a scheduled stop. If the source trees differ, or checkout-loaded helpers require
+stopping before edits, stop once and restart only when the intended change is
+published and checked. Do not start an intermediate unchanged build.
+
+`hortator-next-feature` still includes a full stop/build/start in normal mode; it
+is an explicit operator convenience, not an automatic task-preparation step. Its
+`--refresh` mode remains suitable for the one planned final deployment. An
+additional correction may genuinely need another reload: explain that need, and
+respect an owner hold. A committed fix is not active until the process loads it.
 
 The shell sandbox starts a fresh supervisor from `hortator/shell_worker.py` on
 each job; that file alone is mounted read-only inside the sandbox. The trusted
@@ -830,6 +850,7 @@ Folded console failures now include `error_origin`, actual response format, fram
 
 | Origin | Meaning |
 | --- | --- |
+| `missing_answer` | The completed exchange left no publishable answer or tool call. `turn.failed` remains ERROR and links its request; HTTP status, finish reason and reported output/reasoning counts are separate facts, not a diagnosis of the cause. Intentional silence requires its explicit tool and is unrelated to this failure. |
 | `response_format` | The received payload has invalid JSON/encoding, an unsupported shape or an invalid field. Expected/received types and a bounded redacted frame excerpt are private evidence. This does not count as provider downtime. |
 | `local_client` | Python adapter/client failure or local HTTP connection-pool wait timeout. Private diagnostics show exception type and available function/line locations or timeout phase, without locals. This does not count as provider downtime. |
 | `local_deadline` | Hortator's configured total request deadline expired. Includes duration, timeout setting and request phase; streamed output does not extend this deadline. This does not count as provider downtime. |
@@ -837,6 +858,15 @@ Folded console failures now include `error_origin`, actual response format, fram
 | `upstream_http` | An upstream HTTP failure. Actual HTTP status remains separate from the control API status. |
 | `transport` | HTTP connect/read/write timeout, connection/protocol failure or incomplete stream. Partial reasoning is retained; usage may be incomplete. This excludes our total deadline and local pool wait. |
 | `request_configuration` / `cancelled` | Local request setup or deliberate interruption. No provider outage is inferred. |
+
+A missing-answer console line starts with the failure and shows `answer_chars`,
+`tool_calls`, the recorded HTTP status/finish reason, reported output/reasoning
+tokens and `request_id`. Unavailable facts display as `unknown`; zero stays zero.
+Private reasoning remains in that request’s authenticated diagnostics. This can
+include reasoning-only output, no output, or a private Engram without public text.
+The exchange remains `completed` in the request ledger while the turn is `failed`;
+no transport failure, retry, provider circuit penalty or successful silence is
+invented. Nonempty but incoherent output is not detected by this check.
 
 Malformed frames are never silently skipped to manufacture a successful answer. Format errors can still be caused by an incompatible upstream response; the classification distinguishes observed evidence instead of attributing every Python exception to provider availability. Raw frames and reasoning do not enter ordinary events or Discord.
 
