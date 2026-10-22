@@ -151,7 +151,7 @@ async def test_incomplete_or_reasoning_only_output_is_diagnostic_not_a_silence_d
     if reason == "length":
         assert "max_tokens=2048" in turn["error"] and "output_tokens=2002" in turn["error"]
     if reason == "stop":
-        assert "no visible answer" in turn["error"]
+        assert "no publishable answer" in turn["error"]
     assert "Provider diagnostic fixture" in str(kernel.service.turn(turn["id"], include_diagnostics=True))
     assert "Provider diagnostic fixture" not in str(kernel.service.inspect("turn", turn["id"]))
     assert kernel.store.health("openrouter")["consecutive_failures"] == 0

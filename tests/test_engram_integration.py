@@ -87,6 +87,23 @@ async def test_confirmed_final_only_commits_private_state_and_sanitizes_inspecti
     assert PRIVATE in str(kernel.service.turn(later, include_diagnostics=True))
 
 
+async def test_private_engram_without_answer_reports_missing_answer_without_committing(kernel):
+    _, transport = enable(kernel)
+    await install_client(
+        kernel, lambda request: completion(response(json.loads(request.content), content=""))
+    )
+    await run(kernel)
+    turn = kernel.store.one("SELECT * FROM turns")
+    assert turn["status"] == "failed" and "no publishable answer" in turn["error"]
+    event = next(e for e in kernel.store.events() if e["kind"] == "turn.failed")
+    assert event["data"]["answer_chars"] == 0
+    assert event["request_id"] == kernel.store.one("SELECT id FROM requests")["id"]
+    assert PRIVATE not in json.dumps(event)
+    assert PRIVATE in str(kernel.service.turn(turn["id"], include_diagnostics=True))
+    assert not state(kernel)
+    transport.send.assert_not_awaited()
+
+
 @pytest.mark.parametrize(
     "failure", [DeliveryError("refused"), DeliveryError("timeout", uncertain=True), asyncio.CancelledError()]
 )

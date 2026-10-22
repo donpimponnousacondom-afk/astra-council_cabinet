@@ -708,3 +708,18 @@ These are recovery and guidance corrections, not changes to saved-file policy,
 resource ceilings, attachment delivery or prompt ordering. Entry-monitor
 optimization remains a separate design follow-up because inode counts are not
 equivalent to the existing directory-entry quota. See [SHELL_RUNNER](SHELL_RUNNER.md).
+
+
+## 2026-10-22 — Missing-answer diagnostics and restart cadence
+
+The owner requested concise operational errors for completed responses that contain
+no publishable answer or tool call. Remove intentional-silence advice from that
+failure and attach the request identity and observed transport/usage facts. Keep
+ERROR severity, private reasoning retention, silence semantics, provider health and
+recovery eligibility unchanged. This does not tune model prompts or diagnose
+upstream cache corruption. The separate private provider report includes complete
+incident requests and outputs across compaction, including delivered bad answers.
+
+Use one planned stop/start cycle per feature or hotfix. Avoid restarting unchanged
+code during branch preparation or merely after its squash merge. Record deployment
+state honestly when a restart is deferred; see [OPERATIONS](OPERATIONS.md#publication-and-local-development-deployment).

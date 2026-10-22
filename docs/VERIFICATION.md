@@ -1,5 +1,38 @@
 # Verification record
 
+## 2026-10-22 — Missing-answer operational diagnostics
+
+Completed responses without a publishable answer/tool call now produce a short
+`MissingAnswer` error, linked to the request, with observed HTTP status, finish
+reason, answer/tool counts and reported token usage. The console preserves ERROR
+severity and distinguishes unknown counts from zero. Intentional-silence advice
+is absent from this failure; actual silence-tool policy is unchanged.
+
+Focused local verification used isolated stores and mocked HTTP. The initial
+selection passed **105 tests in 37.18s** and exposed an overly broad new privacy
+assertion in eight cases: it matched the word “Private” in existing tool guidance.
+That assertion was narrowed to the specific private fixture strings. The corrected
+eight cases plus a new Engram-only regression then passed **9 tests in 3.25s**.
+Coverage includes silence enabled/disabled, native and inline reasoning, missing
+and zero usage, ERROR severity/request correlation, private capture retention,
+no retry/circuit penalty/recovery note, console rendering and unchanged end-cycle
+and response-recovery behavior. Repository Ruff lint/format and `git diff --check`
+pass. Full-suite CI and the independent open-PR reviews remain separate gates.
+Sol independently ran the published initial head
+`64e48563ddb47da74e3baebc4ff114d8a1935c9a`: **94 passed in 29.53s**
+across console, silence, Engram integration and reply protocol tests. That review
+also found old README/operations instructions still requiring an identical-code
+restart; those current workflow instructions were reconciled in a docs-only
+follow-up. The corrected head still requires renewed review and CI.
+
+This change does not modify model-facing prompts, tool schemas, provider settings,
+cache keys or response parsing. It does not detect nonempty incoherent answers or
+claim to repair the upstream generation incident. No paid provider or Discord
+validation was performed for this error-reporting change. The owner requested one
+restart per task; this task's initial unchanged-code restart had already happened,
+so deployment of the new reporting code is deferred to a later reload. The private
+provider incident export is ignored runtime evidence, not part of the Git diff.
+
 ## 2026-10-22 — independent DeepSeek Search
 
 Implemented `deepseek_search` as an independently granted plugin, not an ordinary

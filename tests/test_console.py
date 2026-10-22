@@ -90,6 +90,44 @@ async def test_provider_failure_leads_with_received_error_not_empty_image_counte
         assert '"inline_image_count": 0' in console.stream.getvalue()
 
 
+@pytest.mark.parametrize("reported", [True, False])
+def test_missing_answer_console_shows_facts_request_identity_and_unknown_usage(reported):
+    with output() as console:
+        console.accept(
+            console.event(
+                {
+                    "at": 1,
+                    "kind": "turn.failed",
+                    "level": "error",
+                    "seq": 42,
+                    "bot_id": "ada",
+                    "request_id": "req_empty",
+                    "data": {
+                        "error": "MissingAnswer: Model response contained no publishable answer or tool calls.",
+                        "error_origin": "missing_answer",
+                        "http_status": 200 if reported else None,
+                        "finish_reason": "stop" if reported else None,
+                        "answer_chars": 0,
+                        "tool_calls": 0,
+                        "output_tokens": 139 if reported else None,
+                        "reasoning_tokens": 137 if reported else None,
+                    },
+                }
+            )
+        )
+        rendered = console.stream.getvalue()
+        assert "ERROR" in rendered and "turn.failed" in rendered
+        assert "no publishable answer or tool calls" in rendered
+        assert "answer_chars=0" in rendered and "tool_calls=0" in rendered
+        assert "request_id=req_empty" in rendered
+        assert rendered.index("error=") < rendered.index("http_status=")
+        assert f"http_status={'200' if reported else 'unknown'}" in rendered
+        assert f"finish_reason={'stop' if reported else 'unknown'}" in rendered
+        assert f"output_tokens={'139' if reported else 'unknown'}" in rendered
+        assert f"reasoning_tokens={'137' if reported else 'unknown'}" in rendered
+        assert "silence" not in rendered and "reasoning-only" not in rendered
+
+
 def test_provider_size_failure_retains_relevant_sizes_and_reported_field():
     data = {
         "http_status": 413,
