@@ -204,6 +204,7 @@ class Service:
             PREVIOUS_DEFAULT_CONTENT_SHA256,
             PREVIOUS_DRAFT_ONLY_CONTENT_SHA256,
             PREVIOUS_ENGRAM_CONTENT_SHA256,
+            PREVIOUS_STAGED_ATTACHMENT_CONTENT_SHA256,
         )
 
         for prompt in DEFAULT_PROMPTS:
@@ -215,6 +216,7 @@ class Service:
                 PREVIOUS_DEFAULT_CONTENT_SHA256.get(prompt["id"]),
                 PREVIOUS_DRAFT_ONLY_CONTENT_SHA256.get(prompt["id"]),
                 PREVIOUS_ENGRAM_CONTENT_SHA256.get(prompt["id"]),
+                PREVIOUS_STAGED_ATTACHMENT_CONTENT_SHA256.get(prompt["id"]),
             ):
                 existing.pop("revision", None)
                 self.store.put("prompts", {**existing, "content": prompt["content"]})

@@ -102,6 +102,12 @@ Your ordinary answer.
 ```
 
 The model must use the nonce supplied in its actual request, not the example.
+For a terminal `discord_attach` reply, the same answer and private block may instead
+be supplied in its `message` argument. This is a final completion in every response
+mode; it needs no separate assistant answer or `end_cycle`. The private block is
+excluded from public tool evidence and validation errors, and memory advances only
+after confirmed delivery, just as for an ordinary answer.
+
 The private block is removed before Discord delivery. It is not a message-footer
 feature and does not alter the existing diagnostic footer. Intermediate tool-call
 responses, provider retries, compaction and intentional silence do not advance

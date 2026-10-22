@@ -1,5 +1,30 @@
 # Implementation and acceptance plan
 
+## 2026-10-22 — direct Discord file replies
+
+The owner approved replacing the model-managed export → prepare → answer flow
+with a single native `discord_attach` action: reference saved files, optionally
+supply a public message, and deliver the reply. Internal checked export/staging
+remains an implementation detail. Existing generated artifacts stay supported;
+ordinary text answers still use ordinary assistant content. The tool is available
+during normal work without waiting for a current-turn artifact, and a successful
+file reply needs neither a later model answer nor `end_cycle`. This works in
+`narrate`, `progress` and `end_cycle` modes, including models that cannot combine
+assistant prose and tool calls reliably.
+
+Preserve source grants, path/ownership rules, current-turn artifact ownership,
+existing limits, final outbox delivery, cancellation and explicit delivery
+uncertainty. Source/argument errors send no caption/files and permit correction
+within the existing budget; uncertain transport sends are never replayed
+implicitly. Optional export remains useful for other artifact-consuming tools.
+The complete contract is in [TOOLS](TOOLS.md#direct-file-replies).
+
+Only attachment-specific descriptions and conflicting default instructions are
+updated. Exact prior-default fingerprints protect operator-edited prompts.
+This incurs a static prefix/schema change at rollout, without changing prompt
+order or inserting live values before history. The general stable-tool-list
+proposal and unrelated shell prompt-tuning recommendations remain deferred.
+
 ## 2026-10-22 — independent DeepSeek Search plugin
 
 The owner approved a separate `deepseek_search` plugin and per-bot grant, like

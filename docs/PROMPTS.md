@@ -62,7 +62,16 @@ Explicit bot overrides and disabled layers remain authoritative for prompt text;
 runtime gates still apply. Unedited shipped identity/tool-guidance text is
 upgraded only on an exact previous-content fingerprint, including the interim
 draft-only guidance; custom edits are preserved. Operators using overrides should compare their wording with the
-current protocol. The removed `publish_retained_draft` setting remains only as
+current protocol. The 2026-10-22 direct-attachment change also upgrades only exact
+unedited identity/tool-guidance and current protocol defaults, preserving their
+template IDs and any operator edits. The narrow exception explains that
+`discord_attach` sends a file reply with an optional `message` and finishes in
+one call in every mode; it is not ordinary narration or a staged-only action.
+These static changes may invalidate a previously cached prefix once at rollout;
+no counters, clocks, file paths or usage values are added to that prefix, and
+prompt ordering is unchanged. Unrelated shell prompt tuning remains frozen.
+
+The removed `publish_retained_draft` setting remains only as
 a deprecated custom-template placeholder with the constant value `True`, to
 avoid unresolved placeholders in saved owner text. It cannot disable retention.
 

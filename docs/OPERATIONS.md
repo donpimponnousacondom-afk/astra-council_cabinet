@@ -387,7 +387,9 @@ git switch -c feat/next_feature
 
 The clean-tree guard stops if edits remain; commit them on their task branch or resolve them deliberately. `--ff-only` refuses divergent history instead of creating a merge commit. Do not work on main if the pull or new branch creation fails. A squash merge has a new commit ID, so do not merge the old feature branch back into main or rebase it automatically. Keep old local branches until their work is verified as merged; delete them only when requested. [Git pull documentation](https://git-scm.com/docs/git-pull).
 
-Implement and verify the change on the task branch, commit and publish its PR, and complete the intended review corrections while the server stays stopped. When ready for the planned deployment, restore dependencies if needed, build the dashboard and start the foreground server:
+Keep the outage limited to work that requires the shared checkout/runtime to be stopped. Prepare independent checks before shutdown where possible. Once appropriate local checks pass and the change is committed and published in its PR, build and start the foreground server; do not leave it stopped merely while broad CI or independent reviews run. Use isolated source for concurrent verification when needed. If a later correction changes loaded application code, evaluate that correction explicitly; a test/documentation-only commit or a squash merge of identical application code does not require another restart.
+
+When ready for the planned deployment, restore dependencies if needed, build the dashboard and start the foreground server:
 
 ```bash
 uv sync --frozen &&
@@ -1476,7 +1478,7 @@ Enable **Plugins → Interactive Discord panels**, then the matching per-bot **C
 
 Use Trajectory's `panel_action` turns and `discord.panel_*` events to diagnose clicks. The bot's `discord_panel` list/status tools inspect its records; disable revokes one panel, and the dashboard capability toggle blocks all its callbacks. Old messages remain visible. Default lifetime is seven days, configurable per panel up to thirty. Unknown/expired/unconfirmed panels give a refusal, not a model call. See [DISCORD_PANELS.md](DISCORD_PANELS.md) for usage and lifecycle.
 
-Long answer attachments remain automatic. Document-enabled bots can now export site/path into an artifact and then call `discord_attach`; no workspace or image-generation grant is necessary. Those grants must not be enabled as a side effect of panel setup.
+Long answer attachments remain automatic. Document-enabled bots can send saved site files directly with `discord_attach`, using a document source and optional message; no export, later assistant answer, workspace grant or image-generation grant is necessary. See [direct file replies](TOOLS.md#direct-file-replies). Those independent grants must not be enabled as a side effect of panel setup.
 
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
 

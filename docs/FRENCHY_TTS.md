@@ -39,21 +39,32 @@ default voice. Provider permission failures remain visible to the model.
 ## Native voice notes
 
 Generation defaults to `delivery:"voice_note"`. Use `discord_attach` with the
-returned artifact ID, then produce the written answer normally. The ordinary
-answer is sent first; each prepared voice note follows as a separate message
-replying to it. Discord voice messages cannot include text or components.
-The text retains the normal footer and optional panel. Other attached files stay
-with the text. A silent activation sends neither.
+returned artifact ID in `artifact_ids` and an optional written answer in
+`message`. An explicit `message` takes precedence over accompanying assistant
+text; if omitted, that text supplies the caption when present. The attachment
+call finishes the reply without a later assistant answer or `end_cycle`.
+
+With a written answer, the text is sent first; each native voice note follows
+as a separate message replying to it. The text retains the normal footer and
+optional panel. Other attached files stay with the text. Discord voice messages
+cannot include text or components.
+
+When the selection contains only native voice notes and the caption is empty,
+the first note is the primary final reply; additional notes follow as companions.
+No placeholder text or footer is created. A prepared panel requires a caption
+because it cannot accompany a native voice-only message. An explicit empty
+`message` requests this voice-only form even if the model also supplies ordinary
+assistant text. A silent activation sends neither text nor audio.
 
 Each voice note gets its own durable outbox receipt, nonce, destination checks
-and channel send gap. Confirmed text stays confirmed if audio fails. Ambiguous
+and channel send gap. A confirmed primary message stays confirmed if a later audio companion fails. Ambiguous
 acceptance is recorded as unknown with no automatic resend; gateway nonce
 reconciliation can confirm it later. Cancellation joins upload cleanup and
 suppresses undispatched companions. The complete batch holds the existing
 destination send lock. This is not a background delivery service.
 
-Cancellation after confirmed text still propagates to the task owner. The turn
-records the written answer as sent, consumes its handled input and commits any
+Cancellation after a confirmed primary message still propagates to the task
+owner. The turn records that final reply as sent, consumes its handled input and commits any
 still-current Engram candidate. The companion keeps its own interrupted receipt;
 the next cadence does not treat the original human input as unanswered.
 

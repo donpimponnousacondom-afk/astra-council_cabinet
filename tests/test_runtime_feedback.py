@@ -76,7 +76,7 @@ async def test_attachment_schema_and_semantic_failures_are_aggregated_without_di
         assert {error["path"] for error in report["errors"]} == paths
         assert report["error_count"] == 4
         assert report["executed"] is False
-        assert report["usage"]["parameters"]["required"] == ["artifact_ids"]
+        assert {"files", "artifact_ids", "message"} <= report["usage"]["parameters"]["properties"].keys()
         return reply(tool("council_silence", {"label": "Repaired"}))
 
     await install_client(kernel, handle)

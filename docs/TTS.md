@@ -18,7 +18,9 @@ The model supplies neither credentials nor endpoints.
   for this call only. It does not change the operator's saved default.
 - Existing `{"text":"Hello"}` calls keep using the configured default voice.
   Explicit `operation: "generate"` is also accepted. `{}` returns usage only.
-- Prepare the returned artifact with `discord_attach`, then answer normally.
+- Send the returned artifact with `discord_attach`, using `artifact_ids` and an
+  optional public `message`. That call finishes the reply; no later assistant
+  answer or `end_cycle` is needed.
   Listing voices generates no speech or attachment and consumes an ordinary
   tool call. There is no automatic catalog polling or extra model request.
 

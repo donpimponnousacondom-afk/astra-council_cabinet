@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from aiohttp import ClientError
 
 from .action_receipts import ActionReceipts
+from .attachments import Attachments
 from .answer_validation import wrapped_reply
 from .concurrency import cancel_and_wait, join_tasks, task_group, error_text
 from .context import ContextBuilder
@@ -25,7 +26,7 @@ from .plugins import (
     ToolBoundaryInterrupted,
     ToolContext,
 )
-from .provider import strip_reasoning
+from .provider import public_attachment_arguments, public_tool_calls, strip_reasoning
 from .response_recovery import queue_failed_response, read_note
 from .store import dumps, uid
 from .tool_feedback import feedback, parse_arguments, syntax_feedback, usage
@@ -708,14 +709,9 @@ class Engine:
             if handoff
             else silence_tools + (self.registry.schemas(context) if round_index < round_limit else [])
         )
-        can_attach = bool(
-            not handoff
-            and round_index < round_limit
-            and self.store.one(
-                "SELECT id FROM artifacts WHERE bot_id=? AND turn_id=? LIMIT 1",
-                (context.bot["id"], context.turn_id),
-            )
-        )
+        # Native delivery is stable across work rounds. Source access is checked
+        # when called; exporting a file must not change the advertised tool list.
+        can_attach = not handoff and round_index < round_limit
         if can_attach:
             available.append(ATTACH)
         return available, can_attach
@@ -1119,8 +1115,9 @@ class Engine:
                         "exported": exported,
                         "prepared": len(artifact_ids),
                         "posted": False,
-                        "next": "Export only stages files; discord_attach prepares them. "
-                        "The final ordinary reply delivers prepared files. Progress messages carry no files.",
+                        "next": "discord_attach sends files with an optional message and finishes the reply. "
+                        "Saved files can be attached directly by path; export is not required. "
+                        "Progress messages carry no files.",
                     }
                 if background_handoff:
                     budget_bot["background_handoff"] = self.jobs.handoff(context)
@@ -1296,6 +1293,7 @@ class Engine:
                 ending = cycle_mode and any(
                     call["function"]["name"] == "end_cycle" for call in result.tool_calls
                 )
+                attaching = any(call["function"]["name"] == "discord_attach" for call in result.tool_calls)
                 if engram is not None:
                     original_content = result.content
                     result.content = self.registry.engrams.sanitize(engram, original_content)
@@ -1304,6 +1302,7 @@ class Engine:
                         original_content,
                         final=not result.tool_calls
                         or ending
+                        or attaching
                         or (cycle_mode and bool(result.content.strip())),
                     )
                 if result.finish_reason in ("length", "content_filter"):
@@ -1417,7 +1416,12 @@ class Engine:
                                 else "Only end_cycle {} with your first answer (or council_silence if available) "
                                 "can finalize now; no action was executed"
                             )
-                            extras.append(result.message())
+                            extras.append(
+                                {
+                                    **result.message(),
+                                    "tool_calls": public_tool_calls(result.tool_calls, {"engram": engram}),
+                                }
+                            )
                             for call in calls:
                                 value = {"ok": False, "executed": False, "error": error}
                                 self.store.emit(
@@ -1502,7 +1506,9 @@ class Engine:
                         "No further actions executed; accepted jobs continue and retain their completion notifications."
                     )
                 names = [call["function"]["name"] for call in result.tool_calls]
-                terminal = any(name in ("council_speak", "council_silence") for name in names) or ending
+                terminal = (
+                    any(name in ("council_speak", "council_silence") for name in names) or ending or attaching
+                )
                 companions = (
                     [call for call in result.tool_calls if call["function"]["name"] != "end_cycle"]
                     if ending
@@ -1518,6 +1524,17 @@ class Engine:
                     batch_error = "end_cycle must appear exactly once; no actions were executed"
                 elif ending and "council_silence" in names:
                     batch_error = "end_cycle and council_silence cannot be combined; no actions were executed"
+                elif attaching and names.count("discord_attach") != 1:
+                    batch_error = "Call discord_attach once with all selected files; no actions were executed"
+                elif attaching and not can_attach:
+                    batch_error = "Attachment tool work is unavailable in this finalization round; no actions were executed"
+                elif attaching and not all(
+                    call["function"]["name"] == "discord_attach"
+                    or (ending and call["function"]["name"] == "end_cycle")
+                    or self.terminal_compatible(call, False)
+                    for call in result.tool_calls
+                ):
+                    batch_error = "discord_attach finishes the reply. Only memory writes and optional end_cycle may accompany it; do other work first. No actions were executed"
                 elif ending and companions and (finalizing or round_index >= round_limit):
                     batch_error = (
                         "Only terminal tools are available in this finalization round; "
@@ -1531,7 +1548,7 @@ class Engine:
                     )
                 elif ending and wrapped_reply(result.content):
                     batch_error = "Tool-wrapped text cannot be published; write ordinary assistant text together with end_cycle. No actions were executed"
-                elif terminal and not ending and len(names) != 1:
+                elif terminal and not ending and not attaching and len(names) != 1:
                     batch_error = "A silence decision (or obsolete reply call) must be the only tool call; no partial actions were executed"
                 elif len(names) > calls_limit:
                     batch_error = f"Too many tool calls: maximum {calls_limit} per round; none executed"
@@ -1603,6 +1620,7 @@ class Engine:
                             progress_notices.add(reason)
                 cycle_reply_attempt = (
                     cycle_response
+                    and not attaching
                     and (ending or bool(result.content.strip()))
                     and "council_silence" not in names
                 )
@@ -1611,10 +1629,17 @@ class Engine:
                         cycle_error = "Response included tool narration without end_cycle"
                     if cycle_error or batch_error:
                         freeze_draft(result, parsed_engram)
-                extras.append(result.message())
+                extras.append(
+                    {
+                        **result.message(),
+                        "tool_calls": public_tool_calls(result.tool_calls, {"engram": engram}),
+                    }
+                )
                 finished = False
                 ending_call = None
                 companion_failed = False
+                attachment_companion_failed = False
+                attachment_reply = None
                 if self.jobs:
                     self.jobs.begin_batch(turn_id)
                 for call_index, call in enumerate(result.tool_calls):
@@ -1651,6 +1676,7 @@ class Engine:
                                 "usage": usage(name, parameters, description),
                             }
                         cycle_error = "end_cycle arguments were invalid; call it with {}"
+                        attachment_companion_failed = attaching
                         freeze_draft(result, parsed_engram)
                         result_value = self.registry.evidence.record(context, name, call["id"], result_value)
                         self.store.emit(
@@ -1693,6 +1719,8 @@ class Engine:
                             except (ValueError, TypeError) as exc:
                                 argument_report = syntax_feedback(name, exc, parameters, description)
                             else:
+                                if name == "discord_attach":
+                                    batch_args = public_attachment_arguments(batch_args, {"engram": engram})
                                 argument_report = feedback(name, batch_args, parameters, description) or {
                                     "usage": usage(name, parameters, description, arguments=batch_args)
                                 }
@@ -1714,15 +1742,23 @@ class Engine:
                         except (ValueError, TypeError) as exc:
                             result_value = syntax_feedback(name, exc, parameters, description)
                         else:
+                            if name == "discord_attach":
+                                if (
+                                    engram is not None
+                                    and isinstance(args, dict)
+                                    and isinstance(args.get("message"), str)
+                                ):
+                                    parsed_engram = await self.registry.engrams.parse(
+                                        engram, args["message"], final=True
+                                    )
+                                args = public_attachment_arguments(args, {"engram": engram})
                             result_value = feedback(name, args, parameters, description)
                             if (
                                 name == "discord_attach"
                                 and isinstance(args, dict)
                                 and not (result_value or {}).get("usage_only")
                             ):
-                                # Type-invalid fields cannot be inspected safely, but they must
-                                # not hide independent semantic failures in the remaining fields.
-                                issues = list((result_value or {}).get("errors", []))
+                                issues = []
                                 target = args.get("reply_to") or None
                                 if (
                                     isinstance(target, str)
@@ -1738,53 +1774,37 @@ class Engine:
                                             "message": "Reply target must be a message ID in this turn's channel context",
                                         }
                                     )
-                                selected = args.get("artifact_ids", [])
-                                for index, artifact_id in enumerate(
-                                    selected if isinstance(selected, list) else []
-                                ):
-                                    if not isinstance(artifact_id, str):
-                                        continue
-                                    try:
-                                        self.registry.resolve_artifact(artifact_id, context)
-                                    except ControlError as exc:
+                                caption = args.get("message", result.content)
+                                if isinstance(caption, str):
+                                    if wrapped_reply(caption):
+                                        issues.append({"path": "$.message", "message": REPLY_REPAIR})
+                                    if len(strip_reasoning(caption)) > 12000:
                                         issues.append(
-                                            {"path": f"$.artifact_ids[{index}]", "message": str(exc)}
+                                            {
+                                                "path": "$.message",
+                                                "message": "Attachment message exceeds 12,000 visible characters",
+                                            }
                                         )
-                                if issues:
-                                    result_value = {
-                                        "ok": False,
-                                        "executed": False,
-                                        "error": "Invalid attachment preparation; fix all errors",
-                                        "errors": issues,
-                                        "error_count": len(issues),
-                                        "usage": usage(name, parameters, description),
-                                    }
+                                result_value = await budgeted(
+                                    Attachments(self.registry).prepare(args, context, errors=issues)
+                                )
+                                if result_value.get("ok"):
+                                    reply_to = args.get("reply_to", reply_to) or None
+                                    artifact_ids = result_value["artifact_ids"]
+                                    attachment_reply = {"call": call, "content": caption}
+                                    # The public receipt is recorded only after actual delivery.
+                                    continue
+                                result_value["usage"] = usage(name, parameters, description)
                             if result_value is None:
-                                if name == "council_silence":
-                                    status, decision = "silent", "listen"
-                                    self.store.emit(
-                                        "decision.silence",
-                                        {"label": args["label"]},
-                                        bot_id=bot["id"],
-                                        turn_id=turn_id,
-                                    )
-                                else:
-                                    reply_to, artifact_ids = (
-                                        args.get("reply_to", reply_to) or None,
-                                        args["artifact_ids"],
-                                    )
-                                    cycle["actions"] += 1
-                                    result_value = {
-                                        "ok": True,
-                                        "prepared": True,
-                                        "artifact_ids": artifact_ids,
-                                        "reply_to": reply_to,
-                                        "posted": False,
-                                        "next": "Write your answer as ordinary assistant content; no reply tool is needed.",
-                                    }
-                                if name == "council_silence":
-                                    finished = True
-                                    break
+                                status, decision = "silent", "listen"
+                                self.store.emit(
+                                    "decision.silence",
+                                    {"label": args["label"]},
+                                    bot_id=bot["id"],
+                                    turn_id=turn_id,
+                                )
+                                finished = True
+                                break
                     else:
                         receipt_id = (
                             self.action_receipts.start(
@@ -1870,8 +1890,7 @@ class Engine:
                             else "warning",
                         )
                     if (
-                        cycle_reply_attempt
-                        and ending
+                        (cycle_reply_attempt and ending or attaching)
                         and name != "end_cycle"
                         and (result_value.get("ok") is False or result_value.get("usage_only"))
                     ):
@@ -1879,11 +1898,75 @@ class Engine:
                         # Narration has no answer yet; finalization can report
                         # ordinary action errors/help without replaying work.
                         companion_failed = True
+                        if attaching and name != "discord_attach":
+                            attachment_companion_failed = True
                     extras.append(
                         {"role": "tool", "tool_call_id": call["id"], "content": dumps(result_value)}
                     )
-                if ending_call is not None:
+                if attachment_reply is not None:
+                    attachment_call = attachment_reply["call"]
                     if companion_failed or cycle_error:
+                        attachment_value = {
+                            "ok": False,
+                            "executed": False,
+                            "posted": False,
+                            "error": "Attachment was not sent because a companion action failed; do not repeat successful memory writes.",
+                        }
+                    else:
+                        try:
+                            await publish_final(
+                                attachment_reply["content"],
+                                parsed_engram,
+                                result.request_id,
+                                result.finish_reason,
+                                "attachment_sent",
+                                terminal_call_id=attachment_call["id"],
+                            )
+                        except (Exception, asyncio.CancelledError) as exc:
+                            try:
+                                receipt = self.attachment_receipt(context, ordinary_delivery_id, artifact_ids)
+                                self.store.emit(
+                                    "tool.failed",
+                                    {
+                                        "name": "discord_attach",
+                                        "call_id": attachment_call["id"],
+                                        **receipt,
+                                        "ok": False,
+                                        "error": error_text(exc),
+                                    },
+                                    bot_id=bot["id"],
+                                    turn_id=turn_id,
+                                    level="error",
+                                )
+                            except Exception as diagnostic_error:
+                                raise exc from diagnostic_error
+                            raise
+                        cycle["actions"] += 1
+                        attachment_value = self.attachment_receipt(
+                            context, ordinary_delivery_id, artifact_ids
+                        )
+                        finished = True
+                    attachment_value = self.registry.evidence.record(
+                        context, "discord_attach", attachment_call["id"], attachment_value
+                    )
+                    self.store.emit(
+                        "tool.completed" if attachment_value["ok"] else "tool.failed",
+                        {"name": "discord_attach", "call_id": attachment_call["id"], **attachment_value},
+                        bot_id=bot["id"],
+                        turn_id=turn_id,
+                        level="info" if attachment_value["ok"] else "warning",
+                    )
+                    extras.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": attachment_call["id"],
+                            "content": dumps(attachment_value),
+                        }
+                    )
+                if ending_call is not None:
+                    if finished:
+                        ending_value = {"ok": True, "executed": True, "published": True, "draft": False}
+                    elif companion_failed or cycle_error:
                         ending_value = {
                             "ok": False,
                             "executed": False,
@@ -1936,7 +2019,16 @@ class Engine:
                     extras.append(
                         {"role": "tool", "tool_call_id": ending_call["id"], "content": dumps(ending_value)}
                     )
-                if cycle_response and not finished and (cycle_error or batch_error or companion_failed):
+                if attachment_companion_failed and not batch_error:
+                    raise ControlError(
+                        "Attachment reply was withheld because a finish companion failed; successful actions were not replayed"
+                    )
+                if (
+                    cycle_response
+                    and not attaching
+                    and not finished
+                    and (cycle_error or batch_error or companion_failed)
+                ):
                     freeze_draft(result, parsed_engram)
                     cycle_failure(
                         result,
@@ -2126,6 +2218,38 @@ class Engine:
             if engram_candidate is not None and status == "sent":
                 self.registry.engrams.finalize(engram_candidate)
 
+    def attachment_receipt(self, context, outbox_id, artifact_ids):
+        """Use existing delivery evidence; a primary send cannot certify companions."""
+        deliveries = self.store.rows(
+            "SELECT id,status,discord_id,artifacts FROM outbox WHERE bot_id=? AND turn_id=? "
+            "AND (id=? OR json_extract(routing,'$.parent_outbox_id')=?) ORDER BY created_at",
+            (context.bot["id"], context.turn_id, outbox_id, outbox_id),
+        )
+        primary = next((row for row in deliveries if row["id"] == outbox_id), {})
+        states = {artifact_id: "not_sent" for artifact_id in artifact_ids}
+        for row in deliveries:
+            for artifact_id in json.loads(row["artifacts"]):
+                if artifact_id in states:
+                    states[artifact_id] = row["status"]
+        confirmed = all(state == "sent" for state in states.values()) and bool(states)
+        receipt = {
+            "ok": confirmed,
+            "executed": primary.get("status") in ("sent", "sending", "unknown"),
+            "posted": True if confirmed else None if "unknown" in states.values() else False,
+            "partial": not confirmed and "sent" in states.values(),
+            "artifact_ids": artifact_ids,
+            "attachments": [{"artifact_id": key, "status": value} for key, value in states.items()],
+            "outbox_id": outbox_id,
+            "discord_id": primary.get("discord_id"),
+            "channel_id": context.channel_id,
+            "delivery_status": primary.get("status", "not_started"),
+        }
+        if not confirmed:
+            receipt["error"] = (
+                "Not every attachment has confirmed delivery. Inspect the attachment statuses; uncertain sends are not automatically retried."
+            )
+        return receipt
+
     @staticmethod
     def terminal_compatible(call, can_attach):
         """Only writes whose success can precede publication may accompany end_cycle."""
@@ -2275,7 +2399,7 @@ class Engine:
 
         check_deadline()
         content = self.vault.redact(strip_reasoning(content))
-        if not content:
+        if not content and not artifact_ids:
             raise ControlError("No visible content remained after removing reasoning")
         if routing:
             # Explicit cross-post actions retain their single, atomic file receipt.
@@ -2286,6 +2410,17 @@ class Engine:
             paths, voice_notes = self.registry.voice_notes.split(artifact_ids, context)
         voice_ids = {note["artifact_id"] for note in voice_notes}
         regular_ids = [artifact_id for artifact_id in artifact_ids if artifact_id not in voice_ids]
+        # File-only native audio has no text message to precede it. Use its
+        # first note as the ordinary delivery and retain the existing companion
+        # path for any additional notes, with the same lock and uncertainty rules.
+        primary_voice = None
+        if not content and not paths and voice_notes:
+            primary_voice = voice_notes.pop(0)
+            paths = [primary_voice["path"]]
+            regular_ids = [primary_voice["artifact_id"]]
+        ledger_content = (
+            "[Voice note transcript]\n" + primary_voice["transcript"] if primary_voice else content
+        )
         if len(content) > 12000:
             raise ControlError("Council contribution exceeds 12,000 characters")
         request = (
@@ -2296,7 +2431,11 @@ class Engine:
             if request_id
             else None
         )
-        footer = "" if optional else render_footer(bot, profile, provider, request, redact=self.vault.redact)
+        footer = (
+            ""
+            if optional or primary_voice
+            else render_footer(bot, profile, provider, request, redact=self.vault.redact)
+        )
         if routing:
             marker = (
                 "-# "
@@ -2312,19 +2451,21 @@ class Engine:
                 context.turn_id,
                 bot["id"],
                 destination,
-                content,
+                ledger_content,
                 reply_to,
                 dumps(regular_ids),
                 "pending",
                 time.time(),
-                dumps(routing or ({"kind": kind} if kind else {})),
+                dumps(
+                    routing or ({"kind": "voice_note"} if primary_voice else {"kind": kind} if kind else {})
+                ),
             ),
         )
         self.store.emit(
             "delivery.queued",
             {
                 "outbox_id": outbox_id,
-                "content": content,
+                "content": ledger_content,
                 "reply_to": reply_to,
                 "artifact_ids": regular_ids,
                 **({"voice_note_artifact_ids": list(voice_ids)} if voice_ids else {}),
@@ -2406,7 +2547,7 @@ class Engine:
                     await self.registry.reasoning_viewer.prepare(
                         bot, context.turn_id, request_id, outbox_id, destination
                     )
-                    if not routing and not optional
+                    if not routing and not optional and not primary_voice
                     else None
                 )
                 # Stop before dispatch, but never cancel an in-flight Discord send
@@ -2427,6 +2568,10 @@ class Engine:
                     "delivery.sending", {"outbox_id": outbox_id}, bot_id=bot["id"], turn_id=context.turn_id
                 )
                 panel = self.registry.panels.prepared(context) if not routing and not optional else None
+                if panel and primary_voice:
+                    raise DeliveryError(
+                        "Native voice-note delivery with a prepared panel needs a written message"
+                    )
                 if panel:
                     self.registry.panels.dispatch(panel, outbox_id)
                 discord_id = await self.transport.send(
@@ -2439,6 +2584,7 @@ class Engine:
                     footer=footer,
                     **({"panel": panel} if panel else {}),
                     **({"reasoning": reasoning} if reasoning else {}),
+                    **({"voice_note": primary_voice["metadata"]} if primary_voice else {}),
                     **(
                         {
                             "strict_reply": True,
@@ -2466,7 +2612,7 @@ class Engine:
                     channel_id=destination,
                     author_id=self.vault.get(f"bot/{bot['id']}/user_id") or bot["application_id"],
                     author_name=bot["name"],
-                    content=content,
+                    content=ledger_content,
                     room_id=room["id"] if room else f"owner:{bot['id']}",
                     bot_id=bot["id"],
                     reply_to=reply_to,
@@ -2480,7 +2626,9 @@ class Engine:
                     guild_id=routing["guild_id"] if routing else None,
                     parent_id=room["channel_id"] if routing and destination != room["channel_id"] else None,
                 )
-                self.store.execute("UPDATE messages SET content=? WHERE discord_id=?", (content, discord_id))
+                self.store.execute(
+                    "UPDATE messages SET content=? WHERE discord_id=?", (ledger_content, discord_id)
+                )
                 if routing:
                     observed = self.store.one(
                         "SELECT addressing FROM messages WHERE discord_id=?", (discord_id,)
@@ -2497,7 +2645,7 @@ class Engine:
                     {
                         "outbox_id": outbox_id,
                         "discord_id": discord_id,
-                        "content": content,
+                        "content": ledger_content,
                         **({"kind": kind} if kind else {}),
                     },
                     bot_id=bot["id"],
@@ -2545,7 +2693,7 @@ class Engine:
                     "outbox_id": outbox_id,
                     "channel_id": context.channel_id,
                     "error": error_text(exc),
-                    "content": content,
+                    "content": ledger_content,
                     "reason": (
                         "Discord acceptance is unknown; automatic resend withheld to avoid duplicates"
                         if uncertain

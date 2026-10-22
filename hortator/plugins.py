@@ -17,6 +17,7 @@ import httpx
 from jsonschema import Draft202012Validator
 
 from .models import ControlError
+from .attachments import DESCRIPTION as ATTACH_DESCRIPTION, PARAMETERS as ATTACH_PARAMETERS
 from .memory_budget import (
     DEFAULT_MEMORY_CHAR_LIMIT,
     MAX_MEMORY_CHAR_LIMIT,
@@ -81,24 +82,7 @@ def function(name, description, parameters):
     }
 
 
-ATTACH = function(
-    "discord_attach",
-    "Prepare files for your next ordinary text answer. This does not post or end your turn. "
-    "Exporting a file only creates its artifact ID. This tool selects those artifacts; prepared:true "
-    "and posted:false mean the files are still waiting for the final answer. Progress messages never "
-    "carry these files and may be posted before this tool executes. Describe preparation as preparation, "
-    "not completed delivery; only a successful delivery receipt confirms a send. "
-    "Use artifact IDs created in this turn; an optional reply_to must be a message ID in this context. "
-    "The list replaces your previous selection; [] clears it. After preparation, write your answer "
-    "as normal assistant content. No tool is needed for an answer without files.",
-    schema(
-        {
-            "reply_to": STR,
-            "artifact_ids": {"type": "array", "items": STR, "maxItems": 4},
-        },
-        ("artifact_ids",),
-    ),
-)
+ATTACH = function("discord_attach", ATTACH_DESCRIPTION, ATTACH_PARAMETERS)
 SILENCE = function(
     "council_silence",
     "Choose to listen without posting. Ends this activation. Give only a short operational label, not private reasoning.",
@@ -116,7 +100,7 @@ END_CYCLE = {
             "new accompanying text cannot replace it. Text alongside actions without end_cycle is "
             "narration, never a saved answer: after those results, finish with answer text and this tool, "
             "without more actions. During normal work it may accompany only "
-            "memory/global_memory writes and discord_attach, which run once before publication. "
+            "memory/global_memory writes and discord_attach. discord_attach sends files and its optional message, ending the turn without requiring this tool. "
             "If no answer text or draft exists, a valid call permits exactly one tool-free request for "
             "your first public answer; this is not a strike. That request accepts ordinary text only, "
             "never another tool call or private reasoning. Empty or incomplete output stops without retry. "
@@ -364,7 +348,7 @@ class Registry:
             PluginSpec(
                 "image_generation",
                 "Image generation",
-                "Generate an image from a prompt. Returns an artifact ID for discord_attach, then answer normally.",
+                "Generate an image from a prompt. Returns an artifact ID to send with discord_attach and an optional message.",
                 schema({"prompt": {"type": "string", "minLength": 1, "maxLength": 8000}}, ("prompt",)),
                 self.image_generation,
                 {

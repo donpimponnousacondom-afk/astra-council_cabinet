@@ -62,23 +62,28 @@ Inspection uses ordinary Trajectory/Events, including `panel_action` turn trigge
 
 ## Attachments and document exports
 
-Attachments are not a plugin grant. Long answers still automatically include `full-response.txt`; this also works inside panels. `discord_attach` is offered once the current bot turn has a generated/exported artifact, prepares owned files for the final response, and does not itself post.
+Attachments are not a plugin grant. Long answers still automatically include
+`full-response.txt`; this also works inside panels. The native `discord_attach`
+action is available during normal tool work and sends saved files with an
+optional message in one final reply. It can carry a previously prepared panel.
+No separate export, assistant answer or `end_cycle` call is required.
 
-- **Workspace** is an optional plugin with an `export` operation; it is not necessary for document-site exports.
-- **Documents & local sites** now supports `export` with `site`, `path` and optional immutable `revision`. The saved file is integrity-checked, copied into a bot/turn-owned artifact and returned for `discord_attach`. The existing 8 MB artifact limit applies. No publication or file edit is performed.
-- An **artifact** is the internal handle for a generated/exported file, not an additional plugin. Image generation is one possible producer and remains independently optional.
-
-```json
-{"operation":"export","site":"briefing","path":"index.html","revision":3}
-```
-
-Then call `discord_attach` with the returned handle:
+A document-site file can be sent directly:
 
 ```json
-{"artifact_ids":["art_returned_by_export"]}
+{"files":[{"source":"document_site","site":"briefing","path":"index.html","revision":3}],"message":"Briefing attached."}
 ```
 
-Finish with ordinary text. An export is a single file, not a bundled site: relative CSS/image references still require those assets or the published URL. Existing publication ownership, immutable revisions and automatic SSH synchronization are unchanged.
+The existing source grants, owned-file integrity checks and delivery limits still
+apply. The harness makes the delivery copy internally. Document attachments need
+neither workspace nor image-generation grants. `document_site.export` remains
+an optional producer when another tool needs an artifact ID. Generated images,
+audio and other current-turn owned artifacts can be sent using `artifact_ids`.
+See [direct file replies](TOOLS.md#direct-file-replies) for the complete contract.
+
+An attached HTML file is not a bundled site: relative CSS/image references still
+require those assets or the published URL. Existing publication ownership,
+immutable revisions and automatic SSH synchronization are unchanged.
 
 ## Boundaries and follow-ups
 

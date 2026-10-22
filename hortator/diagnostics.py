@@ -94,6 +94,13 @@ def record_diagnostics(store, vault, request_id, result, body, *, status, error=
         "provider_error": error,
         "response": result.response_diagnostics,
     }
+    attachment_calls = [
+        call for call in result.tool_calls if call.get("function", {}).get("name") == "discord_attach"
+    ]
+    if attachment_calls:
+        # Captions can carry the same private suffix/tagged reasoning as answers.
+        # Their sanitized public records must not replace the original evidence.
+        data["attachment_tool_calls"] = attachment_calls
     if recovery:
         data["request_recovery"] = recovery
     # Keep provider-produced diagnostic text, while applying credential masking

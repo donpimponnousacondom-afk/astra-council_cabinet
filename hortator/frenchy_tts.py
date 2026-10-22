@@ -15,14 +15,14 @@ DESCRIPTION = (
     'Frenchy TTS — experimental voice playground. List presets with {"operation":"voices"}; '
     'use type:"custom" for saved clones. Names, emotion tags and languages come from that catalog. '
     'Speak with {"text":"Bonjour!","voice":"<returned-id>"}. French voices can give English a French accent. '
-    'Native voice notes follow your separate written answer; use delivery:"file" for ordinary attachments. '
+    'Native voice notes are separate audio messages; use delivery:"file" for ordinary attachments. '
     'To clone a short reference: {"operation":"clone_voice","name":"My voice","message_id":"...",'
     '"attachment_id":"..."}. Reuse the returned voice ID. For one-shot imitation, supply the same '
     "reference fields with text instead; no voice is saved. reference_artifact_id can select your own "
     "current-turn audio instead of a Discord attachment. References must be audio up to 30 seconds. "
     "Saved cloning can require a paid provider plan. Do not guess voice names or claim a clone was created without a returned ID. A timed-out clone "
-    "may already exist: list custom voices before trying again. Prepare the artifact with discord_attach "
-    "and answer normally. Slash/panel replies and explicit discord_send posts retain ordinary audio attachments."
+    "may already exist: list custom voices before trying again. Send the artifact with discord_attach artifact_ids "
+    "and optionally include your written answer in message; that call finishes the reply. Slash/panel replies and explicit discord_send posts retain ordinary audio attachments."
 )
 
 PARAMETERS = copy.deepcopy(tts.PARAMETERS)

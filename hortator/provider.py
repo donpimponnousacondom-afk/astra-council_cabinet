@@ -142,6 +142,46 @@ def public_content(content, context):
     return content
 
 
+def public_attachment_arguments(arguments, context):
+    """Keep caption privacy even when invalid argument types are quoted in errors."""
+
+    def caption(value):
+        if isinstance(value, str):
+            return public_content(value, context)
+        if isinstance(value, list):
+            return [caption(item) for item in value]
+        if isinstance(value, dict):
+            return {key: caption(item) for key, item in value.items()}
+        return value
+
+    if isinstance(arguments, dict):
+        return (
+            {**arguments, "message": caption(arguments["message"])} if "message" in arguments else arguments
+        )
+    return caption(arguments)
+
+
+def public_tool_calls(calls, context):
+    """Attachment captions share the final-answer Engram privacy boundary.
+
+    Raw arguments remain in private provider diagnostics. Do not mutate calls
+    used by the engine or continuation; sanitize only model-readable evidence.
+    """
+    result = []
+    for call in calls:
+        function = call.get("function", {})
+        if function.get("name") == "discord_attach":
+            raw = function.get("arguments")
+            try:
+                arguments = json.loads(raw) if isinstance(raw, str) else raw
+            except TypeError, ValueError:
+                arguments = "[Private attachment caption omitted: invalid arguments]"
+            arguments = public_attachment_arguments(arguments, context)
+            call = {**call, "function": {**function, "arguments": dumps(arguments)}}
+        result.append(call)
+    return result
+
+
 def envelope_error(error, *, private_key=False):
     """HTTP-200 error envelopes still carry request/auth/rate/server semantics.
 
@@ -856,7 +896,7 @@ class ProviderPool:
                         self.vault.redact(
                             {
                                 "content": public_content(result.content, context),
-                                "tool_calls": result.tool_calls,
+                                "tool_calls": public_tool_calls(result.tool_calls, context),
                                 "finish_reason": result.finish_reason,
                                 "provider_metadata": result.metadata,
                                 "pricing": metrics["pricing"],
@@ -1029,7 +1069,7 @@ class ProviderPool:
                             {
                                 "partial": True,
                                 "content": public_content(result.content, context),
-                                "tool_calls": result.tool_calls,
+                                "tool_calls": public_tool_calls(result.tool_calls, context),
                                 "finish_reason": result.finish_reason,
                                 "provider_metadata": result.metadata,
                                 "pricing": metrics["pricing"],

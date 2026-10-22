@@ -155,8 +155,14 @@ Then, through the separately granted shell:
 Observed attachment IDs remain scoped to the actual current channel even though
 saved files span conversations. Imported originals retain the existing protection
 against alteration, moving and deletion; save transformed copies to other paths.
-Export registers a current-turn artifact for `discord_attach`; it does not post.
-Original intake/export sizes and delivery grants are unchanged.
+Send a saved file directly with `discord_attach`, for example
+`{"files":["notes/USAGE.md"],"message":"Usage notes attached."}`. This sends the
+file and optional message and finishes the reply; no export or later assistant
+answer is needed. File-only replies are supported. The existing filesystem grant
+and mounted-state requirement still apply. Export remains optional when another
+action needs a current-turn artifact ID; export alone does not post.
+Original intake/export sizes and delivery grants are unchanged. See the
+[direct attachment contract](TOOLS.md#direct-file-replies).
 
 ## Limits and persistence
 

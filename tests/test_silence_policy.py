@@ -36,7 +36,10 @@ async def test_disabled_silence_omits_tool_schema_and_requests_text_answer(kerne
 
     def respond(request):
         body = json.loads(request.content)
-        assert "tools" not in body and "tool_choice" not in body
+        if rounds:
+            assert {t["function"]["name"] for t in body["tools"]} == {"discord_attach"}
+        else:
+            assert "tools" not in body and "tool_choice" not in body
         system = body["messages"][0]["content"]
         assert "The operator has disabled intentional silence" in system
         assert "overrides generic persona/shared advice" in system
@@ -59,7 +62,7 @@ async def test_disabled_silence_preserves_action_tools_and_final_text_opportunit
         body = json.loads(request.content)
         bodies.append(body)
         if len(bodies) == 1:
-            assert {t["function"]["name"] for t in body["tools"]} == {"memory"}
+            assert {t["function"]["name"] for t in body["tools"]} == {"memory", "discord_attach"}
             return reply(tool("memory", {"operation": "write", "key": "note", "value": "Testing"}))
         assert "tools" not in body
         return completion("Saved my note; here is my answer.")

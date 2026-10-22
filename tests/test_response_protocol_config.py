@@ -125,7 +125,7 @@ async def test_mode_template_runtime_facts_and_inspection_match_all_contexts(ker
     if protocol == "progress":
         assert "At most 2 progress messages" in content
     elif protocol == "end_cycle":
-        assert "Text without end_cycle is never posted" in content
+        assert "Outside direct file replies, text without end_cycle is never posted" in content
     else:
         assert "NOT posted to Discord" in content
     layer = next(item for item in catalog() if item["id"] == "response_protocol")
@@ -238,6 +238,8 @@ async def test_new_default_does_not_overwrite_legacy_protocol_or_custom_guidance
 
 
 async def test_exact_previous_seed_guidance_is_upgraded_once(kernel):
+    from test_attachment_prompt_migration import OLD_STAGED_DEFAULTS
+
     replacements = {
         "runtime-identity": (
             "Write your answer as ordinary assistant content and follow the current response protocol to publish it.",
@@ -250,7 +252,7 @@ async def test_exact_previous_seed_guidance_is_upgraded_once(kernel):
     }
     for prompt_id, (new, old) in replacements.items():
         current = kernel.store.get("prompts", prompt_id)
-        previous = current["content"].replace(new, old)
+        previous = OLD_STAGED_DEFAULTS[prompt_id].replace(new, old)
         if prompt_id == "runtime-tool-guidance":
             previous = previous.replace(
                 "Read the remaining budget and finish\naccording to the current response protocol (or use the silence tool only when available).",

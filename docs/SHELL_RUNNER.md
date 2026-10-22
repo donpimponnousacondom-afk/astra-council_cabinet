@@ -44,7 +44,7 @@ For persistent files:
 {"operation":"run","task":"image-work","command":"python3.14 - <<'PY'\nfrom PIL import Image\nfrom pathlib import Path\np=Path('original.png')\nim=Image.open(p)\nprint(p.stat().st_size, im.size)\nim.convert('RGB').save('compressed.jpg',quality=60,optimize=True)\nprint(Path('compressed.jpg').stat().st_size)\nPY"}
 ```
 
-Export `compressed.jpg` with `workspace.export`; prepare its current-turn artifact ID with `discord_attach`, then answer normally. Shell execution never sends to Discord or publishes sites. Imported originals are protected during workspace copy-back: changing or deleting an original rejects the entire output snapshot. Image intake remains 20 MiB; the independent attachment export ceiling is 8,000,000 bytes.
+Send saved `compressed.jpg` directly with `discord_attach`, using a `workspace` source with its task/path and an optional message; the call finishes the reply. No export or later assistant answer is needed. See [direct file replies](TOOLS.md#direct-file-replies). Shell execution never sends to Discord or publishes sites. Imported originals are protected during workspace copy-back: changing or deleting an original rejects the entire output snapshot. Image intake remains 20 MiB; the independent attachment export ceiling is 8,000,000 bytes.
 
 ## Operator requirements and readiness
 
