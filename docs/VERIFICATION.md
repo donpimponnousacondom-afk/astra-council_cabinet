@@ -21,6 +21,12 @@ Web search engine. Existing Web search and Parallel schemas/routing stay intact.
   unchanged bot/Web search/Parallel configuration. Successful browser scratch
   was removed after checking that no process referenced it.
 - Ruff lint, repository format checks and `git diff --check` passed.
+- Independent PR review found that an enormous integer relevance score could
+  overflow float conversion and hide the captured HTTP handle behind a generic
+  error. Bounded numeric comparison now rejects it as a response-format failure
+  while retaining the original response. The final standalone regression suite
+  passed **59 tests in 17.83s**, including raw-response rereading for that case;
+  lint/format/diff checks passed after the correction.
 - A live comparison made **three DeepSeek and three Parallel Fast searches**
   with identical short queries and five requested results. All returned HTTP
   200 and five results. Median retrieval times in this tiny sample were

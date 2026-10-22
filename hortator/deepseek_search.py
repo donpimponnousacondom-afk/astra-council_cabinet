@@ -3,7 +3,6 @@
 import asyncio
 from dataclasses import replace
 import json
-import math
 import time
 from urllib.parse import urlsplit
 
@@ -210,9 +209,7 @@ def results(body, count):
                 if row.get(field) is not None and not isinstance(row[field], str):
                     raise ValueError(f"Invalid search result {field}")
             score, authority = row.get("rerank_score"), row.get("authority")
-            if score is not None and (
-                type(score) not in (int, float) or not math.isfinite(score) or not 0 <= score <= 3
-            ):
+            if score is not None and (type(score) not in (int, float) or not 0 <= score <= 3):
                 raise ValueError("Invalid search result rerank_score")
             if authority is not None and (type(authority) is not int or not -1 <= authority <= 4):
                 raise ValueError("Invalid search result authority")

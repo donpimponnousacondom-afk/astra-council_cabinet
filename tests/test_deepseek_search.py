@@ -195,6 +195,7 @@ async def test_configuration_failures_are_actionable_without_network_or_fallback
         (200, {"results": [row(summary=None)]}, "response_format"),
         (200, {"results": [row(url="javascript:alert(1)")]}, "response_format"),
         (200, {"results": [row(rerank_score=True)]}, "response_format"),
+        (200, {"results": [row(rerank_score=10**400)]}, "response_format"),
         (200, {"results": [row(authority=5)]}, "response_format"),
         (302, {"results": []}, "http_status"),
         (401, {"error": "deepseek-fixture-key"}, "http_status"),
