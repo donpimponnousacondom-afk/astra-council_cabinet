@@ -1,5 +1,51 @@
 # Verification record
 
+## 2026-10-22 — independent DeepSeek Search
+
+Implemented `deepseek_search` as an independently granted plugin, not an ordinary
+Web search engine. Existing Web search and Parallel schemas/routing stay intact.
+
+- The focused backend gate passed **221 tests in 62.99s** across
+  `test_deepseek_search`, `test_web_search`, `test_ollama_search`,
+  `test_search_guidance`, `test_dumb_search`, `test_http_evidence`,
+  `test_web_tool_context`, `test_plugin_hooks` and `test_console`. These use
+  isolated stores and mocked HTTP; they cover Unicode bounds, complete paging,
+  credentials/grants/scope, malformed/upstream failures, cancellation, deadlines,
+  partial response inspection and existing search behavior. This is not a local
+  full-suite claim. A subsequent test-only strengthening makes the per-bot
+  credential boundary case use an empty global selection; all **24 boundary
+  cases passed in 7.25s** after that strengthening.
+- The final standalone dashboard build and focused DeepSeek/Ollama Playwright
+  checks passed **2 tests in 18.3s** against an isolated seeded API. They cover
+  provider/count persistence, invalid counts, disabled/ungranted defaults and
+  unchanged bot/Web search/Parallel configuration. Successful browser scratch
+  was removed after checking that no process referenced it.
+- Ruff lint, repository format checks and `git diff --check` passed.
+- A live comparison made **three DeepSeek and three Parallel Fast searches**
+  with identical short queries and five requested results. All returned HTTP
+  200 and five results. Median retrieval times in this tiny sample were
+  **0.442s DeepSeek / 0.545s Parallel**. Returned summary/excerpt text measured
+  **4,494 / 3,347 cl100k_base tokens** respectively; these are local estimates,
+  excluding tool envelopes, not model usage or an invoice. DeepSeek's SQLite
+  summaries alone contained 12,327 characters, supporting complete paged
+  retention rather than assuming a short summary ceiling. Parallel surfaced
+  the central Python TaskGroup and SQLite WAL reference pages more directly
+  for these two queries; DeepSeek returned related documentation/forum pages
+  and multilingual variants. Three queries do not establish a quality ranking.
+- One additional live search executed through the final standalone registry
+  in an isolated temporary Kernel. It returned HTTP 200 and three sources in
+  about **782ms**; its saved response was reread without another search. The
+  temporary store and credential copy were removed by the probe's lifecycle.
+  Live configuration and bot grants were not changed.
+
+Probe scripts and public-result evidence are retained in ignored
+`audit/2026-10-22/deepseek-search/`. An earlier engine-integration prototype and
+its tests were superseded before publication; their passes are not substituted
+for the standalone checks above. One early test used a nonexistent vault-delete
+method; it was corrected to the existing empty-value removal API and rerun.
+No live Discord acceptance, model-cache savings or provider-billing claim is
+made. Current-head CI, PR reviews and deployment identity are recorded on the PR.
+
 ## 2026-10-18 — XDG application caches in task scratch
 
 The shell now sets `XDG_CACHE_HOME=/packages/cache` and prepares that directory

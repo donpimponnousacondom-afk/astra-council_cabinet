@@ -123,6 +123,13 @@ Installed plugins run in the Python process and are **trusted code**, not an OS 
 
 ## Shared model-facing contract
 
+The separate opt-in [DeepSeek Search](DEEPSEEK_SEARCH.md) plugin exposes
+`deepseek_search`, with its own enablement and per-bot grants. It reuses an
+operator-selected official DeepSeek provider credential and the shared HTTP
+evidence/result paging infrastructure. Existing search plugins and MiMo research
+remain independent. Its schema, dashboard and runtime use the same query/count
+limits; unknown fields and overlong queries fail before network access.
+
 The `tts` pack shares its existing grant/key between generation and read-only
 voice discovery. Mistral uses a v2 catalog and JSON/base64 speech; ordinary
 OpenAI-style binary speech remains compatible. `api_format` and optional

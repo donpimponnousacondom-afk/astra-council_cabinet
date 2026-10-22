@@ -539,6 +539,9 @@ class Registry:
         from .dumb_search import register as register_dumb_search
 
         register_dumb_search(self)
+        from .deepseek_search import register as register_deepseek_search
+
+        register_deepseek_search(self)
         from .frenchy_tts import register as register_frenchy_tts
 
         register_frenchy_tts(self)
@@ -824,6 +827,10 @@ class Registry:
             spec = self.spec_for(name, context)
             report = feedback(name, args, spec.parameters, spec.description)
             if report is not None:
+                if name == "deepseek_search":
+                    from .deepseek_search import explain_query_limit
+
+                    explain_query_limit(report, args)
                 report = self.vault.redact(report)
                 report = self.evidence.record(context, name, call_id, report)
                 self.store.emit(
@@ -862,6 +869,7 @@ class Registry:
                         "web_fetch",
                         "web_search",
                         "dumb_search",
+                        "deepseek_search",
                         "workspace",
                         "filesystem",
                         "shell",
@@ -886,7 +894,9 @@ class Registry:
                 "document_site",
             }:
                 result = present_times(result, council_timezone(self.store))
-            search_failed = name in {"web_search", "dumb_search"} and result.get("ok") is False
+            search_failed = (
+                name in {"web_search", "dumb_search", "deepseek_search"} and result.get("ok") is False
+            )
             http = result.get("http_response", {}) if isinstance(result, dict) else {}
             if http:
                 call_fields.update(
@@ -895,7 +905,10 @@ class Registry:
                 if isinstance(args, dict) and args.get("url") != http.get("url") and args.get("url"):
                     call_fields["requested_url"] = args["url"]
             web_warning = (
-                (name in {"web_fetch", "web_search", "dumb_search"} and result.get("ok") is False)
+                (
+                    name in {"web_fetch", "web_search", "dumb_search", "deepseek_search"}
+                    and result.get("ok") is False
+                )
                 or (name == "dumb_search" and result.get("partial") is True)
                 or (http.get("http_status") is not None and http["http_status"] >= 400)
             )
@@ -912,6 +925,7 @@ class Registry:
                         "web_fetch",
                         "web_search",
                         "dumb_search",
+                        "deepseek_search",
                         "memory",
                         "global_memory",
                     )

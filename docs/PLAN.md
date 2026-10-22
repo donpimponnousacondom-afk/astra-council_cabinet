@@ -1,5 +1,19 @@
 # Implementation and acceptance plan
 
+## 2026-10-22 — independent DeepSeek Search plugin
+
+The owner approved a separate `deepseek_search` plugin and per-bot grant, like
+Parallel. Reuse an explicitly selected saved official DeepSeek provider key;
+keep generation profiles, ordinary Web search, Parallel and MiMo research
+independent. Preserve queries exactly, validate the documented character bound
+before sending, and retain complete summaries through existing result paging.
+Search-only scope: no automatic query splitting, rewriting, retries, fallback,
+research-worker loop or native Fetch integration. Existing tool budgets apply.
+New installations/upgrades leave it disabled and ungranted. Schema/help/UI limits
+share the same constants; changing counters remain out of early prompts.
+The shell prompt-tuning freeze remains in force. Current setup and contracts are
+in [DEEPSEEK_SEARCH](DEEPSEEK_SEARCH.md).
+
 ## 2026-10-18 — prompt tuning deferred
 
 The owner has frozen the reviewed shell/tool prompt-tuning proposals while

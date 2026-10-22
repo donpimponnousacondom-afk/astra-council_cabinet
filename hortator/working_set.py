@@ -24,6 +24,7 @@ RESULT_READERS = (
     "shell",
     "web_search",
     "dumb_search",
+    "deepseek_search",
     "council_inspect",
     "memory",
     "global_memory",

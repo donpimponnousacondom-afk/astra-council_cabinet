@@ -140,6 +140,7 @@ including superseded behavior, and must not be treated as current configuration.
 - Private per-bot global memory: [GLOBAL_MEMORY.md](docs/GLOBAL_MEMORY.md).
 - Web search and preserved engine evidence: [WEB_SEARCH.md](docs/WEB_SEARCH.md).
 - Experimental Parallel Fast search: [DUMB_SEARCH.md](docs/DUMB_SEARCH.md).
+- Opt-in DeepSeek search: [DEEPSEEK_SEARCH.md](docs/DEEPSEEK_SEARCH.md).
 - Shared image intake and per-bot visibility: [VISION.md](docs/VISION.md).
 - Opt-in native voice-note/audio input: [AUDIO_INPUT.md](docs/AUDIO_INPUT.md).
 - Experimental speech cloning and native voice-note output: [FRENCHY_TTS.md](docs/FRENCHY_TTS.md).

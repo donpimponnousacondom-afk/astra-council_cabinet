@@ -1638,6 +1638,62 @@ export function Editor({
                     </Notice>
                   </>
                 )}
+                {draft.id === "deepseek_search" && (
+                  <>
+                    <Field
+                      label="DeepSeek credential provider"
+                      hint="Reuses this provider's saved API key for direct DeepSeek search. Choose a provider with an official https://api.deepseek.com base URL. Your bot's model stays unchanged."
+                    >
+                      <select
+                        value={draft.config?.provider_id || ""}
+                        onChange={(e) =>
+                          set("config", {
+                            ...draft.config,
+                            provider_id: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="">Not configured</option>
+                        {byName(dashboard.providers).map((provider) => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.name} · {provider.base_url}
+                            {provider.key_configured ? "" : " · no saved key"}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field
+                      label="Search results"
+                      hint={`Default 5, maximum ${entity?.schema?.properties?.count?.maximum}. Bots can request a different count per search within this limit.`}
+                    >
+                      <input
+                        type="number"
+                        min={entity?.schema?.properties?.count?.minimum}
+                        max={entity?.schema?.properties?.count?.maximum}
+                        step={1}
+                        value={draft.config?.count ?? 5}
+                        onChange={(e) =>
+                          set("config", {
+                            ...draft.config,
+                            count:
+                              e.target.value === ""
+                                ? null
+                                : Number(e.target.value),
+                          })
+                        }
+                      />
+                    </Field>
+                    <Notice>
+                      DeepSeek accepts up to{" "}
+                      {entity?.schema?.properties?.query?.maxLength} Unicode
+                      characters per query, including spaces and search
+                      operators. Longer queries are rejected before sending;
+                      they are never truncated or split automatically. This is a
+                      separate search tool with its own enablement and bot
+                      grants. Web search and Parallel settings are unchanged.
+                    </Notice>
+                  </>
+                )}
                 {draft.id === "research_assistant" && (
                   <>
                     <ResearchSettings

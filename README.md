@@ -148,6 +148,7 @@ package example. The [plugin manual](docs/PLUGINS.md) remains the registry contr
 | `document_site` | Owned static documents, paged editing, revision recovery and automatic publication | Keyless bot tools; global SSH delivery settings, immutable revisions and private snapshot history |
 | `web_search` | Brave + DuckDuckGo search, fallback or combined | Brave key; DuckDuckGo keyless; engine/endpoint/count configurable |
 | `dumb_search` | Opt-in [Parallel Fast search experiment](docs/DUMB_SEARCH.md) | Parallel plugin key; one search per call; disabled by default |
+| `deepseek_search` | Opt-in [DeepSeek Search](docs/DEEPSEEK_SEARCH.md) | Saved DeepSeek provider key; independent grants; summaries with paging; disabled by default |
 | `secretary` | Experimental reminders, snooze and recurring alarms that wake the bot | Keyless, off by default; [setup and behavior](docs/SECRETARY.md) |
 | `image_generation` | Image generation to a Discord attachment | OpenAI-style image endpoint, raw request JSON, key |
 | `tts` | Speech generation and provider-specific voice discovery | OpenAI-style or Mistral speech, model/voice/options JSON, key; [voice discovery](docs/TTS.md) |
