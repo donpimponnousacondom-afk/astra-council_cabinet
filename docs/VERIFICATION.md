@@ -46,6 +46,23 @@ memory snapshots, live counters at the tail, unrelated frozen shell tuning and
 the general deferred tool-list decision are unchanged. Actual provider cache
 savings remain unmeasured.
 
+The full local run began before the final corrections: **2,835 passed, five
+failed, two skipped** in 1,022.18s. Besides the summary-capacity fixture and an
+uncertain-delivery Engram assertion, it exposed two old silence-policy tool-set
+expectations and a supersession capacity measurement that omitted the now-native
+attachment schema. Those fixtures now account for the advertised tool while
+retaining their silence/final-round and receipt-nonacknowledgement assertions.
+The corrected silence suite passed 18 tests, and the corrected capacity case
+passed independently. Current-head CI remains the full-suite merge gate.
+
+Development deployment started at **2026-10-22T13:09:09+02:00** from published
+`ebe7a670b42294e6bef8e2d36032f04c81a3174d`, after the dashboard build and focused
+checks. Health returned HTTP 200; CI and both PR reviews were still pending.
+The preceding stop at 12:40:33+02:00 caused an unnecessarily long outage of about
+28½ minutes. The owner called this out; operations guidance now explicitly avoids
+keeping the harness stopped solely for broad verification/review waits. No second
+restart is needed for later test/documentation changes or an identical-code merge.
+
 ## 2026-10-22 — Missing-answer operational diagnostics
 
 Completed responses without a publishable answer/tool call now produce a short
