@@ -1,8 +1,13 @@
 # Web response evidence and console display
 
-Implemented on 2026-09-14 after the owner identified that generic HTTP exceptions hid response bodies and that the console stripped useful URLs. This contract applies to `web_fetch`, `web_search` and the opt-in [Dumb Search](DUMB_SEARCH.md); media-generation and Discord attachment adapters are separate follow-ups.
+Implemented on 2026-09-14 after the owner identified that generic HTTP exceptions hid response bodies and that the console stripped useful URLs. This contract applies to `web_fetch`, `web_search`, opt-in [Dumb Search](DUMB_SEARCH.md) and [DeepSeek Search](DEEPSEEK_SEARCH.md); media-generation and Discord attachment adapters are separate follow-ups.
 
 ## Received responses
+
+DeepSeek Search follows this capture path, including cancellation evidence and
+console inspection. Successful summaries omit the duplicate raw-body preview
+while preserving its read handle. The selected provider key is sent only to the
+fixed DeepSeek search endpoint. Existing trajectory retention applies.
 
 Dumb Search follows the same capture path. Successful excerpts omit the duplicate
 raw-body preview while retaining its paged handle; failed responses keep their

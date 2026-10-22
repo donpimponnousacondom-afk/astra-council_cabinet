@@ -1174,6 +1174,13 @@ Image intake currently accepts up to **20 MiB per image**, with 64 megapixels pe
 
 ### Web search credentials and engine selection
 
+The separate opt-in [DeepSeek Search](DEEPSEEK_SEARCH.md) plugin reuses a saved
+official DeepSeek provider key. Select it in that plugin's credential-provider
+control, enable the plugin and grant it to the intended bots. It is independent
+of the Web search engine selector and Parallel; configuring it never changes
+their defaults or the bot's generation model. See its feature contract for
+query/count limits, evidence, cost and setup.
+
 Create a Brave Search API key in the [Brave API dashboard](https://api-dashboard.search.brave.com/) after activating a Search plan (**API Keys → Add API Key**). In Hortator, open **Plugins → Edit Web search → API key → Save credential**. Enable the plugin globally and grant **Web search** under each desired bot's **Capabilities**. DuckDuckGo needs no key. The global Brave key is shared; **Per-bot plugin key**, with **Plugin credential → Web search**, is an optional override. Saving credentials never performs a paid probe.
 
 The editor exposes **Default search engine**: Auto (Brave then DuckDuckGo after failure/empty results), Brave only, DuckDuckGo only, and Both. Select **Both** with **Search results per engine = 5** for up to five from each, deduplicated and attributed. Bots can override engine/count per call. Save non-secret settings with **Save changes**, separately from the credential button. Existing endpoint/count settings and bot grants are preserved. A saved key flag means stored, not verified by a live search.
