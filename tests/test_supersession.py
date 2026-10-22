@@ -397,7 +397,9 @@ async def test_receipt_omitted_for_real_input_capacity_is_not_acknowledged_by_fi
     }
     profile = kernel.store.get("profiles", measured_bot["model_profile_id"])
     context = ToolContext(measured_bot, CHANNEL, "capacity-preflight")
-    schemas = [SILENCE] + kernel.registry.schemas(context)
+    from hortator.plugins import ATTACH
+
+    schemas = [SILENCE, ATTACH] + kernel.registry.schemas(context)
     rows, summary, _, prepared = await kernel.engine.contexts.prepare(
         measured_bot, profile, CHANNEL, context.turn_id, schemas
     )
