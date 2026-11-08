@@ -1,10 +1,10 @@
 # Offline tool-call evaluation
 
-The owner authorized this Cheapseek-only trial on 2026-11-08. It investigates
-missing `operation` arguments using historical Sun/Zelda requests. It does not
-change runtime prompts, tools, validation, bot configuration or provider models.
-The owner reviews measured results and council scores before deciding whether to
-benchmark Loki's provider. Production prompt tuning remains frozen.
+The owner authorized the initial Cheapseek trial on 2026-11-08, followed by a
+40-call Loki benchmark after reviewing three council rounds. These investigate
+missing `operation` arguments using saved requests, without changing runtime
+prompts, tools, validation, bot configuration or provider models. Production
+prompt tuning remains frozen.
 
 ## Replay a saved request
 
@@ -25,9 +25,13 @@ or tool-result continuations. Returned tools are **never dispatched**.
 
 The script reads the external SQLite database in read-only mode and decrypts only
 the selected provider credential using the existing key. It does not instantiate
-the application Store/Vault or write bot state. Requests must belong to Sun/Zelda
-and use the exact configured Cheapseek model. Paid inference requires owner
-authorization; this task has it.
+the application Store/Vault or write bot state. The default `--study cheapseek`
+accepts only Sun/Zelda and `cheapseek/deepseek-flash`. Explicit `--study loki`
+accepts only Loki and `fortysixstelvio/gemini-3.8-flash-high`, with ten paired
+baseline/instruction blocks. Both saved row and body model identities must match;
+no slug is rewritten. Loki cases must contain text-only saved messages because
+internal image metadata cannot reconstruct the original image input. Paid
+inference requires owner authorization; the two-case Loki benchmark now has it.
 This is a trusted operator CLI under the existing OS account and vault boundary.
 It uses the application's bot-override/provider-key selection order; it adds no
 API route, model tool, filesystem permission or bot grant. The selected credential
@@ -110,3 +114,27 @@ effect or stable provider implementation.
 Return counts, quality assessment, failures and objections to all three members
 of the project-local [council](../skills/council/SKILL.md). Research scores do not
 replace final open-PR review. Dated results belong in [VERIFICATION](VERIFICATION.md).
+
+## Authorized Loki transfer benchmark
+
+Run each of the two locked cases with `--study loki --variant baseline instruction
+--repeats 10`, a separate unused output directory and the saved request ID. The
+case selection, exclusions, original body hashes, full schedule, frozen instruction
+hash and task-specific quality rubric are recorded before inference in private
+`audit/2026-11-08/loki-benchmark/benchmark-plan.json`. One initially selected case
+was excluded during preflight because its image was retained only as metadata;
+no inference had occurred. Select the two most recent eligible text-only failures
+from distinct turns; do not replace cases after observing replay outcomes.
+
+There are 40 attempted requests total, one in flight, without retries or returned
+tool execution. Keep the exact final-system-message placement tested on Cheapseek.
+A case needs at least 3/10 omission-bearing baseline completions to be informative;
+a syntax success requires candidate omissions at most one third of baseline in
+each informative case, without new other-invalid/help-only/no-tool outcomes.
+Uninformative or interrupted cases are reported, not silently extended. Report
+both omission denominators and shell uptake. Lock the relevance rubric before
+inference, have the council assess it with arm labels concealed, and report each
+rater separately. Consistent adverse relevance or owner-instruction findings
+prevent an overall-success claim. Syntax itself may partly reveal the arm.
+Even success establishes only a candidate mitigation in these contexts; live
+rollout remains a separate owner decision.

@@ -1,4 +1,4 @@
-"""Replay a saved Cheapseek inference without dispatching any returned tools.
+"""Replay an owner-authorized saved inference without dispatching returned tools.
 
 Run with the repository Python, e.g. .venv/bin/python scripts/replay_tool_request.py.
 The owner must authorize paid inference. Raw evidence belongs in ignored audit/.
@@ -38,6 +38,8 @@ from hortator.tool_feedback import feedback, full_schema, parse_arguments  # noq
 
 
 MODEL = "cheapseek/deepseek-flash"
+LOKI_MODEL = "fortysixstelvio/gemini-3.8-flash-high"
+STUDIES = {"cheapseek": ({"sun", "zelda"}, MODEL), "loki": ({"loki"}, LOKI_MODEL)}
 VARIANTS = ("baseline", "description", "required", "combined", "op_field", "root_required", "instruction")
 CHANGES = {
     "baseline": "Unchanged saved body",
@@ -139,6 +141,7 @@ def classify(calls, original_tools):
         command = arguments.get("command", "") if isinstance(arguments, dict) else ""
         command_field = schema.get("properties", {}).get("command", {})
         examples = command_field.get("examples", []) if isinstance(command_field, dict) else []
+        examples = examples if isinstance(examples, list) else []
         results.append(
             {
                 "tool": name,
@@ -230,7 +233,9 @@ def aggregate(summaries):
     return result
 
 
-def load_source(data_dir, request_id):
+def load_source(data_dir, request_id, study="cheapseek"):
+    if study not in STUDIES:
+        raise ValueError(f"Unknown study: {study}")
     with closing(
         sqlite3.connect((data_dir / "council.sqlite3").resolve().as_uri() + "?mode=ro", uri=True)
     ) as db:
@@ -239,8 +244,20 @@ def load_source(data_dir, request_id):
         if row is None:
             raise ValueError("Unknown saved request")
         body = json.loads(row["body"])
-        if row["bot_id"] not in {"sun", "zelda"} or body.get("model") != MODEL:
-            raise ValueError("This owner-authorized experiment covers Sun/Zelda Cheapseek only")
+        bots, model = STUDIES[study]
+        if row["bot_id"] not in bots or body.get("model") != model or row["model"] != model:
+            raise ValueError(f"Study {study} requires bots {sorted(bots)} and exact model {model}")
+        if study == "loki" and any(
+            isinstance(message.get("content"), list)
+            and any(part.get("type") != "text" for part in message["content"])
+            for message in body.get("messages", [])
+        ):
+            raise ValueError(
+                "Loki benchmark requires text-only saved messages; media evidence may be omitted"
+            )
+        context = json.loads(row["context"] or "{}")
+        if not isinstance(context, dict):
+            raise ValueError("Saved request context must be a JSON object")
         provider_row = db.execute(
             "SELECT body,revision FROM entities WHERE kind='providers' AND id=?", (row["provider_id"],)
         ).fetchone()
@@ -258,7 +275,7 @@ def load_source(data_dir, request_id):
         if provider.get("requires_key", True) and not key:
             raise ValueError("Configured credential is unavailable")
         meta = {k: row[k] for k in ("id", "turn_id", "bot_id", "model", "started_at", "provider_id")}
-        context = json.loads(row["context"] or "{}")
+        meta["study"] = study
         meta["historical_context"] = {
             k: context.get(k) for k in ("round", "profile_revision", "provider_revision")
         }
@@ -267,7 +284,12 @@ def load_source(data_dir, request_id):
 
 
 async def replay(args):
-    source, provider, key, meta = load_source(args.data_dir, args.request_id)
+    study = getattr(args, "study", "cheapseek")
+    if study == "loki" and (
+        len(args.variant) != 2 or set(args.variant) != {"baseline", "instruction"} or args.repeats != 10
+    ):
+        raise ValueError("Loki benchmark requires exactly baseline/instruction and ten paired blocks")
+    source, provider, key, meta = load_source(args.data_dir, args.request_id, study)
     bodies = {variant: variant_body(source, variant) for variant in args.variant}
     endpoint = provider["base_url"].rstrip("/") + "/chat/completions"
     headers = httpx.Headers({"Content-Type": "application/json"})
@@ -418,6 +440,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=Path.home() / ".local/share/hortator")
     parser.add_argument("--request-id", required=True)
+    parser.add_argument("--study", choices=STUDIES, default="cheapseek")
     parser.add_argument("--variant", choices=VARIANTS, nargs="+", default=["baseline"])
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=180)

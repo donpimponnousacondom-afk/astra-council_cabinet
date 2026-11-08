@@ -773,3 +773,20 @@ historical Gemini slug change; do not present that change as a proxy fault.
 During this trial, show the steps and incoming council feedback as inline HTML in
 the T3 Code chat. The owner explicitly clarified that an HTML file is not the
 requested presentation.
+
+## 2026-11-08 — Loki benchmark authorized
+
+After the three-provider council completed the Cheapseek assessment and PR #138
+was merged, the owner approved the proposed 40-call Loki experiment (“Go for loki”).
+Use two saved failing contexts, ten baseline/instruction pairs each, with the
+identical frozen final-system-message placement. Preserve Loki's existing Gemini
+slug and provider configuration. Select text-only saved cases before inference:
+internal image metadata cannot recreate the original multimodal input. Preserve
+preflight exclusions and the private case/rubric/schedule manifest. Returned tools
+remain unexecuted; original validation and separate error denominators apply.
+
+The prior Zelda result retained 4/10 omissions, and Sun's additional shell use
+raised relevance concerns. Accordingly, this is a transfer experiment, not a
+deployment decision. Require blinded task-relevance assessment as well as syntax
+improvement. Low baseline incidence or interrupted samples are inconclusive, not
+grounds for silently extending the fixed budget. Live prompt tuning remains frozen.

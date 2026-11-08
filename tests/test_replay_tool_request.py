@@ -340,6 +340,74 @@ def test_source_closes_connection_and_accepts_null_context(tmp_path, monkeypatch
         assert meta["current_provider_revision"] == 17
         assert all(v is None for v in meta["historical_context"].values())
     else:
-        with pytest.raises(ValueError, match="Sun/Zelda"):
+        with pytest.raises(ValueError, match="Study cheapseek"):
             replay.load_source(tmp_path, "fixture")
     assert closed == [True]
+
+
+@pytest.mark.parametrize(
+    "study,bot,body_model,row_model,context,media,error",
+    [
+        ("loki", "loki", replay.LOKI_MODEL, replay.LOKI_MODEL, "{}", False, None),
+        ("cheapseek", "loki", replay.LOKI_MODEL, replay.LOKI_MODEL, "{}", False, "Study cheapseek"),
+        ("loki", "sun", replay.LOKI_MODEL, replay.LOKI_MODEL, "{}", False, "Study loki"),
+        ("loki", "loki", replay.MODEL, replay.LOKI_MODEL, "{}", False, "Study loki"),
+        ("loki", "loki", replay.LOKI_MODEL, replay.MODEL, "{}", False, "Study loki"),
+        ("loki", "loki", replay.LOKI_MODEL, replay.LOKI_MODEL, "null", False, "JSON object"),
+        ("loki", "loki", replay.LOKI_MODEL, replay.LOKI_MODEL, "[]", False, "JSON object"),
+        ("loki", "loki", replay.LOKI_MODEL, replay.LOKI_MODEL, "{}", True, "text-only"),
+    ],
+)
+def test_explicit_loki_scope_and_saved_evidence(
+    tmp_path, source, study, bot, body_model, row_model, context, media, error
+):
+    source["model"] = body_model
+    if media:
+        source["messages"][0]["content"] = [
+            {"type": "text", "text": "Inspect the screenshot"},
+            {"type": "hortator_image", "image": {"status": "ready", "sha256": "fixture"}},
+        ]
+    with sqlite3.connect(tmp_path / "council.sqlite3") as db:
+        db.executescript(
+            "CREATE TABLE requests(id,body,bot_id,provider_id,model,turn_id,started_at,context);"
+            "CREATE TABLE entities(kind,id,body,revision); CREATE TABLE secrets(scope,value);"
+        )
+        db.execute(
+            "INSERT INTO requests VALUES(?,?,?,?,?,?,?,?)",
+            ("fixture", json.dumps(source), bot, "provider", row_model, "turn", 0, context),
+        )
+        db.execute(
+            "INSERT INTO entities VALUES(?,?,?,?)",
+            ("providers", "provider", json.dumps({"requires_key": False}), 17),
+        )
+    db.close()
+    if error:
+        with pytest.raises(ValueError, match=error):
+            replay.load_source(tmp_path, "fixture", study)
+    else:
+        body, _, key, meta = replay.load_source(tmp_path, "fixture", study)
+        assert body == source and key == "" and meta["study"] == "loki"
+
+
+@pytest.mark.parametrize(
+    "variants,repeats",
+    [
+        (["baseline"], 10),
+        (["baseline", "op_field"], 10),
+        (["baseline", "instruction"], 11),
+        (["baseline", "instruction", "instruction"], 10),
+    ],
+)
+async def test_loki_plan_rejected_before_source_or_inference(monkeypatch, variants, repeats):
+    def forbidden(*_):
+        pytest.fail("Invalid experiment must fail before source or credential access")
+
+    monkeypatch.setattr(replay, "load_source", forbidden)
+    with pytest.raises(ValueError, match="ten paired blocks"):
+        await replay.replay(argparse.Namespace(study="loki", variant=variants, repeats=repeats))
+
+
+def test_malformed_future_examples_do_not_create_quality_flags(source):
+    source["tools"][0]["function"]["parameters"]["anyOf"][1]["properties"]["command"]["examples"] = "echo"
+    result = replay.classify([call('{"operation":"run","command":"e"}')], source["tools"])[0]
+    assert result["category"] == "valid_action" and not result["example_command_match"]
