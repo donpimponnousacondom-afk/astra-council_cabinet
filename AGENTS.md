@@ -55,8 +55,11 @@
   discussing a possible cause does not lift the hold. Narrow 2026-11-08 exception:
   the owner authorizes Sun/Zelda Cheapseek inference replays and offline prompt/
   schema experiments, with council feedback and measured failure rates. Returned
-  tool calls are not executed. Report the results and council scores before any
-  Loki-provider benchmark or live rollout; unrelated prompt tuning stays frozen.
+  tool calls are not executed. After reviewing those results and council scores,
+  the owner said “Go for loki” on 2026-11-08: the bounded 40-call, two-case Loki
+  inference benchmark is authorized, with the same final-message instruction,
+  original validation, nonexecution and blinded relevance review. Record the
+  predeclared plan and results. Live rollout and unrelated prompt tuning remain frozen.
   The ongoing external shell
   audit remains separate. See [the deferred decision](docs/PLAN.md#2026-10-18--prompt-tuning-deferred).
 

@@ -114,8 +114,10 @@ The initial Cheapseek trial is inference-only: use saved Sun/Zelda request JSON,
 record its hash and unavoidable reconstruction limits, and never execute returned
 tools. Keep raw requests/responses in ignored audit storage. Separate exact
 baseline replays from every modified prompt/schema variant; record no-tool answers,
-transport failures and schema failures separately. The owner chooses whether to
-benchmark Loki after reviewing council scores and measured results. No runtime
+transport failures and schema failures separately. After reviewing council scores
+and measured results, the owner authorized a two-case, 40-call Loki benchmark on
+2026-11-08. Use its text-only saved cases and frozen final-message instruction;
+record the planned order and quality rubric before inference. No runtime
 restart or configuration rollout is authorized by the offline experiment.
 See [offline tool-call evaluation](TOOL_CALL_EVALUATION.md) for the replay command,
 experimental variants, evidence format and outcome denominators.

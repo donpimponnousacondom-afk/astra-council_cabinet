@@ -4052,3 +4052,69 @@ responses retain their original separate format/evidence.
 Current focused suite: **17 passed in 0.97s**; repository Ruff lint/format passes.
 These are offline checks and evidence reanalysis, with no further paid inference.
 Current-head CI, council delta review and Haiku/Luna triage remain merge gates.
+
+## 2026-11-08 — Loki transfer benchmark preparation
+
+Owner authorization follows PR #138's three completed council rounds. Prepared
+`--study loki` for the existing `fortysixstelvio/gemini-3.8-flash-high` model,
+preserving the default Sun/Zelda Cheapseek scope. The Loki study requires the
+matching saved row/body model, text-only messages and exactly ten paired
+baseline/instruction blocks. No provider slug, configuration, runtime validator
+or live prompt is changed. The existing credential boundary is unchanged.
+
+Read-only case selection initially found an image-bearing request whose saved
+`hortator_image` part contains metadata rather than provider image input. It was
+excluded before any inference, with the initial selection preserved in private
+audit evidence. The final cases are the most recent eligible text-only omission
+requests from distinct turns: an article-reading request following failed fetches
+and a first-request domain-status investigation. They have the same shell schema
+and different immediate tasks, but share much conversation history.
+
+The private `audit/2026-11-08/loki-benchmark/benchmark-plan.json` locks request/body
+hashes, frozen instruction, schedules, denominators and task-specific quality
+rubrics before calls. This checkpoint contains no Loki inference results.
+Focused evaluator tests: **30 passed in 1.01s**, including explicit study/model
+scope, rejection of incomplete media evidence, fixed experiment shape, malformed
+context and examples handling. Returned tools remain unexecuted. The shared
+runtime continues unchanged; no restart is needed for this operator utility.
+
+### Completed Loki inference benchmark; quality review pending
+
+All three initial reviewers inspected open PR #139 at
+`db1fbc6f5daf1f8ae27293c138f183022f717d2f`: PR scores **9/10 each**;
+experiment-start readiness Opus **8.5/10**, Sol **9/10**, Wonder Full **9/10**.
+No blockers. Before inference, preserved a clarification defining new-error and
+multi-rater relevance thresholds and verified case-b's instruction-first order
+against its locked schedule. The original plan was retained unchanged.
+
+Exactly **40 Loki inference attempts completed**, with no retries, transport,
+HTTP, provider, format or incomplete-response outcomes. The unchanged requested
+slug was `fortysixstelvio/gemini-3.8-flash-high`; every response reported
+`gemini-3.8-flash-n`. This is reported transport identity, not proof of a pinned
+backend or a reason to rewrite the model slug.
+
+| Case | Arm | Omission-bearing / complete responses | Missing-operation / nonempty shell calls | Responses attempting shell |
+| --- | --- | --- | --- | --- |
+| Article research, after failed fetches | Baseline | 8/10 | 8/8 | 8/10 |
+| Article research, after failed fetches | Frozen instruction | 1/10 | 1/8 | 8/10 |
+| Domain-status investigation, first request | Baseline | 10/10 | 10/10 | 10/10 |
+| Domain-status investigation, first request | Frozen instruction | 1/10 | 1/10 | 10/10 |
+
+Neither case introduced other-invalid calls, help-only or no-tool responses.
+Non-shell calls were valid search/fetch calls. Both cases meet the predeclared
+syntax-reduction threshold; residual omissions remain in both. This does not yet
+establish overall success: the separate shuffled 40-response quality packet
+awaits all three independent assessments under the pre-inference rubric.
+
+Offline verification reproduces both aggregates and their summary/source hashes,
+the frozen candidate and exact planned payloads/order. Independent reassembly of
+the captured upstream arguments matches all **40/40** reconstructed responses;
+reclassification preserves every recorded category. Missing selectors are already
+absent in upstream argument fragments. Raw private evidence and the blinded packet
+remain in ignored `audit/2026-11-08/loki-benchmark/`.
+
+These selected contexts share substantial history and one shell schema; counts
+are not production error-rate estimates. Tools were never executed, live prompts
+remain frozen and the shared runtime was not restarted. The results commit only
+records measured evidence and corrects the documented case-b order; it does not
+change the tested evaluator. Its PR checks and delta review remain merge gates.

@@ -78,10 +78,11 @@ result and commit. Missing, pending, cancelled or failed required checks do not 
 it does not replace the technical council. Children never watch or merge PRs.
 Their final PR-work line is `PR <full URL>, head <SHA>, checks and reviews <state>`.
 
-For the initial tool-call trial, the owner authorizes Cheapseek inference replays
-of Sun/Zelda failures and measured offline variants. Return the council's scores
-and error-rate evidence before any Loki-provider benchmark or live rollout.
-No successful Cheapseek test establishes that the change works on Gemini.
+The initial tool-call trial authorized Cheapseek inference replays of Sun/Zelda
+failures and measured offline variants. After three rounds and the owner's
+2026-11-08 “Go for loki”, the two-case, 40-call Loki inference benchmark is also
+authorized. Follow its predeclared plan and assess task relevance independently
+of syntax. Neither Cheapseek success nor a Loki benchmark authorizes live rollout.
 For this trial, report steps, measured results and council feedback inline in the
 T3 Code chat using `html_preview` then `html_render`. The owner explicitly wants
 the visible chat view, not an HTML file. Refresh it when feedback or phase results
