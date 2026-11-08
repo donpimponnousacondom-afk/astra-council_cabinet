@@ -53,7 +53,8 @@ def read_row(row):
     if response is not None:
         if not isinstance(response, dict):
             raise ValueError("response_shape")
-        calls = response.get("tool_calls") or []
+        calls = response.get("tool_calls")
+        calls = [] if calls is None else calls
         if not isinstance(calls, list) or any(
             not isinstance(c, dict)
             or not isinstance(c.get("function"), dict)
@@ -83,6 +84,7 @@ def summarize(rows, *, diagnostics=None):
             diagnostics["skipped_" + str(exc)] += 1
             continue
         if decoded is None:
+            diagnostics["rows_without_shell"] += 1
             continue
         tools, guidance, response = decoded
         key = (
@@ -121,7 +123,8 @@ def summarize(rows, *, diagnostics=None):
             count["not_complete"] += 1
             continue
         count["complete_responses"] += 1
-        calls = response.get("tool_calls") or []
+        calls = response.get("tool_calls")
+        calls = [] if calls is None else calls
         shell = [c for c in calls if c.get("function", {}).get("name") == "shell"]
         count["shell_responses"] += bool(shell)
         count["no_shell_responses"] += not shell

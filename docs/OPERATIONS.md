@@ -303,6 +303,10 @@ bot, provider, profile, requested model, convention content hash and role (or ab
 Use separate time windows for pre-rollout and later disabled/empty guidance;
 both have the absent key. Malformed stored envelopes are skipped with explicit
 `ledger_diagnostics` counts; classifier/evaluator errors still abort the report.
+Diagnostics cover the whole scanned generation window, not only shell cohorts:
+scanned rows equal grouped attempts plus skipped rows plus `rows_without_shell`.
+Tool-shape validation precedes eligibility, so a malformed tool envelope has
+unknown eligibility; context/response validation applies only to shell rows.
 Each transport retry remains a separate attempt. Complete responses require
 `stop`/`tool_calls`; incomplete/error attempts are separate. Report omission-bearing
 responses over complete responses and missing-operation calls over nonempty shell

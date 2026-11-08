@@ -4195,3 +4195,12 @@ Loki finish reasons 44 tool_calls / 15 stop and Sun 1 tool_calls / 4 stop. Thus
 no omission samples were excluded for a nonstandard boundary in this window.
 The original report is preserved; follow-up is ignored
 `audit/2026-11-08/shared-shell-guidance/before-v2.json`.
+
+
+Final reporting correction validates the raw `tool_calls` value before treating
+only missing/null as empty; falsey non-list values are explicitly malformed.
+`rows_without_shell` now reconciles all scanned rows with grouped and skipped
+rows. **25 focused reporting/guidance tests passed**, with lint/format/diff checks.
+The same baseline window reconciles exactly: 66 scanned = 64 eligible attempts
++ 2 without shell + 0 skipped. Runtime modules remain identical to the initial
+reviewed implementation. No additional inference or live-effectiveness claim.

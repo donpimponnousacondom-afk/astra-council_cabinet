@@ -76,9 +76,30 @@ def test_report_preserves_denominators_unknown_cache_and_prompt_cohorts():
 def test_report_excludes_requests_without_shell_and_does_not_turn_unknown_into_miss():
     no_shell = row()
     no_shell["body"] = '{"tools":[]}'
-    [report] = summarize([no_shell, row(cached=150)])
+    diagnostics = Counter()
+    [report] = summarize([no_shell, row(cached=150)], diagnostics=diagnostics)
     assert report["attempts"] == 1 and report["cache_unknown_attempts"] == 1
     assert report["attempt_median_cached_share"] is None
+    assert diagnostics == {"scanned_generation_rows": 2, "rows_without_shell": 1}
+
+
+@pytest.mark.parametrize("calls", [{}, "", False, 0])
+def test_falsey_non_list_calls_are_malformed_not_no_tool(calls):
+    value = row()
+    value["response"] = json.dumps({"finish_reason": "stop", "tool_calls": calls})
+    diagnostics = Counter()
+    assert summarize([value], diagnostics=diagnostics) == []
+    assert diagnostics == {"scanned_generation_rows": 1, "skipped_call_shape": 1}
+
+
+@pytest.mark.parametrize("fields", [{}, {"tool_calls": None}, {"tool_calls": []}])
+def test_missing_null_and_empty_call_lists_remain_valid_no_tool(fields):
+    value = row()
+    value["response"] = json.dumps({"finish_reason": "stop", **fields})
+    diagnostics = Counter()
+    [report] = summarize([value], diagnostics=diagnostics)
+    assert report["complete_responses"] == report["no_tool_responses"] == 1
+    assert diagnostics == {"scanned_generation_rows": 1}
 
 
 def test_role_cohorts_and_attempt_metrics_include_nonstandard_or_failed_completions():
