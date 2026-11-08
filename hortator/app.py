@@ -120,7 +120,8 @@ class Kernel:
                     {
                         "delay_ms": round(delay * 1000),
                         "active_bots": sorted(self.engine.tasks),
-                        "note": "Event loop was delayed; active bots are correlation, not attribution",
+                        "note": "The server was slow to respond. The bots listed were active at the time, "
+                        "but that doesn't mean they caused the slowdown.",
                     },
                     level="warning",
                 )
