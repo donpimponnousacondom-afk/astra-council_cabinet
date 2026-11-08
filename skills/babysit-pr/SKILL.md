@@ -17,14 +17,14 @@ history rules and report an actual branch-transition blocker.
 Resolve the live T3 catalog and use `delegate_task` with explicit options:
 
 - **Claude Haiku**, currently `claudeAgent` / `claude-haiku-5-5`, `effort: high`.
-- **GPT Luna**, currently `codex` / `gpt-6-luna`, `reasoningEffort: high` and
-  `serviceTier: priority`.
+- **GPT Luna**, currently `codex` / `gpt-6-luna`, `reasoningEffort: high`.
 
 Report unavailable selections; do not silently substitute. These agents check
 current-head CI results, logs, review threads and actionable feedback. They are
 not substitutes for the [technical council](../council/SKILL.md). Assign distinct
 triage scopes to avoid duplicate work; both return measured evidence and pending
 state. The parent owns edits unless it explicitly assigns a fix to one writer.
+Retain the caller's configured service tier rather than forcing a different tier.
 
 ## One watch, owned by the parent
 
@@ -63,6 +63,9 @@ base. Investigate a changed base and overlapping changes; do not certify stale
 test/review evidence or merge conflicts. Every new head requires council delta
 review. The parent verifies the gate and uses GitHub **Squash and merge** under
 standing authorization, unless the owner explicitly reserves that action.
+Pin the full reviewed head SHA in the merge API call (for example, `sha` or
+`expectedHeadOid`) and verify the returned merge result/commit. Missing, pending,
+cancelled and failed required checks are not passing results.
 
 At a user handoff or investigated blocker, call `unwatch_pull_request` for any
 active parent watch, then report actual status. Never post repetitive waiting

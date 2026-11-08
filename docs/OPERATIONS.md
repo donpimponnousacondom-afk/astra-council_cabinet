@@ -106,6 +106,9 @@ fixes and GitHub squash merge after the current-head council review, resolved
 blocking findings and passing required checks. Preserve explicit owner holds,
 linear history and the prohibition on direct main pushes or force-pushes. A
 score is evidence, not a replacement for correctness or required CI.
+Pin the full reviewed head SHA in the GitHub merge request, then verify the
+returned merged result and commit. Missing, pending, cancelled and failed required
+checks do not pass; a head refresh before the call alone does not prevent a race.
 
 The initial Cheapseek trial is inference-only: use saved Sun/Zelda request JSON,
 record its hash and unavoidable reconstruction limits, and never execute returned

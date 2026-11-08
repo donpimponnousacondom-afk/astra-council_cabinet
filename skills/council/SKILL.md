@@ -19,7 +19,7 @@ The current configured selections are:
 | Member | Provider instance | Exact model | Options |
 | --- | --- | --- | --- |
 | Claude Opus | `claudeAgent` | `claude-opus-5-5` | `effort: high` |
-| Latest GPT Sol | `codex` | `gpt-6.1-sol` | `reasoningEffort: high`, `serviceTier: priority` |
+| Latest GPT Sol | `codex` | `gpt-6.1-sol` | `reasoningEffort: high` |
 | Muse Wonder Full | `muse` | **`muse-wonder-full-1.0`** | `reasoningEffort: high` |
 
 Wonder Full is mandatory: **`muse-wonder-1.0` is a different model and is not a
@@ -28,6 +28,7 @@ silently replace another member, model, provider or requested option. Report an
 unavailable capability. Put settings in `target.options`, not merely the prompt;
 verify the returned provider/model/options. Do not use native same-provider agents,
 top-level threads or shell-launched models to stand in for this council.
+Retain the caller's configured service tier; this skill does not force a tier.
 
 ## Round workflow
 
@@ -70,6 +71,8 @@ score comments. Label pre-PR research separately from current-head PR review.
 Each pushed head needs council delta review; old scores remain historical.
 The parent alone edits, pushes, links the PR to T3 and performs the authorized
 GitHub squash merge after current-head review and required checks pass.
+Pin the reviewed full head SHA in the merge request and verify the returned merge
+result and commit. Missing, pending, cancelled or failed required checks do not pass.
 
 [Babysitting](../babysit-pr/SKILL.md) uses Haiku and Luna for check/comment triage;
 it does not replace the technical council. Children never watch or merge PRs.

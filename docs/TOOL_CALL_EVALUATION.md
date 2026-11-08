@@ -28,6 +28,10 @@ the selected provider credential using the existing key. It does not instantiate
 the application Store/Vault or write bot state. Requests must belong to Sun/Zelda
 and use the exact configured Cheapseek model. Paid inference requires owner
 authorization; this task has it.
+This is a trusted operator CLI under the existing OS account and vault boundary.
+It uses the application's bot-override/provider-key selection order; it adds no
+API route, model tool, filesystem permission or bot grant. The selected credential
+stays inside the inference process and HTTP transport, outside model request data.
 
 `baseline` preserves the saved JSON body, including tools, messages, model
 parameters and tool choice. The original saved body has already undergone the
@@ -72,12 +76,22 @@ body. Response files contain reconstructed model messages and parser diagnostics
 wire files contain the consumed, decompressed response text, with configured key
 redaction and UTF-8 replacement if needed. These are private audit evidence, not
 complete network captures. Keep raw bodies, commands and conversations out of Git.
+The committed `aggregate()` function generates `aggregate.json` with the exact
+input summary-file SHA and evaluator-source SHA. Earlier manually computed tables
+can be independently regenerated from their unchanged current-format summaries;
+preserve their originals and write the verification to a separate file.
 
 Request outcomes distinguish complete responses, incomplete/truncated responses,
-transport failures, provider errors and response-format failures. Call categories
+transport failures, HTTP status errors, provider errors and response-format failures.
+An evaluator exception is recorded separately and aborts further paid requests;
+it is never counted as a model argument failure. Call categories
 are valid action, help, missing operation and other invalid. No-tool responses,
 mixed batches and valid actions have separate flags. Retain additional validation
-errors even when missing operation is the primary category.
+errors even when missing operation is the primary category. Required-selector
+omissions are identified from the original schema and parsed object, independently
+of jsonschema's English error wording. Optional-operation tools remain valid.
+Exact example-command matches (including `pwd` and schema examples) are quality
+review flags, not automatic failures: an example can also be a legitimate command.
 
 Report both omission-bearing completions / complete responses and missing-operation
 calls / nonempty shell calls, with raw counts. Report malformed calls separately

@@ -4002,3 +4002,53 @@ help/action distinction, literal-placeholder flags, streaming captures and failu
 accounting. Repository Ruff lint/format and `git diff --check` pass. The prior
 86-test combined feedback/replay pass remains dated evidence for the earlier
 screening revision; it is not relabelled as the later check.
+
+Completed independent validation (40/40 responses complete, no transport/format
+failures):
+
+| Case | Arm | Omission-bearing / complete responses | Missing-operation / nonempty shell calls |
+| --- | --- | --- | --- |
+| Zelda, different bot | Baseline | 10/10 | 10/10 |
+| Zelda, different bot | Frozen instruction | 4/10 | 4/10 |
+| Sun, different-day first request | Baseline | 2/10 | 2/4 |
+| Sun, different-day first request | Frozen instruction | 0/10 | 0/9 |
+
+Zelda shows a partial reduction with four residual failures. Sun only just meets
+the predeclared baseline-informativeness rule and has little power: responses
+containing shell increased from 4/10 to 8/10 (nine candidate calls). Both Sun arms
+also made ten valid web_fetch calls; the baseline made one valid dumb_search call.
+This is not a demonstrated production reduction or an automatic quality win.
+There were no help-only/no-tool substitutions or other-invalid shell calls.
+Across discovery, both screens and both validation cases, **93 real Cheapseek
+inferences** were made; returned tools were never executed.
+
+Round 2 independently reviewed open PR #138 at `7ffef406b042132b307a96e8cc3a9a2d907fd8e7`.
+PR scores: Opus **7/10**, Sol **8/10**, Wonder Full **8/10**. Separate readiness
+scores for asking the owner about Loki: **6/10**, **7/10**, **6/10**, respectively.
+These are assessments of the reviewed head/snapshot, not final approval. All three
+blind screening-content assessments rated the instruction arm seven useful and
+one partial; their judgments of other arms differed. No executed-task success is
+claimed. Forty held-out responses have a separate blinded quality packet for the
+next council pass, including the Sun tool-choice shift and stop-order ambiguity.
+
+Review corrections restore explicit merge-head pinning/result verification and
+leave service tier at the caller's configured value. The evaluator now closes
+SQLite deterministically, accepts NULL request context, distinguishes HTTP status
+errors from transport failures, records/raises evaluator failures before any more
+paid calls, and detects mandatory-selector absence without matching English error
+text. Example commands are quality flags, including `pwd` and schema examples;
+they are not rejected automatically. A committed aggregator records its input-file
+and evaluator hashes and excludes incomplete/error responses from completion rates.
+
+The freeze hash was correctly computed over the full appended role/content JSON
+object with sorted keys and default JSON separators; it was not a content-only
+hash. A separate verification artifact documents that derivation without changing
+the original plan. Both held-out payloads preserve the original messages/tools
+and the exact frozen appended message. Reclassification of **89/89 complete
+controlled responses** using the corrected evaluator preserves every category;
+zero exact command-example matches were found. The earlier three discovery
+responses retain their original separate format/evidence.
+
+Current focused suite: **17 passed in 0.97s**; repository Ruff lint/format passes.
+These are offline checks and evidence reanalysis, with no further paid inference.
+Current-head CI, council delta review and Haiku/Luna triage remain merge gates.

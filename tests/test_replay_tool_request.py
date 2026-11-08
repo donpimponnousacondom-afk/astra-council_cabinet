@@ -5,6 +5,7 @@ import copy
 import itertools
 import json
 from pathlib import Path
+import sqlite3
 
 import httpx
 from jsonschema import Draft202012Validator
@@ -115,6 +116,9 @@ def test_variants_preserve_inputs_and_acceptance(source):
     placeholder = replay.classify([call('{"operation":"run","command":"YOUR_COMMAND"}')], source["tools"])[0]
     assert placeholder["category"] == "valid_action"
     assert placeholder["copied_command_placeholder"]
+    real_example = replay.classify([call('{"operation":"run","command":"pwd"}')], source["tools"])[0]
+    assert real_example["category"] == "valid_action"
+    assert real_example["example_command_match"]  # Human review flag, not rejection.
 
 
 def test_schedule_balances_all_three_positions():
@@ -187,7 +191,8 @@ async def test_replay_records_wire_without_dispatch(tmp_path, monkeypatch, sourc
 @pytest.mark.parametrize(
     "status,wire,expected",
     [
-        (503, "unavailable", "transport_error"),
+        (503, "unavailable", "http_error"),
+        (0, "", "transport_error"),
         (200, "data: {broken}\n\n", "format_error"),
         (200, 'data: {"error":{"message":"interrupted","type":"server_error"}}\n\n', "provider_error"),
     ],
@@ -200,6 +205,8 @@ async def test_failed_sample_is_recorded_once(tmp_path, monkeypatch, source, sta
 
     def respond(request):
         calls.append(request)
+        if status == 0:
+            raise httpx.ConnectError("fixture connection failure", request=request)
         return httpx.Response(status, content=wire, headers={"content-type": "text/event-stream"})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
@@ -213,3 +220,126 @@ async def test_failed_sample_is_recorded_once(tmp_path, monkeypatch, source, sta
     summary = json.loads((output / "summary.json").read_text())[0]
     assert summary["outcome"] == expected
     assert "call_counts" not in summary
+
+
+def test_aggregate_keeps_error_incomplete_help_and_no_tool_denominators_separate(source):
+    def row(outcome, calls):
+        return {"variant": "baseline", "outcome": outcome, "calls": replay.classify(calls, source["tools"])}
+
+    rows = [
+        row("complete", [call('{"operation":"run","command":"pwd"}'), call('{"command":"pwd"}')]),
+        row("incomplete", [call('{"command":"pwd"}')]),
+        {"variant": "baseline", "outcome": "provider_error"},
+        row("complete", [call("{}")]),
+        row("complete", []),
+    ]
+    before = copy.deepcopy(rows)
+    result = replay.aggregate(rows)["baseline"]
+    assert result["attempted"] == 5
+    assert result["complete"] == 3
+    assert result["omission_completions"] == result["valid_shell_action_completions"] == 1
+    assert result["shell_attempt_completions"] == result["nonempty_shell_objects"] == 2
+    assert result["help_only"] == result["no_tools"] == 1
+    assert result["calls_by_tool"]["shell"] == {"valid_action": 1, "missing_operation": 1, "help": 1}
+    assert rows == before
+
+
+def test_optional_operation_is_not_an_omission():
+    tools = [
+        {
+            "function": {
+                "name": "web_fetch",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"url": {"type": "string"}, "operation": {"type": "string"}},
+                    "required": ["url"],
+                },
+            }
+        }
+    ]
+    result = replay.classify([call('{"url":"https://example.com"}', "web_fetch")], tools)
+    assert result[0]["category"] == "valid_action"
+
+
+async def test_evaluator_failure_aborts_without_further_paid_calls(tmp_path, monkeypatch, source):
+    monkeypatch.setattr(
+        replay, "load_source", lambda *_: (source, {"base_url": "https://provider.invalid"}, "", {})
+    )
+
+    def broken_feedback(*_):
+        raise ValueError("fixture evaluator defect")
+
+    monkeypatch.setattr(replay, "feedback", broken_feedback)
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "tool_calls": [call('{"command":"pwd"}')]},
+                        "finish_reason": "tool_calls",
+                    }
+                ]
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    monkeypatch.setattr(replay.httpx, "AsyncClient", lambda **_: client)
+    output = tmp_path / "evidence"
+    args = argparse.Namespace(
+        data_dir=tmp_path, request_id="fixture", variant=["baseline"], repeats=3, timeout=1, output=output
+    )
+    with pytest.raises(ValueError, match="evaluator defect"):
+        await replay.replay(args)
+    assert len(calls) == 1
+    summary = json.loads((output / "summary.json").read_text())[0]
+    assert summary["outcome"] == "evaluator_error"
+    assert "calls" not in summary
+    aggregate = json.loads((output / "aggregate.json").read_text())
+    assert aggregate["arms"]["baseline"]["complete"] == 0
+    assert aggregate["arms"]["baseline"]["attempted"] == 1
+
+
+@pytest.mark.parametrize("bot", ["sun", "loki"])
+def test_source_closes_connection_and_accepts_null_context(tmp_path, monkeypatch, source, bot):
+    db = sqlite3.connect(tmp_path / "council.sqlite3")
+    db.executescript(
+        "CREATE TABLE requests(id,body,bot_id,provider_id,model,turn_id,started_at,context);"
+        "CREATE TABLE entities(kind,id,body,revision); CREATE TABLE secrets(scope,value);"
+    )
+    db.execute(
+        "INSERT INTO requests VALUES(?,?,?,?,?,?,?,?)",
+        ("fixture", json.dumps(source), bot, "provider", replay.MODEL, "turn", 0, None),
+    )
+    db.execute(
+        "INSERT INTO entities VALUES(?,?,?,?)",
+        ("providers", "provider", json.dumps({"requires_key": False}), 17),
+    )
+    db.commit()
+    db.close()
+    closed = []
+    original_connect = sqlite3.connect
+
+    class TrackedConnection(sqlite3.Connection):
+        def close(self):
+            closed.append(True)
+            super().close()
+
+    monkeypatch.setattr(
+        replay.sqlite3,
+        "connect",
+        lambda *args, **kwargs: original_connect(*args, **kwargs, factory=TrackedConnection),
+    )
+    if bot == "sun":
+        body, _, key, meta = replay.load_source(tmp_path, "fixture")
+        assert body == source and key == ""
+        assert meta["current_provider_revision"] == 17
+        assert all(v is None for v in meta["historical_context"].values())
+    else:
+        with pytest.raises(ValueError, match="Sun/Zelda"):
+            replay.load_source(tmp_path, "fixture")
+    assert closed == [True]

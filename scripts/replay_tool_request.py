@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import Counter
+from contextlib import closing
 import copy
 import hashlib
 from importlib.metadata import version
@@ -110,39 +112,46 @@ def classify(calls, original_tools):
         name = function.get("name")
         try:
             arguments = parse_arguments(function.get("arguments", ""))
-            if name not in schemas:
-                results.append({"tool": name, "category": "other_invalid", "error": "Unknown tool"})
-                continue
-            report = feedback(name, arguments, schemas[name])
-            help_only = bool(report and report.get("usage_only"))
-            errors = report.get("errors", []) if report else []
-            missing_operation = any(
-                e.get("rule") == "required" and e.get("message") == "'operation' is a required property"
-                for e in errors
-            )
-            category = (
-                "help"
-                if help_only
-                else "valid_action"
-                if report is None
-                else "missing_operation"
-                if missing_operation
-                else "other_invalid"
-            )
-            results.append(
-                {
-                    "tool": name,
-                    "category": category,
-                    "schema_valid": report is None or help_only,
-                    "nonempty_object": isinstance(arguments, dict) and bool(arguments),
-                    "argument_keys": list(arguments) if isinstance(arguments, dict) else None,
-                    "errors": errors,
-                    "copied_command_placeholder": isinstance(arguments, dict)
-                    and "YOUR_COMMAND" in str(arguments.get("command", "")),
-                }
-            )
         except (ValueError, TypeError) as exc:
             results.append({"tool": name, "category": "other_invalid", "error": str(exc)})
+            continue
+        if name not in schemas:
+            results.append({"tool": name, "category": "other_invalid", "error": "Unknown tool"})
+            continue
+        # Evaluator failures must propagate, never become a model-argument verdict.
+        report = feedback(name, arguments, schemas[name])
+        schema = full_schema(schemas[name])
+        help_only = bool(report and report.get("usage_only"))
+        errors = report.get("errors", []) if report else []
+        nonempty = isinstance(arguments, dict) and bool(arguments)
+        missing_operation = bool(
+            nonempty and "operation" not in arguments and "operation" in schema.get("required", [])
+        )
+        category = (
+            "help"
+            if help_only
+            else "valid_action"
+            if report is None
+            else "missing_operation"
+            if missing_operation
+            else "other_invalid"
+        )
+        command = arguments.get("command", "") if isinstance(arguments, dict) else ""
+        command_field = schema.get("properties", {}).get("command", {})
+        examples = command_field.get("examples", []) if isinstance(command_field, dict) else []
+        results.append(
+            {
+                "tool": name,
+                "category": category,
+                "schema_valid": report is None or help_only,
+                "nonempty_object": nonempty,
+                "argument_keys": list(arguments) if isinstance(arguments, dict) else None,
+                "errors": errors,
+                "copied_command_placeholder": isinstance(command, str) and "YOUR_COMMAND" in command,
+                # A match prompts quality review; pwd can be a legitimate command.
+                "example_command_match": isinstance(command, str) and command.strip() in ["pwd", *examples],
+            }
+        )
     return results
 
 
@@ -194,8 +203,37 @@ class CapturedResponse:
             yield chunk
 
 
+def aggregate(summaries):
+    """Count current-format evidence; error/incomplete responses stay outside completion rates."""
+    result = {}
+    for variant in sorted({r["variant"] for r in summaries}):
+        rows = [r for r in summaries if r["variant"] == variant]
+        complete = [r for r in rows if r["outcome"] == "complete"]
+        calls = [c for r in complete for c in r["calls"]]
+        flags = [outcomes(r["calls"]) for r in complete]
+        result[variant] = {
+            "attempted": len(rows),
+            "outcomes": dict(Counter(r["outcome"] for r in rows)),
+            "complete": len(complete),
+            "omission_completions": sum(f["any_missing_shell_operation"] for f in flags),
+            "valid_shell_action_completions": sum(f["any_valid_shell_action"] for f in flags),
+            "other_invalid_shell_completions": sum(f["any_other_invalid_shell"] for f in flags),
+            "shell_attempt_completions": sum(any(c["tool"] == "shell" for c in r["calls"]) for r in complete),
+            "nonempty_shell_objects": sum(f["nonempty_shell_objects"] for f in flags),
+            "help_only": sum(f["help_only"] for f in flags),
+            "no_tools": sum(f["no_tool_calls"] for f in flags),
+            "calls_by_tool": {
+                name: dict(Counter(c["category"] for c in calls if c["tool"] == name))
+                for name in sorted({c["tool"] for c in calls}, key=str)
+            },
+        }
+    return result
+
+
 def load_source(data_dir, request_id):
-    with sqlite3.connect((data_dir / "council.sqlite3").resolve().as_uri() + "?mode=ro", uri=True) as db:
+    with closing(
+        sqlite3.connect((data_dir / "council.sqlite3").resolve().as_uri() + "?mode=ro", uri=True)
+    ) as db:
         db.row_factory = sqlite3.Row
         row = db.execute("SELECT * FROM requests WHERE id=?", (request_id,)).fetchone()
         if row is None:
@@ -220,8 +258,9 @@ def load_source(data_dir, request_id):
         if provider.get("requires_key", True) and not key:
             raise ValueError("Configured credential is unavailable")
         meta = {k: row[k] for k in ("id", "turn_id", "bot_id", "model", "started_at", "provider_id")}
+        context = json.loads(row["context"] or "{}")
         meta["historical_context"] = {
-            k: json.loads(row["context"]).get(k) for k in ("round", "profile_revision", "provider_revision")
+            k: context.get(k) for k in ("round", "profile_revision", "provider_revision")
         }
         meta["current_provider_revision"] = provider_row["revision"]
         return body, provider, key, meta
@@ -313,15 +352,8 @@ async def replay(args):
                             captured.extend(await response.aread())
                             state.packet(json.loads(captured), streamed=False)
                         state.finish()
-                classified = classify(result.tool_calls, source["tools"])
-                summary.update(
-                    outcome="complete" if result.finish_reason in {"stop", "tool_calls"} else "incomplete",
-                    finish_reason=result.finish_reason,
-                    reported_model=result.metadata.get("model"),
-                    calls=classified,
-                    **outcomes(classified),
-                    usage=result.usage,
-                )
+            except httpx.HTTPStatusError as exc:
+                summary.update(outcome="http_error", error_type=type(exc).__name__, error=str(exc))
             except (httpx.HTTPError, TimeoutError, ValueError) as exc:
                 summary.update(
                     outcome="transport_error"
@@ -336,6 +368,22 @@ async def replay(args):
                     error_type=type(exc).__name__,
                     error=str(exc),
                 )
+            else:
+                try:
+                    classified = classify(result.tool_calls, source["tools"])
+                    summary.update(
+                        outcome="complete"
+                        if result.finish_reason in {"stop", "tool_calls"}
+                        else "incomplete",
+                        finish_reason=result.finish_reason,
+                        reported_model=result.metadata.get("model"),
+                        calls=classified,
+                        **outcomes(classified),
+                        usage=result.usage,
+                    )
+                except Exception as exc:
+                    summary.update(outcome="evaluator_error", error_type=type(exc).__name__, error=str(exc))
+                    raise  # Stop paid inference; never score an evaluator bug as model behavior.
             finally:
                 summary["elapsed_seconds"] = round(time.time() - started, 3)
                 (args.output / f"response-{index + 1:02}.json").write_text(
@@ -349,6 +397,17 @@ async def replay(args):
                 )
                 summaries.append(summary)
                 (args.output / "summary.json").write_text(redact(summaries))
+                (args.output / "aggregate.json").write_text(
+                    redact(
+                        {
+                            "summary_sha256": hashlib.sha256(
+                                (args.output / "summary.json").read_bytes()
+                            ).hexdigest(),
+                            "evaluator_source_sha256": source_hashes["scripts/replay_tool_request.py"],
+                            "arms": aggregate(summaries),
+                        }
+                    )
+                )
                 (args.output / f"wire-{index + 1:02}.json").write_text(
                     redact({"consumed_utf8": captured.decode("utf-8", "replace")})
                 )
