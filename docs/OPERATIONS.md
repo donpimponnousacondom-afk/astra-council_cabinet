@@ -1,6 +1,6 @@
 # Operations
 
-All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The agent publishes completed changes as task-branch PRs targeting `main`; the agent performs GitHub **Squash and merge** after both reviews and required checks pass, under standing owner authorization. After a merge, prepare a fresh task branch from verified fetched main using the restart-aware procedure below; fast-forward local main at the next planned stop. Never make local implementation commits/merges on main, push directly to main, create merge commits, rewrite history or force-push.
+All commands in this guide run from `/home/codexy/codex/astra-council_cabinet`, the standalone repository root. Read [AGENTS.md](../AGENTS.md) for branch and documentation rules and [VERIFICATION.md](VERIFICATION.md) for dated evidence. Inspect actual Git/Screen/API state when resuming work. The agent publishes completed changes as task-branch PRs targeting `main`; the agent performs GitHub **Squash and merge** after council review and required checks pass, under standing owner authorization. After a merge, prepare a fresh task branch from verified fetched main using the restart-aware procedure below; fast-forward local main at the next planned stop. Never make local implementation commits/merges on main, push directly to main, create merge commits, rewrite history or force-push.
 
 ## Publication and local development deployment
 
@@ -53,7 +53,7 @@ Rebuild the dashboard after the final commit and restart through shared Screen s
 the dashboard and server identify the intended commit. A review or CI fix requires
 another ordinary task-branch commit/push and fresh evidence for the new head; use
 the same deployment conditions for that update. The parent completes GitHub
-squash merging after both reviews, resolution of blocking findings and passing
+squash merging after council review, resolution of blocking findings and passing
 required checks, then verifies the recorded merge and main commit. Never bypass
 required checks or push directly to main.
 
@@ -82,57 +82,40 @@ completed merge: poll its result and verify each PR's merge commit on main.
 
 ## Independent PR review and check monitoring
 
-After publication, prepare a short digest of user intent, scope, PR URL,
-base/head commits and measured verification, then delegate two independent
-reviews and CI watches of the **open GitHub PR**: **gpt-6-luna at max reasoning**
-and **gpt-6.1-sol at high reasoning**. A latest confirmed available successor
-within either family is allowed; the older `gpt-6-sol` is not a substitute. Record
-the actual model/settings and report unavailable reviewers honestly. Keep initial
-reviews independent and compare confirmed findings, false positives, demonstrated
-misses and measured time; do not reward finding counts or invent token/cost
-measurements. The
-installed [council-pr-babysitter skill](/home/codexy/.codex/skills/council-pr-babysitter/SKILL.md)
-provides the detailed brief under these owner rules. It is a local Codex skill outside
-Git, not a council bot plugin, and does not grant bots any new capability.
+Owner decision, 2026-11-08: the authoritative shared workflows are the project-local
+[council](../skills/council/SKILL.md) and [babysit-pr](../skills/babysit-pr/SKILL.md)
+skills. They adapt the corresponding t3dotgg/tstack skills for this repository.
+Do not install global copies: cross-provider council execution requires T3 Code.
 
-Each reviewer independently reads the actual PR diff and relevant contracts,
-reports concrete regressions with file/line, trigger, consequence and evidence,
-watches all current-head Actions/checks and review threads, and posts its own PR
-comment with the reviewed SHA, measured evidence and validation limits. A local
-commit review may prepare the work but never substitutes for either required PR
-review. Historical local reviews retain their dated labels; do not retroactively
-describe them as reviews of a published PR.
+Technical reviewers are Claude Opus 5.5, latest confirmed GPT Sol 6.x (currently
+6.1), and **Muse Wonder Full 1.0**, at high reasoning effort. Resolve the live
+catalog and exact options; Wonder 1.0 is not Wonder Full 1.0. Each reviewer inspects
+the actual open PR at a pinned head independently. Record every round's scores,
+findings, fixes and evidence in the PR description. Research/design rounds can
+precede publication, but do not replace open-PR review of the final head.
 
-The parent verifies findings and coordinates confirmed in-scope fixes. It may
-delegate a fix to either reviewer; assign a single writer for each affected branch
-and explicitly transfer edit ownership to prevent shared-checkout races. Routine
-fixes, task-branch pushes and review comments are authorized. Read failed job logs,
-investigate the actual cause and resolve ordinary CI issues without involving the
-owner. Escalate genuine owner decisions or blockers after investigation with the
-evidence, attempted remedies and operational impact.
+Haiku and Luna handle bounded CI/comment triage. The parent alone owns T3's
+persistent PR watch; delegated agents do not watch or poll. Follow tool-provided
+wake instructions. Keep one writer per branch, verify reports against the source,
+and repeat council delta review for each new head. Old checks and scores cannot
+certify new commits. No global reviewer skill or standalone polling script
+supersedes this project workflow.
 
-Every pushed head requires both reviewers to review the delta and watch its new
-checks. Green checks and verdicts belong to one full PR head SHA. Before readiness,
-query the complete current-head check rollup and unresolved review threads; a
-PR-workflow-only listing can omit other checks. Missing, pending, cancelled or
-failed required checks do not pass, and older-head results cannot certify a new
-head. Each reviewer updates or supersedes its own comment for the new head. The
-parent may publish a concise comparison digest after validating the findings;
-keep comments distinct from formal GitHub approval. Once the reviewed head has
-passing required checks and no blocking findings, the parent squash-merges it
-through GitHub under standing authorization. Pin the reviewed head in the merge
-request and verify the returned merge result. An explicit owner hold still wins;
-otherwise a ready PR is an intermediate state, not task completion. No direct
-push to main or bypass of required checks is permitted.
+The parent retains standing authorization for task-branch publication, ordinary
+fixes and GitHub squash merge after the current-head council review, resolved
+blocking findings and passing required checks. Preserve explicit owner holds,
+linear history and the prohibition on direct main pushes or force-pushes. A
+score is evidence, not a replacement for correctness or required CI.
 
-Use real review outcomes to refine the skill. Distinguish prompt/model mistakes
-from application bugs and CI infrastructure problems. Repeated issues despite a
-targeted correction should be reported with examples before changing reviewer
-families. The permitted latest successor rule does not retire either family.
-Do not claim a completed reviewer continues watching; finish with the actual PR
-state, reviewed head and outstanding actions. This protocol governs required PR
-reviewers; useful sub-agent delegation and parallel work elsewhere remain welcome
-within the task's scope.
+The initial Cheapseek trial is inference-only: use saved Sun/Zelda request JSON,
+record its hash and unavoidable reconstruction limits, and never execute returned
+tools. Keep raw requests/responses in ignored audit storage. Separate exact
+baseline replays from every modified prompt/schema variant; record no-tool answers,
+transport failures and schema failures separately. The owner chooses whether to
+benchmark Loki after reviewing council scores and measured results. No runtime
+restart or configuration rollout is authorized by the offline experiment.
+See [offline tool-call evaluation](TOOL_CALL_EVALUATION.md) for the replay command,
+experimental variants, evidence format and outcome denominators.
 
 ### Owner-relayed external audits
 
@@ -157,8 +140,8 @@ another targeted pass when the fixes interact or leave material questions;
 repeated requests for useful external help are welcome. Keep the exchange active
 instead of relying on the owner to remember to request its next step.
 
-This supplements the mandatory Luna/Sol open-PR reviews and current-head checks.
-It does not substitute an external report for either review or create an
+This supplements the mandatory three-provider open-PR reviews and current-head checks.
+It does not substitute an external report for council review or create an
 automatic extra merge/deployment gate; an explicit owner request to wait for an
 audit remains binding. Record what was actually reviewed and what remains open.
 
@@ -398,7 +381,7 @@ npm run build --prefix web &&
 /home/codexy/.local/bin/hortator serve --host 127.0.0.1 --port 8000 --color
 ```
 
-When the feature is finished and locally verified, commit it on its task branch, push and open its PR targeting `main` **before** the final build/restart. Builds embed commit metadata, so a build produced before that commit correctly identifies the older commit plus uncommitted changes. Start both independent PR reviews and CI watches; local development deployment may proceed while they run. Publication and GitHub squash merging after both reviews and required checks have standing owner authorization. Complete and verify the merge rather than stopping at readiness.
+When the feature is finished and locally verified, commit it on its task branch, push and open its PR targeting `main` **before** the final build/restart. Builds embed commit metadata, so a build produced before that commit correctly identifies the older commit plus uncommitted changes. Start the independent technical council and Haiku/Luna triage with the parent-owned T3 watch; local development deployment may proceed while they run. Publication and GitHub squash merging after council review and required checks have standing owner authorization. Complete and verify the merge rather than stopping at readiness.
 
 ## Running code identity
 

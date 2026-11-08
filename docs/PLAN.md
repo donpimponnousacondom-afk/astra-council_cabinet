@@ -184,6 +184,11 @@ effective configuration and provider-reported identity are the evaluation eviden
 
 ## GitHub PR workflow — owner decision (2026-10-12)
 
+The reviewer assignments and watch/comment procedure below are historical; the
+[2026-11-08 decision](#2026-11-08--t3-council-trial-and-cheapseek-tool-call-experiments)
+and project-local skills supersede them. Standing publication/merge authorization
+remains in force.
+
 Completed task changes are automatically committed on their task branch, pushed
 and opened as a PR to main under standing owner authorization. The agent also
 performs GitHub squash merging after both independent reviews, resolution of
@@ -748,3 +753,23 @@ incident requests and outputs across compaction, including delivered bad answers
 Use one planned stop/start cycle per feature or hotfix. Avoid restarting unchanged
 code during branch preparation or merely after its squash merge. Record deployment
 state honestly when a restart is deferred; see [OPERATIONS](OPERATIONS.md#publication-and-local-development-deployment).
+
+## 2026-11-08 — T3 council trial and Cheapseek tool-call experiments
+
+The owner replaces the Luna/Sol review pair with Opus 5.5, latest Sol 6.x and
+Muse Wonder Full 1.0, using T3 cross-provider delegation. Haiku and Luna take
+PR babysitting/triage; the parent owns the single T3 watch. Shared project-local
+skills are authoritative and record scored rounds in PR descriptions.
+
+First establish repeatable missing-operation failures using historical Sun/Zelda
+Cheapseek requests. Preserve exact stored message/tool JSON for the baseline,
+label redaction/media limitations, and execute no returned tools. Test council
+proposals against that baseline and additional cases, return measured feedback
+for further rounds, then report scores and results to the owner. This narrowly
+reopens offline prompt/schema experiments; live tuning and a Loki-provider
+benchmark require the owner's next decision. Google experimentation explains the
+historical Gemini slug change; do not present that change as a proxy fault.
+
+During this trial, show the steps and incoming council feedback as inline HTML in
+the T3 Code chat. The owner explicitly clarified that an HTML file is not the
+requested presentation.

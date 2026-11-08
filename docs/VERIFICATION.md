@@ -3901,3 +3901,104 @@ that no workspace changes from the call will be saved. The error-path regression
 covers symlink, hardlink and special-file failures in both modes: **6 passed in
 18.29s**, preserving the prior saved sentinel. Ruff formatting was corrected
 after this test run; no execution behavior changed.
+
+## 2026-11-08 — Cheapseek replay and project-local T3 council trial
+
+The first research round uses T3 delegates with actual returned selections
+`claudeAgent/claude-opus-5-5` (`effort=high`), `codex/gpt-6.1-sol`
+(`reasoningEffort=high`, `serviceTier=priority`) and
+`muse/muse-wonder-full-1.0` (`reasoningEffort=high`). These are research reviews,
+not open-PR approvals. Initial investigation-design scores: **Opus 6/10, Sol 7/10,
+Wonder Full 6/10**. They reviewed evolving experiment snapshots; these scores do
+not certify a final implementation or improvement. Their recommendations include
+explicit operation-field guidance, stronger controls, raw response capture and an
+independent held-out case. Later measured feedback is not yet recorded.
+The project-local council/babysit skills replace the previous global protocol.
+Both skill frontmatter validators passed.
+
+Discovery replay of saved Sun request `req_a36f4582d29245a49f74` preserved the
+saved JSON body and produced missing `operation` in **2/3** complete responses
+(one shell call each, HTTP 200, reported model `deepseek-flash`). This is a
+current-provider replay of saved, already-redacted evidence, not a reconstruction
+of the original wire request or a historical backend guarantee.
+
+A subsequent predeclared screen used all six order permutations of three arms,
+one inference in flight, **18 requests**. Separate contemporaneous outcomes:
+
+| Arm | Complete / attempted | Completions with missing operation | Missing-operation / nonempty shell calls |
+| --- | --- | --- | --- |
+| Unchanged baseline | 6/6 | 6/6 | 6/6 |
+| Explicit JSON example in shell description | 5/6 | 5/5 | 5/5 |
+| Redundant root conditional requirement | 6/6 | 5/6 | 6/7 |
+
+The description arm had one HTTP-200 upstream stream error before a completion
+boundary; it is not an argument success or failure. The schema arm produced one
+valid action and one response containing two invalid calls. There were no
+help-only/no-tool substitutions among completed responses. Generated shell action
+content remained associated with the original task, but execution and end-to-end
+quality were not tested. These counts do **not** show a convincing improvement.
+Zelda request `req_9e1b2b41437e4260b421` remains reserved for held-out confirmation;
+no winner is selected from this screen.
+
+Independent reconstruction of argument fragments directly from all 18 consumed
+stream captures exactly matched the runtime parser's strings. Seventeen shell
+calls already lacked `operation` in upstream fragments. This rules out our
+assembler dropping the field in these samples, not unobservable provider schema
+rendering or backend changes. The first screen's six three-arm permutations were
+balanced. A reviewer correctly identified bias for incomplete factorial schedules;
+the next harness revision uses cyclic rotations to balance positions in N blocks.
+
+Indexed event/request inspection also located first-shell omissions at request
+round zero, including Sun `req_e867335c49cf466e89cb` (different day) and
+`req_bb5f9c0510dc4a429c4b`. These have not yet been replayed. They address the
+coverage gap between the selected second-round reproducer and Loki's first-call
+failures without spending another provider's quota.
+
+The evaluator now separates help, valid action, missing operation, other invalid,
+no-tool responses and transport/provider/format/incomplete outcomes. Manifests
+pin planned order, payload/source hashes and provider revision; ignored evidence
+includes evaluator source copies and consumed decompressed response text.
+Original runtime schemas remain the judge for every variant. Raw evidence stays
+under ignored `audit/2026-11-08/loki-tool-failures/`.
+
+Local checks: **86 passed in 17.32s** across tool-feedback and replay tests;
+repository Ruff lint/format, verification-runner unit checks (4 tests), and
+`git diff --check` passed. Mocked response tests are offline evidence, distinct
+from the 21 real Cheapseek inferences above. No returned tool was executed, no
+runtime configuration or application source changed, and the shared server was
+not restarted. No Loki/Gemini benchmark or live prompt rollout was performed.
+
+Second screening checkpoint: **32/32 complete responses** using eight balanced
+blocks of four arms. The frozen final-system instruction is the only candidate
+that meets the predeclared screening rule (at most one omission response versus
+at least four in the concurrent baseline):
+
+| Arm | Omission-bearing / complete responses | Missing-operation / nonempty shell calls |
+| --- | --- | --- |
+| Unchanged baseline | 8/8 | 9/9 |
+| Operation-field description | 5/8 | 6/9 |
+| Diagnostic root required | 7/8 | 8/10 |
+| Final calling-convention instruction | 0/8 | 0/11 |
+
+There were no transport/format failures, help-only/no-tool substitutions,
+other-invalid shell calls or literal `YOUR_COMMAND` copies. One root-required
+response mixed valid and invalid shell calls; success and error flags can overlap.
+The diagnostic arm makes advertised `{}` help invalid and is not a deployable
+candidate. Adding a root requirement alone did not resolve the omission here.
+The instruction changes no tools or existing messages, and every response is
+judged by the original schema. This supports a candidate for further tests, not a
+production error-rate claim or proof of the model's internal mechanism.
+
+The instruction text is frozen before independent validation. The planned cases
+are Zelda `req_9e1b2b41437e4260b421` and different-day first-request Sun
+`req_e867335c49cf466e89cb`, ten alternating-order baseline/candidate pairs each.
+Those outcomes and the council's next assessment are separate from this completed
+screening checkpoint. A shuffled, arm-blinded command-content review packet is
+prepared in ignored audit storage; command execution remains out of scope.
+
+The updated replay utility passes **11 tests in 1.08s**, covering balanced
+four-arm schedules, schema equivalence with the explicit diagnostic exception,
+help/action distinction, literal-placeholder flags, streaming captures and failure
+accounting. Repository Ruff lint/format and `git diff --check` pass. The prior
+86-test combined feedback/replay pass remains dated evidence for the earlier
+screening revision; it is not relabelled as the later check.

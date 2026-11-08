@@ -5,10 +5,10 @@
 - The sole working repository is `/home/codexy/codex/astra-council_cabinet`. Its top level is the application root; there is no nested `council/` directory here.
 - The user explicitly retired the previous workspace for this project. Do not run Git, edit files, restore files, synchronize changes, or clean up in `/home/codexy/codex/t3-code`. Do not use that repository as a worktree or source of truth.
 - Inspect actual Git state and continue the user's active task branch. The user uses GitHub **Squash and merge**. After the prior PR is merged, require a clean working tree and prepare a new `feat/<name>`, `hotfix/<name>` or `dev/<name>` branch from verified, fetched `origin/main`, following the single-restart procedure below. Fast-forward local main at a scheduled stop; do not restart unchanged code just to walk through main. Use the user's specified base/name if provided. Never put new implementation commits on main. The original `dev/initial_phase` baseline is historical. Verify `git rev-parse --show-toplevel`, branch and working tree before Git mutations; preserve existing user changes. If the prior task is unmerged or main has diverged, stop that branch transition rather than merging/rebasing automatically or dropping work.
-- Keep new work linear: ordinary commits on the task branch, no merge commits or local merges between branches. The agent owns task-branch publication, independent Luna/Sol PR review and check coordination, and GitHub **Squash and merge** after the merge gates pass. This has standing owner authorization; do not stop at merge readiness or ask again for ordinary merges unless the owner explicitly pauses or reserves a particular merge. Do not rewrite historical commits or force-push. Do not infer the current branch from a dated verification/design entry. Delete local task branches only when requested and after checking for unmerged work (a squash merge may require tree/PR evidence). Extra hook automation is deferred.
+- Keep new work linear: ordinary commits on the task branch, no merge commits or local merges between branches. The agent owns task-branch publication, independent three-provider council review and Haiku/Luna check coordination, and GitHub **Squash and merge** after the merge gates pass. This has standing owner authorization; do not stop at merge readiness or ask again for ordinary merges unless the owner explicitly pauses or reserves a particular merge. Do not rewrite historical commits or force-push. Do not infer the current branch from a dated verification/design entry. Delete local task branches only when requested and after checking for unmerged work (a squash merge may require tree/PR evidence). Extra hook automation is deferred.
 - The user deliberately reuses the local placeholder `feat/next_feature` after a merged PR, then renames it before publishing. The installed `hortator-next-feature` shell command automates verified merge checks, shared-Screen stop, fast-forward main update, placeholder preparation, locked dependency installation, dashboard build and foreground restart. It may archive an older verified-merged placeholder under `archive/next_feature-...` before recreating it; it must never discard unmerged commits or reset branches. Its `--refresh` mode rebuilds/restarts the clean current task branch without a Git transition. Run from a shell prompt, not the active console; see OPERATIONS. The helper itself does not publish; the agent must complete the publication workflow before deploying a completed change.
 - Owner decision, 2026-10-22: normally use one runtime stop/start cycle per feature or hotfix, preferably after the final reviewed changes are ready. Do not restart unchanged code at task preparation or merely to replace a deployed PR head with its identical squash-merge tree. With a clean tree, verified merged prior PR, and identical running/checkout/fetched-main source trees, create the next task branch directly from `origin/main` without restarting; defer local main fast-forward until the next planned stop. If checkout-time code or worker/server compatibility requires stopping before edits, keep that stop and the final start within one cycle rather than starting an intermediate build. The existing `hortator-next-feature` helper still performs a full restart; do not invoke its normal mode automatically at task start. If another restart is genuinely needed for a correction, explain why. Preserve startup-captured version identity and report committed-but-not-loaded changes explicitly. See [OPERATIONS](docs/OPERATIONS.md#publication-and-local-development-deployment).
-- Owner decision, 2026-10-12: every completed change must be committed on its task branch, pushed, and included in an open GitHub PR targeting `main`. This is standing authorization for task-branch pushes, PR creation, routine review/CI fixes, review comments and GitHub squash merges after both reviews and required checks pass; do not ask separately for each push or merge. Do not leave a deployed backlog of unpublished changes. Local development deployment may proceed once its PR exists and appropriate local checks pass, while GitHub CI and the independent reviews continue. Pending remote checks/reviews do not establish merge readiness.
+- Owner decision, 2026-10-12: every completed change must be committed on its task branch, pushed, and included in an open GitHub PR targeting `main`. This is standing authorization for task-branch pushes, PR creation, routine review/CI fixes, review comments and GitHub squash merges after council review and required checks pass; do not ask separately for each push or merge. Do not leave a deployed backlog of unpublished changes. Local development deployment may proceed once its PR exists and appropriate local checks pass, while GitHub CI and the independent reviews continue. Pending remote checks/reviews do not establish merge readiness.
 - **NEVER PUSH DIRECTLY TO MAIN.** Do not make local implementation commits or local merges on `main`, create merge commits, rewrite history or force-push. GitHub PR **Squash and merge** into `main` after the required reviews/checks is the authorized completion path, not a prohibited direct push. The local `core.hooksPath=.githooks` setting installs an additional pre-push guard for `refs/heads/main`; do not bypass it. On a new clone, install it with `git config core.hooksPath .githooks`.
 - Narrow recovery exception, authorized 2026-10-12: publish the eleven unpublished commits following PR #94 as eleven ordered single-commit PRs, followed by the protocol PR, using GitHub's native stack dependencies. The owner subsequently authorized combining the faulty intermediate PRs #95, #97 and #99 into their corrected successors #96, #98 and #100, and closing the intermediate PRs as superseded without merging. Preserve their original commits and review evidence; review the combined successor diffs. The bottom PR targets `main`; each higher PR initially targets the preceding PR's branch and ultimately reaches `main` through bottom-up GitHub squash merges performed by the agent. This exception permits the recovery stack to be published while lower PRs remain unmerged. Preserve the original local history: no local rebase or force-push. GitHub may restack unmerged PR heads after a lower squash merge; those changed heads require renewed reviews/checks. This does not authorize rewriting `main` or historical merged commits, or general stacking of future tasks.
 - Never stage runtime data, credentials, logs, caches, dependencies, build output or test screenshots. The migration commit removes previously tracked copies from the current tree while preserving local files. Earlier commits still contain those copies; do not rewrite history or rotate credentials without a separately scoped task.
@@ -17,27 +17,22 @@
 
 - Check scratch space before full verification. Pytest removes successful temporary fixtures by default and preserves failed ones for diagnosis. At task completion, remove confirmed, inactive project-owned browser/test/build scratch; archive useful diagnostics in the ignored audit folder or external data storage first. Inspect process use before cleanup, preserve current runs, and never blanket-delete `/tmp` or another application's files. See the temporary-file procedure in OPERATIONS.
 
-- After publishing each completed change, spawn both independent PR-review
-  sub-agents: **gpt-6-luna at max reasoning** and **gpt-6.1-sol at high reasoning**.
-  A latest confirmed available successor within each family is allowed; do not
-  substitute the older `gpt-6-sol`. Both must independently inspect the actual
-  **open GitHub PR** diff, monitor all Actions/checks for its current head, and
-  post their own PR comments with measured evidence. A local-commit review is
-  preparation only and never substitutes for either required PR review. Keep
-  historical local reviews honestly labelled as dated local evidence. Follow the local
-  [council-pr-babysitter skill](/home/codexy/.codex/skills/council-pr-babysitter/SKILL.md)
-  for reviewer settings, independent A/B briefs, evidence and escalation rules, and
-  [PR review procedure](docs/OPERATIONS.md#independent-pr-review-and-check-monitoring).
-  The parent validates findings and coordinates fixes; either reviewer may be
-  delegated a fix. Keep one writer per affected branch to prevent checkout races.
-  Resolve ordinary CI problems under standing authorization; escalate genuine
-  owner decisions or investigated blockers. Every pushed head requires delta
-  re-review and its own check evidence. After both reviews, resolved blocking
-  findings and passing required checks, the parent squash-merges through GitHub
-  and verifies the merge result without another permission request. Never bypass
-  checks. Improve the skill from demonstrated review
-  problems. This PR-specific protocol does not restrict useful sub-agent work
-  elsewhere; delegation and parallel agent work are welcome within task scope.
+- Owner decision, 2026-11-08: the project-local [council](skills/council/SKILL.md)
+  replaces the previous Luna/Sol technical review pair. Required open-PR reviews
+  use Claude Opus 5.5, the latest confirmed GPT Sol 6.x (currently 6.1), and
+  **Muse Wonder Full 1.0** (`muse-wonder-full-1.0`, never `muse-wonder-1.0`),
+  through T3 Code at high reasoning effort. Record independent findings and
+  scores by review round in the PR description. Current-head council review,
+  resolved blockers and required CI remain merge gates; scores alone are not.
+  [PR babysitting](skills/babysit-pr/SKILL.md) now uses Haiku and Luna for
+  bounded check/comment triage. Only the parent owns T3's persistent PR watch;
+  children never poll or watch. The parent owns publication, fixes and gated
+  GitHub squash merging under the existing authorization. Every pushed head
+  requires council delta review. These skills stay in this project, readable
+  by all council providers; do not install global Codex/Claude copies or use
+  the superseded global council-pr-babysitter skill as the active protocol.
+  This PR protocol does not restrict useful delegation and parallel work elsewhere
+  within the task's scope.
 
 - Owner decision, 2026-10-18: proactively recommend external audits for changes
   with substantial stability impact, including scheduling, cancellation, shell
@@ -57,7 +52,12 @@
   effective prompt alongside tool receipts and runtime code: distinguish model
   behavior, misleading guidance, new regressions and pre-existing bugs before
   proposing a change. Raise prompt tuning when evidence makes it relevant;
-  discussing a possible cause does not lift the hold. The ongoing external shell
+  discussing a possible cause does not lift the hold. Narrow 2026-11-08 exception:
+  the owner authorizes Sun/Zelda Cheapseek inference replays and offline prompt/
+  schema experiments, with council feedback and measured failure rates. Returned
+  tool calls are not executed. Report the results and council scores before any
+  Loki-provider benchmark or live rollout; unrelated prompt tuning stays frozen.
+  The ongoing external shell
   audit remains separate. See [the deferred decision](docs/PLAN.md#2026-10-18--prompt-tuning-deferred).
 
 ## Read before continuing
