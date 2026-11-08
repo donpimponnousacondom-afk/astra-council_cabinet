@@ -557,8 +557,19 @@ class ContextBuilder:
             raise ControlError(
                 "All prompt layers are disabled or empty; enable conversation input or supply a prompt"
             )
+        # Keep the tested convention as a separate final message. Do not merge it
+        # into the changing tail or alter any earlier cacheable prompt prefix.
+        guidance = (
+            self.prompt(bot, "shell_call_guidance")
+            if any(tool.get("function", {}).get("name") == "shell" for tool in tools or [])
+            else None
+        )
+        if guidance:
+            layers.append(guidance)
+            messages.append({"role": guidance["role"], "content": guidance["content"]})
         estimate = await self.estimate_async(messages, tools or [])
         meta = {
+            "final_prompt_count": int(guidance is not None),
             "channel_id": channel_id,
             "memory_snapshot": memory_meta,
             "transcript_format": bot.get("transcript_format", "structured"),

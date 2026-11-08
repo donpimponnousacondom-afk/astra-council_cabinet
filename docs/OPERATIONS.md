@@ -279,6 +279,50 @@ Dashboard reporting uses a bounded read worker and summary polling; see
 Discord clients retain one runtime owner. Startup may take longer once when
 backfilling reporting metadata for an older database.
 
+## Shared shell guidance monitoring
+
+The 2026-11-08 shared [shell call convention](PROMPTS.md#shared-shell-call-convention)
+applies to every bot/provider whose actual request advertises shell. It does not
+change grants, validation, provider settings or cache accounting. Existing prompt
+library controls remain the operator's way to edit/disable guidance; no new trial
+switch is needed. A code deployment seeds its default record once. Request
+`context.prompt_layers` records the selected template, revision and content hash.
+
+Use the existing external request ledger for a bounded before/after report:
+
+```bash
+uv run python scripts/report_shell_calls.py \
+  --database /home/codexy/.local/share/hortator/council.sqlite3 \
+  --since 2026-11-08T00:00:00+01:00 --until 2026-11-09T00:00:00+01:00
+```
+
+Choose actual observation boundaries; the example is not a scheduled job. The
+script opens SQLite read-only, never opens the vault, never contacts a provider
+and emits aggregate metrics without prompt text or tool commands. It groups by
+bot, provider, profile, requested model and convention content hash (or absent).
+Each transport retry remains a separate attempt. Complete responses require
+`stop`/`tool_calls`; incomplete/error attempts are separate. Report omission-bearing
+responses over complete responses and missing-operation calls over nonempty shell
+objects, alongside malformed arguments, help/no-tool outcomes and shell uptake.
+Schema-valid actions are not proof of successful execution or useful work.
+
+Cache counts come from normalized provider-reported fields already in the ledger.
+Missing/inconsistent counts remain unknown; a reported zero is a real zero.
+Compare reported sample counts, minimum/median cached share, total uncached tokens,
+input size and TTFT. Do not use medians alone to hide cold samples or compare raw
+percentages across substantially different context sizes, compaction, task mix,
+provider routing or idle intervals. A changed requested slug is a separate cohort;
+reported backend identity can be inspected in the existing response evidence.
+
+At deployment, retain the exact startup time/head and a pre-deployment report in
+ignored audit storage. Recheck ordinary traffic after eligible requests arrive;
+if no relevant traffic has arrived, report insufficient evidence. Inspect sample
+trajectories for task relevance, redundant shell use, ignored instructions and
+example copying alongside the counts. This is ongoing operational observation,
+not another paid replay or a claim that live effectiveness is already established.
+Use the common template for a measured correction if needed; do not introduce
+vendor-specific fallbacks or silently relax the original schema.
+
 ## Verification scratch and cleanup
 
 Before a full gate, check space with `df -h /tmp` and inspect this task's scratch

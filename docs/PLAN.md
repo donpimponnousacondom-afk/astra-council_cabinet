@@ -790,3 +790,33 @@ raised relevance concerns. Accordingly, this is a transfer experiment, not a
 deployment decision. Require blinded task-relevance assessment as well as syntax
 improvement. Low baseline incidence or interrupted samples are inconclusive, not
 grounds for silently extending the fixed budget. Live prompt tuning remains frozen.
+
+
+## 2026-11-08 — Shared shell convention rollout
+
+After reviewing the two Loki cases and council quality assessments, the owner
+rejected a bespoke Loki/Gemini handler and an opt-in trial. Apply the tested
+final-message convention to every bot/provider offered shell, then monitor the
+situation. This specifically reopens the measured shell guidance; unrelated
+prompt tuning stays frozen. Existing prompt-library overrides remain honored.
+
+The two Loki cases reduced omission-bearing completions from 8/10 and 10/10 to
+1/10 each with unchanged shell uptake; the three raters found no regression under
+the locked quality rule. Cheapseek showed partial transfer (Zelda retained 4/10),
+and the Sun relevance caveat remains. These selected-context measurements support
+a shared mitigation, not elimination or a production error-rate estimate.
+
+Keep the frozen text as a separate final message, after recovery/receipts, using
+the shared request builder and actual advertised-tool availability. Preserve
+original acceptance and recovery isolation. Preserve earlier messages and schemas
+for prefix reuse; include the added message in context estimates. No per-model
+routing, operation inference, new opt-in setting or additional paid experiment.
+
+Cache accounting in existing replays showed continued reuse: median Loki cached
+shares were 99.15%/99.13% baseline and 99.09%/99.08% instruction. The instruction
+added 135 input tokens on Loki and 121 on Cheapseek. One instruction sample had
+11.36% cached tokens, and one baseline omitted counts. These are descriptive
+fixed-body observations, not proof of unchanged live cache efficiency. Monitor
+omissions, relevance, cache counts/unknowns and latency by bot/provider/model and
+guidance version using the existing ledger. See PROMPTS and OPERATIONS for the
+implemented contract and reporting procedure.

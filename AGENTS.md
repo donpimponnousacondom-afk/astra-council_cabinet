@@ -59,7 +59,13 @@
   the owner said “Go for loki” on 2026-11-08: the bounded 40-call, two-case Loki
   inference benchmark is authorized, with the same final-message instruction,
   original validation, nonexecution and blinded relevance review. Record the
-  predeclared plan and results. Live rollout and unrelated prompt tuning remain frozen.
+  predeclared plan and results. Later on 2026-11-08, after the Loki results, the
+  owner authorized shared rollout of the tested final-message shell convention
+  for every bot/provider offered shell, with monitoring. No Loki/Gemini-specific
+  handler or new opt-in trial switch. Preserve the earlier cacheable prefix and
+  existing prompt controls; monitor omissions, task relevance, reported cache
+  accounting and latency. This reopens only that measured guidance change;
+  unrelated prompt tuning remains frozen.
   The ongoing external shell
   audit remains separate. See [the deferred decision](docs/PLAN.md#2026-10-18--prompt-tuning-deferred).
 

@@ -2,7 +2,9 @@
 
 Ordinary council conversations receive one temporary diagnostic note after an
 incomplete generation. It is the final **user-role** message in the next eligible
-generation request, after dynamic facts and any Engram protocol. It identifies
+generation request, after dynamic facts and any Engram protocol. When shell is
+advertised, the shared system-role call convention follows the recovery note.
+It identifies
 itself as an automatic harness notice, not a human message. Earlier prompt
 messages are unchanged; actual cache reuse remains provider-dependent.
 
@@ -65,7 +67,8 @@ inference. Missing text and encrypted-only reasoning are not invented.
 Only the same bot and conversation can receive the evidence. Changing models does
 not change bot ownership; the note identifies the earlier requested model. Current
 known credentials are redacted again before inference. Model-readable request
-records contain a placeholder in the note's slot; the exact supplied note is kept
+records contain a placeholder in the exact supplied note's slot (located by
+message identity, not by assuming it is last); the exact supplied note is kept
 under private diagnostics `request_recovery`. This preserves operator inspection
 without spreading private reasoning through public trajectory tools, events or
 transcript replay. Events `response_recovery.queued`, `.offered`, read-failure

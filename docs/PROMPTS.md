@@ -22,9 +22,39 @@ The compact list follows assembly placement, not the alphabetical library order:
 shared generated instructions → selected additional shared prompts in their saved
 order → personality and memory → invocation guidance and conversation input →
 accumulated assistant/tool exchanges and any repair → saved memory changes → live memory budgets → dynamic tail and wake-up
-context. Compaction layers appear separately in their own request order. Adjacent
+context → Engram protocol/state → any recovery/receipt input → shell call convention
+when shell is advertised. Compaction layers appear separately in their own request order. Adjacent
 text of the same role may be combined into one provider message. Inspection does
 not change this existing runtime order.
+
+### Shared shell call convention
+
+Owner decision, 2026-11-08: apply the measured convention to every bot/provider
+offered `shell`; do not create a Loki/Gemini-specific handler or an opt-in trial.
+`runtime-shell-call-guidance` seeds the `shell_call_guidance` placement once,
+enabled by default through the existing prompt-library rules. It uses the exact
+final system message evaluated in PRs #138 and #139, explaining the mandatory
+`operation` field, real returned IDs and the existing `{}` usage behavior.
+Existing template edits, role choices, overrides and disabled layers remain
+authoritative. There is no new capability, grant, model branch or experiment switch.
+
+The convention is a **separate final message**, after dynamic facts, Engram,
+one-use recovery and action receipts. Every applicable tool round includes it;
+requests that do not advertise shell (including restricted finalization,
+tool-free answers, compaction and search-only workers) omit it. Ordinary,
+slash/panel and eligible background follow-up turns share this assembly path.
+The complete request estimate includes the message before context admission.
+Original validation still rejects nonempty shell calls missing `operation`;
+the harness never infers a default or changes returned arguments.
+
+Appending the constant message leaves earlier messages/tool definitions intact
+at the application boundary. There are no new clock, nonce or usage fields in
+this layer. Provider/intermediary serialization and cache behavior remain outside
+that guarantee. Replays added 135 input tokens on Loki and 121 on Cheapseek;
+reported cache reuse persisted, but the fixed-body experiment was not a live
+cache benchmark. The prompt record/hash in request metadata identifies the
+guidance cohort. See [monitoring](OPERATIONS.md#shared-shell-guidance-monitoring)
+for omission and cache accounting; actual task relevance needs separate review.
 
 Checked means the layer is permitted **when applicable**, not necessarily
 injected. **Eligible** means configuration allows it; **Turn only** still requires
@@ -148,6 +178,7 @@ survive compaction within their current generation turn. See [VISION](VISION.md)
 | `memory_budget`, `global_memory_budget` | Current quota guidance after conversation/tool exchanges, only with the respective grant |
 | `summary`, `transcript` | Retained conversation summary and current transcript input |
 | `runtime_facts`, `dynamic_prompt` | Clock, round/capability/activation facts and the existing per-bot tail |
+| `shell_call_guidance` | Separate final message whenever shell is advertised; shared by every bot/provider |
 | `slash_invocation` | Fresh slash invocation guidance |
 | `reply_repair` | The existing single bounded repair of malformed tool-wrapped answers |
 | `compaction_instructions`, `compaction_summary`, `compaction_transcript` | Summary-request guidance and input wrappers |
