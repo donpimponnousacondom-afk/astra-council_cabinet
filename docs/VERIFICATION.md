@@ -4118,3 +4118,89 @@ are not production error-rate estimates. Tools were never executed, live prompts
 remain frozen and the shared runtime was not restarted. The results commit only
 records measured evidence and corrects the documented case-b order; it does not
 change the tested evaluator. Its PR checks and delta review remain merge gates.
+
+
+## 2026-11-08 — Shared shell guidance implementation (pre-PR checkpoint)
+
+The owner authorized the tested final-message convention for all eligible bots
+and providers, with monitoring, and rejected a bespoke Loki/Gemini handler or
+new opt-in trial. Implementation adds the shared editable
+`runtime-shell-call-guidance` default, gated by actual advertised shell presence.
+The default text equals the frozen evaluator instruction byte-for-byte. Earlier
+messages/tools remain unchanged with time held constant; all request estimates
+include the final message. Restricted/tool-free requests omit it. Recovery input
+and action receipts precede the convention; public evidence masks the exact
+recovery message object rather than assuming it is last.
+
+Focused offline checks: **64 passed** across shell-guidance, reporting,
+prompt-layer and response-recovery suites. They cover ordinary/slash/panel
+assembly for multiple bots, exact prefix preservation, default/edited/empty
+prompt controls, absent-shell requests, Engram/recovery/receipts, transport retry
+identity, one-use recovery lifetime, private evidence isolation and accounting.
+The report tests distinguish incomplete responses, malformed arguments, help,
+no-tool responses, missing-operation calls and unknown/zero cache counts. An
+initial prefix test needed its fixture clock frozen correctly; no runtime
+change was needed for that fixture failure. Full gate/current-head council and
+live rollout evidence are separate from this checkpoint.
+
+Post-hoc cache inspection of the completed inference experiments (no new calls):
+
+| Loki case | Median cached share baseline | Median cached share instruction | Additional input tokens |
+| --- | --- | --- | --- |
+| Article | 99.15% (9 reported, 1 unknown) | 99.09% (10 reported) | 135 |
+| Domain | 99.13% (10 reported) | 99.08% (10 reported) | 135 |
+
+One domain instruction sample reported 11.36% cached tokens. Cheapseek added
+121 input tokens; repeated warm requests in both arms retained cache reuse.
+These fixed-body replays do not establish live cache equivalence. Provider cache
+reuse can vary with timing, prefix processing and routing. The analysis is in
+ignored `audit/2026-11-08/loki-benchmark/cache-followup.json`.
+
+Read-only pre-deployment ledger report, 2026-11-07 23:00Z through
+2026-11-08 08:45:56Z: Loki had 59 complete shell-eligible attempts, 27 shell
+responses and 7 omission-bearing responses (7/27 nonempty shell calls).
+Cache counts were available for 57 attempts, unknown for 2; median cached share
+97.48%, minimum 11.25%. Sun had five eligible complete responses and no shell
+calls, so its omission denominator was zero. This is ordinary observational
+traffic, distinct from the selected failure replays. No after-deployment result
+is claimed here. Private aggregate: `audit/2026-11-08/shared-shell-guidance/before.json`.
+
+The reporting command is documented in OPERATIONS. It opens the existing ledger
+read-only, emits aggregates and performs no provider calls, vault access or
+returned-tool execution. Counts support operational follow-up; task relevance
+requires trajectory review. Required PR review and CI outcomes are recorded at
+the actual reviewed head in its PR description.
+
+
+### Council follow-up: reporting precision
+
+The follow-up leaves all runtime modules and the frozen convention unchanged.
+It records malformed stored-envelope skips separately while still propagating
+classifier/evaluator failures; adds role to the content-hash cohort; labels
+cache/input/TTFT metrics as attempt-based; and reports finish-reason counts so
+missing/nonstandard completion boundaries are visible. Operations now separates
+pre-rollout and subsequently disabled/empty guidance windows and includes Engram
+missed updates in observation. Recovery wording honors operator role edits.
+
+**18 focused tests passed** for the updated reporting/guidance suites, including
+multi-call denominators, role-only edits, failed/nonstandard completion metrics,
+malformed-row counts, evaluator-error propagation and receipt-only wire placement.
+Ruff and diff checks passed. The ongoing full local suite began on the original
+runtime implementation; it is not new-head evidence for this reporting delta.
+Required new-head CI and council delta review remain separate gates.
+
+A second read-only report over the identical pre-deployment window reproduced
+all prior call/cache denominators: 66 generation rows scanned, no malformed rows,
+Loki finish reasons 44 tool_calls / 15 stop and Sun 1 tool_calls / 4 stop. Thus
+no omission samples were excluded for a nonstandard boundary in this window.
+The original report is preserved; follow-up is ignored
+`audit/2026-11-08/shared-shell-guidance/before-v2.json`.
+
+
+Final reporting correction validates the raw `tool_calls` value before treating
+only missing/null as empty; falsey non-list values are explicitly malformed.
+`rows_without_shell` now reconciles all scanned rows with grouped and skipped
+rows. **25 focused reporting/guidance tests passed**, with lint/format/diff checks.
+The same baseline window reconciles exactly: 66 scanned = 64 eligible attempts
++ 2 without shell + 0 skipped. Runtime modules remain identical to the initial
+reviewed implementation. No additional inference or live-effectiveness claim.

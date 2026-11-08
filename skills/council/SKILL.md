@@ -82,7 +82,11 @@ The initial tool-call trial authorized Cheapseek inference replays of Sun/Zelda
 failures and measured offline variants. After three rounds and the owner's
 2026-11-08 “Go for loki”, the two-case, 40-call Loki inference benchmark is also
 authorized. Follow its predeclared plan and assess task relevance independently
-of syntax. Neither Cheapseek success nor a Loki benchmark authorizes live rollout.
+of syntax. The experiments alone did not authorize live rollout. After their
+results, the owner explicitly authorized the shared final-message shell
+convention for all eligible bots/providers, with monitoring and no bespoke
+Loki/Gemini behavior. That narrow change is authorized; unrelated prompt tuning
+remains frozen. See [PROMPTS](../../docs/PROMPTS.md#shared-shell-call-convention).
 For this trial, report steps, measured results and council feedback inline in the
 T3 Code chat using `html_preview` then `html_render`. The owner explicitly wants
 the visible chat view, not an HTML file. Refresh it when feedback or phase results

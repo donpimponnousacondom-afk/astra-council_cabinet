@@ -647,7 +647,15 @@ class ProviderPool:
             )
         public_body = safe_payload(body)
         if recovery:
-            public_body["messages"][-1] = {
+            # The shared shell guidance may follow this private note. Locate the
+            # exact supplied object, never assume the last slot or match prose.
+            recovery_index = next(
+                (index for index, message in enumerate(messages) if message is recovery["message"]),
+                None,
+            )
+            if recovery_index is None:
+                raise ProviderError("Recovery note missing from request", provider_fault=False)
+            public_body["messages"][recovery_index] = {
                 "role": "user",
                 "content": "[One-use failed-response recovery note; original in private request diagnostics]",
             }

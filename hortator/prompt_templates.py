@@ -8,6 +8,14 @@ from .placeholders import DOUBLE_BRACE, double_brace_name
 
 DEFAULT_PROMPTS = [
     {
+        "id": "runtime-shell-call-guidance",
+        "name": "Shell call convention",
+        "runtime_layer": "shell_call_guidance",
+        "role": "system",
+        "content": 'Tool calling convention: shell is one tool, not separate shell.run or shell.status tools. Every nonempty shell call must explicitly include the JSON field "operation". To execute a command, send {"operation":"run","command":"pwd"}, replacing pwd with your actual command. For status/read/cancel use the matching operation plus a real returned job_id. For read_result use operation read_result plus a real returned result_id. A command field alone does not select run and will be rejected without execution. {} returns usage only and executes nothing. Preserve the task and all other tool constraints.',
+        "condition": "Final message when shell is advertised in this request, for every bot and provider",
+    },
+    {
         "id": "runtime-scheduled-alarm",
         "name": "Secretary alarm wake-up",
         "runtime_layer": "scheduled_alarm",
@@ -507,10 +515,16 @@ INSPECTION_STAGES = {
         "background_updates",
         "engram_instructions",
         "engram_state",
+        "shell_call_guidance",
     ),
     "compaction": ("compaction_instructions", "compaction_summary", "compaction_transcript"),
 }
 INSPECTION_RULES = {
+    "shell_call_guidance": {
+        "plugin": "shell",
+        "conditional": True,
+        "when": "Final separate message only when shell is actually advertised, after Engram, recovery and action receipts. Absent from tool-free and restricted finalization requests.",
+    },
     "engram_instructions": {
         "plugin": "engram",
         "conditional": True,

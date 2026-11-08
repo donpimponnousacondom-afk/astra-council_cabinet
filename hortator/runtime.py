@@ -1231,7 +1231,8 @@ class Engine:
                         )
                     if recovery:
                         recovery = {**recovery, "message": self.vault.redact(recovery["message"])}
-                        candidate = messages + [recovery["message"]]
+                        at = len(messages) - meta["final_prompt_count"]
+                        candidate = messages[:at] + [recovery["message"]] + messages[at:]
                         estimated = await self.contexts.estimate_async(candidate, available_tools)
                         if (
                             estimated * original_meta["calibration_factor"] + profile["response_tokens"]
@@ -1247,12 +1248,10 @@ class Engine:
                             recovery = None
                 receipts_in_last_request = None
                 if receipt_offer:
-                    # Response-recovery evidence masking owns the final message slot.
-                    candidate = (
-                        messages[:-1] + [receipt_offer.message] + messages[-1:]
-                        if recovery
-                        else messages + [receipt_offer.message]
-                    )
+                    # Keep receipts before recovery, and the shared call guidance
+                    # last. Provider evidence masking locates the recovery object.
+                    at = len(messages) - meta["final_prompt_count"] - int(recovery is not None)
+                    candidate = messages[:at] + [receipt_offer.message] + messages[at:]
                     estimated = await self.contexts.estimate_async(candidate, available_tools)
                     if (
                         estimated * original_meta["calibration_factor"] + profile["response_tokens"]
