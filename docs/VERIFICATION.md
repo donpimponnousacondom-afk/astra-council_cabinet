@@ -4170,3 +4170,28 @@ read-only, emits aggregates and performs no provider calls, vault access or
 returned-tool execution. Counts support operational follow-up; task relevance
 requires trajectory review. Required PR review and CI outcomes are recorded at
 the actual reviewed head in its PR description.
+
+
+### Council follow-up: reporting precision
+
+The follow-up leaves all runtime modules and the frozen convention unchanged.
+It records malformed stored-envelope skips separately while still propagating
+classifier/evaluator failures; adds role to the content-hash cohort; labels
+cache/input/TTFT metrics as attempt-based; and reports finish-reason counts so
+missing/nonstandard completion boundaries are visible. Operations now separates
+pre-rollout and subsequently disabled/empty guidance windows and includes Engram
+missed updates in observation. Recovery wording honors operator role edits.
+
+**18 focused tests passed** for the updated reporting/guidance suites, including
+multi-call denominators, role-only edits, failed/nonstandard completion metrics,
+malformed-row counts, evaluator-error propagation and receipt-only wire placement.
+Ruff and diff checks passed. The ongoing full local suite began on the original
+runtime implementation; it is not new-head evidence for this reporting delta.
+Required new-head CI and council delta review remain separate gates.
+
+A second read-only report over the identical pre-deployment window reproduced
+all prior call/cache denominators: 66 generation rows scanned, no malformed rows,
+Loki finish reasons 44 tool_calls / 15 stop and Sun 1 tool_calls / 4 stop. Thus
+no omission samples were excluded for a nonstandard boundary in this window.
+The original report is preserved; follow-up is ignored
+`audit/2026-11-08/shared-shell-guidance/before-v2.json`.

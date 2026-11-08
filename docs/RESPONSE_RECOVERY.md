@@ -1,10 +1,10 @@
 # One-use failed-response recovery
 
 Ordinary council conversations receive one temporary diagnostic note after an
-incomplete generation. It is the final **user-role** message in the next eligible
-generation request, after dynamic facts and any Engram protocol. When shell is
-advertised, the shared system-role call convention follows the recovery note.
-It identifies
+incomplete generation. Its **user-role** message follows dynamic facts and any
+Engram protocol in the next eligible generation request. When shell is
+advertised, it precedes the shared call convention (system-role by default;
+operator role edits remain authoritative). The recovery note identifies
 itself as an automatic harness notice, not a human message. Earlier prompt
 messages are unchanged; actual cache reuse remains provider-dependent.
 

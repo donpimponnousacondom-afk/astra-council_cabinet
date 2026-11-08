@@ -299,14 +299,21 @@ uv run python scripts/report_shell_calls.py \
 Choose actual observation boundaries; the example is not a scheduled job. The
 script opens SQLite read-only, never opens the vault, never contacts a provider
 and emits aggregate metrics without prompt text or tool commands. It groups by
-bot, provider, profile, requested model and convention content hash (or absent).
+bot, provider, profile, requested model, convention content hash and role (or absent).
+Use separate time windows for pre-rollout and later disabled/empty guidance;
+both have the absent key. Malformed stored envelopes are skipped with explicit
+`ledger_diagnostics` counts; classifier/evaluator errors still abort the report.
 Each transport retry remains a separate attempt. Complete responses require
 `stop`/`tool_calls`; incomplete/error attempts are separate. Report omission-bearing
 responses over complete responses and missing-operation calls over nonempty shell
 objects, alongside malformed arguments, help/no-tool outcomes and shell uptake.
 Schema-valid actions are not proof of successful execution or useful work.
 
-Cache counts come from normalized provider-reported fields already in the ledger.
+Cache/input/TTFT metrics use **all eligible attempts** with reported measurements,
+including failures; their `attempt_` field names make that basis explicit.
+`attempt_finish_reasons` reports every boundary, including missing/nonstandard
+reasons, so exclusions from omission denominators are visible. Cache counts come
+from normalized provider-reported fields already in the ledger.
 Missing/inconsistent counts remain unknown; a reported zero is a real zero.
 Compare reported sample counts, minimum/median cached share, total uncached tokens,
 input size and TTFT. Do not use medians alone to hide cold samples or compare raw
@@ -317,8 +324,9 @@ reported backend identity can be inspected in the existing response evidence.
 At deployment, retain the exact startup time/head and a pre-deployment report in
 ignored audit storage. Recheck ordinary traffic after eligible requests arrive;
 if no relevant traffic has arrived, report insufficient evidence. Inspect sample
-trajectories for task relevance, redundant shell use, ignored instructions and
-example copying alongside the counts. This is ongoing operational observation,
+trajectories for task relevance, redundant shell use, ignored instructions,
+example copying and existing Engram missed-update counts alongside the report.
+This is ongoing operational observation,
 not another paid replay or a claim that live effectiveness is already established.
 Use the common template for a measured correction if needed; do not introduce
 vendor-specific fallbacks or silently relax the original schema.

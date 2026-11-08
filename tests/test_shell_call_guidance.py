@@ -153,3 +153,21 @@ async def test_missing_recovery_object_fails_before_request_or_transport(kernel)
             recovery={"message": {"role": "user", "content": THOUGHT}},
         )
     assert not kernel.store.rows("SELECT * FROM requests")
+
+
+async def test_receipt_without_recovery_precedes_guidance_on_wire(kernel, monkeypatch):
+    ready(kernel, enabled_plugins=["shell"], cooldown_seconds=0)
+    plugin = kernel.store.get("plugins", "shell")
+    kernel.store.put("plugins", {**plugin, "enabled": True})
+    offer = SimpleNamespace(message={"role": "user", "content": "RECEIPT_ONLY"}, receipt_ids=())
+    monkeypatch.setattr(kernel.engine.action_receipts, "offer", lambda *args, **kwargs: offer)
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return completion("Considered answer")
+
+    await install_client(kernel, handler)
+    await run(kernel)
+    [body] = bodies
+    assert body["messages"][-2:] == [offer.message, {"role": "system", "content": SHELL_INSTRUCTION}]

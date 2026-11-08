@@ -20,25 +20,82 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.replay_tool_request import classify  # noqa: E402
 
 
-def summarize(rows):
+def read_row(row):
+    """Validate stored envelopes separately from argument/schema evaluation."""
+    body = json.loads(row["body"])
+    if not isinstance(body, dict) or not isinstance(body.get("tools", []), list):
+        raise ValueError("request_shape")
+    tools = body.get("tools", [])
+    for item in tools:
+        if not isinstance(item, dict):
+            raise ValueError("tool_shape")
+        if item.get("type") == "function":
+            function = item.get("function")
+            if (
+                not isinstance(function, dict)
+                or not isinstance(function.get("name"), str)
+                or not isinstance(function.get("parameters"), dict)
+            ):
+                raise ValueError("tool_shape")
+    tools = [t for t in tools if t.get("type") == "function"]
+    if not any(t["function"]["name"] == "shell" for t in tools):
+        return None
+    context = json.loads(row["context"])
+    if not isinstance(context, dict) or not isinstance(context.get("prompt_layers", []), list):
+        raise ValueError("context_shape")
+    layers = context.get("prompt_layers", [])
+    if any(not isinstance(p, dict) or not isinstance(p.get("id"), str) for p in layers):
+        raise ValueError("prompt_layer_shape")
+    guidance = next((p for p in layers if p["id"] == "shell_call_guidance"), None)
+    if guidance and not all(isinstance(guidance.get(k), str) for k in ("sha256", "role")):
+        raise ValueError("guidance_shape")
+    response = json.loads(row["response"] or "null")
+    if response is not None:
+        if not isinstance(response, dict):
+            raise ValueError("response_shape")
+        calls = response.get("tool_calls") or []
+        if not isinstance(calls, list) or any(
+            not isinstance(c, dict)
+            or not isinstance(c.get("function"), dict)
+            or not isinstance(c["function"].get("name"), str)
+            for c in calls
+        ):
+            raise ValueError("call_shape")
+        if response.get("finish_reason") is not None and not isinstance(response["finish_reason"], str):
+            raise ValueError("finish_shape")
+    return tools, guidance, response
+
+
+def summarize(rows, *, diagnostics=None):
+    diagnostics = Counter() if diagnostics is None else diagnostics
     groups = {}
     for row in rows:
-        body = json.loads(row["body"])
-        tools = body.get("tools", [])
-        if not any(t.get("function", {}).get("name") == "shell" for t in tools):
+        diagnostics["scanned_generation_rows"] += 1
+        try:
+            decoded = read_row(row)
+        except json.JSONDecodeError:
+            diagnostics["skipped_invalid_json"] += 1
             continue
-        context = json.loads(row["context"])
-        guidance = next(
-            (p for p in context.get("prompt_layers", []) if p["id"] == "shell_call_guidance"), None
-        )
+        except TypeError:
+            diagnostics["skipped_invalid_storage_type"] += 1
+            continue
+        except ValueError as exc:
+            diagnostics["skipped_" + str(exc)] += 1
+            continue
+        if decoded is None:
+            continue
+        tools, guidance, response = decoded
         key = (
             row["bot_id"],
             row["provider_id"],
             row["profile_id"],
             row["model"],
             guidance["sha256"] if guidance else "absent",
+            guidance["role"] if guidance else "absent",
         )
-        group = groups.setdefault(key, {"counts": Counter(), "input": [], "cache": [], "ttft": []})
+        group = groups.setdefault(
+            key, {"counts": Counter(), "finishes": Counter(), "input": [], "cache": [], "ttft": []}
+        )
         count = group["counts"]
         count["attempts"] += 1
         count["status_" + row["status"]] += 1
@@ -51,7 +108,11 @@ def summarize(rows):
             count["cache_unknown_attempts"] += 1
         if row["ttft_ms"] is not None:
             group["ttft"].append(row["ttft_ms"])
-        response = json.loads(row["response"] or "null")
+        group["finishes"][
+            response.get("finish_reason")
+            if response and response.get("finish_reason") is not None
+            else "<missing>"
+        ] += 1
         if (
             row["status"] != "completed"
             or not response
@@ -65,7 +126,9 @@ def summarize(rows):
         count["shell_responses"] += bool(shell)
         count["no_shell_responses"] += not shell
         count["no_tool_responses"] += not calls
-        results = classify(shell, [t for t in tools if t.get("type") == "function"])
+        # Evaluator exceptions still abort: never relabel a classifier defect as
+        # malformed ledger data or a model omission.
+        results = classify(shell, tools)
         count["omission_responses"] += any(c["category"] == "missing_operation" for c in results)
         count["other_invalid_responses"] += any(c["category"] == "other_invalid" for c in results)
         count["help_only_shell_responses"] += bool(results) and all(c["category"] == "help" for c in results)
@@ -102,17 +165,23 @@ def summarize(rows):
         counts.update({name: value for name, value in count.items() if name.startswith("status_")})
         output.append(
             {
-                **dict(zip(("bot_id", "provider_id", "profile_id", "model", "guidance_sha256"), key)),
+                **dict(
+                    zip(
+                        ("bot_id", "provider_id", "profile_id", "model", "guidance_sha256", "guidance_role"),
+                        key,
+                    )
+                ),
                 **counts,
+                "attempt_finish_reasons": dict(group["finishes"]),
                 "cache_reported_attempts": len(cache),
-                "median_input_tokens": median(group["input"]) if group["input"] else None,
-                "median_cached_share": median(c / t for t, c in cache) if cache else None,
-                "min_cached_share": min((c / t for t, c in cache), default=None),
+                "attempt_median_input_tokens": median(group["input"]) if group["input"] else None,
+                "attempt_median_cached_share": median(c / t for t, c in cache) if cache else None,
+                "attempt_min_cached_share": min((c / t for t, c in cache), default=None),
                 "reported_input_tokens": sum(t for t, _ in cache),
                 "reported_cached_tokens": sum(c for _, c in cache),
                 "reported_uncached_tokens": sum(t - c for t, c in cache),
                 "ttft_reported_attempts": len(group["ttft"]),
-                "median_ttft_ms": median(group["ttft"]) if group["ttft"] else None,
+                "attempt_median_ttft_ms": median(group["ttft"]) if group["ttft"] else None,
             }
         )
     return output
@@ -140,15 +209,17 @@ def main():
             "cached_tokens,ttft_ms FROM requests WHERE purpose='generation' AND started_at>=? AND started_at<?",
             (args.since, args.until),
         )
-        groups = summarize(rows)
+        diagnostics = Counter()
+        groups = summarize(rows, diagnostics=diagnostics)
     print(
         json.dumps(
             {
                 "since": datetime.fromtimestamp(args.since, timezone.utc).isoformat(),
                 "until": datetime.fromtimestamp(args.until, timezone.utc).isoformat(),
-                "scope": "Generation attempts advertising shell; retries are separate attempts. Complete responses require stop/tool_calls. Original saved schemas judge syntax, not execution or task relevance.",
+                "scope": "Generation attempts advertising shell; retries are separate attempts. Cache/input/TTFT metrics use all eligible attempts with reports, including failures. Omission denominators use complete stop/tool_calls responses only; attempt_finish_reasons exposes excluded boundaries. Original saved schemas judge syntax, not execution or task relevance.",
                 "caveat": "Observational counts, not a controlled comparison. Compare context size, timing, schema and task mix; missing cache counts are unknown. Review task relevance separately.",
                 "groups": groups,
+                "ledger_diagnostics": dict(diagnostics),
             },
             indent=2,
         )
