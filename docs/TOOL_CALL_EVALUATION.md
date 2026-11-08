@@ -117,9 +117,12 @@ replace final open-PR review. Dated results belong in [VERIFICATION](VERIFICATIO
 
 ## Authorized Loki transfer benchmark
 
-Run each of the two locked cases with `--study loki --variant baseline instruction
---repeats 10`, a separate unused output directory and the saved request ID. The
-case selection, exclusions, original body hashes, full schedule, frozen instruction
+Run each locked case with `--study loki --repeats 10`, a separate unused output
+directory, its saved request ID and **its own variant order from the plan**:
+case-a uses `--variant baseline instruction`; case-b uses
+`--variant instruction baseline`. Verify `schedule(variants, 10)` equals that
+case's locked schedule before launching and compare the output manifest afterward.
+The case selection, exclusions, original body hashes, full schedule, frozen instruction
 hash and task-specific quality rubric are recorded before inference in private
 `audit/2026-11-08/loki-benchmark/benchmark-plan.json`. One initially selected case
 was excluded during preflight because its image was retained only as metadata;
@@ -134,7 +137,14 @@ each informative case, without new other-invalid/help-only/no-tool outcomes.
 Uninformative or interrupted cases are reported, not silently extended. Report
 both omission denominators and shell uptake. Lock the relevance rubric before
 inference, have the council assess it with arm labels concealed, and report each
-rater separately. Consistent adverse relevance or owner-instruction findings
-prevent an overall-success claim. Syntax itself may partly reveal the arm.
+rater separately. The preserved pre-inference clarification defines a new error
+outcome as a candidate response count greater than baseline in any of the three
+categories above (other-invalid covers all tools). A quality regression requires
+at least two raters to identify, in the same case, either three or more additional
+candidate partial/no responses, an increased candidate no count, or the same
+candidate response introducing a clear owner-instruction violation or unauthorized
+external/system mutation absent from baseline. Ordinary appropriate local
+preparation is not automatically a violation. Such a regression prevents an
+overall-success claim. Syntax itself may partly reveal the arm.
 Even success establishes only a candidate mitigation in these contexts; live
 rollout remains a separate owner decision.
