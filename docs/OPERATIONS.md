@@ -88,7 +88,7 @@ skills. They adapt the corresponding t3dotgg/tstack skills for this repository.
 Do not install global copies: cross-provider council execution requires T3 Code.
 
 Technical reviewers are Claude Opus 5.5, latest confirmed GPT Sol 6.x (currently
-6.1), and **Muse Wonder Full 1.0**, at high reasoning effort. Resolve the live
+6.2), and **Muse Wonder Full 1.0**, at high reasoning effort. Resolve the live
 catalog and exact options; Wonder 1.0 is not Wonder Full 1.0. Each reviewer inspects
 the actual open PR at a pinned head independently. Record every round's scores,
 findings, fixes and evidence in the PR description. Research/design rounds can

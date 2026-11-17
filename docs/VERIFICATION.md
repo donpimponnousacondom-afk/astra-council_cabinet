@@ -4204,3 +4204,11 @@ rows. **25 focused reporting/guidance tests passed**, with lint/format/diff chec
 The same baseline window reconciles exactly: 66 scanned = 64 eligible attempts
 + 2 without shell + 0 skipped. Runtime modules remain identical to the initial
 reviewed implementation. No additional inference or live-effectiveness claim.
+
+## 2026-11-17 — T3 review model catalog
+
+T3 listed `codex/gpt-6.2-sol` for the council and `codex/gpt-6-luna` for triage.
+Both advertise `reasoningEffort: high`, as does `muse/muse-wonder-full-1.0`.
+The `claudeAgent` instance listed `claude-opus-5-5` and `claude-haiku-5-5`
+with `effort: high`. All three provider instances reported support for
+cross-provider delegation. The open-PR review record tracks actual delegate runs.

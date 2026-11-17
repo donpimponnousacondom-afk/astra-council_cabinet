@@ -19,7 +19,7 @@ The current configured selections are:
 | Member | Provider instance | Exact model | Options |
 | --- | --- | --- | --- |
 | Claude Opus | `claudeAgent` | `claude-opus-5-5` | `effort: high` |
-| Latest GPT Sol | `codex` | `gpt-6.1-sol` | `reasoningEffort: high` |
+| Latest GPT Sol | `codex` | `gpt-6.2-sol` | `reasoningEffort: high` |
 | Muse Wonder Full | `muse` | **`muse-wonder-full-1.0`** | `reasoningEffort: high` |
 
 Wonder Full is mandatory: **`muse-wonder-1.0` is a different model and is not a

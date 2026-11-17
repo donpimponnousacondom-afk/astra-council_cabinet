@@ -19,7 +19,7 @@
 
 - Owner decision, 2026-11-08: the project-local [council](skills/council/SKILL.md)
   replaces the previous Luna/Sol technical review pair. Required open-PR reviews
-  use Claude Opus 5.5, the latest confirmed GPT Sol 6.x (currently 6.1), and
+  use Claude Opus 5.5, the latest confirmed GPT Sol 6.x (currently 6.2), and
   **Muse Wonder Full 1.0** (`muse-wonder-full-1.0`, never `muse-wonder-1.0`),
   through T3 Code at high reasoning effort. Record independent findings and
   scores by review round in the PR description. Current-head council review,

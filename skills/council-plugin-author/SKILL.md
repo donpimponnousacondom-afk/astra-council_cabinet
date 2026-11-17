@@ -106,10 +106,10 @@ the plugin from `docs/PLUGINS.md`. Record measured checks and their limits in
 `docs/VERIFICATION.md`. Do not copy running configuration or write rolling
 session handovers into these documents.
 
-Follow AGENTS and `docs/OPERATIONS.md` for task-branch publication and independent
-Luna/Sol review of the open PR. The installed `council-pr-babysitter` skill gives
-the detailed review workflow on this host; the repository procedure remains
-available to agents without that local skill. Coordinate one integration owner
+Follow AGENTS and `docs/OPERATIONS.md` for task-branch publication. Use the
+project-local [council](../council/SKILL.md) for independent review of the open
+PR and [babysit-pr](../babysit-pr/SKILL.md) for CI and feedback triage.
+Coordinate one integration owner
 for publication, gated squash merge and any shared-runtime deployment. Do not
 change branches or restart the shared server behind another agent's task.
 Report the PR/commit, verified behavior, remaining integration work and
