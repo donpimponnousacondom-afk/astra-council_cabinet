@@ -14,7 +14,9 @@ history rules and report an actual branch-transition blocker.
 
 ## Assignments
 
-Resolve the live T3 catalog and use `delegate_task` with explicit options:
+Use these T3 targets for triage. The [council roster](../council/SKILL.md#members-and-transport)
+tracks Sol upgrades independently. Check each provider, model ID and high-effort
+option in the live catalog before calling `delegate_task`.
 
 - **Claude Haiku**, currently `claudeAgent` / `claude-haiku-5-5`, `effort: high`.
 - **GPT Luna**, currently `codex` / `gpt-6-luna`, `reasoningEffort: high`.
