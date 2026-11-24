@@ -1,6 +1,6 @@
 ---
 name: babysit-pr
-description: Triage this project's PR checks and feedback with Haiku and Luna, using one T3-owned watch. Complements the Opus/Sol/Wonder Full technical council.
+description: Triage this project's PR checks and feedback with Haiku and Luna, using one T3-owned watch. Complements the Opus/Sol/Wonder Full/Neon technical council.
 ---
 
 # Project PR babysitting

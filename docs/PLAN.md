@@ -820,3 +820,22 @@ fixed-body observations, not proof of unchanged live cache efficiency. Monitor
 omissions, relevance, cache counts/unknowns and latency by bot/provider/model and
 guidance version using the existing ledger. See PROMPTS and OPERATIONS for the
 implemented contract and reporting procedure.
+
+
+## 2026-11-24 — Project council ownership and Neon membership
+
+The owner authorizes selected improvements from the global council skill while
+keeping this project's workflow independent. Add Gemini 4 Neon through Antigravity
+at `thought_level: high` to Opus 5.5, Sol 6.2 and Muse Wonder Full 1.0. This amends
+the three-member roster from November 8; Haiku/Luna triage and parent-owned gated
+squash merging remain unchanged. It does not change any bot's runtime provider.
+
+The project skill must explicitly prohibit overwriting/synchronizing it from a
+global skill, replacing it with a global symlink, or using global fallback. Global
+maintenance does not authorize project edits. Borrow a concrete review brief,
+evidence-based scope control, stable reviewed source, finding history across
+rounds and separate implementation/merge verdicts. Apply late-finding scrutiny
+to every reviewer without dismissing genuine defects. Retain the project's
+concurrency, storage, security, research and prompt contracts; do not import
+blanket edge-case exclusions or another project's model-specific reprimands.
+Completed trial budgets remain historical and are not renewed by skill invocation.

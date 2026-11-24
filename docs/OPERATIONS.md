@@ -82,13 +82,19 @@ completed merge: poll its result and verify each PR's merge commit on main.
 
 ## Independent PR review and check monitoring
 
-Owner decision, 2026-11-08: the authoritative shared workflows are the project-local
-[council](../skills/council/SKILL.md) and [babysit-pr](../skills/babysit-pr/SKILL.md)
+Owner decision, 2026-11-08, amended 2026-11-24: the authoritative shared workflows
+are the project-local [council](../skills/council/SKILL.md) and [babysit-pr](../skills/babysit-pr/SKILL.md)
 skills. They adapt the corresponding t3dotgg/tstack skills for this repository.
 Do not install global copies: cross-provider council execution requires T3 Code.
+The project workflow overrides global discovery, including symlinked skills. Never
+replace or synchronize the project skill from the global version, symlink it to
+the global directory, or use global fallback if the local skill cannot be read.
+Global updates are not project authorization; selected imports follow an
+owner-authorized project PR. Leave global files and discovery links unchanged.
 
 Technical reviewers are Claude Opus 5.5, latest confirmed GPT Sol 6.x (currently
-6.2), and **Muse Wonder Full 1.0**, at high reasoning effort. Resolve the live
+6.2), **Muse Wonder Full 1.0**, and Gemini 4 Neon through Antigravity, all at high
+reasoning effort. Neon uses `thought_level: high`. Resolve the live
 catalog and exact options; Wonder 1.0 is not Wonder Full 1.0. Each reviewer inspects
 the actual open PR at a pinned head independently. Record every round's scores,
 findings, fixes and evidence in the PR description. Research/design rounds can
@@ -145,7 +151,7 @@ another targeted pass when the fixes interact or leave material questions;
 repeated requests for useful external help are welcome. Keep the exchange active
 instead of relying on the owner to remember to request its next step.
 
-This supplements the mandatory three-provider open-PR reviews and current-head checks.
+This supplements the mandatory four-provider open-PR reviews and current-head checks.
 It does not substitute an external report for council review or create an
 automatic extra merge/deployment gate; an explicit owner request to wait for an
 audit remains binding. Record what was actually reviewed and what remains open.

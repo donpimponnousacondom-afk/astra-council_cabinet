@@ -4212,3 +4212,33 @@ Both advertise `reasoningEffort: high`, as does `muse/muse-wonder-full-1.0`.
 The `claudeAgent` instance listed `claude-opus-5-5` and `claude-haiku-5-5`
 with `effort: high`. All three provider instances reported support for
 cross-provider delegation. The open-PR review record tracks actual delegate runs.
+
+
+## 2026-11-24 — Project-owned four-provider council
+
+The project council adds `antigravity` / `gemini-4-neon` with explicit
+`thought_level: high`. A live T3 catalog query confirmed that exact target,
+its high option and cross-provider delegation support. The catalog also exposes
+an orchestrator variant and an OpenCode route; neither is the selected member.
+Actual delegate execution and current-head review results belong in the open PR
+record, not this catalog-only evidence.
+
+The skill now defines project precedence, forbids replacement/synchronization
+from global skills and global fallback, supplies a scoped implementation brief,
+keeps reviewed source stable, records findings across rounds for every reviewer,
+and separates implementation approval from merge readiness. Current roster
+references were updated; dated three-member research records remain historical.
+Haiku/Luna triage, merge pinning, owner holds and prompt restrictions remain.
+
+Local checks: the skill-creator validator passed for council and babysit-pr;
+relative file links resolve; `git diff --check` passed. No application tests were
+run for this documentation-only change. The global council's SHA-256 remained
+`06464b38389a10c16087feffdf32dd007c826a7a97ea2993bc9737c05ae76c94`;
+Codex/Claude discovery links still point to `/home/codexy/.agents/skills/council`.
+The project skill remains a real directory, not a symlink.
+
+PR #142 was verified merged at the prior checkout head; fetched main and checkout
+had identical trees before creating the new task branch. Startup-captured runtime
+metadata still identifies `38f84715ee82951f20a827e76a91429fb1df5d0e`; its differences
+from the new base are instructions/docs only. Runtime code is unchanged, so no
+build, restart, bot configuration or provider inference was needed for the edit.
