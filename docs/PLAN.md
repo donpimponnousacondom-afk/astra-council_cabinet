@@ -839,3 +839,14 @@ to every reviewer without dismissing genuine defects. Retain the project's
 concurrency, storage, security, research and prompt contracts; do not import
 blanket edge-case exclusions or another project's model-specific reprimands.
 Completed trial budgets remain historical and are not renewed by skill invocation.
+
+
+### 2026-11-24 — Inline council progress as the default
+
+The owner requests compact HTML tables rendered directly in T3 chat for council
+steps and results, replacing hard-to-scan sequences of narrative status replies.
+Apply this throughout the project council, not only the historical replay trial.
+Show current round/head, member scores/verdicts, finding dispositions, workflow
+gates and next action. Keep content-height sizing and current versus historical
+evidence explicit. The project skill owns presentation details; this does not
+change review, CI or merge requirements or modify the separate global skill.

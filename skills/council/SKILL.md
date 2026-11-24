@@ -154,6 +154,43 @@ new assortment of speculative edge cases each round. Do not fix out-of-scope
 items just to obtain approval. Preserve objections and escalate an evidence-backed
 stalemate to the owner, as above; a majority vote cannot waive a valid blocker.
 
+## Inline council progress (owner decision, 2026-11-24)
+
+For every council task, show the owner a compact HTML status table in the T3 Code
+chat using `html_preview` followed by `html_render`. This is the standard progress
+report for research and PR rounds, not just the historical tool-call trial.
+An HTML file path or raw HTML text alone is not a rendered report.
+
+Render a refreshed snapshot when a round starts, reviews arrive, findings are
+resolved, the head changes, or CI/merge status changes. Combine results already
+available in the same turn rather than emitting a separate table for each one.
+Keep surrounding prose short; do not repeat each delegate's report as a narrative.
+The latest table must stand on its own:
+
+- Identify the task/PR, current round and reviewed head (short SHA visible, full
+  SHA available in a title or detail). Clearly label older-round scores as
+  historical; a new head resets its own review/check statuses to pending/unknown.
+- Show each member's status, score (`pending` or `no score` when appropriate),
+  verdict and a short actionable finding/disposition. Never infer approval from
+  a score or from dispatch acceptance.
+- Show the workflow steps: local verification, council review, findings/fixes,
+  Haiku/Luna triage where applicable, required CI and merge/handoff. Distinguish
+  pending, passed, failed, blocked, unknown and not applicable. Research scores
+  do not certify an implementation or establish merge readiness.
+- State the next action and outstanding gate. Use snapshot-qualified wording for
+  CI and triage; do not turn an older check into a current-head pass.
+
+Use a small self-contained semantic HTML table, theme colors and text status
+labels, readable on desktop and mobile. Let content determine height: no viewport
+height, full-height wrapper, fixed minimum page height or blank spacer. Inspect
+preview sizing for excess whitespace and use the renderer's sizing contract;
+do not enlarge the frame to create a dashboard. Keep detailed history in the PR
+record or optional collapsed details. No web server or runtime change is needed.
+If rendering is unavailable or fails, report that briefly and provide a compact
+Markdown table so progress remains readable. Reporting failure is not a new
+review/merge gate. The HTML view supplements, never replaces, the PR evidence
+record and existing review/CI requirements.
+
 ## PR evidence and handoff
 
 Put the council round/score table and concise disposition of findings in the PR

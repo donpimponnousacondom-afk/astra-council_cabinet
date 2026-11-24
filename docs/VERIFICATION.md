@@ -4257,3 +4257,12 @@ status line within the brief, and uses a three-dot PR diff with separate base
 integration inspection. Trial procedures are explicitly historical/non-renewing
 and refer to the current council roster for new authorized work. Skill validators,
 relative-link checks and whitespace checks passed again; no runtime change.
+
+
+Owner-requested presentation follow-up: the project council now requires compact
+inline T3 HTML status tables for all council rounds and workflow milestones,
+including explicit head/round, historical evidence, reviewer verdicts and gates.
+The global skill remains separate. The skill validator and whitespace check
+passed for the instruction change. Live rendering is validated in the PR's chat
+record; this does not claim application tests, runtime changes or approval of
+the new head from earlier review rounds.

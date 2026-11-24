@@ -25,6 +25,10 @@
   All four run through T3 Code at high reasoning effort. Record independent
   findings and scores by review round in the PR description. Current-head council review,
   resolved blockers and required CI remain merge gates; scores alone are not.
+  Owner addition, 2026-11-24: report council steps/results as compact inline HTML
+  tables through T3 `html_preview` then `html_render`, following the project
+  skill's progress section. Keep head/round/status clear and avoid oversized
+  frames or repeated narrative updates; preserve the PR evidence record.
   [PR babysitting](skills/babysit-pr/SKILL.md) now uses Haiku and Luna for
   bounded check/comment triage. Only the parent owns T3's persistent PR watch;
   children never poll or watch. The parent owns publication, fixes and gated
