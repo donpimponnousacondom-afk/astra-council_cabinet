@@ -47,7 +47,8 @@ substitutes for these exact targets either; Neon means the Antigravity model,
 not its orchestrator variant or Loki's runtime provider. The owner permits the
 latest confirmed Sol 6.x successor. Do not
 silently replace another member, model, provider or requested option. Report an
-unavailable capability. Put settings in `target.options`, not merely the prompt;
+unavailable capability to the owner for resolution; do not silently omit a
+member or bypass the review gate. Put settings in `target.options`, not merely the prompt;
 verify the returned provider/model/options. Do not use native same-provider agents,
 top-level threads or shell-launched models to stand in for this council.
 Retain the caller's configured service tier; this skill does not force a tier.
@@ -71,7 +72,8 @@ or another transport to bypass it.
    delegates read it: no tracked edits, checkouts or pushes during that round.
    If a correction must supersede a round, cancel its delegates before editing.
    Pin executable probes to the reviewed source. Delegate tools/paid provider
-   experiments only when the brief explicitly authorizes them. Do not let reviewers repeat live experiments.
+   experiments only when the brief explicitly authorizes them. Do not let
+   reviewers repeat live experiments.
 4. Ask for actionable findings with trigger, consequence and measured evidence;
    separate introduced bugs, existing weaknesses and hypotheses. Request a score
    out of 10 with its rationale, unresolved blockers and validation limits. Use
@@ -101,13 +103,17 @@ correctness, relevance and side effects.
 > Independently review the open PR. Repository: [absolute path]. PR: [URL].
 > Base: [full SHA]. Head: [full SHA]. Read `AGENTS.md`, this project skill, the
 > relevant feature contracts, the actual open GitHub diff and callers of changed
-> code. Use pinned source (`git diff <base> <head>`, `git show <head>:<path>`) and
-> confirm that the PR head matches before reporting.
+> code. Use pinned source (`git diff <base>...<head>`, `git show <head>:<path>`) and
+> confirm that the PR head matches before reporting. Inspect base movement
+> separately for integration conflicts; do not treat unrelated base changes as
+> changes introduced by the PR.
+> Write your initial assessment before reading sibling reports, PR comments or
+> the PR description's scores/findings.
 >
 > Intent and acceptance: [requirements]. Non-goals: [exclusions]. Deployment
 > assumptions: [relevant runtime facts]. Evidence: [commands, results, paths and
 > limitations]. Allowed probes: [isolated checks and permitted evidence access].
-> Stay read-only: no tracked edits, checkout changes, pushes, merges, runtime
+> Stay read-only: no tracked edits, commits, checkout changes, pushes, merges, runtime
 > actions or GitHub comments. No live/provider experiments or private-state
 > access beyond what this brief explicitly authorizes. Start no agents.
 >
@@ -127,6 +133,7 @@ correctness, relevance and side effects.
 > blockers, residual risks, validation performed and its limits, a score out of
 > 10 with rationale, and an implementation verdict: APPROVE or BLOCKED. Report
 > CI/review state separately; implementation approval is not merge readiness.
+> End with: `PR <full URL>, head <SHA>, checks and reviews <state>`.
 
 Do not blanket-exclude latency, races, filesystem failures or malformed persisted
 data: assess their relevance to the changed behavior and project contracts.
@@ -154,8 +161,9 @@ description, before the model/harness attribution. Do not post separate council
 score comments. Label pre-PR research separately from current-head PR review.
 Each pushed head needs council delta review; old scores remain historical.
 The parent alone edits, pushes, links the PR to T3 and performs the authorized
-GitHub squash merge after all four current-head implementation approvals, resolved
-blockers and passing required checks. Preserve explicit owner holds and standing
+GitHub squash merge after completed current-head review by all four members, no
+unresolved valid blockers and passing required checks. Record evidence-based
+dispositions; a stalled reviewer disagreement goes to the owner before merging. Preserve explicit owner holds and standing
 merge authorization; this skill adds no per-merge permission request.
 Pin the reviewed full head SHA in the merge request and verify the returned merge
 result and commit. Missing, pending, cancelled or failed required checks do not pass.

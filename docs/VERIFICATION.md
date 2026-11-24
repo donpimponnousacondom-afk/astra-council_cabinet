@@ -4242,3 +4242,18 @@ had identical trees before creating the new task branch. Startup-captured runtim
 metadata still identifies `38f84715ee82951f20a827e76a91429fb1df5d0e`; its differences
 from the new base are instructions/docs only. Runtime code is unchanged, so no
 build, restart, bot configuration or provider inference was needed for the edit.
+
+
+PR #143 round-1 follow-up: all four delegates returned independent implementation
+approvals (9/10 each) on `69c6785a3f890dea1ceaaa0513620f83a0277f59`, including
+Neon through the exact requested Antigravity target/high option. This establishes
+a completed Neon review, beyond catalog availability. Those scores cover that
+head only; the correction head requires its own delta review and CI.
+
+The correction preserves the prior merge contract (completed review by all four,
+no unresolved valid blockers, required checks; owner resolves stalled disputes),
+adds explicit unavailable-member escalation, repeats independence and the closing
+status line within the brief, and uses a three-dot PR diff with separate base
+integration inspection. Trial procedures are explicitly historical/non-renewing
+and refer to the current council roster for new authorized work. Skill validators,
+relative-link checks and whitespace checks passed again; no runtime change.

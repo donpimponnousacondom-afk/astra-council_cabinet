@@ -116,6 +116,8 @@ Pin the full reviewed head SHA in the GitHub merge request, then verify the
 returned merged result and commit. Missing, pending, cancelled and failed required
 checks do not pass; a head refresh before the call alone does not prevent a race.
 
+Historical procedure — the November 2026 trials below are completed; these
+instructions do not renew their budgets or authorize new experiments.
 The initial Cheapseek trial is inference-only: use saved Sun/Zelda request JSON,
 record its hash and unavoidable reconstruction limits, and never execute returned
 tools. Keep raw requests/responses in ignored audit storage. Separate exact
