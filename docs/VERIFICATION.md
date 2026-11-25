@@ -4344,3 +4344,37 @@ the rerun passes. Logs: ignored audit/2026-11-25/tool-validation-feedback.
 These are isolated synthetic tests, not live Discord/provider acceptance.
 Current-head remote CI, four-provider council review and deployment are pending
 at this entry; the runtime remains on startup-captured 38f84715ee82.
+
+
+### PR144 round-1 correction — replay redaction and evidence directions
+
+R1 at 56339016ffb661528a4bb5e58aab00dfd16fd67c: Opus, Wonder Full and Neon
+approved at 9/10; Sol blocked at 8/10. The parent reproduced Sol B1: large-event
+compaction saved an already clipped validation message, so registering a matching
+credential later could leave its unmatched prefix visible on replay. All four
+readers finished before this correction. The earlier approvals are historical.
+
+The console now retains at most three errors' whole path/rule/message strings
+(up to 4,096 characters per field) separately from its cached event preview.
+Oversized fields are omitted whole with an evidence hint; current vault redaction
+runs before display clipping on every render/replay. This preserves the existing
+redaction policy rather than adding a content filter. Full event/model data is
+unchanged. Path/message errors without a rule (attachment preparation) now get
+a useful summary; single explanations can use the 420-character summary budget.
+The runbook now distinguishes f's potentially truncated preview from stored T
+evidence/ledger inspection. The reviewed shared zero-offset fetch schema is unchanged.
+
+197 focused console/fetched/tool-feedback/HTTP-evidence tests passed on this
+correction, including late credential registration/replay on compacted and
+noncompacted events, whole-field omission with stored-evidence recovery, and
+rule-less attachment diagnostics. Ruff lint/format and whitespace checks pass.
+The local full CI-suite run began on R1 and overlaps this source correction;
+it is diagnostic evidence only, not certification of this corrected head. New-head
+remote CI and all-four delta review are required. No runtime reload or paid
+inference occurred. Logs remain in audit/2026-11-25/tool-validation-feedback.
+
+Pre-existing follow-ups from R1 are recorded in the PR: malformed object-valued
+URL can make repeat-grouping unhashable; reused call IDs can group different
+validation causes; WEB_READING's operations table omits the existing read_response
+row. These are not introduced by this patch or the cause of the observed
+zero-offset failures, and were not silently folded into this correction.

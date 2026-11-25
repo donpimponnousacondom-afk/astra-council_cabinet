@@ -523,8 +523,9 @@ The agent can send commands through `screen -S hortator -p dashboard -X stuff` a
 
 Argument-validation warnings now show the rejected field and rule directly
 (for example `$.offset [const]: 0 was expected`), with an error count and execution
-flag. The summary shows up to three bounded explanations; expand with `f` or
-inspect `T` evidence for complete feedback and usage. See the
+flag. The summary shows up to three bounded explanations. `f` shows cached JSON
+details, which may be a preview; use `T` twice for stored evidence (then `n`/`N`
+to page) or inspect the ledger for complete feedback and usage. See the
 [console evidence contract](HTTP_EVIDENCE.md#console-contract).
 
 For private inspection from Discord, enable **Plugins → Reasoning viewer** and

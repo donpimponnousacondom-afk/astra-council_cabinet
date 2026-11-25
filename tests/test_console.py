@@ -51,7 +51,7 @@ async def test_tool_validation_line_shows_causes_and_keeps_complete_evidence(ker
         assert "$.offset [forbidden]" in rendered
         assert "$.length [type]" in rendered
         assert "executed=False" in rendered and "error_count=5" in rendered
-        assert "+2 more (expand details)" in rendered
+        assert "+2 more (stored T evidence)" in rendered
         assert "Invalid tool arguments" not in rendered
         assert "calling_convention" not in rendered
         assert kernel.store.events(after=event["seq"] - 1)[0]["data"] == data
@@ -101,6 +101,82 @@ async def test_validation_summary_is_bounded_escaped_and_redacted_without_clippi
         assert "error_count=50" in rendered and "+47 more" in rendered
         assert len(rendered) < len(url) + 800
         assert len(rendered.splitlines()) == 1
+
+
+@pytest.mark.parametrize("compacted", [False, True])
+async def test_replayed_validation_redacts_later_credentials_before_clipping(kernel, compacted):
+    from hortator.fetched_documents import DESCRIPTION, PARAMETERS
+    from hortator.tool_feedback import feedback
+
+    secret = "LATER_SYNTHETIC_CREDENTIAL_" + "Q" * 100
+    arguments = {
+        "operation": "fetch",
+        "url": "https://example.com/" + ("x" * 66000 if compacted else ""),
+        "length": "a" * 95 + secret,
+    }
+    if not compacted:
+        arguments["offset"] = 1
+    else:
+        arguments["operation"] = "fetch" + "o" * 7000
+    report = feedback("web_fetch", arguments, PARAMETERS, DESCRIPTION)
+    with output() as console:
+        console.bind(kernel)
+        kernel.store.emit("tool.failed", {"name": "web_fetch", **report}, level="warning", bot_id="ada")
+        assert ("detail_preview" in console.history[-1]["data"]) is compacted
+        assert secret[:15] in console.stream.getvalue()  # The summary boundary crosses this value.
+        kernel.vault.put("test/later-validation", secret)
+        console.stream.seek(0)
+        console.stream.truncate()
+        console.key("r")
+        rendered = console.stream.getvalue()
+        assert secret[:15] not in rendered and "[REDACTED]" in rendered
+        assert "$.length [type]" in rendered
+
+
+async def test_validation_omits_whole_oversized_fields_and_stored_evidence_remains_complete(kernel):
+    long_value = "OVERSIZED_FIELD_START_" + "x" * 7000 + "\nEND_MARKER_COMPLETE"
+    data = {
+        "name": "web_fetch",
+        "error": "Invalid tool arguments",
+        "executed": False,
+        "errors": [{"path": "$.url", "rule": "maxLength", "message": long_value}],
+        "error_count": 1,
+        "usage": {"padding": ["z" * 2000] * 10},
+    }
+    with output() as console:
+        console.bind(kernel)
+        kernel.store.emit("tool.failed", data, level="warning", bot_id="ada")
+        assert "[long field; use stored T evidence]" in console.stream.getvalue()
+        assert "OVERSIZED_FIELD_START_" not in console.stream.getvalue()
+        console.stream.seek(0)
+        console.stream.truncate()
+        console.key("T")
+        console.key("T")
+        read_all_evidence(console)
+        assert "END_MARKER_COMPLETE" in console.stream.getvalue()
+
+
+def test_ruleless_attachment_error_and_single_long_explanation_are_visible():
+    explanation = "The selected reply target cannot be used. " + "Check the requested destination. " * 5
+    with output() as console:
+        console.accept(
+            console.event(
+                {
+                    "at": 1,
+                    "kind": "tool.failed",
+                    "level": "warning",
+                    "data": {
+                        "name": "discord_attach",
+                        "error": "Attachment preparation failed",
+                        "errors": [{"path": "$.reply_to", "message": explanation}],
+                        "executed": False,
+                        "error_count": 1,
+                    },
+                }
+            )
+        )
+        assert "$.reply_to: " + explanation.rstrip() in console.stream.getvalue()
+        assert "Attachment preparation failed" not in console.stream.getvalue()
 
 
 @pytest.mark.parametrize(

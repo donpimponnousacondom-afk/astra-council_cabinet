@@ -299,34 +299,56 @@ def plain(value):
     return "".join(c if c.isprintable() else f"\\u{ord(c):04x}" for c in str(value))
 
 
-def tool_validation_summary(data):
-    """Summarize field errors without changing the stored/model-facing feedback."""
+def tool_validation_preview(data):
+    """Keep whole bounded fields so later vault updates can redact before clipping."""
     errors = data.get("errors")
     if not isinstance(errors, list) or not errors:
         return None
     shown = errors[:3]
     if not all(
-        isinstance(error, dict)
-        and all(isinstance(error.get(key), str) for key in ("path", "rule", "message"))
+        isinstance(error, dict) and all(isinstance(error.get(key), str) for key in ("path", "message"))
         for error in shown
     ):
+        return None
+
+    count = data.get("error_count")
+    if type(count) is not int or count < len(errors):
+        count = len(errors)
+    return {
+        "error_count": count,
+        "errors": [
+            {
+                key: value if len(value) <= 4096 else "[long field; use stored T evidence]"
+                for key in ("path", "rule", "message")
+                if isinstance(value := error.get(key), str)
+            }
+            for error in shown
+        ],
+    }
+
+
+def tool_validation_summary(preview):
+    """Called only after current vault redaction, never cached as a clipped string."""
+    if not preview:
         return None
 
     def short(value, limit):
         value = plain(value)
         return value if len(value) <= limit else value[: limit - 1] + "…"
 
-    count = data.get("error_count")
-    if type(count) is not int or count < len(errors):
-        count = len(errors)
-    summary = "; ".join(
-        f"{short(error['path'], 64)} [{short(error['rule'], 32)}]: {short(error['message'], 120)}"
-        for error in shown
-    )
+    shown = preview["errors"]
+    count = preview["error_count"]
+    parts = []
+    for error in shown:
+        rule = f" [{short(error['rule'], 32)}]" if error.get("rule") else ""
+        parts.append(
+            f"{short(error['path'], 64)}{rule}: {short(error['message'], 420 if len(shown) == 1 else 120)}"
+        )
+    summary = "; ".join(parts)
     summary = short(summary, 420)
     if count > len(shown):
-        summary += f"; +{count - len(shown)} more (expand details)"
-    return {**data, "error_count": count, "error": summary}
+        summary += f"; +{count - len(shown)} more (stored T evidence)"
+    return {"error_count": count, "error": summary}
 
 
 def safe_text(value, *, include_reasoning=False, full_urls=False):
@@ -709,28 +731,29 @@ class OperationalConsole(logging.Handler):
     def event(self, event):
         if event["kind"] == "config.updated" and self.store is not None:
             self.timezone = council_timezone(self.store)
-        event = safe_value(self.redact(event), full_urls=is_web_event(event))
+        event = self.redact(event)
+        validation = tool_validation_preview(event["data"]) if event["kind"] == "tool.failed" else None
+        event = safe_value(event, full_urls=is_web_event(event))
         kind = event["kind"]
         level = event.get("level", "info")
         if level == "info" and kind in QUIET_EVENTS:
             level = "debug"
         encoded = json.dumps(event["data"], ensure_ascii=False, default=str)
         if len(encoded) > 12000:
-            summary_data = (
-                tool_validation_summary(event["data"]) if kind == "tool.failed" else None
-            ) or event["data"]
             event["data"] = {
                 **{
-                    k: summary_data[k]
+                    k: event["data"][k]
                     for k in set(
                         INCIDENT_FIELDS + ("provider_id", "url", "requested_url", "query", "duration_ms")
                     )
-                    if k in summary_data
+                    if k in event["data"]
                 },
                 "detail_preview": encoded[:4000],
                 "truncated": "Full detail remains in the event ledger",
             }
-        return {**event, "scope": scope_for(kind), "level": level}
+        # Internal display source only; not included in expanded data or the ledger.
+        # Oversized fields are omitted whole, never cached as a secret prefix.
+        return {**event, "scope": scope_for(kind), "level": level, "_validation": validation}
 
     def emit(self, record):
         try:
@@ -1226,8 +1249,10 @@ class OperationalConsole(logging.Handler):
         if event["kind"] == "request.failed":
             keys, summary_data = provider_failure_summary(data)
             summary_data = safe_value(self.redact(summary_data))
-        elif event["kind"] == "tool.failed" and (validation := tool_validation_summary(data)):
-            summary_data = validation
+        elif event["kind"] == "tool.failed" and (
+            validation := tool_validation_summary(event.get("_validation"))
+        ):
+            summary_data = {**data, **validation}
         elif event["kind"] == "turn.failed" and data.get("error_origin") == "missing_answer":
             keys = (
                 "error",

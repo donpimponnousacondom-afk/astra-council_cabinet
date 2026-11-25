@@ -45,10 +45,20 @@ Expanded `T` evidence follows the original HTTP response handles, including each
 
 Tool argument validation failures show up to three field paths, rules and short
 explanations in the normal line, plus the error count and `executed` flag when
-present. Larger sets show how many additional errors remain; long explanations
-are clipped for the summary. Full usage and all errors remain in expanded
-details, the event ledger and the model-facing tool result. This applies to all
-tools and members. Failures without structured field errors keep their original
+present. Attachment-preparation errors with a path/message but no rule show
+those fields without inventing a rule. Larger sets show how many additional
+errors remain. A single explanation can use the summary's 420-character budget;
+multiple explanations are individually bounded. Replay applies current vault
+redaction before summary clipping, including credentials registered after capture.
+Console history retains the first three errors' whole fields up to 4,096
+characters each; longer fields are replaced entirely by a stored-evidence hint,
+not retained as a partial value. This keeps history bounded without breaking
+later exact-value redaction in the new summaries.
+
+Full usage and all errors remain in stored `T` evidence, the event ledger and
+the model-facing tool result. `f` shows cached JSON details, which may contain
+only a preview for large events. This applies to all tools and members that
+provide structured field errors. Failures without them keep their original
 error message; web URLs, field ordering, redaction and terminal escaping retain
 the same contract.
 
