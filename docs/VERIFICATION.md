@@ -4412,3 +4412,34 @@ No runtime reload, live model calls or new paid experiments occurred.
 The pre-existing f detail_preview clipping limitation reported in R2 remains a
 separate follow-up, alongside the R1 repeat-grouping and documentation items.
 This correction does not change those older evidence-view paths.
+
+### PR144 round-3 correction — preserve specific JSON and batch causes
+
+R3 at c35ac9abd29ac10840c5c66a69b89eea7f573b43: Sol approved at 9/10;
+Wonder Full and Neon approved at 9.5/10; Opus blocked at 7.5/10 on B3.
+All four confirmed the earlier B1/B2 corrections. Opus found that the static
+JSON/batch descriptions hid causes already shown by the base, and mislabeled
+budget/configuration refusals as invalid combinations. Parent reproduced with
+real syntax_feedback and a synthetic runtime-shaped budget event. All four
+reviewers finished before this correction.
+
+JSON and batch error records now retain the existing top-level error display,
+including its redaction, escaping and compaction behavior. Schema-error summaries
+still avoid copying rejected-value messages. The runbook now calls these schema
+paths rather than promising a specific field name when validation reports `$`.
+No new required-field metadata or unrelated explanation tuning was added.
+Twenty regression cases cover five real parser failures and five runtime-shaped
+batch causes, with/without compaction, initial render and replay, and unchanged
+ledger data. Mixed batch/schema feedback retains the primary batch cause.
+
+The parent stopped its owned R3 full local gate before edits (exit130 after about
+48% of pytest, no test failure reported) because the new head needs its own gate.
+This is an interrupted check, not a pass or a discovered code failure. Runtime
+remains unchanged; no live provider experiments occurred. R4 focused-check and
+current-head review results are recorded separately below and in the PR.
+
+R4 validation: 232 focused console/fetched/tool-feedback/HTTP-evidence tests
+passed in 48.81s; Ruff lint/format and git diff --check passed. Evidence:
+audit/2026-11-25/tool-validation-feedback/r4-focused.log. These offline results
+cover the new JSON/batch preservation cases and all prior B1/B2/shared-schema
+regressions; they do not certify live model behavior or the pending full gate.

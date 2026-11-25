@@ -60,6 +60,79 @@ async def test_tool_validation_line_shows_causes_and_keeps_complete_evidence(ker
         assert "calling_convention" in expanded and "additionalProperties" in expanded
 
 
+@pytest.mark.parametrize("compacted", [False, True])
+@pytest.mark.parametrize(
+    "raw,cause",
+    [
+        ('{"url":"example.com" "length":4}', "Expecting ',' delimiter: line 1 column 22"),
+        ('{"url":"a","url":"b"}', "Duplicate JSON field 'url'"),
+        ('{"length":1e999}', "JSON numbers must be finite"),
+        ('{"query":"\\ud800"}', "Unpaired UTF-16 surrogate"),
+        ("", "Expecting value: line 1 column 1"),
+    ],
+)
+async def test_json_failure_keeps_specific_cause_on_normal_line_and_replay(kernel, compacted, raw, cause):
+    from hortator.fetched_documents import PARAMETERS
+    from hortator.tool_feedback import parse_arguments, syntax_feedback
+
+    with pytest.raises(ValueError) as exc:
+        parse_arguments(raw)
+    data = {"name": "web_fetch", **syntax_feedback("web_fetch", exc.value, PARAMETERS)}
+    if compacted:
+        data["padding"] = ["x" * 2000] * 10
+    with output() as console:
+        console.bind(kernel)
+        event = kernel.store.emit("tool.failed", data, level="warning", bot_id="ada")
+        assert ("detail_preview" in console.history[-1]["data"]) is compacted
+        assert cause in console.stream.getvalue()
+        assert "Invalid JSON arguments." not in console.stream.getvalue()
+        console.stream.seek(0)
+        console.stream.truncate()
+        console.key("r")
+        assert cause in console.stream.getvalue()
+        assert kernel.store.events(after=event["seq"] - 1)[0]["data"] == data
+
+
+@pytest.mark.parametrize("compacted", [False, True])
+@pytest.mark.parametrize(
+    "cause",
+    [
+        "Tool round budget exhausted; write an ordinary text answer",
+        "Too many tool calls: maximum 4 per round; none executed",
+        "Intentional silence is disabled for this bot; council_silence was not executed.",
+        "Attachment tool work is unavailable in this finalization round; no actions were executed",
+        "end_cycle and council_silence cannot be combined; no actions were executed",
+    ],
+)
+async def test_batch_failure_keeps_specific_cause_even_with_schema_errors(kernel, compacted, cause):
+    from hortator.fetched_documents import PARAMETERS
+    from hortator.tool_feedback import feedback
+
+    argument_report = feedback("web_fetch", {"url": "https://example.com", "offset": 1}, PARAMETERS)
+    data = {
+        "name": "web_fetch",
+        "error": cause,
+        "executed": False,
+        "errors": [{"path": "$", "rule": "batch", "message": cause}, *argument_report["errors"]],
+        "error_count": 1 + argument_report["error_count"],
+        "usage": argument_report["usage"],
+    }
+    if compacted:
+        data["padding"] = ["x" * 2000] * 10
+    with output() as console:
+        console.bind(kernel)
+        event = kernel.store.emit("tool.failed", data, level="warning", bot_id="ada")
+        assert ("detail_preview" in console.history[-1]["data"]) is compacted
+        assert cause in console.stream.getvalue()
+        assert "Invalid tool-call combination" not in console.stream.getvalue()
+        assert "executed=False" in console.stream.getvalue()
+        console.stream.seek(0)
+        console.stream.truncate()
+        console.key("r")
+        assert cause in console.stream.getvalue()
+        assert kernel.store.events(after=event["seq"] - 1)[0]["data"] == data
+
+
 @pytest.mark.parametrize("errors", [None, [], "bad", [None], [{"path": "$.x"}]])
 def test_tool_failure_without_structured_validation_keeps_original_error(errors):
     with output() as console:

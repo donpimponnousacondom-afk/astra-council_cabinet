@@ -310,6 +310,10 @@ def tool_validation_preview(data):
         for error in shown
     ):
         return None
+    if any(error.get("rule") in ("json", "batch") for error in shown):
+        # These already have specific top-level causes (syntax, budgets, etc.).
+        # Preserve their existing display/redaction rather than inventing a cause.
+        return None
 
     count = data.get("error_count")
     if type(count) is not int or count < len(errors):
@@ -359,8 +363,6 @@ def tool_validation_summary(preview):
             "maximum": "Value exceeds the maximum.",
             "minLength": "Text is too short.",
             "maxLength": "Text is too long.",
-            "json": "Invalid JSON arguments.",
-            "batch": "Invalid tool-call combination; inspect stored T evidence.",
         }.get(error.get("rule"), "Invalid argument; inspect stored T evidence.")
         if error.get("rule") == "type" and error.get("expected_types"):
             explanation = "Expected " + " or ".join(error["expected_types"]) + "."

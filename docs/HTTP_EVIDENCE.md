@@ -58,6 +58,12 @@ characters each, plus recognized JSON Schema type names. Longer paths/rules are
 replaced entirely by a stored-evidence hint, not retained as a partial value.
 Full validator messages remain in the existing detailed evidence views.
 
+JSON syntax failures and batch refusals retain their existing top-level error
+instead of a schema summary. Those messages already identify the syntax fault,
+budget, configuration or combination refusal; existing redaction and terminal
+escaping still apply. Required/unexpected-field schema errors can have root path
+`$`; use stored evidence to identify their individual fields.
+
 Full usage and all errors remain in stored `T` evidence, the event ledger and
 the model-facing tool result. `f` shows cached JSON details, which may contain
 only a preview for large events. This applies to all tools and members that
