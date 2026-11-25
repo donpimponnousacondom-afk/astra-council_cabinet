@@ -4212,3 +4212,100 @@ Both advertise `reasoningEffort: high`, as does `muse/muse-wonder-full-1.0`.
 The `claudeAgent` instance listed `claude-opus-5-5` and `claude-haiku-5-5`
 with `effort: high`. All three provider instances reported support for
 cross-provider delegation. The open-PR review record tracks actual delegate runs.
+
+
+## 2026-11-24 — Project-owned four-provider council
+
+The project council adds `antigravity` / `gemini-4-neon` with explicit
+`thought_level: high`. A live T3 catalog query confirmed that exact target,
+its high option and cross-provider delegation support. The catalog also exposes
+an orchestrator variant and an OpenCode route; neither is the selected member.
+Actual delegate execution and current-head review results belong in the open PR
+record, not this catalog-only evidence.
+
+The skill now defines project precedence, forbids replacement/synchronization
+from global skills and global fallback, supplies a scoped implementation brief,
+keeps reviewed source stable, records findings across rounds for every reviewer,
+and separates implementation approval from merge readiness. Current roster
+references were updated; dated three-member research records remain historical.
+Haiku/Luna triage, merge pinning, owner holds and prompt restrictions remain.
+
+Local checks: the skill-creator validator passed for council and babysit-pr;
+relative file links resolve; `git diff --check` passed. No application tests were
+run for this documentation-only change. The global council's SHA-256 remained
+`06464b38389a10c16087feffdf32dd007c826a7a97ea2993bc9737c05ae76c94`;
+Codex/Claude discovery links still point to `/home/codexy/.agents/skills/council`.
+The project skill remains a real directory, not a symlink.
+
+PR #142 was verified merged at the prior checkout head; fetched main and checkout
+had identical trees before creating the new task branch. Startup-captured runtime
+metadata still identifies `38f84715ee82951f20a827e76a91429fb1df5d0e`; its differences
+from the new base are instructions/docs only. Runtime code is unchanged, so no
+build, restart, bot configuration or provider inference was needed for the edit.
+
+
+PR #143 round-1 follow-up: all four delegates returned independent implementation
+approvals (9/10 each) on `69c6785a3f890dea1ceaaa0513620f83a0277f59`, including
+Neon through the exact requested Antigravity target/high option. This establishes
+a completed Neon review, beyond catalog availability. Those scores cover that
+head only; the correction head requires its own delta review and CI.
+
+The correction preserves the prior merge contract (completed review by all four,
+no unresolved valid blockers, required checks; owner resolves stalled disputes),
+adds explicit unavailable-member escalation, repeats independence and the closing
+status line within the brief, and uses a three-dot PR diff with separate base
+integration inspection. Trial procedures are explicitly historical/non-renewing
+and refer to the current council roster for new authorized work. Skill validators,
+relative-link checks and whitespace checks passed again; no runtime change.
+
+
+Owner-requested presentation follow-up: the project council now requires compact
+inline T3 HTML status tables for all council rounds and workflow milestones,
+including explicit head/round, historical evidence, reviewer verdicts and gates.
+The global skill remains separate. The skill validator and whitespace check
+passed for the instruction change. Live rendering is validated in the PR's chat
+record; this does not claim application tests, runtime changes or approval of
+the new head from earlier review rounds.
+
+## 2026-11-25 — Council self-review follow-up
+
+Read the owner-referenced T3 maintenance thread through its final installation
+report and inspected the current global skill as comparison evidence only.
+The global review ended after thirteen rounds with three final READY results;
+Sol's seat used a one-task owner exception, not a four-way final approval. That
+exception and the global snapshot/publication/merge rules were not imported.
+The global file read in this pass had SHA-256
+`938959f46a71e20b9103f908eece65bc40afb550e1640cefa3a1113b81266994`.
+This is an at-read observation, not a promise that external maintenance stops.
+
+PR #143's interrupted R3 tasks were confirmed ended before further edits; no R3
+verdicts are claimed. Required CI passed on `ca5aef2da2160f69b244885080eb74ebdc72a6d7`,
+which does not certify the subsequent head. The follow-up adds local review
+modes/surfaces, explicit data-loss/test correctness criteria, governing-rule
+checks and bounded invalid-result handling. Both skill validators and whitespace
+checks passed. The compact T3 status table preview measured 284px at 728px width
+and rendered successfully; mobile sizing was also returned by the renderer.
+No application tests, runtime reload, bot changes or global writes were needed.
+Whole-skill and actual-open-PR council review of the follow-up remain required.
+
+PR #143 R4 completed on `2887b68b1d2662990915f0c49977273924e2741b`:
+Sol, Wonder Full and Neon approved at 9/10; Opus scored 8/10 and blocked on the
+new one-round research mode conflicting with retained iterative research.
+The parent accepted that blocker despite three approvals. The correction
+separates ideas/research and scopes scoring, iteration and PR writes by mode;
+it also makes governing-rule fields, distinct delegate-attempt IDs, wrong-head
+retry handling and parent-owned HTML reporting explicit. All four R4 reports
+had arrived before editing. Both skill validators and whitespace checks pass
+for the correction; these are documentation checks, not application or runtime
+validation. R4 verdicts do not certify the next head; its review and CI gates
+remain separate. No global files, runtime configuration or research spend changed.
+
+R5 completed on `415a30cc83ab5ad82c0128ffde18bb9399bb41ca`: Opus/Wonder Full
+approved at 9/10 and Neon at 10/10; Sol blocked at 8/10 on the experiment-budget
+stop wording. The parent accepted the issue: the cap stops new experiments,
+not authorized analysis and council assessment of already collected evidence.
+The correction states that distinction and aligns OPERATIONS/AGENTS reporting
+with the skill's modes, retaining implementation-PR evidence and merge gates.
+Both skill validators and whitespace checks pass; no application tests or
+runtime/global changes. All R5 reviews finished before these edits. New-head
+review and CI remain pending; R5 approvals are historical only.

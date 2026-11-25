@@ -6,6 +6,10 @@ missing `operation` arguments using saved requests, without changing runtime
 prompts, tools, validation, bot configuration or provider models. Production
 prompt tuning remains frozen.
 
+The November 2026 trials below are completed historical procedures, not renewed
+permission to spend on replays. Any new experiment requires authorization for its
+current scope; use the current [project council](../skills/council/SKILL.md) roster.
+
 ## Replay a saved request
 
 Use the repository environment and an unused ignored audit directory:
@@ -111,8 +115,8 @@ repeated samples from one context are a screening result, not a production-wide
 error-rate estimate. Record cache/usage/time metadata without assuming a cache
 effect or stable provider implementation.
 
-Return counts, quality assessment, failures and objections to all three members
-of the project-local [council](../skills/council/SKILL.md). Research scores do not
+Return counts, quality assessment, failures and objections to every member
+of the current project-local [council](../skills/council/SKILL.md). Research scores do not
 replace final open-PR review. Dated results belong in [VERIFICATION](VERIFICATION.md).
 
 ## Authorized Loki transfer benchmark

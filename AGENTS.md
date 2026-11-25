@@ -5,7 +5,7 @@
 - The sole working repository is `/home/codexy/codex/astra-council_cabinet`. Its top level is the application root; there is no nested `council/` directory here.
 - The user explicitly retired the previous workspace for this project. Do not run Git, edit files, restore files, synchronize changes, or clean up in `/home/codexy/codex/t3-code`. Do not use that repository as a worktree or source of truth.
 - Inspect actual Git state and continue the user's active task branch. The user uses GitHub **Squash and merge**. After the prior PR is merged, require a clean working tree and prepare a new `feat/<name>`, `hotfix/<name>` or `dev/<name>` branch from verified, fetched `origin/main`, following the single-restart procedure below. Fast-forward local main at a scheduled stop; do not restart unchanged code just to walk through main. Use the user's specified base/name if provided. Never put new implementation commits on main. The original `dev/initial_phase` baseline is historical. Verify `git rev-parse --show-toplevel`, branch and working tree before Git mutations; preserve existing user changes. If the prior task is unmerged or main has diverged, stop that branch transition rather than merging/rebasing automatically or dropping work.
-- Keep new work linear: ordinary commits on the task branch, no merge commits or local merges between branches. The agent owns task-branch publication, independent three-provider council review and Haiku/Luna check coordination, and GitHub **Squash and merge** after the merge gates pass. This has standing owner authorization; do not stop at merge readiness or ask again for ordinary merges unless the owner explicitly pauses or reserves a particular merge. Do not rewrite historical commits or force-push. Do not infer the current branch from a dated verification/design entry. Delete local task branches only when requested and after checking for unmerged work (a squash merge may require tree/PR evidence). Extra hook automation is deferred.
+- Keep new work linear: ordinary commits on the task branch, no merge commits or local merges between branches. The agent owns task-branch publication, independent four-provider council review and Haiku/Luna check coordination, and GitHub **Squash and merge** after the merge gates pass. This has standing owner authorization; do not stop at merge readiness or ask again for ordinary merges unless the owner explicitly pauses or reserves a particular merge. Do not rewrite historical commits or force-push. Do not infer the current branch from a dated verification/design entry. Delete local task branches only when requested and after checking for unmerged work (a squash merge may require tree/PR evidence). Extra hook automation is deferred.
 - The user deliberately reuses the local placeholder `feat/next_feature` after a merged PR, then renames it before publishing. The installed `hortator-next-feature` shell command automates verified merge checks, shared-Screen stop, fast-forward main update, placeholder preparation, locked dependency installation, dashboard build and foreground restart. It may archive an older verified-merged placeholder under `archive/next_feature-...` before recreating it; it must never discard unmerged commits or reset branches. Its `--refresh` mode rebuilds/restarts the clean current task branch without a Git transition. Run from a shell prompt, not the active console; see OPERATIONS. The helper itself does not publish; the agent must complete the publication workflow before deploying a completed change.
 - Owner decision, 2026-10-22: normally use one runtime stop/start cycle per feature or hotfix, preferably after the final reviewed changes are ready. Do not restart unchanged code at task preparation or merely to replace a deployed PR head with its identical squash-merge tree. With a clean tree, verified merged prior PR, and identical running/checkout/fetched-main source trees, create the next task branch directly from `origin/main` without restarting; defer local main fast-forward until the next planned stop. If checkout-time code or worker/server compatibility requires stopping before edits, keep that stop and the final start within one cycle rather than starting an intermediate build. The existing `hortator-next-feature` helper still performs a full restart; do not invoke its normal mode automatically at task start. If another restart is genuinely needed for a correction, explain why. Preserve startup-captured version identity and report committed-but-not-loaded changes explicitly. See [OPERATIONS](docs/OPERATIONS.md#publication-and-local-development-deployment).
 - Owner decision, 2026-10-12: every completed change must be committed on its task branch, pushed, and included in an open GitHub PR targeting `main`. This is standing authorization for task-branch pushes, PR creation, routine review/CI fixes, review comments and GitHub squash merges after council review and required checks pass; do not ask separately for each push or merge. Do not leave a deployed backlog of unpublished changes. Local development deployment may proceed once its PR exists and appropriate local checks pass, while GitHub CI and the independent reviews continue. Pending remote checks/reviews do not establish merge readiness.
@@ -17,13 +17,20 @@
 
 - Check scratch space before full verification. Pytest removes successful temporary fixtures by default and preserves failed ones for diagnosis. At task completion, remove confirmed, inactive project-owned browser/test/build scratch; archive useful diagnostics in the ignored audit folder or external data storage first. Inspect process use before cleanup, preserve current runs, and never blanket-delete `/tmp` or another application's files. See the temporary-file procedure in OPERATIONS.
 
-- Owner decision, 2026-11-08: the project-local [council](skills/council/SKILL.md)
+- Owner decision, 2026-11-08, amended 2026-11-24: the project-local [council](skills/council/SKILL.md)
   replaces the previous Luna/Sol technical review pair. Required open-PR reviews
-  use Claude Opus 5.5, the latest confirmed GPT Sol 6.x (currently 6.2), and
+  use Claude Opus 5.5, the latest confirmed GPT Sol 6.x (currently 6.2),
   **Muse Wonder Full 1.0** (`muse-wonder-full-1.0`, never `muse-wonder-1.0`),
-  through T3 Code at high reasoning effort. Record independent findings and
-  scores by review round in the PR description. Current-head council review,
+  plus Gemini 4 Neon (`antigravity` / `gemini-4-neon`, `thought_level: high`).
+  All four run through T3 Code at high reasoning effort. For implementation PRs
+  the parent owns, record independent findings and scores by review round in the
+  PR description; other assignments use the skill's mode-specific record rules.
+  Current-head council review,
   resolved blockers and required CI remain merge gates; scores alone are not.
+  Owner addition, 2026-11-24: report council steps/results as compact inline HTML
+  tables through T3 `html_preview` then `html_render`, following the project
+  skill's progress section. Keep head/round/status clear and avoid oversized
+  frames or repeated narrative updates; preserve the PR evidence record.
   [PR babysitting](skills/babysit-pr/SKILL.md) now uses Haiku and Luna for
   bounded check/comment triage. Only the parent owns T3's persistent PR watch;
   children never poll or watch. The parent owns publication, fixes and gated
@@ -31,6 +38,11 @@
   requires council delta review. These skills stay in this project, readable
   by all council providers; do not install global Codex/Claude copies or use
   the superseded global council-pr-babysitter skill as the active protocol.
+  The project skill overrides globally discovered council skills, including
+  symlinked ones. Never overwrite/synchronize it from the global version, replace
+  it with a global symlink, or fall back to the global workflow if it is missing.
+  Global-skill maintenance does not authorize project changes. Selected imports
+  require an owner-authorized project change; leave global files/links untouched.
   This PR protocol does not restrict useful delegation and parallel work elsewhere
   within the task's scope.
 

@@ -10,10 +10,11 @@ The canonical project root is **`/home/codexy/codex/astra-council_cabinet`**. In
 
 Completed tasks are published as PRs to main. Technical review uses the
 project-local [T3 council](skills/council/SKILL.md): Opus 5.5, latest Sol 6.x,
-and **Muse Wonder Full 1.0**, with scores and findings recorded by round in the
-PR description. [Haiku/Luna babysitting](skills/babysit-pr/SKILL.md) triages CI
+**Muse Wonder Full 1.0**, and Gemini 4 Neon through Antigravity, with scores and
+findings recorded by round in the PR description. [Haiku/Luna babysitting](skills/babysit-pr/SKILL.md) triages CI
 and comments; the parent owns T3's watch and the gated GitHub squash merge.
-These T3-specific skills remain in this repository for all provider agents.
+These T3-specific skills remain in this repository for all provider agents and
+override globally discovered council skills; do not overwrite them from global copies.
 See the [PR workflow](docs/OPERATIONS.md#independent-pr-review-and-check-monitoring).
 
 An observable council of independent Discord applications. Each bot has its own Discord token, identity, personality, tool grants, cadence, credentials overrides, and channel-scoped memory. Reusable model profiles let you change the model without changing the bot.

@@ -820,3 +820,59 @@ fixed-body observations, not proof of unchanged live cache efficiency. Monitor
 omissions, relevance, cache counts/unknowns and latency by bot/provider/model and
 guidance version using the existing ledger. See PROMPTS and OPERATIONS for the
 implemented contract and reporting procedure.
+
+
+## 2026-11-24 — Project council ownership and Neon membership
+
+The owner authorizes selected improvements from the global council skill while
+keeping this project's workflow independent. Add Gemini 4 Neon through Antigravity
+at `thought_level: high` to Opus 5.5, Sol 6.2 and Muse Wonder Full 1.0. This amends
+the three-member roster from November 8; Haiku/Luna triage and parent-owned gated
+squash merging remain unchanged. It does not change any bot's runtime provider.
+
+The project skill must explicitly prohibit overwriting/synchronizing it from a
+global skill, replacing it with a global symlink, or using global fallback. Global
+maintenance does not authorize project edits. Borrow a concrete review brief,
+evidence-based scope control, stable reviewed source, finding history across
+rounds and separate implementation/merge verdicts. Apply late-finding scrutiny
+to every reviewer without dismissing genuine defects. Retain the project's
+concurrency, storage, security, research and prompt contracts; do not import
+blanket edge-case exclusions or another project's model-specific reprimands.
+Completed trial budgets remain historical and are not renewed by skill invocation.
+
+
+### 2026-11-24 — Inline council progress as the default
+
+The owner requests compact HTML tables rendered directly in T3 chat for council
+steps and results, replacing hard-to-scan sequences of narrative status replies.
+Apply this throughout the project council, not only the historical replay trial.
+Show current round/head, member scores/verdicts, finding dispositions, workflow
+gates and next action. Keep content-height sizing and current versus historical
+evidence explicit. The project skill owns presentation details; this does not
+change review, CI or merge requirements or modify the separate global skill.
+
+### 2026-11-25 — Selected lessons from the global council review
+
+The owner asked this project to assess the completed `t3-code-maintance` thread,
+bring useful improvements locally, and apply the council to the council skill
+itself. Adopt explicit advisory/read-only/implementation scopes, whole-work
+review alongside change review, data-loss and ineffective-test findings even in
+new code, governing-rule checks independent of proposed rule changes, and bounded
+handling of unusable reviewer results. Preserve current owner amendments and all
+four required project reviewers. The other thread's one-time Sol final-pass
+exception is not a project exception.
+
+Keep the project self-contained: do not import global snapshot/staging recipes,
+new publication filters, global dependencies, automatic branch integration or
+the global all-READY merge policy. Existing project security decisions, branch
+rules, research authorization, Haiku/Luna triage and standing gated squash merge
+remain authoritative. Compact HTML progress remains the presentation contract.
+
+Council self-review clarified that a one-round ideas default must not replace
+authorized iterative research. Mode-specific scores, iteration and evidence
+locations now preserve that distinction; review-only does not authorize PR
+writes. The reusable brief identifies base/target governing rules and owner
+amendments explicitly. Each new delegate attempt has its own dispatch ID, and
+wrong-revision/scope results are unusable. Parent-only HTML reporting and ended
+round states are explicit. Isolated reviewer scratch follows the existing
+project cleanup procedure, without forced cleanup or process kills by pattern.
