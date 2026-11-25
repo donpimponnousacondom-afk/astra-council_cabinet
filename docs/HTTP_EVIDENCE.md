@@ -43,6 +43,15 @@ Received HTTP 4xx/5xx responses and local extraction/capture limitations are war
 
 Expanded `T` evidence follows the original HTTP response handles, including each search engine, so `n`/`N` can page received headers and body directly in the console. Literal upstream text is not treated as private provider reasoning. Existing console evidence bounds remain explicit; no source response is rerun just to inspect evidence. Existing `T`, `P`, `f`, scopes, normal scrollback and Ctrl-C remain available.
 
+Tool argument validation failures show up to three field paths, rules and short
+explanations in the normal line, plus the error count and `executed` flag when
+present. Larger sets show how many additional errors remain; long explanations
+are clipped for the summary. Full usage and all errors remain in expanded
+details, the event ledger and the model-facing tool result. This applies to all
+tools and members. Failures without structured field errors keep their original
+error message; web URLs, field ordering, redaction and terminal escaping retain
+the same contract.
+
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
 
 The date marks relocation of standing instructions, not a new product decision.

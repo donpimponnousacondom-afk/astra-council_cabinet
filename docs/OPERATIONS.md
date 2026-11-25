@@ -521,6 +521,12 @@ The agent can send commands through `screen -S hortator -p dashboard -X stuff` a
 
 ## Console inspection and filtering
 
+Argument-validation warnings now show the rejected field and rule directly
+(for example `$.offset [const]: 0 was expected`), with an error count and execution
+flag. The summary shows up to three bounded explanations; expand with `f` or
+inspect `T` evidence for complete feedback and usage. See the
+[console evidence contract](HTTP_EVIDENCE.md#console-contract).
+
 For private inspection from Discord, enable **Plugins → Reasoning viewer** and
 the desired bot's **Capabilities → Reasoning viewer**. New answers with readable
 captured reasoning receive a button; only the configured human owner can open

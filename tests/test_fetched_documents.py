@@ -4,6 +4,7 @@ import time
 from unittest.mock import AsyncMock
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from conftest import configured
 from hortator.fetched_documents import (
@@ -15,7 +16,7 @@ from hortator.fetched_documents import (
     validate_config,
 )
 from hortator.models import ControlError
-from hortator.plugins import PluginSpec, ToolContext
+from hortator.plugins import PluginSpec, ToolContext, function
 from hortator.security import Vault
 from hortator.store import Store, dumps
 from hortator.tool_feedback import feedback
@@ -502,6 +503,7 @@ async def test_registry_complete_usage_errors_and_global_and_bot_revocation(kern
     "arguments",
     [
         {"operation": "start", "url": "https://example.com"},
+        {"operation": "refetch", "document_id": "fetch_0123456789abcdef0123", "offset": 0},
         {"operation": "read", "url": "https://example.com"},
         {"document_id": "fetch_0123456789abcdef0123"},
         {"operation": "read_result", "result_id": False, "length": "10", "offset": -1},
@@ -512,3 +514,53 @@ def test_operation_schema_rejects_ignored_fields_and_incomplete_calls(arguments)
     assert result and not result["ok"] and not result["executed"]
     assert "usage" in result and result["error_count"] >= 1
     json.dumps(result)
+
+
+@pytest.mark.parametrize("explicit_operation", [False, True])
+@pytest.mark.parametrize("bot_id", ["ada", "socrates"])
+async def test_fetch_zero_offset_through_registry_preserves_first_chunk_and_continuation(
+    kernel, tmp_path, explicit_operation, bot_id
+):
+    documents = FetchedDocuments(kernel.store, tmp_path, kernel.vault)
+    network = response(documents, "aé🙂bcdef".encode())
+    kernel.registry.specs["web_fetch"] = PluginSpec(
+        "web_fetch", "Web fetch", DESCRIPTION, PARAMETERS, documents.call, DEFAULTS
+    )
+    ctx = ToolContext(configured(kernel, bot_id, enabled_plugins=["web_fetch"]), "channel-a", "zero-fetch")
+    arguments = {"url": "https://example.com", "offset": 0, "length": 3}
+    if explicit_operation:
+        arguments["operation"] = "fetch"
+    advertised = function("web_fetch", DESCRIPTION, PARAMETERS)["function"]["parameters"]
+    assert "default" not in advertised["properties"]["offset"]
+    assert Draft202012Validator(advertised).is_valid(arguments)
+    result = await kernel.registry.call("web_fetch", arguments, ctx, "zero")
+    assert result["text"] == "aé🙂"
+    assert result["range"] == {"start": 0, "end": 3}
+    assert result["next"]["offset"] == 3
+    later = await kernel.registry.call("web_fetch", result["next"], ctx, "continue")
+    assert later["text"] == "bcd" and later["range"] == {"start": 3, "end": 6}
+    network.assert_awaited_once()
+    assert arguments["offset"] == 0
+
+
+@pytest.mark.parametrize("explicit_operation", [False, True])
+@pytest.mark.parametrize("offset", [1, -1, "0", False, None, 0.5])
+async def test_fetch_invalid_offsets_are_rejected_before_network(
+    kernel, tmp_path, explicit_operation, offset
+):
+    documents = FetchedDocuments(kernel.store, tmp_path, kernel.vault)
+    network = response(documents, b"must not fetch")
+    kernel.registry.specs["web_fetch"] = PluginSpec(
+        "web_fetch", "Web fetch", DESCRIPTION, PARAMETERS, documents.call, DEFAULTS
+    )
+    ctx = ToolContext(configured(kernel, enabled_plugins=["web_fetch"]), "channel-a", "bad-offset")
+    arguments = {"url": "https://example.com", "offset": offset}
+    if explicit_operation:
+        arguments["operation"] = "fetch"
+    advertised = function("web_fetch", DESCRIPTION, PARAMETERS)["function"]["parameters"]
+    assert not Draft202012Validator(advertised).is_valid(arguments)
+    result = await kernel.registry.call("web_fetch", arguments, ctx, "invalid-offset")
+    assert result["executed"] is False
+    assert "$.offset" in {error["path"] for error in result["errors"]}
+    network.assert_not_awaited()
+    assert documents.list_documents() == []

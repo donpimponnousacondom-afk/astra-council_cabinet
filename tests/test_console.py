@@ -27,6 +27,82 @@ def access(target="/api/status", status=200):
     )
 
 
+@pytest.mark.parametrize("name", ["web_fetch", "memory"])
+async def test_tool_validation_line_shows_causes_and_keeps_complete_evidence(kernel, name):
+    from hortator.tool_feedback import feedback
+
+    report = feedback(
+        name,
+        {"offset": 1, "length": "bad", "extra": True},
+        {
+            "type": "object",
+            "properties": {"offset": False, "length": {"type": "integer"}},
+            "required": ["url", "operation"],
+            "additionalProperties": False,
+        },
+    )
+    data = {"name": name, **report}
+    with output() as console:
+        console.bind(kernel)
+        console.stream.seek(0)
+        console.stream.truncate()
+        event = kernel.store.emit("tool.failed", data, level="warning", bot_id="ada")
+        rendered = console.stream.getvalue()
+        assert "$.offset [forbidden]" in rendered
+        assert "$.length [type]" in rendered
+        assert "executed=False" in rendered and "error_count=5" in rendered
+        assert "+2 more (expand details)" in rendered
+        assert "Invalid tool arguments" not in rendered
+        assert "calling_convention" not in rendered
+        assert kernel.store.events(after=event["seq"] - 1)[0]["data"] == data
+        console.key("f")
+        expanded = console.stream.getvalue()
+        assert "calling_convention" in expanded and "additionalProperties" in expanded
+
+
+@pytest.mark.parametrize("errors", [None, [], "bad", [None], [{"path": "$.x"}]])
+def test_tool_failure_without_structured_validation_keeps_original_error(errors):
+    with output() as console:
+        console.accept(
+            console.event(
+                {
+                    "at": 1,
+                    "kind": "tool.failed",
+                    "level": "warning",
+                    "data": {"name": "web_fetch", "error": "Network unavailable", "errors": errors},
+                }
+            )
+        )
+        assert "error=Network unavailable" in console.stream.getvalue()
+
+
+async def test_validation_summary_is_bounded_escaped_and_redacted_without_clipping_web_url(kernel):
+    secret = "console-validation-secret-test-value"
+    kernel.vault.put("test/validation", secret)
+    url = "https://example.com/" + "x" * 700 + "?ordinary=yes#section"
+    data = {
+        "name": "web_fetch",
+        "operation": "fetch",
+        "url": url,
+        "error": "Invalid tool arguments",
+        "executed": False,
+        "error_count": 50,
+        "errors": [{"path": "$.offset", "rule": "type", "message": secret + "\n\x1b[31m" + "x" * 2000}] * 50,
+    }
+    with output() as console:
+        console.bind(kernel)
+        console.stream.seek(0)
+        console.stream.truncate()
+        kernel.store.emit("tool.failed", data, level="warning", bot_id="socrates")
+        rendered = console.stream.getvalue()
+        assert secret not in rendered and "[REDACTED]" in rendered
+        assert "\x1b" not in rendered and "\\u000a\\u001b[31m" in rendered
+        assert url in rendered and rendered.index("url=") < rendered.index("error=")
+        assert "error_count=50" in rendered and "+47 more" in rendered
+        assert len(rendered) < len(url) + 800
+        assert len(rendered.splitlines()) == 1
+
+
 @pytest.mark.parametrize(
     "extra,expected",
     [

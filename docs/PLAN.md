@@ -876,3 +876,22 @@ amendments explicitly. Each new delegate attempt has its own dispatch ID, and
 wrong-revision/scope results are unusable. Parent-only HTML reporting and ended
 round states are explicit. Isolated reviewer scratch follows the existing
 project cleanup procedure, without forced cleanup or process kills by pattern.
+
+
+## 2026-11-25 — Shared tool validation visibility and zero-offset fetches
+
+The owner requested clearer logging and assessment of Loki's suggestion without
+Loki/Gemini-specific behavior. Adopt both bounded changes for all eligible members:
+show field-level validation causes in console summaries; clarify the shared
+web_fetch offset field without an advertised default; explicitly accept zero for
+fetch (including URL-only calls), which already returns the first chunk at zero.
+Keep nonzero offsets and wrong types invalid before network work, and preserve
+read/search pagination, per-bot/channel snapshot ownership, grants and limits.
+This is a documented schema contract change, not silent argument removal or
+coercion. It does not reopen unrelated prompt tuning.
+
+Full errors/usage and historical events remain unchanged in the ledger and
+model-facing replies. Console summaries are bounded, preserve web URLs and
+existing escaping/redaction, and leave complete evidence accessible. Validate
+with isolated registry/console tests and the four-provider council; no paid
+model experiment or bot/provider configuration change is part of this task.

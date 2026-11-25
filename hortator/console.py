@@ -130,6 +130,8 @@ SUMMARY_FIELDS = (
     "after_tokens",
 )
 INCIDENT_FIELDS = (
+    "executed",
+    "error_count",
     "request_body_bytes",
     "upstream_body_limit_bytes",
     "body_limit_basis",
@@ -295,6 +297,36 @@ def scope_for(kind):
 def plain(value):
     # Untrusted log text must not issue terminal controls, forge lines, or change Screen titles.
     return "".join(c if c.isprintable() else f"\\u{ord(c):04x}" for c in str(value))
+
+
+def tool_validation_summary(data):
+    """Summarize field errors without changing the stored/model-facing feedback."""
+    errors = data.get("errors")
+    if not isinstance(errors, list) or not errors:
+        return None
+    shown = errors[:3]
+    if not all(
+        isinstance(error, dict)
+        and all(isinstance(error.get(key), str) for key in ("path", "rule", "message"))
+        for error in shown
+    ):
+        return None
+
+    def short(value, limit):
+        value = plain(value)
+        return value if len(value) <= limit else value[: limit - 1] + "…"
+
+    count = data.get("error_count")
+    if type(count) is not int or count < len(errors):
+        count = len(errors)
+    summary = "; ".join(
+        f"{short(error['path'], 64)} [{short(error['rule'], 32)}]: {short(error['message'], 120)}"
+        for error in shown
+    )
+    summary = short(summary, 420)
+    if count > len(shown):
+        summary += f"; +{count - len(shown)} more (expand details)"
+    return {**data, "error_count": count, "error": summary}
 
 
 def safe_text(value, *, include_reasoning=False, full_urls=False):
@@ -684,13 +716,16 @@ class OperationalConsole(logging.Handler):
             level = "debug"
         encoded = json.dumps(event["data"], ensure_ascii=False, default=str)
         if len(encoded) > 12000:
+            summary_data = (
+                tool_validation_summary(event["data"]) if kind == "tool.failed" else None
+            ) or event["data"]
             event["data"] = {
                 **{
-                    k: event["data"][k]
+                    k: summary_data[k]
                     for k in set(
                         INCIDENT_FIELDS + ("provider_id", "url", "requested_url", "query", "duration_ms")
                     )
-                    if k in event["data"]
+                    if k in summary_data
                 },
                 "detail_preview": encoded[:4000],
                 "truncated": "Full detail remains in the event ledger",
@@ -1191,6 +1226,8 @@ class OperationalConsole(logging.Handler):
         if event["kind"] == "request.failed":
             keys, summary_data = provider_failure_summary(data)
             summary_data = safe_value(self.redact(summary_data))
+        elif event["kind"] == "tool.failed" and (validation := tool_validation_summary(data)):
+            summary_data = validation
         elif event["kind"] == "turn.failed" and data.get("error_origin") == "missing_answer":
             keys = (
                 "error",

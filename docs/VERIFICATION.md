@@ -4309,3 +4309,38 @@ with the skill's modes, retaining implementation-PR evidence and merge gates.
 Both skill validators and whitespace checks pass; no application tests or
 runtime/global changes. All R5 reviews finished before these edits. New-head
 review and CI remain pending; R5 approvals are historical only.
+
+
+## 2026-11-25 — Shared validation summaries and zero-offset fetch
+
+Read-only diagnosis of Loki event #189686 found a fetch call with offset=0; the
+validator rejected that field and the next model turn removed it, producing an
+HTTP 200 fetch (#189692). The same failure/recovery occurred at #189337/#189343.
+The stored outgoing tool schema already carried the conditional restriction;
+no provider-side schema interpretation was inspected. A bounded 10,001-event
+window contained 36 Loki web_fetch starts, 31 completions and 5 failures: two
+missing/unavailable document handles, one empty URL, and these two offset errors.
+This is diagnostic evidence, not a measured post-change model success rate.
+
+Implemented the owner's shared fix: console field/rule/explanation summaries
+(up to three, with count and execution flag) survive large-event compaction;
+full ledger/model feedback is retained. web_fetch advertises offset scope without
+a default and accepts explicit numeric zero for fetch, including implicit-fetch
+URL calls. Nonzero/wrong-type offsets still fail before download; other operation
+contracts, grants and snapshot boundaries remain unchanged. No bot/provider
+configuration, custom Loki handler or unrelated prompt change.
+
+Validation: 192 focused tests passed across test_console, test_fetched_documents,
+test_tool_feedback and test_http_evidence; an additional five-case operation-schema
+check passed after adding refetch's retained zero-offset rejection. Tests exercise
+two bot identities, the advertised schema and registry, first-chunk/continuation
+semantics, no-network invalid calls, multiple validation errors, fallback messages,
+large-event summaries, existing credential redaction and terminal escaping,
+unchanged ledger data and complete web URLs. Ruff lint/format and whitespace
+checks pass. An initial new large-event test failed because console event
+compaction removed structured errors; the summary now survives that path and
+the rerun passes. Logs: ignored audit/2026-11-25/tool-validation-feedback.
+
+These are isolated synthetic tests, not live Discord/provider acceptance.
+Current-head remote CI, four-provider council review and deployment are pending
+at this entry; the runtime remains on startup-captured 38f84715ee82.
