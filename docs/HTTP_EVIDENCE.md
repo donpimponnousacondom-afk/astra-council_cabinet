@@ -45,15 +45,18 @@ Expanded `T` evidence follows the original HTTP response handles, including each
 
 Tool argument validation failures show up to three field paths, rules and short
 explanations in the normal line, plus the error count and `executed` flag when
-present. Attachment-preparation errors with a path/message but no rule show
-those fields without inventing a rule. Larger sets show how many additional
-errors remain. A single explanation can use the summary's 420-character budget;
-multiple explanations are individually bounded. Replay applies current vault
+present. Explanations describe the validation rule, with schema-derived expected
+types when available (for example `$.length [type]: Expected integer.`). They
+do not copy validator messages that can quote rejected values, including their
+escaped representations. Rule-less attachment-preparation errors identify the
+path and point to stored evidence; unknown rules use the same evidence hint.
+Larger sets show how many additional errors remain. The summary is bounded to
+420 characters before its additional-error hint. Replay applies current vault
 redaction before summary clipping, including credentials registered after capture.
-Console history retains the first three errors' whole fields up to 4,096
-characters each; longer fields are replaced entirely by a stored-evidence hint,
-not retained as a partial value. This keeps history bounded without breaking
-later exact-value redaction in the new summaries.
+Console history retains the first three errors' whole paths/rules up to 4,096
+characters each, plus recognized JSON Schema type names. Longer paths/rules are
+replaced entirely by a stored-evidence hint, not retained as a partial value.
+Full validator messages remain in the existing detailed evidence views.
 
 Full usage and all errors remain in stored `T` evidence, the event ledger and
 the model-facing tool result. `f` shows cached JSON details, which may contain

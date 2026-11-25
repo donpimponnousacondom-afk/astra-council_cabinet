@@ -522,8 +522,10 @@ The agent can send commands through `screen -S hortator -p dashboard -X stuff` a
 ## Console inspection and filtering
 
 Argument-validation warnings now show the rejected field and rule directly
-(for example `$.offset [const]: 0 was expected`), with an error count and execution
-flag. The summary shows up to three bounded explanations. `f` shows cached JSON
+(for example `$.length [type]: Expected integer.`), with an error count and execution
+flag. The summary shows up to three rule/schema explanations without quoting
+rejected values. Rule-less errors identify the field and direct you to evidence.
+`f` shows cached JSON
 details, which may be a preview; use `T` twice for stored evidence (then `n`/`N`
 to page) or inspect the ledger for complete feedback and usage. See the
 [console evidence contract](HTTP_EVIDENCE.md#console-contract).

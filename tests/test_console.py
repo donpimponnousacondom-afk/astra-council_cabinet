@@ -87,7 +87,7 @@ async def test_validation_summary_is_bounded_escaped_and_redacted_without_clippi
         "error": "Invalid tool arguments",
         "executed": False,
         "error_count": 50,
-        "errors": [{"path": "$.offset", "rule": "type", "message": secret + "\n\x1b[31m" + "x" * 2000}] * 50,
+        "errors": [{"path": "$.offset\n\x1b[31m", "rule": "type", "message": secret + "x" * 2000}] * 50,
     }
     with output() as console:
         console.bind(kernel)
@@ -95,8 +95,9 @@ async def test_validation_summary_is_bounded_escaped_and_redacted_without_clippi
         console.stream.truncate()
         kernel.store.emit("tool.failed", data, level="warning", bot_id="socrates")
         rendered = console.stream.getvalue()
-        assert secret not in rendered and "[REDACTED]" in rendered
-        assert "\x1b" not in rendered and "\\u000a\\u001b[31m" in rendered
+        assert secret not in rendered
+        assert "\x1b" not in rendered and "Incorrect value type." in rendered
+        assert "\\u000a\\u001b[31m" in rendered
         assert url in rendered and rendered.index("url=") < rendered.index("error=")
         assert "error_count=50" in rendered and "+47 more" in rendered
         assert len(rendered) < len(url) + 800
@@ -123,13 +124,13 @@ async def test_replayed_validation_redacts_later_credentials_before_clipping(ker
         console.bind(kernel)
         kernel.store.emit("tool.failed", {"name": "web_fetch", **report}, level="warning", bot_id="ada")
         assert ("detail_preview" in console.history[-1]["data"]) is compacted
-        assert secret[:15] in console.stream.getvalue()  # The summary boundary crosses this value.
+        assert secret[:15] not in console.stream.getvalue()  # Rejected values are never summarized.
         kernel.vault.put("test/later-validation", secret)
         console.stream.seek(0)
         console.stream.truncate()
         console.key("r")
         rendered = console.stream.getvalue()
-        assert secret[:15] not in rendered and "[REDACTED]" in rendered
+        assert secret[:15] not in rendered and "Expected integer." in rendered
         assert "$.length [type]" in rendered
 
 
@@ -139,7 +140,7 @@ async def test_validation_omits_whole_oversized_fields_and_stored_evidence_remai
         "name": "web_fetch",
         "error": "Invalid tool arguments",
         "executed": False,
-        "errors": [{"path": "$.url", "rule": "maxLength", "message": long_value}],
+        "errors": [{"path": "$." + long_value, "rule": "maxLength", "message": long_value}],
         "error_count": 1,
         "usage": {"padding": ["z" * 2000] * 10},
     }
@@ -156,7 +157,79 @@ async def test_validation_omits_whole_oversized_fields_and_stored_evidence_remai
         assert "END_MARKER_COMPLETE" in console.stream.getvalue()
 
 
-def test_ruleless_attachment_error_and_single_long_explanation_are_visible():
+@pytest.mark.parametrize("compacted", [False, True])
+@pytest.mark.parametrize("registered_late", [False, True])
+@pytest.mark.parametrize("special", ["\\", "'\"", "\n\t"])
+async def test_validation_never_echoes_repr_encoded_credentials(kernel, compacted, registered_late, special):
+    from hortator.fetched_documents import DESCRIPTION, PARAMETERS
+    from hortator.tool_feedback import feedback
+
+    secret = "SYNTHETIC_PREFIX_" + special + "_CREDENTIAL_SUFFIX"
+    report = feedback("web_fetch", {"url": "https://example.com", "length": secret}, PARAMETERS, DESCRIPTION)
+    assert repr(secret) in report["errors"][0]["message"]
+    data = {"name": "web_fetch", **report}
+    if compacted:
+        data["padding"] = ["x" * 2000] * 10
+    if not registered_late:
+        kernel.vault.put("test/encoded-validation", secret)
+    with output() as console:
+        console.bind(kernel)
+        console.stream.seek(0)
+        console.stream.truncate()
+        event = kernel.store.emit("tool.failed", data, level="warning", bot_id="ada")
+        assert ("detail_preview" in console.history[-1]["data"]) is compacted
+        assert "SYNTHETIC_PREFIX_" not in console.stream.getvalue()
+        assert "$.length [type]: Expected integer." in console.stream.getvalue()
+        if registered_late:
+            kernel.vault.put("test/encoded-validation", secret)
+        console.stream.seek(0)
+        console.stream.truncate()
+        console.key("r")
+        assert "SYNTHETIC_PREFIX_" not in console.stream.getvalue()
+        assert "$.length [type]: Expected integer." in console.stream.getvalue()
+        assert kernel.store.events(after=event["seq"] - 1)[0]["data"] == data
+
+
+@pytest.mark.parametrize("compacted", [False, True])
+async def test_validation_path_redacted_before_replay_clipping(kernel, compacted):
+    secret = "PATH_CREDENTIAL_" + "q" * 70
+    data = {
+        "name": "memory",
+        "error": "Invalid tool arguments",
+        "errors": [{"path": "$." + "p" * 40 + secret, "rule": "forbidden", "message": "Rejected"}],
+    }
+    if compacted:
+        data["padding"] = ["x" * 2000] * 10
+    with output() as console:
+        console.bind(kernel)
+        kernel.store.emit("tool.failed", data, level="warning", bot_id="ada")
+        kernel.vault.put("test/path-validation", secret)
+        console.stream.seek(0)
+        console.stream.truncate()
+        console.key("r")
+        assert "PATH_CREDENTIAL_" not in console.stream.getvalue()
+        assert "[REDACTED]" in console.stream.getvalue()
+
+
+def test_expected_types_are_schema_names_not_arbitrary_diagnostic_text():
+    preview = console_module.tool_validation_preview(
+        {
+            "errors": [
+                {
+                    "path": "$.value",
+                    "rule": "type",
+                    "message": "rejected-value",
+                    "expected_types": ["integer", "ENCODED_CREDENTIAL", "null"],
+                }
+            ]
+        }
+    )
+    summary = console_module.tool_validation_summary(preview)
+    assert summary["error"] == "$.value [type]: Expected integer or null."
+    assert "rejected-value" not in str(preview)
+
+
+def test_ruleless_attachment_error_identifies_field_without_echoing_message():
     explanation = "The selected reply target cannot be used. " + "Check the requested destination. " * 5
     with output() as console:
         console.accept(
@@ -175,7 +248,8 @@ def test_ruleless_attachment_error_and_single_long_explanation_are_visible():
                 }
             )
         )
-        assert "$.reply_to: " + explanation.rstrip() in console.stream.getvalue()
+        assert "$.reply_to: Invalid argument; inspect stored T evidence." in console.stream.getvalue()
+        assert explanation not in console.stream.getvalue()
         assert "Attachment preparation failed" not in console.stream.getvalue()
 
 

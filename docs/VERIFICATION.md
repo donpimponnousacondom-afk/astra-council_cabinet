@@ -4378,3 +4378,37 @@ URL can make repeat-grouping unhashable; reused call IDs can group different
 validation causes; WEB_READING's operations table omits the existing read_response
 row. These are not introduced by this patch or the cause of the observed
 zero-offset failures, and were not silently folded into this correction.
+
+### PR144 round-2 correction — concise schema diagnostics without value echoes
+
+R2 at cd8ee9109187ce968363f7679165a97c9a8e5583: Opus approved at 9.5/10,
+Neon approved at 9/10; Sol and Wonder Full blocked at 8/10 on the same B2.
+All four completed before edits. B1's literal-value replay correction held, but
+JSON Schema's Python-repr messages could encode a registered credential and
+bypass existing exact-value redaction when copied into the new ordinary line.
+The parent reproduced that path with synthetic web_fetch length/type feedback.
+
+Concise summaries now use field/rule diagnostics and recognized schema type
+names, never copied rejected-value messages. Type-error feedback gains additive
+expected_types metadata; original messages, usage, validation outcomes and stored
+evidence remain. Rule-less errors identify the field and direct the operator to
+stored evidence. Whole bounded paths/rules still receive current vault redaction
+before clipping, including on replay. Vault policy and detailed-view behavior are
+unchanged; this corrects the new diagnostic construction, not publication policy.
+The in-memory T fallback comment now reflects its existing metadata behavior.
+The shared zero-offset web_fetch schema is unchanged since R1.
+
+212 focused console/fetched/tool-feedback/HTTP-evidence tests passed, including
+12 registered-before/after capture, compacted/noncompacted backslash/quote/control
+credential cases using real web_fetch validation; late path redaction, terminal
+escaping, stored-evidence identity, and schema-derived expected types also passed.
+Ruff lint/format and git diff --check pass. Log:
+audit/2026-11-25/tool-validation-feedback/r3-focused.log.
+The earlier full local CI command exited 0 (2,927 passed, two explicit live-install
+skips), but started at R1 and overlapped R2 edits; it remains diagnostic evidence,
+not final-head certification. New-head checks and all-four review are required.
+No runtime reload, live model calls or new paid experiments occurred.
+
+The pre-existing f detail_preview clipping limitation reported in R2 remains a
+separate follow-up, alongside the R1 repeat-grouping and documentation items.
+This correction does not change those older evidence-view paths.

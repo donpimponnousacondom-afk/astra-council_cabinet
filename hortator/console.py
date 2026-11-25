@@ -300,7 +300,7 @@ def plain(value):
 
 
 def tool_validation_preview(data):
-    """Keep whole bounded fields so later vault updates can redact before clipping."""
+    """Keep whole paths/rules and schema types, never rejected-value explanations."""
     errors = data.get("errors")
     if not isinstance(errors, list) or not errors:
         return None
@@ -319,8 +319,15 @@ def tool_validation_preview(data):
         "errors": [
             {
                 key: value if len(value) <= 4096 else "[long field; use stored T evidence]"
-                for key in ("path", "rule", "message")
+                for key in ("path", "rule")
                 if isinstance(value := error.get(key), str)
+            }
+            | {
+                "expected_types": [
+                    kind
+                    for kind in ("object", "array", "string", "integer", "number", "boolean", "null")
+                    if isinstance(error.get("expected_types"), list) and kind in error["expected_types"]
+                ]
             }
             for error in shown
         ],
@@ -341,9 +348,23 @@ def tool_validation_summary(preview):
     parts = []
     for error in shown:
         rule = f" [{short(error['rule'], 32)}]" if error.get("rule") else ""
-        parts.append(
-            f"{short(error['path'], 64)}{rule}: {short(error['message'], 420 if len(shown) == 1 else 120)}"
-        )
+        explanation = {
+            "type": "Incorrect value type.",
+            "forbidden": "Field is not accepted for this operation.",
+            "required": "Required field missing; inspect tool usage.",
+            "additionalProperties": "Unexpected field; inspect tool usage.",
+            "const": "Value must match the constant in tool usage.",
+            "enum": "Value must be one of the choices in tool usage.",
+            "minimum": "Value is below the minimum.",
+            "maximum": "Value exceeds the maximum.",
+            "minLength": "Text is too short.",
+            "maxLength": "Text is too long.",
+            "json": "Invalid JSON arguments.",
+            "batch": "Invalid tool-call combination; inspect stored T evidence.",
+        }.get(error.get("rule"), "Invalid argument; inspect stored T evidence.")
+        if error.get("rule") == "type" and error.get("expected_types"):
+            explanation = "Expected " + " or ".join(error["expected_types"]) + "."
+        parts.append(f"{short(error['path'], 64)}{rule}: {explanation}")
     summary = "; ".join(parts)
     summary = short(summary, 420)
     if count > len(shown):
@@ -751,7 +772,8 @@ class OperationalConsole(logging.Handler):
                 "detail_preview": encoded[:4000],
                 "truncated": "Full detail remains in the event ledger",
             }
-        # Internal display source only; not included in expanded data or the ledger.
+        # Internal display source; excluded from f and persisted evidence.
+        # An unbound/missing-row T fallback can include this in-memory metadata.
         # Oversized fields are omitted whole, never cached as a secret prefix.
         return {**event, "scope": scope_for(kind), "level": level, "_validation": validation}
 
