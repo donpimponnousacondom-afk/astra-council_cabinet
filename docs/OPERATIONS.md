@@ -96,8 +96,10 @@ Technical reviewers are Claude Opus 5.5, latest confirmed GPT Sol 6.x (currently
 6.2), **Muse Wonder Full 1.0**, and Gemini 4 Neon through Antigravity, all at high
 reasoning effort. Neon uses `thought_level: high`. Resolve the live
 catalog and exact options; Wonder 1.0 is not Wonder Full 1.0. Each reviewer inspects
-the actual open PR at a pinned head independently. Record every round's scores,
-findings, fixes and evidence in the PR description. Research/design rounds can
+the actual open PR at a pinned head independently. For implementation PRs the
+parent owns, record every round's scores, findings, fixes and evidence in the PR
+description. Other assignments follow the council skill's mode-specific record
+rules; review-only does not authorize PR writes. Research/design rounds can
 precede publication, but do not replace open-PR review of the final head.
 
 Haiku and Luna handle bounded CI/comment triage. The parent alone owns T3's

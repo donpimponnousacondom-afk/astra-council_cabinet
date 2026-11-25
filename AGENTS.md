@@ -22,8 +22,10 @@
   use Claude Opus 5.5, the latest confirmed GPT Sol 6.x (currently 6.2),
   **Muse Wonder Full 1.0** (`muse-wonder-full-1.0`, never `muse-wonder-1.0`),
   plus Gemini 4 Neon (`antigravity` / `gemini-4-neon`, `thought_level: high`).
-  All four run through T3 Code at high reasoning effort. Record independent
-  findings and scores by review round in the PR description. Current-head council review,
+  All four run through T3 Code at high reasoning effort. For implementation PRs
+  the parent owns, record independent findings and scores by review round in the
+  PR description; other assignments use the skill's mode-specific record rules.
+  Current-head council review,
   resolved blockers and required CI remain merge gates; scores alone are not.
   Owner addition, 2026-11-24: report council steps/results as compact inline HTML
   tables through T3 `html_preview` then `html_render`, following the project

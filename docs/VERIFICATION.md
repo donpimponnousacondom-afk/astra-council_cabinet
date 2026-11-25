@@ -4299,3 +4299,13 @@ had arrived before editing. Both skill validators and whitespace checks pass
 for the correction; these are documentation checks, not application or runtime
 validation. R4 verdicts do not certify the next head; its review and CI gates
 remain separate. No global files, runtime configuration or research spend changed.
+
+R5 completed on `415a30cc83ab5ad82c0128ffde18bb9399bb41ca`: Opus/Wonder Full
+approved at 9/10 and Neon at 10/10; Sol blocked at 8/10 on the experiment-budget
+stop wording. The parent accepted the issue: the cap stops new experiments,
+not authorized analysis and council assessment of already collected evidence.
+The correction states that distinction and aligns OPERATIONS/AGENTS reporting
+with the skill's modes, retaining implementation-PR evidence and merge gates.
+Both skill validators and whitespace checks pass; no application tests or
+runtime/global changes. All R5 reviews finished before these edits. New-head
+review and CI remain pending; R5 approvals are historical only.

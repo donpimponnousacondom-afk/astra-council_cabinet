@@ -46,8 +46,11 @@ State the mode and the review surface in every brief:
   authorized changes and then the normal open-PR review.
 - **Research:** investigate a named question within the owner's current scope
   and experiment budget. Return measured evidence to the council for further
-  rounds when needed to assess the result. Reviews do not renew spend or permit
-  deployment; stop at the authorized research outcome or an exhausted budget.
+  rounds when needed to assess the result. An exhausted experiment budget stops
+  further experiments, not already-authorized analysis, council assessment or
+  reporting of collected evidence. Reviews do not renew spend or permit
+  deployment. Complete the authorized research outcome; any later implementation
+  requires its own existing or newly granted authorization.
 - **Review only:** one read-only assessment when fixes are not requested or the
   owner prohibits changes. Report results without edits or PR writes.
 - **Implement and review:** the parent's authorized task continues through fixes,
