@@ -54,8 +54,9 @@ PROPERTIES = {
     "offset": {
         "type": "integer",
         "minimum": 0,
-        "description": "Zero-based Python Unicode character offset; ranges have an exclusive end.",
-        "default": 0,
+        "description": "Zero-based Python Unicode character offset for read, search, read_result and "
+        "read_response; ranges have an exclusive end. Omit for fetch: it always starts at 0 "
+        "(explicit 0 is also accepted). Not accepted for start or refetch.",
     },
     "length": {"type": "integer", "minimum": 1, "maximum": 18_000},
     "query": {"type": "string", "minLength": 1, "maxLength": 512},
@@ -73,7 +74,7 @@ REQUIRED = {
     "read_response": ["document_id"],
 }
 ALLOWED = {
-    "fetch": ["url", "length"],
+    "fetch": ["url", "length", "offset"],
     "start": [],
     "read": ["document_id", "offset", "length"],
     "search": ["document_id", "query", "offset", "limit", "context_chars", "case_sensitive"],
@@ -91,7 +92,12 @@ PARAMETERS = {
             "then": {
                 "required": REQUIRED[operation],
                 "properties": {
-                    field: False for field in PROPERTIES if field not in ["operation", *ALLOWED[operation]]
+                    **{
+                        field: False
+                        for field in PROPERTIES
+                        if field not in ["operation", *ALLOWED[operation]]
+                    },
+                    **({"offset": {"const": 0}} if operation == "fetch" else {}),
                 },
             },
         }
@@ -102,7 +108,10 @@ PARAMETERS = {
             "if": {"not": {"required": ["operation"]}},
             "then": {
                 "required": ["url"],
-                "properties": {field: False for field in PROPERTIES if field not in ALLOWED["fetch"]},
+                "properties": {
+                    **{field: False for field in PROPERTIES if field not in ALLOWED["fetch"]},
+                    "offset": {"const": 0},
+                },
             },
         }
     ],

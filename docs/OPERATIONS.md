@@ -521,6 +521,18 @@ The agent can send commands through `screen -S hortator -p dashboard -X stuff` a
 
 ## Console inspection and filtering
 
+Argument-validation warnings now show the reported schema path and rule directly
+(for example `$.length [type]: Expected integer.`), with an error count and execution
+flag. The summary shows up to three rule/schema explanations without quoting
+rejected values. Rule-less errors identify the field and direct you to evidence.
+Required/unexpected-field errors may report the root path; stored evidence names
+the specific fields. JSON syntax and batch refusals retain their existing specific
+top-level cause, including budget/configuration refusals.
+`f` shows cached JSON
+details, which may be a preview; use `T` twice for stored evidence (then `n`/`N`
+to page) or inspect the ledger for complete feedback and usage. See the
+[console evidence contract](HTTP_EVIDENCE.md#console-contract).
+
 For private inspection from Discord, enable **Plugins → Reasoning viewer** and
 the desired bot's **Capabilities → Reasoning viewer**. New answers with readable
 captured reasoning receive a button; only the configured human owner can open

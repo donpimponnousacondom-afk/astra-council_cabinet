@@ -14,12 +14,20 @@ As for every [tool](TOOLS.md), `{}` returns the full usage without invoking a ha
 
 | Operation | Required fields | Optional fields | Result |
 | --- | --- | --- | --- |
-| `fetch` (also the default when `operation` is absent) | `url` | `length` | A new immutable text snapshot and its first chunk. |
+| `fetch` (also the default when `operation` is absent) | `url` | `length`, `offset: 0` | A new immutable text snapshot and its first chunk. |
 | `read` | `document_id` | `offset`, `length` | A bounded range from the saved snapshot; no network request. |
 | `search` | `document_id`, `query` | `offset`, `limit`, `context_chars`, `case_sensitive` | Literal matches with bounded context and stable match/excerpt offsets. |
 | `refetch` | `document_id` | `length` | A new snapshot from the original requested URL; returns `replaces_document_id`. |
 | `start` | none | none | Signals an explicit extended reading task; performs no download. The engine owns the bounded, non-renewable extension. |
 | `read_result` | `result_id` | `offset`, `length` | Registry-managed retrieval of retained tool-result evidence after its body has left the active prompt. Scope and the source tool's current grant are checked again. |
+
+`fetch` always starts at character zero. Prefer omitting `offset`; an explicit
+numeric zero is also accepted as the same first-chunk request. Nonzero offsets
+and incorrect types remain validation errors before any download. To continue,
+use `read` with the returned document ID and `next` arguments. The shared offset
+field advertises its operation scope without a default that suggests adding it
+to every call; read/search handlers still start at zero when it is omitted.
+This applies to every granted bot/provider, not only Loki or Gemini.
 
 Example calls use illustrative IDs; replace them with actual returned handles:
 

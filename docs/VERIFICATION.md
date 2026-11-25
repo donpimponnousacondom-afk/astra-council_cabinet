@@ -4309,3 +4309,137 @@ with the skill's modes, retaining implementation-PR evidence and merge gates.
 Both skill validators and whitespace checks pass; no application tests or
 runtime/global changes. All R5 reviews finished before these edits. New-head
 review and CI remain pending; R5 approvals are historical only.
+
+
+## 2026-11-25 — Shared validation summaries and zero-offset fetch
+
+Read-only diagnosis of Loki event #189686 found a fetch call with offset=0; the
+validator rejected that field and the next model turn removed it, producing an
+HTTP 200 fetch (#189692). The same failure/recovery occurred at #189337/#189343.
+The stored outgoing tool schema already carried the conditional restriction;
+no provider-side schema interpretation was inspected. A bounded 10,001-event
+window contained 36 Loki web_fetch starts, 31 completions and 5 failures: two
+missing/unavailable document handles, one empty URL, and these two offset errors.
+This is diagnostic evidence, not a measured post-change model success rate.
+
+Implemented the owner's shared fix: console field/rule/explanation summaries
+(up to three, with count and execution flag) survive large-event compaction;
+full ledger/model feedback is retained. web_fetch advertises offset scope without
+a default and accepts explicit numeric zero for fetch, including implicit-fetch
+URL calls. Nonzero/wrong-type offsets still fail before download; other operation
+contracts, grants and snapshot boundaries remain unchanged. No bot/provider
+configuration, custom Loki handler or unrelated prompt change.
+
+Validation: 192 focused tests passed across test_console, test_fetched_documents,
+test_tool_feedback and test_http_evidence; an additional five-case operation-schema
+check passed after adding refetch's retained zero-offset rejection. Tests exercise
+two bot identities, the advertised schema and registry, first-chunk/continuation
+semantics, no-network invalid calls, multiple validation errors, fallback messages,
+large-event summaries, existing credential redaction and terminal escaping,
+unchanged ledger data and complete web URLs. Ruff lint/format and whitespace
+checks pass. An initial new large-event test failed because console event
+compaction removed structured errors; the summary now survives that path and
+the rerun passes. Logs: ignored audit/2026-11-25/tool-validation-feedback.
+
+These are isolated synthetic tests, not live Discord/provider acceptance.
+Current-head remote CI, four-provider council review and deployment are pending
+at this entry; the runtime remains on startup-captured 38f84715ee82.
+
+
+### PR144 round-1 correction — replay redaction and evidence directions
+
+R1 at 56339016ffb661528a4bb5e58aab00dfd16fd67c: Opus, Wonder Full and Neon
+approved at 9/10; Sol blocked at 8/10. The parent reproduced Sol B1: large-event
+compaction saved an already clipped validation message, so registering a matching
+credential later could leave its unmatched prefix visible on replay. All four
+readers finished before this correction. The earlier approvals are historical.
+
+The console now retains at most three errors' whole path/rule/message strings
+(up to 4,096 characters per field) separately from its cached event preview.
+Oversized fields are omitted whole with an evidence hint; current vault redaction
+runs before display clipping on every render/replay. This preserves the existing
+redaction policy rather than adding a content filter. Full event/model data is
+unchanged. Path/message errors without a rule (attachment preparation) now get
+a useful summary; single explanations can use the 420-character summary budget.
+The runbook now distinguishes f's potentially truncated preview from stored T
+evidence/ledger inspection. The reviewed shared zero-offset fetch schema is unchanged.
+
+197 focused console/fetched/tool-feedback/HTTP-evidence tests passed on this
+correction, including late credential registration/replay on compacted and
+noncompacted events, whole-field omission with stored-evidence recovery, and
+rule-less attachment diagnostics. Ruff lint/format and whitespace checks pass.
+The local full CI-suite run began on R1 and overlaps this source correction;
+it is diagnostic evidence only, not certification of this corrected head. New-head
+remote CI and all-four delta review are required. No runtime reload or paid
+inference occurred. Logs remain in audit/2026-11-25/tool-validation-feedback.
+
+Pre-existing follow-ups from R1 are recorded in the PR: malformed object-valued
+URL can make repeat-grouping unhashable; reused call IDs can group different
+validation causes; WEB_READING's operations table omits the existing read_response
+row. These are not introduced by this patch or the cause of the observed
+zero-offset failures, and were not silently folded into this correction.
+
+### PR144 round-2 correction — concise schema diagnostics without value echoes
+
+R2 at cd8ee9109187ce968363f7679165a97c9a8e5583: Opus approved at 9.5/10,
+Neon approved at 9/10; Sol and Wonder Full blocked at 8/10 on the same B2.
+All four completed before edits. B1's literal-value replay correction held, but
+JSON Schema's Python-repr messages could encode a registered credential and
+bypass existing exact-value redaction when copied into the new ordinary line.
+The parent reproduced that path with synthetic web_fetch length/type feedback.
+
+Concise summaries now use field/rule diagnostics and recognized schema type
+names, never copied rejected-value messages. Type-error feedback gains additive
+expected_types metadata; original messages, usage, validation outcomes and stored
+evidence remain. Rule-less errors identify the field and direct the operator to
+stored evidence. Whole bounded paths/rules still receive current vault redaction
+before clipping, including on replay. Vault policy and detailed-view behavior are
+unchanged; this corrects the new diagnostic construction, not publication policy.
+The in-memory T fallback comment now reflects its existing metadata behavior.
+The shared zero-offset web_fetch schema is unchanged since R1.
+
+212 focused console/fetched/tool-feedback/HTTP-evidence tests passed, including
+12 registered-before/after capture, compacted/noncompacted backslash/quote/control
+credential cases using real web_fetch validation; late path redaction, terminal
+escaping, stored-evidence identity, and schema-derived expected types also passed.
+Ruff lint/format and git diff --check pass. Log:
+audit/2026-11-25/tool-validation-feedback/r3-focused.log.
+The earlier full local CI command exited 0 (2,927 passed, two explicit live-install
+skips), but started at R1 and overlapped R2 edits; it remains diagnostic evidence,
+not final-head certification. New-head checks and all-four review are required.
+No runtime reload, live model calls or new paid experiments occurred.
+
+The pre-existing f detail_preview clipping limitation reported in R2 remains a
+separate follow-up, alongside the R1 repeat-grouping and documentation items.
+This correction does not change those older evidence-view paths.
+
+### PR144 round-3 correction — preserve specific JSON and batch causes
+
+R3 at c35ac9abd29ac10840c5c66a69b89eea7f573b43: Sol approved at 9/10;
+Wonder Full and Neon approved at 9.5/10; Opus blocked at 7.5/10 on B3.
+All four confirmed the earlier B1/B2 corrections. Opus found that the static
+JSON/batch descriptions hid causes already shown by the base, and mislabeled
+budget/configuration refusals as invalid combinations. Parent reproduced with
+real syntax_feedback and a synthetic runtime-shaped budget event. All four
+reviewers finished before this correction.
+
+JSON and batch error records now retain the existing top-level error display,
+including its redaction, escaping and compaction behavior. Schema-error summaries
+still avoid copying rejected-value messages. The runbook now calls these schema
+paths rather than promising a specific field name when validation reports `$`.
+No new required-field metadata or unrelated explanation tuning was added.
+Twenty regression cases cover five real parser failures and five runtime-shaped
+batch causes, with/without compaction, initial render and replay, and unchanged
+ledger data. Mixed batch/schema feedback retains the primary batch cause.
+
+The parent stopped its owned R3 full local gate before edits (exit130 after about
+48% of pytest, no test failure reported) because the new head needs its own gate.
+This is an interrupted check, not a pass or a discovered code failure. Runtime
+remains unchanged; no live provider experiments occurred. R4 focused-check and
+current-head review results are recorded separately below and in the PR.
+
+R4 validation: 232 focused console/fetched/tool-feedback/HTTP-evidence tests
+passed in 48.81s; Ruff lint/format and git diff --check passed. Evidence:
+audit/2026-11-25/tool-validation-feedback/r4-focused.log. These offline results
+cover the new JSON/batch preservation cases and all prior B1/B2/shared-schema
+regressions; they do not certify live model behavior or the pending full gate.

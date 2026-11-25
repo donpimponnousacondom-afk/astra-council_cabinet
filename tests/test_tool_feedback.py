@@ -186,6 +186,13 @@ async def test_all_type_errors_and_missing_field_are_repaired_in_one_response(ke
     }
     messages = "\n".join(error["message"] for error in result["errors"])
     assert "string" in messages and "number" in messages and "integer" in messages
+    assert {
+        error["path"]: error["expected_types"] for error in result["errors"] if error["rule"] == "type"
+    } == {
+        "$.title": ["string"],
+        "$.weight": ["number"],
+        "$.count": ["integer"],
+    }
     assert "'body' is a required property" in messages
     assert_full_usage(result)
     handler.assert_not_awaited()

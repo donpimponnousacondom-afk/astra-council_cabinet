@@ -148,6 +148,15 @@ def errors_for(parameters, arguments):
                     ),
                     "rule": item.validator,
                     "message": item.message,
+                    **(
+                        {
+                            "expected_types": [item.validator_value]
+                            if isinstance(item.validator_value, str)
+                            else list(item.validator_value)
+                        }
+                        if item.validator == "type"
+                        else {}
+                    ),
                 }
             )
     return errors

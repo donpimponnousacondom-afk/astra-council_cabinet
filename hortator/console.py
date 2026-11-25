@@ -130,6 +130,8 @@ SUMMARY_FIELDS = (
     "after_tokens",
 )
 INCIDENT_FIELDS = (
+    "executed",
+    "error_count",
     "request_body_bytes",
     "upstream_body_limit_bytes",
     "body_limit_basis",
@@ -295,6 +297,81 @@ def scope_for(kind):
 def plain(value):
     # Untrusted log text must not issue terminal controls, forge lines, or change Screen titles.
     return "".join(c if c.isprintable() else f"\\u{ord(c):04x}" for c in str(value))
+
+
+def tool_validation_preview(data):
+    """Keep whole paths/rules and schema types, never rejected-value explanations."""
+    errors = data.get("errors")
+    if not isinstance(errors, list) or not errors:
+        return None
+    shown = errors[:3]
+    if not all(
+        isinstance(error, dict) and all(isinstance(error.get(key), str) for key in ("path", "message"))
+        for error in shown
+    ):
+        return None
+    if any(error.get("rule") in ("json", "batch") for error in shown):
+        # These already have specific top-level causes (syntax, budgets, etc.).
+        # Preserve their existing display/redaction rather than inventing a cause.
+        return None
+
+    count = data.get("error_count")
+    if type(count) is not int or count < len(errors):
+        count = len(errors)
+    return {
+        "error_count": count,
+        "errors": [
+            {
+                key: value if len(value) <= 4096 else "[long field; use stored T evidence]"
+                for key in ("path", "rule")
+                if isinstance(value := error.get(key), str)
+            }
+            | {
+                "expected_types": [
+                    kind
+                    for kind in ("object", "array", "string", "integer", "number", "boolean", "null")
+                    if isinstance(error.get("expected_types"), list) and kind in error["expected_types"]
+                ]
+            }
+            for error in shown
+        ],
+    }
+
+
+def tool_validation_summary(preview):
+    """Called only after current vault redaction, never cached as a clipped string."""
+    if not preview:
+        return None
+
+    def short(value, limit):
+        value = plain(value)
+        return value if len(value) <= limit else value[: limit - 1] + "…"
+
+    shown = preview["errors"]
+    count = preview["error_count"]
+    parts = []
+    for error in shown:
+        rule = f" [{short(error['rule'], 32)}]" if error.get("rule") else ""
+        explanation = {
+            "type": "Incorrect value type.",
+            "forbidden": "Field is not accepted for this operation.",
+            "required": "Required field missing; inspect tool usage.",
+            "additionalProperties": "Unexpected field; inspect tool usage.",
+            "const": "Value must match the constant in tool usage.",
+            "enum": "Value must be one of the choices in tool usage.",
+            "minimum": "Value is below the minimum.",
+            "maximum": "Value exceeds the maximum.",
+            "minLength": "Text is too short.",
+            "maxLength": "Text is too long.",
+        }.get(error.get("rule"), "Invalid argument; inspect stored T evidence.")
+        if error.get("rule") == "type" and error.get("expected_types"):
+            explanation = "Expected " + " or ".join(error["expected_types"]) + "."
+        parts.append(f"{short(error['path'], 64)}{rule}: {explanation}")
+    summary = "; ".join(parts)
+    summary = short(summary, 420)
+    if count > len(shown):
+        summary += f"; +{count - len(shown)} more (stored T evidence)"
+    return {"error_count": count, "error": summary}
 
 
 def safe_text(value, *, include_reasoning=False, full_urls=False):
@@ -677,7 +754,9 @@ class OperationalConsole(logging.Handler):
     def event(self, event):
         if event["kind"] == "config.updated" and self.store is not None:
             self.timezone = council_timezone(self.store)
-        event = safe_value(self.redact(event), full_urls=is_web_event(event))
+        event = self.redact(event)
+        validation = tool_validation_preview(event["data"]) if event["kind"] == "tool.failed" else None
+        event = safe_value(event, full_urls=is_web_event(event))
         kind = event["kind"]
         level = event.get("level", "info")
         if level == "info" and kind in QUIET_EVENTS:
@@ -695,7 +774,10 @@ class OperationalConsole(logging.Handler):
                 "detail_preview": encoded[:4000],
                 "truncated": "Full detail remains in the event ledger",
             }
-        return {**event, "scope": scope_for(kind), "level": level}
+        # Internal display source; excluded from f and persisted evidence.
+        # An unbound/missing-row T fallback can include this in-memory metadata.
+        # Oversized fields are omitted whole, never cached as a secret prefix.
+        return {**event, "scope": scope_for(kind), "level": level, "_validation": validation}
 
     def emit(self, record):
         try:
@@ -1191,6 +1273,10 @@ class OperationalConsole(logging.Handler):
         if event["kind"] == "request.failed":
             keys, summary_data = provider_failure_summary(data)
             summary_data = safe_value(self.redact(summary_data))
+        elif event["kind"] == "tool.failed" and (
+            validation := tool_validation_summary(event.get("_validation"))
+        ):
+            summary_data = {**data, **validation}
         elif event["kind"] == "turn.failed" and data.get("error_origin") == "missing_answer":
             keys = (
                 "error",

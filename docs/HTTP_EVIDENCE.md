@@ -43,6 +43,34 @@ Received HTTP 4xx/5xx responses and local extraction/capture limitations are war
 
 Expanded `T` evidence follows the original HTTP response handles, including each search engine, so `n`/`N` can page received headers and body directly in the console. Literal upstream text is not treated as private provider reasoning. Existing console evidence bounds remain explicit; no source response is rerun just to inspect evidence. Existing `T`, `P`, `f`, scopes, normal scrollback and Ctrl-C remain available.
 
+Tool argument validation failures show up to three field paths, rules and short
+explanations in the normal line, plus the error count and `executed` flag when
+present. Explanations describe the validation rule, with schema-derived expected
+types when available (for example `$.length [type]: Expected integer.`). They
+do not copy validator messages that can quote rejected values, including their
+escaped representations. Rule-less attachment-preparation errors identify the
+path and point to stored evidence; unknown rules use the same evidence hint.
+Larger sets show how many additional errors remain. The summary is bounded to
+420 characters before its additional-error hint. Replay applies current vault
+redaction before summary clipping, including credentials registered after capture.
+Console history retains the first three errors' whole paths/rules up to 4,096
+characters each, plus recognized JSON Schema type names. Longer paths/rules are
+replaced entirely by a stored-evidence hint, not retained as a partial value.
+Full validator messages remain in the existing detailed evidence views.
+
+JSON syntax failures and batch refusals retain their existing top-level error
+instead of a schema summary. Those messages already identify the syntax fault,
+budget, configuration or combination refusal; existing redaction and terminal
+escaping still apply. Required/unexpected-field schema errors can have root path
+`$`; use stored evidence to identify their individual fields.
+
+Full usage and all errors remain in stored `T` evidence, the event ledger and
+the model-facing tool result. `f` shows cached JSON details, which may contain
+only a preview for large events. This applies to all tools and members that
+provide structured field errors. Failures without them keep their original
+error message; web URLs, field ordering, redaction and terminal escaping retain
+the same contract.
+
 ## Owner decisions (preserved from AGENTS, 2026-09-23)
 
 The date marks relocation of standing instructions, not a new product decision.

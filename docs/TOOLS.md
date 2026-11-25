@@ -99,6 +99,11 @@ the contents of results that older code already discarded.
 
 For parseable JSON, validation collects all detectable schema errors: missing required fields, wrong types, unknown fields, bounds and conditional operation requirements. The response contains all error paths/rules/messages and full usage with an example for the requested valid operation. Named JSON fields have **no positional order**. Strings are not silently converted into numbers, and a malformed call never partially invokes the handler.
 
+Type errors also carry `expected_types`, an array copied from the schema's type
+constraint. The console uses recognized JSON Schema type names for concise
+diagnostics without quoting rejected values. Complete messages and usage remain
+in structured feedback; see the [console contract](HTTP_EVIDENCE.md#console-contract).
+
 Fields forbidden by an operation's conditional schema are reported at their
 actual path with rule `forbidden`, naming the operation and instructing removal.
 For example, a memory `read` with `length` reports `$.length` rather than the
