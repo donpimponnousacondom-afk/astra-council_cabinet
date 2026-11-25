@@ -850,3 +850,20 @@ Show current round/head, member scores/verdicts, finding dispositions, workflow
 gates and next action. Keep content-height sizing and current versus historical
 evidence explicit. The project skill owns presentation details; this does not
 change review, CI or merge requirements or modify the separate global skill.
+
+### 2026-11-25 — Selected lessons from the global council review
+
+The owner asked this project to assess the completed `t3-code-maintance` thread,
+bring useful improvements locally, and apply the council to the council skill
+itself. Adopt explicit advisory/read-only/implementation scopes, whole-work
+review alongside change review, data-loss and ineffective-test findings even in
+new code, governing-rule checks independent of proposed rule changes, and bounded
+handling of unusable reviewer results. Preserve current owner amendments and all
+four required project reviewers. The other thread's one-time Sol final-pass
+exception is not a project exception.
+
+Keep the project self-contained: do not import global snapshot/staging recipes,
+new publication filters, global dependencies, automatic branch integration or
+the global all-READY merge policy. Existing project security decisions, branch
+rules, research authorization, Haiku/Luna triage and standing gated squash merge
+remain authoritative. Compact HTML progress remains the presentation contract.

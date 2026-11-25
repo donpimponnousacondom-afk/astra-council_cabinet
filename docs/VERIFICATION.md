@@ -4266,3 +4266,24 @@ The global skill remains separate. The skill validator and whitespace check
 passed for the instruction change. Live rendering is validated in the PR's chat
 record; this does not claim application tests, runtime changes or approval of
 the new head from earlier review rounds.
+
+## 2026-11-25 — Council self-review follow-up
+
+Read the owner-referenced T3 maintenance thread through its final installation
+report and inspected the current global skill as comparison evidence only.
+The global review ended after thirteen rounds with three final READY results;
+Sol's seat used a one-task owner exception, not a four-way final approval. That
+exception and the global snapshot/publication/merge rules were not imported.
+The global file read in this pass had SHA-256
+`938959f46a71e20b9103f908eece65bc40afb550e1640cefa3a1113b81266994`.
+This is an at-read observation, not a promise that external maintenance stops.
+
+PR #143's interrupted R3 tasks were confirmed ended before further edits; no R3
+verdicts are claimed. Required CI passed on `ca5aef2da2160f69b244885080eb74ebdc72a6d7`,
+which does not certify the subsequent head. The follow-up adds local review
+modes/surfaces, explicit data-loss/test correctness criteria, governing-rule
+checks and bounded invalid-result handling. Both skill validators and whitespace
+checks passed. The compact T3 status table preview measured 284px at 728px width
+and rendered successfully; mobile sizing was also returned by the renderer.
+No application tests, runtime reload, bot changes or global writes were needed.
+Whole-skill and actual-open-PR council review of the follow-up remain required.
