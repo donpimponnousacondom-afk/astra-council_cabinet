@@ -867,3 +867,12 @@ new publication filters, global dependencies, automatic branch integration or
 the global all-READY merge policy. Existing project security decisions, branch
 rules, research authorization, Haiku/Luna triage and standing gated squash merge
 remain authoritative. Compact HTML progress remains the presentation contract.
+
+Council self-review clarified that a one-round ideas default must not replace
+authorized iterative research. Mode-specific scores, iteration and evidence
+locations now preserve that distinction; review-only does not authorize PR
+writes. The reusable brief identifies base/target governing rules and owner
+amendments explicitly. Each new delegate attempt has its own dispatch ID, and
+wrong-revision/scope results are unusable. Parent-only HTML reporting and ended
+round states are explicit. Isolated reviewer scratch follows the existing
+project cleanup procedure, without forced cleanup or process kills by pattern.

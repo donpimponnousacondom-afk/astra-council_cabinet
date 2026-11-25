@@ -4287,3 +4287,15 @@ checks passed. The compact T3 status table preview measured 284px at 728px width
 and rendered successfully; mobile sizing was also returned by the renderer.
 No application tests, runtime reload, bot changes or global writes were needed.
 Whole-skill and actual-open-PR council review of the follow-up remain required.
+
+PR #143 R4 completed on `2887b68b1d2662990915f0c49977273924e2741b`:
+Sol, Wonder Full and Neon approved at 9/10; Opus scored 8/10 and blocked on the
+new one-round research mode conflicting with retained iterative research.
+The parent accepted that blocker despite three approvals. The correction
+separates ideas/research and scopes scoring, iteration and PR writes by mode;
+it also makes governing-rule fields, distinct delegate-attempt IDs, wrong-head
+retry handling and parent-owned HTML reporting explicit. All four R4 reports
+had arrived before editing. Both skill validators and whitespace checks pass
+for the correction; these are documentation checks, not application or runtime
+validation. R4 verdicts do not certify the next head; its review and CI gates
+remain separate. No global files, runtime configuration or research spend changed.

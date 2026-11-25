@@ -40,10 +40,14 @@ authorization solely from the proposed head.
 
 State the mode and the review surface in every brief:
 
-- **Ideas/research:** one advisory round on a named question, with reasons,
+- **Ideas:** one advisory round on a named question, with reasons,
   alternatives and limits. Recommendations do not authorize implementation or
   experiments. If the owner also requested implementation, continue with the
   authorized changes and then the normal open-PR review.
+- **Research:** investigate a named question within the owner's current scope
+  and experiment budget. Return measured evidence to the council for further
+  rounds when needed to assess the result. Reviews do not renew spend or permit
+  deployment; stop at the authorized research outcome or an exhausted budget.
 - **Review only:** one read-only assessment when fixes are not requested or the
   owner prohibits changes. Report results without edits or PR writes.
 - **Implement and review:** the parent's authorized task continues through fixes,
@@ -88,8 +92,8 @@ or another transport to bypass it.
 
 ## Round workflow
 
-1. Fix already-confirmed in-scope problems and run relevant checks before requesting
-   implementation review. Research rounds may precede a patch, but are labelled
+1. In implement-and-review mode, fix confirmed in-scope problems and run relevant
+   checks before requesting implementation review. Research rounds may precede a patch, but are labelled
    design/experiment review and never substitute for reviewing the actual open PR.
 2. Supply each member a self-contained brief: user intent, scope, source revision,
    evidence paths, uncertainties, exclusions and the requested decision. Children
@@ -105,24 +109,32 @@ or another transport to bypass it.
    Pin executable probes to the reviewed source. Delegate tools/paid provider
    experiments only when the brief explicitly authorizes them. Do not let
    reviewers repeat live experiments.
-4. Ask for actionable findings with trigger, consequence and measured evidence;
-   separate introduced bugs, existing weaknesses and hypotheses. Request a score
-   out of 10 with its rationale, unresolved blockers and validation limits. Use
-   the brief below for implementation review. For experiments also ask which result would falsify the proposed explanation.
-5. Validate findings yourself. Run narrow tests of suggested changes, then return
-   successes, failures, sample sizes and objections to **all four** members.
+4. For implementation assessments (including review-only), ask for actionable
+   findings, a score out of 10 with rationale, unresolved blockers and validation
+   limits. Separate introduced bugs, existing weaknesses and hypotheses. Ideas
+   ask for recommendations and risks, without a score or approval verdict.
+   Research asks for evidence, hypotheses and falsifiers; give any requested
+   research score its own explicitly named meaning, never deployment readiness.
+5. Validate findings yourself. Ideas and review-only end with a report after the
+   assessment, except the authorized transition from ideas to implementation.
+   In implement-and-review or authorized research, run appropriate narrow checks
+   or experiments within scope, then return measured successes, failures, sample
+   sizes and objections to **all four** members for the needed follow-up rounds.
    Start a new `delegate_task` for each subsequent round, including the original
-   brief and accumulated findings/responses. Keep a new stable `clientRequestId`
-   and returned `taskId` per round. Never continue a delegate via `t3_thread_send`.
+   brief and accumulated findings/responses. Use a distinct `clientRequestId`
+   for each new delegate attempt, including same-round replacements; reuse an ID
+   only to retry the same dispatch. Record its returned `taskId` with member,
+   round and attempt. Never continue a delegate via `t3_thread_send`.
 6. Follow a delegate's `next` instruction. Do not poll or keep an external wait
    loop. Cancel replaced/unneeded tasks. A delegated council member does its own
    review and starts no children unless the assigned task explicitly requests it.
 
 Validate each result against its requested head and scope. A score, dispatch
 receipt or CI pass is not a verdict; research recommendations are not
-implementation approvals. If a required member fails or omits its reviewed
-revision or the result required by the brief (an explicit verdict for
-implementation, recommendations for ideas), start at most one fresh delegate with the same brief to
+implementation approvals. If a required member fails, reviews the wrong
+revision/scope, or omits its revision or the result required by the brief
+(an explicit verdict for implementation, recommendations for ideas), start at
+most one fresh delegate with the same brief to
 obtain a usable result, unless the owner stopped it or a new head will supersede
 the round. If that attempt also fails, report the unavailable member for owner
 resolution; do not loop, substitute or count it as completed review. Before
@@ -145,6 +157,9 @@ correctness, relevance and side effects.
 > Independently review the open PR. Mode: [implement and review or review only].
 > Surface: [change or whole-work review].
 > Repository: [absolute path]. PR: [URL].
+> Governing rules: [paths at base SHA and current target SHA; read with
+> `git show <base>:<path>` and `git show <target>:<path>`].
+> Owner amendments for this task: [explicit instructions, or none].
 > Base: [full SHA]. Head: [full SHA]. Read `AGENTS.md`, this project skill, the
 > relevant feature contracts, the actual open GitHub diff and callers of changed
 > code. Use pinned source (`git diff <base>...<head>`, `git show <head>:<path>`) and
@@ -205,10 +220,14 @@ what it measures.
 
 ## Findings across rounds
 
-Maintain a concise finding record in the PR description: ID, reviewer, first
+For an implementation PR the parent owns, maintain a concise finding record in
+the PR description: ID, reviewer, first
 round/head, affected code, evidence and disposition (fixed, rejected with reason,
 nonblocking follow-up, or unresolved blocker). Send the accumulated record and
-the full brief to all four reviewers in subsequent rounds.
+the full brief to all four reviewers in subsequent rounds. In ideas, review-only
+or research without an authorized PR record, keep the equivalent evidence in the
+chat report (and authorized research artifacts), without PR writes. Later
+implementation may cite that history but still needs its own open-PR review.
 
 For every reviewer, distinguish newly changed code from code already reviewed.
 A late finding must meet the same evidence and scope requirements; earlier silence
@@ -219,10 +238,11 @@ stalemate to the owner, as above; a majority vote cannot waive a valid blocker.
 
 ## Inline council progress (owner decision, 2026-11-24)
 
-For every council task, show the owner a compact HTML status table in the T3 Code
-chat using `html_preview` followed by `html_render`. This is the standard progress
+For every council task, the parent shows the owner a compact HTML status table
+in the T3 Code chat using `html_preview` followed by `html_render`. This is the standard progress
 report for research and PR rounds, not just the historical tool-call trial.
 An HTML file path or raw HTML text alone is not a rendered report.
+Delegates return their assigned reports; they do not render duplicate progress tables.
 
 Render a refreshed snapshot when a round starts, reviews arrive, findings are
 resolved, the head changes, or CI/merge status changes. Combine results already
@@ -238,8 +258,8 @@ The latest table must stand on its own:
   a score or from dispatch acceptance.
 - Show the workflow steps: local verification, council review, findings/fixes,
   Haiku/Luna triage where applicable, required CI and merge/handoff. Distinguish
-  pending, passed, failed, blocked, unknown and not applicable. Research scores
-  do not certify an implementation or establish merge readiness.
+  pending, passed, failed, blocked, cancelled/interrupted, unknown and not
+  applicable. Research scores do not certify an implementation or establish merge readiness.
 - State the next action and outstanding gate. Use snapshot-qualified wording for
   CI and triage; do not turn an older check into a current-head pass.
 
@@ -256,9 +276,12 @@ record and existing review/CI requirements.
 
 ## PR evidence and handoff
 
-Put the council round/score table and concise disposition of findings in the PR
+For an implementation PR the parent owns, put the council round/score table and
+concise disposition of findings in the PR
 description, before the model/harness attribution. Do not post separate council
 score comments. Label pre-PR research separately from current-head PR review.
+Ideas/review-only and research reporting follow the mode-specific record rules
+above; they do not implicitly authorize PR writes or merging.
 Each pushed head needs council delta review; old scores remain historical.
 The parent alone edits, pushes, links the PR to T3 and performs the authorized
 GitHub squash merge after completed current-head review by all four members, no
